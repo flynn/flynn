@@ -103,11 +103,12 @@ func main() {
 	})
 
 	handler := appHandler(handlerConfig{
-		db:   db,
-		cc:   utils.ClusterClientWrapper(cluster.NewClient()),
-		lc:   lc,
-		rc:   rc,
-		keys: strings.Split(os.Getenv("AUTH_KEY"), ","),
+		db:     db,
+		cc:     utils.ClusterClientWrapper(cluster.NewClient()),
+		lc:     lc,
+		rc:     rc,
+		keys:   strings.Split(os.Getenv("AUTH_KEY"), ","),
+		caCert: []byte(os.Getenv("CA_CERT")),
 	})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
@@ -180,6 +181,7 @@ type handlerConfig struct {
 	rc      routerc.Client
 	pgxpool *pgx.ConnPool
 	keys    []string
+	caCert  []byte
 }
 
 // NOTE: this is temporary until httphelper supports custom errors
@@ -229,7 +231,7 @@ func appHandler(c handlerConfig) http.Handler {
 		logaggc:             c.lc,
 		routerc:             c.rc,
 		que:                 q,
-		caCert:              []byte(os.Getenv("CA_CERT")),
+		caCert:              c.caCert,
 		config:              c,
 	}
 
@@ -280,11 +282,14 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/apps/:apps_id/release", httphelper.WrapHandler(api.appLookup(api.GetAppRelease)))
 	httpRouter.GET("/apps/:apps_id/releases", httphelper.WrapHandler(api.appLookup(api.GetAppReleases)))
 
+	httpRouter.GET("/resources", httphelper.WrapHandler(api.GetResources))
 	httpRouter.POST("/providers/:providers_id/resources", httphelper.WrapHandler(api.ProvisionResource))
 	httpRouter.GET("/providers/:providers_id/resources", httphelper.WrapHandler(api.GetProviderResources))
 	httpRouter.GET("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.GetResource))
 	httpRouter.PUT("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.PutResource))
 	httpRouter.DELETE("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.DeleteResource))
+	httpRouter.PUT("/providers/:providers_id/resources/:resources_id/apps/:app_id", httphelper.WrapHandler(api.AddResourceApp))
+	httpRouter.DELETE("/providers/:providers_id/resources/:resources_id/apps/:app_id", httphelper.WrapHandler(api.DeleteResourceApp))
 	httpRouter.GET("/apps/:apps_id/resources", httphelper.WrapHandler(api.appLookup(api.GetAppResources)))
 
 	httpRouter.POST("/apps/:apps_id/routes", httphelper.WrapHandler(api.appLookup(api.CreateRoute)))
@@ -306,6 +311,10 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 	return httphelper.CORSAllowAll.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/ping" {
 			w.WriteHeader(200)
+			return
+		}
+		if r.URL.Path == "/ca-cert" {
+			main.ServeHTTP(w, r)
 			return
 		}
 		_, password, _ := utils.ParseBasicAuth(r.Header)

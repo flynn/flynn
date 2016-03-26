@@ -231,16 +231,6 @@ var Client = createClass({
 		});
 	},
 
-	createAppDatabase: function (data) {
-		return this.performControllerRequest('POST', {
-			url: "/providers/postgres/resources",
-			body: data,
-			headers: {
-				'Content-Type': 'application/json'
-			}
-		});
-	},
-
 	createArtifact: function (data) {
 		return this.performControllerRequest('POST', {
 			url: "/artifacts",
@@ -429,6 +419,77 @@ var Client = createClass({
 			headers: {
 				'Content-Type': 'application/json'
 			}
+		});
+	},
+
+	listProviders: function () {
+		return this.performControllerRequest('GET', {
+			url: '/providers'
+		});
+	},
+
+	listResources: function () {
+		return this.performControllerRequest('GET', {
+			url: '/resources'
+		});
+	},
+
+	listProviderResources: function (providerID) {
+		return this.performControllerRequest('GET', {
+			url: '/providers/'+ encodeURIComponent(providerID) +'/resources'
+		});
+	},
+
+	getResource: function (providerID, resourceID) {
+		return this.performControllerRequest('GET', {
+			url: '/providers/'+ encodeURIComponent(providerID) +'/resources/'+ encodeURIComponent(resourceID)
+		});
+	},
+
+	addResourceApp: function (providerID, resourceID, appID) {
+		return this.performControllerRequest('PUT', {
+			url: '/providers/'+ encodeURIComponent(providerID) +'/resources/'+ encodeURIComponent(resourceID) +'/apps/'+ encodeURIComponent(appID)
+		});
+	},
+
+	deleteResourceApp: function (providerID, resourceID, appID) {
+		return this.performControllerRequest('DELETE', {
+			url: '/providers/'+ encodeURIComponent(providerID) +'/resources/'+ encodeURIComponent(resourceID) +'/apps/'+ encodeURIComponent(appID)
+		});
+	},
+
+	provisionResource: function (providerID, resourceReq) {
+		resourceReq = resourceReq || {};
+		resourceReq.config = resourceReq.config || {};
+		return this.performControllerRequest('POST', {
+			url: '/providers/'+ encodeURIComponent(providerID) +'/resources',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: resourceReq
+		}).catch(function (args) {
+			var res = args[0];
+			var xhr = args[1];
+			Dispatcher.dispatch({
+				name: 'PROVISION_RESOURCE_FAILED',
+				providerID: providerID,
+				error: res.message || ('Something went wrong ('+ xhr.status +')')
+			});
+		});
+	},
+
+	deleteResource: function (providerID, resourceID) {
+		return this.performControllerRequest('DELETE', {
+			url: '/providers/'+ encodeURIComponent(providerID) +'/resources/'+ resourceID
+		}).catch(function (args) {
+			var res = args[0];
+			var xhr = args[1];
+			Dispatcher.dispatch({
+				name: 'DELETE_RESOURCE_FAILED',
+				providerID: providerID,
+				resourceID: resourceID,
+				error: res.message || ('Something went wrong ('+ xhr.status +')')
+			});
 		});
 	},
 

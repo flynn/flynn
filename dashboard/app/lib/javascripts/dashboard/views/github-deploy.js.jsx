@@ -11,6 +11,7 @@ import CommandOutput from './command-output';
 import EditEnv from './edit-env';
 import GithubCommit from './github-commit';
 import GithubPull from './github-pull';
+import ProviderPicker from 'dashboard/views/provider-picker';
 import GithubRepoBuildpack from './github-repo-buildpack';
 import Dispatcher from 'dashboard/dispatcher';
 
@@ -52,14 +53,14 @@ function getBuildpackStoreId (props, commit, pull) {
 	};
 }
 
-function getState (props, prevState, dbRequested) {
+function getState (props, prevState, providerIDs) {
 	prevState = prevState || {};
 	var state = {
 		launching: prevState.launching,
 		deleting: prevState.deleting,
 		env: prevState.env || {},
 		name: prevState.name,
-		db: dbRequested === undefined ? prevState.db : dbRequested
+		providerIDs: providerIDs === undefined ? prevState.providerIDs : providerIDs
 	};
 
 	state.deployStoreId = getDeployStoreId(props);
@@ -73,11 +74,6 @@ function getState (props, prevState, dbRequested) {
 	}
 	if (deployState.release !== null) {
 		state.env = deployState.release.env || {};
-	}
-	if (state.env.hasOwnProperty('PGDATABASE')) {
-		state.db = true;
-	} else if (deployState.release !== null) {
-		state.db = false;
 	}
 
 	state.jobOutputStoreId = null;
@@ -168,14 +164,11 @@ var GithubDeploy = React.createClass({
 							<input type="text" value={this.state.name} onChange={this.__handleNameChange} />
 						</label>
 
-						<label>
-							<span className="name">Postgres</span>
-							<input
-								type="checkbox"
-								disabled={this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed}
-								checked={this.state.db}
-								onChange={this.__handleDbChange} />
-						</label>
+						{this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed ? null : (
+							<ProviderPicker
+								selected={this.state.providers}
+								onChange={this.__handleProvidersChange} />
+						)}
 
 						<EditEnv
 							disabled={this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed}
@@ -299,9 +292,9 @@ var GithubDeploy = React.createClass({
 		}
 	},
 
-	__handleStoreChange: function (props, dbRequested) {
+	__handleStoreChange: function (props, providerIDs) {
 		if (this.isMounted()) {
-			this.setState(getState.call(this, props || this.props, this.state, dbRequested !== undefined ? dbRequested : this.state.db));
+			this.setState(getState.call(this, props || this.props, this.state, providerIDs));
 		}
 	},
 
@@ -312,9 +305,8 @@ var GithubDeploy = React.createClass({
 		});
 	},
 
-	__handleDbChange: function (e) {
-		var db = e.target.checked;
-		this.__handleStoreChange(this.props, db);
+	__handleProvidersChange: function (providerIDs) {
+		this.__handleStoreChange(this.props, providerIDs);
 	},
 
 	__handleEnvChange: function (env) {
@@ -339,7 +331,7 @@ var GithubDeploy = React.createClass({
 		e.preventDefault();
 		var appData = extend({
 			name: this.state.name,
-			dbRequested: this.state.db,
+			providerIDs: this.state.providerIDs,
 			env: this.state.env
 		}, this.props.appData || {});
 		if (this.props.errorMsg) {

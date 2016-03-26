@@ -1,0 +1,45 @@
+@import "./mixins";
+
+.resource-apps {
+  > ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+}
+
+.resource {
+  margin-bottom: 2rem;
+  > header > h1 {
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .icn-trash {
+      margin-left: 0.5rem;
+      font-size: 0.65em;
+    }
+  }
+}
+
+.resource-apps {
+  > ul {
+    > li {
+      > .delete-link {
+        margin-left: 0.5rem;
+        visibility: hidden;
+      }
+      &:hover > .delete-link {
+        visibility: visible;
+      }
+    }
+  }
+}
+
+.resource-delete {
+  .delete-btn {
+    @extend %btn-red;
+    @extend %btn-block;
+  }
+}
+

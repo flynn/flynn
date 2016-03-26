@@ -1,0 +1,28 @@
+@import './colors';
+@import './mixins';
+
+.resource-route {
+  display: -webkit-flex;
+  display: flex;
+  margin-bottom: 1rem;
+
+  > div {
+    @extend %userselectnone;
+    cursor: pointer;
+    padding: 1rem;
+    color: $almostWhiteColor;
+    background-color: $greenColor;
+    border-radius: 4px 0 0 4px;
+  }
+  > div + div {
+    color: $almostBlackColor;
+    background-color: $almostWhiteColor;
+    border-radius: 0;
+  }
+  > input {
+    flex-grow: 1;
+    cursor: default;
+    border-color: $almostWhiteColor;
+    border-radius: 0 4px 4px 0;
+  }
+}

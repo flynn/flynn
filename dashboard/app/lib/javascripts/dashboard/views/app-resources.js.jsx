@@ -1,5 +1,11 @@
 import { assertEqual } from 'marbles/utils';
-import AppResourcesStore from '../stores/app-resources';
+import Config from 'dashboard/config';
+import AppResourcesStore from 'dashboard/stores/app-resources';
+import ProvidersStore from 'dashboard/stores/providers';
+import RouteLink from 'dashboard/views/route-link';
+
+var providersStoreID = 'default';
+var providerAttrs = Config.PROVIDER_ATTRS;
 
 function getAppResourcesStoreId (props) {
 	return {
@@ -16,6 +22,13 @@ function getState (props) {
 	state.resources = appResourcesState.resources;
 	state.resourcesFetched = appResourcesState.fetched;
 
+	var providersState = ProvidersStore.getState(providersStoreID);
+	var providersByID = {};
+	providersState.providers.forEach(function (provider) {
+		providersByID[provider.id] = provider;
+	});
+	state.providersByID = providersByID;
+
 	return state;
 }
 
@@ -23,6 +36,9 @@ var AppResources = React.createClass({
 	displayName: "Views.AppResources",
 
 	render: function () {
+		var getAppPath = this.props.getAppPath;
+		var providersByID = this.state.providersByID;
+
 		return (
 			<section className="app-resources">
 				<header>
@@ -30,18 +46,28 @@ var AppResources = React.createClass({
 				</header>
 
 				{(this.state.resources.length === 0 && this.state.resourcesFetched) ? (
-					<span>(none)</span>
+					<div>(none)</div>
 				) : (
 					<ul>
 						{this.state.resources.map(function (resource) {
+							var provider = providersByID[resource.provider] || {};
+							var pAttrs = providerAttrs[provider.name] || {title: ''};
 							return (
 								<li key={resource.id}>
-									{resource.provider}
+									<RouteLink className="resource-link" path={'/providers/'+ resource.provider +'/resources/'+ resource.id}>
+										<img src={pAttrs.img} />
+										<span>{pAttrs.title}</span>
+									</RouteLink>
+									<RouteLink className="delete-resource-link" style={{float: 'right'}} path={getAppPath("/providers/:providerID/resources/:resourceID/delete", {providerID: resource.provider, resourceID: resource.id})}>
+										<i className="icn-trash" />
+									</RouteLink>
 								</li>
 							);
 						}, this)}
 					</ul>
 				)}
+
+				<RouteLink path={'/apps/'+ this.props.appId +'/resources/new'} className="btn-green" style={{marginTop: '2rem'}}>Provision database</RouteLink>
 			</section>
 		);
 	},
@@ -52,6 +78,7 @@ var AppResources = React.createClass({
 
 	componentDidMount: function () {
 		AppResourcesStore.addChangeListener(this.state.appResourcesStoreId, this.__handleStoreChange);
+		ProvidersStore.addChangeListener(providersStoreID, this.__handleStoreChange);
 	},
 
 	componentWillReceiveProps: function (nextProps) {
@@ -66,6 +93,7 @@ var AppResources = React.createClass({
 
 	componentWillUnmount: function () {
 		AppResourcesStore.removeChangeListener(this.state.appResourcesStoreId, this.__handleStoreChange);
+		ProvidersStore.removeChangeListener(providersStoreID, this.__handleStoreChange);
 	},
 
 	__handleStoreChange: function (props) {

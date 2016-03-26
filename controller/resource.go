@@ -58,7 +58,91 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 			return err
 		}
 	}
+	if len(r.Apps) == 0 {
+		// Ensure an event is created if there are no associated apps
+		if err := createEvent(tx.Exec, &ct.Event{
+			ObjectID:   r.ID,
+			ObjectType: ct.EventTypeResource,
+		}, r); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
 	return tx.Commit()
+}
+
+func (rr *ResourceRepo) AddApp(resourceID, appID string) (*ct.Resource, error) {
+	tx, err := rr.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	row := tx.QueryRow("resource_select", resourceID)
+	r, err := scanResource(row)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	r.Apps = append(r.Apps, appID)
+
+	{
+		var row postgres.Scanner
+		if idPattern.MatchString(appID) {
+			row = tx.QueryRow("app_resource_insert_app_by_name_or_id", appID, appID, r.ID)
+		} else {
+			row = tx.QueryRow("app_resource_insert_app_by_name", appID, r.ID)
+		}
+		if err := row.Scan(&r.Apps[len(r.Apps)-1]); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      appID,
+		ObjectID:   r.ID,
+		ObjectType: ct.EventTypeResource,
+	}, r); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	return r, tx.Commit()
+}
+
+func (rr *ResourceRepo) RemoveApp(resourceID, appID string) (*ct.Resource, error) {
+	tx, err := rr.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	row := tx.QueryRow("resource_select", resourceID)
+	r, err := scanResource(row)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	apps := make([]string, 0, len(r.Apps))
+	for _, id := range r.Apps {
+		if id != appID {
+			apps = append(apps, id)
+		}
+	}
+	r.Apps = apps
+
+	if err := tx.Exec("app_resource_delete_by_app", appID); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      appID,
+		ObjectID:   r.ID,
+		ObjectType: ct.EventTypeResourceAppDeletion,
+	}, r); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	return r, tx.Commit()
 }
 
 func split(s string, sep string) []string {
@@ -86,6 +170,14 @@ func scanResource(s postgres.Scanner) (*ct.Resource, error) {
 func (r *ResourceRepo) Get(id string) (*ct.Resource, error) {
 	row := r.db.QueryRow("resource_select", id)
 	return scanResource(row)
+}
+
+func (r *ResourceRepo) List() ([]*ct.Resource, error) {
+	rows, err := r.db.Query("resource_list")
+	if err != nil {
+		return nil, err
+	}
+	return resourceList(rows)
 }
 
 func (r *ResourceRepo) ProviderList(providerID string) ([]*ct.Resource, error) {
@@ -135,6 +227,16 @@ func (rr *ResourceRepo) Remove(r *ct.Resource) error {
 	for _, appID := range r.Apps {
 		if err := createEvent(tx.Exec, &ct.Event{
 			AppID:      appID,
+			ObjectID:   r.ID,
+			ObjectType: ct.EventTypeResourceDeletion,
+		}, r); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	if len(r.Apps) == 0 {
+		// Ensure an event is created if there are no associated apps
+		if err := createEvent(tx.Exec, &ct.Event{
 			ObjectID:   r.ID,
 			ObjectType: ct.EventTypeResourceDeletion,
 		}, r); err != nil {
@@ -198,6 +300,15 @@ func (c *controllerAPI) GetProviderResources(ctx context.Context, w http.Respons
 	}
 
 	res, err := c.resourceRepo.ProviderList(p.ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, res)
+}
+
+func (c *controllerAPI) GetResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	res, err := c.resourceRepo.List()
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -289,6 +400,42 @@ func (c *controllerAPI) DeleteResource(ctx context.Context, w http.ResponseWrite
 	logger.Info("completed resource removal")
 
 	httphelper.JSON(w, 200, res)
+}
+
+func (c *controllerAPI) AddResourceApp(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	_, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	resource, err := c.resourceRepo.AddApp(params.ByName("resources_id"), params.ByName("app_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	httphelper.JSON(w, 200, resource)
+}
+
+func (c *controllerAPI) DeleteResourceApp(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	_, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	resource, err := c.resourceRepo.RemoveApp(params.ByName("resources_id"), params.ByName("app_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	httphelper.JSON(w, 200, resource)
 }
 
 func (c *controllerAPI) GetAppResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {

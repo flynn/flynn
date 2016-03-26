@@ -290,10 +290,28 @@ func (c *Client) GetResource(providerID, resourceID string) (*ct.Resource, error
 	return res, err
 }
 
+// ResourceListAll returns all resources.
+func (c *Client) ResourceListAll() ([]*ct.Resource, error) {
+	var resources []*ct.Resource
+	return resources, c.Get("/resources", &resources)
+}
+
 // ResourceList returns all resources under providerID.
 func (c *Client) ResourceList(providerID string) ([]*ct.Resource, error) {
 	var resources []*ct.Resource
 	return resources, c.Get(fmt.Sprintf("/providers/%s/resources", providerID), &resources)
+}
+
+// AddResourceApp adds appID to the resource identified by resourceID and returns the resource
+func (c *Client) AddResourceApp(providerID, resourceID, appID string) (*ct.Resource, error) {
+	var resource *ct.Resource
+	return resource, c.Put(fmt.Sprintf("/providers/%s/resources/%s/apps/%s", providerID, resourceID, appID), nil, &resource)
+}
+
+// DeleteResourceApp removes appID from the resource identified by resourceID and returns the resource
+func (c *Client) DeleteResourceApp(providerID, resourceID, appID string) (*ct.Resource, error) {
+	var resource *ct.Resource
+	return resource, c.Delete(fmt.Sprintf("/providers/%s/resources/%s/apps/%s", providerID, resourceID, appID), &resource)
 }
 
 // AppResourceList returns a list of all resources under appID.

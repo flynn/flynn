@@ -54,6 +54,7 @@ var preparedStatements = map[string]string{
 	"provider_select_by_name":               providerSelectByNameQuery,
 	"provider_select_by_name_or_id":         providerSelectByNameOrIDQuery,
 	"provider_insert":                       providerInsertQuery,
+	"resource_list":                         resourceListQuery,
 	"resource_list_by_provider":             resourceListByProviderQuery,
 	"resource_list_by_app":                  resourceListByAppQuery,
 	"resource_select":                       resourceSelectQuery,
@@ -255,6 +256,17 @@ FROM providers WHERE deleted_at IS NULL AND (provider_id = $1 OR name = $2) LIMI
 	providerInsertQuery = `
 INSERT INTO providers (name, url) VALUES ($1, $2)
 RETURNING provider_id, created_at, updated_at`
+	resourceListQuery = `
+SELECT resource_id, provider_id, external_id, env,
+  ARRAY(
+	SELECT a.app_id
+    FROM app_resources a
+	WHERE a.resource_id = r.resource_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at DESC
+  ), created_at
+FROM resources r
+WHERE deleted_at IS NULL
+ORDER BY created_at DESC`
 	resourceListByProviderQuery = `
 SELECT resource_id, provider_id, external_id, env,
   ARRAY(
@@ -276,7 +288,7 @@ SELECT DISTINCT(r.resource_id), r.provider_id, r.external_id, r.env,
   ), r.created_at
 FROM resources r
 JOIN app_resources a USING (resource_id)
-WHERE a.app_id = $1 AND r.deleted_at IS NULL
+WHERE a.app_id = $1 AND r.deleted_at IS NULL AND a.deleted_at IS NULL
 ORDER BY r.created_at DESC`
 	resourceSelectQuery = `
 SELECT resource_id, provider_id, external_id, env,
@@ -302,9 +314,9 @@ INSERT INTO app_resources (app_id, resource_id)
 VALUES ((SELECT app_id FROM apps WHERE (app_id = $1 OR name = $2) AND deleted_at IS NULL), $3)
 RETURNING app_id`
 	appResourceDeleteByAppQuery = `
-UPDATE app_resources SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL`
+DELETE FROM app_resources WHERE app_id = $1`
 	appResourceDeleteByResourceQuery = `
-UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL`
+DELETE FROM app_resources WHERE resource_id = $1`
 	domainMigrationInsert = `
 INSERT INTO domain_migrations (old_domain, domain, old_tls_cert, tls_cert) VALUES ($1, $2, $3, $4) RETURNING migration_id, created_at`
 )

@@ -24,6 +24,7 @@ var AppRoutes = Store.createClass({
 
 	getInitialState: function () {
 		return {
+			fetched: false,
 			routes: []
 		};
 	},
@@ -76,6 +77,7 @@ var AppRoutes = Store.createClass({
 		return this.__getClient().getAppRoutes(this.props.appId).then(function (args) {
 			var res = args[0];
 			this.setState({
+				fetched: true,
 				routes: res
 			});
 		}.bind(this));
