@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -14,6 +15,7 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/certgen"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -28,11 +30,12 @@ func init() {
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
-	cc   *tu.FakeCluster
-	srv  *httptest.Server
-	hc   handlerConfig
-	c    *controller.Client
-	flac *fakeLogAggregatorClient
+	cc     *tu.FakeCluster
+	srv    *httptest.Server
+	hc     handlerConfig
+	c      *controller.Client
+	flac   *fakeLogAggregatorClient
+	caCert []byte
 }
 
 var _ = Suite(&S{})
@@ -76,14 +79,21 @@ func (s *S) SetUpSuite(c *C) {
 	}
 	db = postgres.New(pgxpool, nil)
 
+	ca, err := certgen.Generate(certgen.Params{IsCA: true})
+	if err != nil {
+		c.Fatal(err)
+	}
+	s.caCert = []byte(ca.PEM)
+
 	s.flac = newFakeLogAggregatorClient()
 	s.cc = tu.NewFakeCluster()
 	s.hc = handlerConfig{
-		db:   db,
-		cc:   s.cc,
-		lc:   s.flac,
-		rc:   newFakeRouter(),
-		keys: []string{authKey},
+		db:     db,
+		cc:     s.cc,
+		lc:     s.flac,
+		rc:     newFakeRouter(),
+		keys:   []string{authKey},
+		caCert: s.caCert,
 	}
 	handler := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)
@@ -466,4 +476,27 @@ func (s *S) TestProviderList(c *C) {
 
 	c.Assert(len(list) > 0, Equals, true)
 	c.Assert(list[0].ID, Not(Equals), "")
+}
+
+func (s *S) TestGetCACertWithAuth(c *C) {
+	cert, err := s.c.GetCACert()
+	c.Assert(err, IsNil)
+	c.Assert(cert, DeepEquals, s.caCert)
+}
+
+func (s *S) TestGetCACertWithInvalidAuth(c *C) {
+	client, err := controller.NewClient(s.srv.URL, "invalid-key")
+	c.Assert(err, IsNil)
+	cert, err := client.GetCACert()
+	c.Assert(err, Not(IsNil))
+	c.Assert(len(cert), Equals, 0)
+	c.Assert(strings.Contains(err.Error(), "unexpected status 401"), Equals, true)
+}
+
+func (s *S) TestGetCACertWithoutAuth(c *C) {
+	client, err := controller.NewClient(s.srv.URL, "")
+	c.Assert(err, IsNil)
+	cert, err := client.GetCACert()
+	c.Assert(err, IsNil)
+	c.Assert(cert, DeepEquals, s.caCert)
 }
