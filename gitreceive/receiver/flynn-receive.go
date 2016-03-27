@@ -98,7 +98,7 @@ Options:
 			jobEnv[k] = v
 		}
 	}
-	slugURL := fmt.Sprintf("%s/%s.tgz", blobstoreURL, random.UUID())
+	slugURL := fmt.Sprintf("%s/%s/slug.tgz", blobstoreURL, random.UUID())
 
 	cmd := exec.Job(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), &host.Job{
 		Config: host.ContainerConfig{
@@ -142,11 +142,20 @@ Options:
 
 	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: os.Getenv("SLUGRUNNER_IMAGE_URI")}
 	if err := client.CreateArtifact(artifact); err != nil {
-		log.Fatalln("Error creating artifact:", err)
+		log.Fatalln("Error creating image artifact:", err)
+	}
+
+	slugArtifact := &ct.Artifact{
+		Type: host.ArtifactTypeFile,
+		URI:  slugURL,
+		Meta: map[string]string{"blobstore": "true"},
+	}
+	if err := client.CreateArtifact(slugArtifact); err != nil {
+		log.Fatalln("Error creating slug artifact:", err)
 	}
 
 	release := &ct.Release{
-		ArtifactIDs: []string{artifact.ID},
+		ArtifactIDs: []string{artifact.ID, slugArtifact.ID},
 		Env:         prevRelease.Env,
 		Meta:        prevRelease.Meta,
 	}
@@ -181,10 +190,6 @@ Options:
 		procs[t] = proc
 	}
 	release.Processes = procs
-	if release.Env == nil {
-		release.Env = make(map[string]string)
-	}
-	release.Env["SLUG_URL"] = slugURL
 
 	if err := client.CreateRelease(release); err != nil {
 		log.Fatalln("Error creating release:", err)
