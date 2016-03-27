@@ -98,3 +98,67 @@ func (TestSuite) TestFormationRectifyOmni(c *C) {
 	assertRectify(2, true, map[string]int{"web": 4, "omni": 4})
 	assertRectify(2, false, map[string]int{"web": 4, "omni": 4})
 }
+
+func (TestSuite) TestDiffScaleDownOf(c *C) {
+	type test struct {
+		diff     Processes
+		procs    Processes
+		expected bool
+	}
+
+	for _, t := range []test{
+		{
+			diff:     nil,
+			procs:    nil,
+			expected: false,
+		},
+		{
+			diff:     Processes{"web": 1},
+			procs:    Processes{"web": 0},
+			expected: false,
+		},
+		{
+			diff:     Processes{"web": 1},
+			procs:    Processes{"web": 1},
+			expected: false,
+		},
+		{
+			diff:     Processes{"web": -1},
+			procs:    Processes{"web": 1},
+			expected: true,
+		},
+		{
+			diff:     Processes{"web": 0},
+			procs:    Processes{"web": 1},
+			expected: false,
+		},
+		{
+			diff:     Processes{"web": -1},
+			procs:    Processes{"web": 2},
+			expected: false,
+		},
+		{
+			diff:     Processes{"web": -2},
+			procs:    Processes{"web": 2},
+			expected: true,
+		},
+		{
+			diff:     Processes{"web": -1, "worker": -1},
+			procs:    Processes{"web": 2, "worker": 2},
+			expected: false,
+		},
+		{
+			diff:     Processes{"web": -2, "worker": -1},
+			procs:    Processes{"web": 2, "worker": 2},
+			expected: true,
+		},
+		{
+			diff:     Processes{"web": -2, "worker": -2},
+			procs:    Processes{"web": 2, "worker": 2},
+			expected: true,
+		},
+	} {
+		diff := Processes(t.diff)
+		c.Assert(diff.IsScaleDownOf(Processes(t.procs)), Equals, t.expected)
+	}
+}

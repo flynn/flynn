@@ -54,9 +54,11 @@ func (p Processes) IsEmpty() bool {
 	return true
 }
 
-func (p Processes) IsScaleDown() bool {
-	for _, count := range p {
-		if count < 0 {
+// IsScaleDownOf returns whether a diff is the complete scale down of any
+// process types in the given processes
+func (p Processes) IsScaleDownOf(proc Processes) bool {
+	for typ, count := range p {
+		if count <= -proc[typ] {
 			return true
 		}
 	}

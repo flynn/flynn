@@ -1223,9 +1223,9 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Format
 			return
 		}
 
-		// do not scale down critical apps for which this is the only active formation
+		// do not completely scale down critical apps for which this is the only active formation
 		// (this prevents for example scaling down discoverd which breaks the cluster)
-		if diff.IsScaleDown() && formation.App.Critical() && s.activeFormationCount(formation.App.ID) < 2 {
+		if diff.IsScaleDownOf(formation.OriginalProcesses) && formation.App.Critical() && s.activeFormationCount(formation.App.ID) < 2 {
 			log.Info("refusing to scale down critical app")
 			return
 		}
