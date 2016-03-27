@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/digitalocean/godo"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 var ClusterNotFoundError = errors.New("Cluster not found")
@@ -36,10 +37,13 @@ func NewInstaller(l log.Logger) *Installer {
 		logger:        l,
 	}
 	if err := installer.openDB(); err != nil {
-		panic(err)
+		if err.Error() == "resource temporarily unavailable" {
+			shutdown.Fatal("Error: Another `flynn install` process is already running.")
+		}
+		shutdown.Fatalf("Error opening database: %s", err)
 	}
 	if err := installer.loadEventsFromDB(); err != nil {
-		panic(err)
+		shutdown.Fatalf("Error loading events from database: %s", err)
 	}
 	return installer
 }
