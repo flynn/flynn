@@ -106,9 +106,17 @@ func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
 	}
 	c.Assert(db.Exec(`INSERT INTO releases (release_id) VALUES ($1)`, random.UUID()), IsNil)
 
+	// insert a slug based release
+	slugReleaseID := random.UUID()
+	imageArtifactID := random.UUID()
+	slugEnv := map[string]string{"SLUG_URL": "http://example.com/slug.tgz"}
+	c.Assert(db.Exec(`INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3)`, imageArtifactID, "docker", "http://example.com/"+imageArtifactID), IsNil)
+	c.Assert(db.Exec(`INSERT INTO releases (release_id, artifact_id, env) VALUES ($1, $2, $3)`, slugReleaseID, imageArtifactID, slugEnv), IsNil)
+	releaseArtifacts[slugReleaseID] = imageArtifactID
+
 	// migrate to 14 and check release_artifacts was populated correctly
 	m.migrateTo(14)
-	rows, err := db.Query("SELECT release_id, artifact_id FROM release_artifacts")
+	rows, err := db.Query("SELECT release_id, artifact_id FROM release_artifacts INNER JOIN artifacts USING (artifact_id) WHERE type = 'docker'")
 	c.Assert(err, IsNil)
 	defer rows.Close()
 	actual := make(map[string]string)
@@ -119,4 +127,12 @@ func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
 	}
 	c.Assert(rows.Err(), IsNil)
 	c.Assert(actual, DeepEquals, releaseArtifacts)
+
+	// check the slug release got a file artifact with the correct URI and meta
+	var slugURI string
+	var meta map[string]string
+	err = db.QueryRow("SELECT uri, meta FROM artifacts INNER JOIN release_artifacts USING (artifact_id) WHERE type = 'file' AND release_id = $1", slugReleaseID).Scan(&slugURI, &meta)
+	c.Assert(err, IsNil)
+	c.Assert(slugURI, Equals, slugEnv["SLUG_URL"])
+	c.Assert(meta, DeepEquals, map[string]string{"blobstore": "true"})
 }

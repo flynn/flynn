@@ -300,6 +300,21 @@ $$ LANGUAGE plpgsql`,
 			AFTER INSERT ON release_artifacts
 			FOR EACH ROW EXECUTE PROCEDURE check_release_artifacts()`,
 		`INSERT INTO release_artifacts (release_id, artifact_id) (SELECT release_id, artifact_id FROM releases WHERE artifact_id IS NOT NULL)`,
+
+		// create file artifacts for any releases with SLUG_URL set
+		`DO $$
+		DECLARE
+			release RECORD;
+		BEGIN
+			FOR release IN SELECT * FROM releases WHERE env ? 'SLUG_URL' LOOP
+				WITH artifact AS (
+					INSERT INTO artifacts (type, uri, meta)
+					VALUES ('file', release.env->>'SLUG_URL', '{"blobstore":"true"}')
+					RETURNING *
+				)
+				INSERT INTO release_artifacts (release_id, artifact_id) (SELECT release.release_id, artifact_id FROM artifact);
+			END LOOP;
+		END $$`,
 		`ALTER TABLE releases DROP COLUMN artifact_id`,
 	)
 }
