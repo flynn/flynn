@@ -267,7 +267,7 @@ func (i *Installer) dbInsertItem(tableName string, item interface{}) error {
 	return i.txExec(list.String(), fields...)
 }
 
-func (c *BaseCluster) prompt(typ, msg string) *Prompt {
+func (c *BaseCluster) prompt(typ PromptType, msg string) *Prompt {
 	if c.State != "starting" && c.State != "deleting" {
 		return &Prompt{}
 	}
@@ -282,7 +282,7 @@ func (c *BaseCluster) prompt(typ, msg string) *Prompt {
 }
 
 func (c *BaseCluster) YesNoPrompt(msg string) bool {
-	res := c.prompt("yes_no", msg)
+	res := c.prompt(PromptTypeYesNo, msg)
 	return res.Yes
 }
 
@@ -302,27 +302,27 @@ func (c *BaseCluster) ChoicePrompt(choice Choice) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	res := c.prompt("choice", string(data))
+	res := c.prompt(PromptTypeChoice, string(data))
 	return res.Input, nil
 }
 
 func (c *BaseCluster) CredentialPrompt(msg string) string {
-	res := c.prompt("credential", msg)
+	res := c.prompt(PromptTypeCredential, msg)
 	return res.Input
 }
 
 func (c *BaseCluster) PromptInput(msg string) string {
-	res := c.prompt("input", msg)
+	res := c.prompt(PromptTypeInput, msg)
 	return res.Input
 }
 
 func (c *BaseCluster) PromptProtectedInput(msg string) string {
-	res := c.prompt("protected_input", msg)
+	res := c.prompt(PromptTypeProtectedInput, msg)
 	return res.Input
 }
 
 func (c *BaseCluster) PromptFileInput(msg string) string {
-	res := c.prompt("file", msg)
+	res := c.prompt(PromptTypeFile, msg)
 	return res.Input
 }
 

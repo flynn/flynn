@@ -165,7 +165,7 @@ type Event struct {
 
 type Prompt struct {
 	ID        string     `json:"id"`
-	Type      string     `json:"type,omitempty"`
+	Type      PromptType `json:"type,omitempty"`
 	Message   string     `json:"message,omitempty"`
 	Yes       bool       `json:"yes,omitempty"`
 	Input     string     `json:"input,omitempty"`
@@ -174,6 +174,17 @@ type Prompt struct {
 	resChan   chan *Prompt
 	cluster   *BaseCluster
 }
+
+type PromptType string
+
+var (
+	PromptTypeYesNo          PromptType = "yes_no"
+	PromptTypeChoice         PromptType = "choice"
+	PromptTypeCredential     PromptType = "credential"
+	PromptTypeInput          PromptType = "input"
+	PromptTypeProtectedInput PromptType = "protected_input"
+	PromptTypeFile           PromptType = "file"
+)
 
 func (i *Installer) updatedbColumns(in interface{}, t string) error {
 	s, err := ql.StructSchema(in)
