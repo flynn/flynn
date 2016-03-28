@@ -298,7 +298,10 @@ func (i *Installer) ListAzureRegions(creds *Credential) (interface{}, error) {
 	return locs, nil
 }
 
-func (i *Installer) dbMarshalItem(tableName string, item interface{}) ([]interface{}, error) {
+func (i *Installer) dbMarshalItem(tableName string, item interface{}, typeMap map[string]interface{}) ([]interface{}, error) {
+	if typeMap == nil {
+		typeMap = make(map[string]interface{})
+	}
 	rows, err := i.db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT 0", tableName))
 	if err != nil {
 		return nil, err
@@ -312,6 +315,9 @@ func (i *Installer) dbMarshalItem(tableName string, item interface{}) ([]interfa
 	fields := make([]interface{}, len(cols))
 	for idx, c := range cols {
 		fields[idx] = v.FieldByName(c).Interface()
+		if t, ok := typeMap[c]; ok {
+			fields[idx] = reflect.ValueOf(fields[idx]).Convert(reflect.TypeOf(t)).Interface()
+		}
 	}
 	return fields, nil
 }
@@ -325,7 +331,7 @@ func (i *Installer) SaveCluster(c Cluster) error {
 	base.Type = c.Type()
 	base.Name = base.ID
 
-	baseFields, err := i.dbMarshalItem("clusters", base)
+	baseFields, err := i.dbMarshalItem("clusters", base, nil)
 	if err != nil {
 		return err
 	}
@@ -335,7 +341,7 @@ func (i *Installer) SaveCluster(c Cluster) error {
 	}
 
 	tableName := strings.Join([]string{base.Type, "clusters"}, "_")
-	clusterFields, err := i.dbMarshalItem(tableName, c)
+	clusterFields, err := i.dbMarshalItem(tableName, c, nil)
 	if err != nil {
 		return err
 	}

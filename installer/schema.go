@@ -169,9 +169,12 @@ type Prompt struct {
 	Message   string     `json:"message,omitempty"`
 	Yes       bool       `json:"yes,omitempty"`
 	Input     string     `json:"input,omitempty"`
+	File      io.Reader  `json:"-" ql:"-"`
+	FileSize  int        `json:"-" ql:"-"`
 	Resolved  bool       `json:"resolved,omitempty"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	resChan   chan *Prompt
+	errChan   chan error
 	cluster   *BaseCluster
 }
 

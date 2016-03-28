@@ -261,12 +261,28 @@ func (api *httpAPI) Prompt(w http.ResponseWriter, req *http.Request, params http
 		return
 	}
 
+	defer req.Body.Close()
 	var input *Prompt
-	if err := httphelper.DecodeJSON(req, &input); err != nil {
+	if prompt.Type == PromptTypeFile {
+		size, err := strconv.Atoi(req.Header.Get("Content-Length"))
+		if err != nil {
+			httphelper.Error(w, err)
+			return
+		}
+		input = &Prompt{
+			File:     req.Body,
+			FileSize: size,
+		}
+	} else {
+		if err := httphelper.DecodeJSON(req, &input); err != nil {
+			httphelper.Error(w, err)
+			return
+		}
+	}
+	if err := prompt.Resolve(input); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
-	prompt.Resolve(input)
 	w.WriteHeader(200)
 }
 

@@ -138,8 +138,19 @@ var Client = {
 	},
 
 	sendPromptResponse: function (clusterID, promptID, data) {
+		var url = Config.endpoints.prompt.replace(':id', clusterID).replace(':prompt_id', promptID);
+		if (data.type === "file") {
+			this.performRequest('POST', {
+				url: url,
+				body: data.file,
+				headers: {
+					'Content-Length': data.file.size
+				}
+			});
+			return;
+		}
 		this.performRequest('POST', {
-			url: Config.endpoints.prompt.replace(':id', clusterID).replace(':prompt_id', promptID),
+			url: url,
 			body: data,
 			headers: {
 				'Content-Type': 'application/json'

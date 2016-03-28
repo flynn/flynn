@@ -40,13 +40,10 @@ var FilePrompt = React.createClass({
 	},
 
 	__handleFileSelected: function (file) {
-		var reader = new FileReader();
-		reader.onload = function () {
-			this.props.onSubmit({
-				input: btoa(reader.result)
-			});
-		}.bind(this);
-		reader.readAsBinaryString(file);
+		this.props.onSubmit({
+			type: "file",
+			file: file
+		});
 	}
 });
 
