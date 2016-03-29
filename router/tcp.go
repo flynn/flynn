@@ -240,7 +240,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	} else {
 		bf = service.sc.Addrs
 	}
-	r.rp = proxy.NewReverseProxy(bf, nil, false)
+	r.rp = proxy.NewReverseProxy(bf, nil, false, logger)
 	if listener, ok := h.l.listeners[r.Port]; ok {
 		r.l = listener
 		delete(h.l.listeners, r.Port)

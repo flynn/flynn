@@ -8,7 +8,6 @@ package proxy
 
 import (
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
 const (
@@ -51,17 +51,14 @@ type ReverseProxy struct {
 	// If zero, no periodic flushing is done.
 	FlushInterval time.Duration
 
-	// ErrorLog specifies an optional logger for errors
-	// that occur when attempting to proxy the request.
-	// If nil, logging goes to os.Stderr via the log package's
-	// standard logger.
-	ErrorLog *log.Logger
+	// Logger is the logger for the proxy.
+	Logger log15.Logger
 }
 
 // NewReverseProxy initializes a new ReverseProxy with a callback to get
 // backends, a stickyKey for encrypting sticky session cookies, and a flag
 // sticky to enable sticky sessions.
-func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool) *ReverseProxy {
+func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool, l log15.Logger) *ReverseProxy {
 	return &ReverseProxy{
 		transport: &transport{
 			getBackends:       bf,
@@ -69,6 +66,7 @@ func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool) *Reve
 			useStickySessions: sticky,
 		},
 		FlushInterval: 10 * time.Millisecond,
+		Logger:        l,
 	}
 }
 
@@ -81,14 +79,15 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	outreq := prepareRequest(req)
 
+	l := p.Logger.New("request_id", req.Header.Get("X-Request-Id"), "client_addr", req.RemoteAddr, "host", req.Host, "path", req.URL.Path, "method", req.Method)
+
 	if isConnectionUpgrade(req.Header) {
-		p.serveUpgrade(rw, outreq)
+		p.serveUpgrade(rw, l, outreq)
 		return
 	}
 
-	res, err := transport.RoundTrip(outreq)
+	res, err := transport.RoundTrip(outreq, l)
 	if err != nil {
-		p.logf("router: proxy error: %v", err)
 		rw.WriteHeader(http.StatusServiceUnavailable)
 		rw.Write(serviceUnavailable)
 		return
@@ -119,9 +118,10 @@ func (p *ReverseProxy) ServeConn(ctx context.Context, dconn net.Conn) {
 		}
 	}()
 
-	uconn, err := transport.Connect(ctx)
+	l := p.Logger.New("client_addr", dconn.RemoteAddr(), "host_addr", dconn.LocalAddr(), "proxy", "tcp")
+
+	uconn, err := transport.Connect(ctx, l)
 	if err != nil {
-		p.logf("router: proxy error: %v", err)
 		return
 	}
 	defer uconn.Close()
@@ -129,15 +129,14 @@ func (p *ReverseProxy) ServeConn(ctx context.Context, dconn net.Conn) {
 	joinConns(uconn, dconn)
 }
 
-func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
+func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, l log15.Logger, req *http.Request) {
 	transport := p.transport
 	if transport == nil {
 		panic("router: nil transport for proxy")
 	}
 
-	res, uconn, err := transport.UpgradeHTTP(req)
+	res, uconn, err := transport.UpgradeHTTP(req, l)
 	if err != nil {
-		p.logf("router: proxy error: %v", err)
 		rw.WriteHeader(http.StatusServiceUnavailable)
 		rw.Write(serviceUnavailable)
 		return
@@ -153,7 +152,7 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
 
 	dconn, bufrw, err := rw.(http.Hijacker).Hijack()
 	if err != nil {
-		p.logf("router: hijack failed: %v", err)
+		l.Error("error hijacking request", "err", err, "status", "503")
 		rw.WriteHeader(http.StatusServiceUnavailable)
 		rw.Write(serviceUnavailable)
 		return
@@ -161,7 +160,7 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
 	defer dconn.Close()
 
 	if err := res.Write(dconn); err != nil {
-		p.logf("router: proxy error: %v", err)
+		l.Error("error proxying response to client", "err", err)
 		return
 	}
 	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
@@ -224,14 +223,6 @@ func (p *ReverseProxy) copyResponse(dst io.Writer, src io.Reader) {
 	}
 
 	io.Copy(dst, src)
-}
-
-func (p *ReverseProxy) logf(format string, args ...interface{}) {
-	if p.ErrorLog != nil {
-		p.ErrorLog.Printf(format, args...)
-	} else {
-		log.Printf(format, args...)
-	}
 }
 
 func copyHeader(dst, src http.Header) {
