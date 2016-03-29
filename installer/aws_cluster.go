@@ -247,11 +247,12 @@ func (c *AWSCluster) loadKeyPair(name string) error {
 func (c *AWSCluster) createKeyPair() error {
 	keypairNames := listSSHKeyNames()
 	if c.base.SSHKeyName != "" {
-		keypairNames = make([]string, len(keypairNames)+1)
-		keypairNames[0] = c.base.SSHKeyName
+		newKeypairNames := make([]string, len(keypairNames)+1)
+		newKeypairNames[0] = c.base.SSHKeyName
 		for i, name := range keypairNames {
-			keypairNames[i+1] = name
+			newKeypairNames[i+1] = name
 		}
+		keypairNames = newKeypairNames
 	}
 	for _, name := range keypairNames {
 		if err := c.loadKeyPair(name); err == nil {
