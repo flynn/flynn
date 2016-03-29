@@ -39,6 +39,12 @@ func (a *App) System() bool {
 	return ok && v == "true"
 }
 
+// Critical apps cannot be completely scaled down by the scheduler
+func (a *App) Critical() bool {
+	v, ok := a.Meta["flynn-system-critical"]
+	return ok && v == "true"
+}
+
 type Release struct {
 	ID         string                 `json:"id,omitempty"`
 	ArtifactID string                 `json:"artifact,omitempty"`

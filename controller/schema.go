@@ -249,6 +249,28 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(12,
 		`INSERT INTO event_types (name) VALUES ('resource_app_deletion')`,
 	)
+	migrations.Add(13,
+		// define a function to merge two JSON objects, taken from:
+		// https://gist.github.com/inindev/2219dff96851928c2282
+		`CREATE OR REPLACE FUNCTION public.jsonb_merge(data jsonb, merge_data jsonb)
+		RETURNS jsonb
+		IMMUTABLE
+		LANGUAGE sql
+		AS $$
+		    SELECT json_object_agg(key, value)::jsonb
+		    FROM (
+			WITH to_merge AS (
+			    SELECT * FROM jsonb_each(merge_data)
+			)
+			SELECT *
+			FROM jsonb_each(data)
+			WHERE key NOT IN (SELECT key FROM to_merge)
+			UNION ALL
+			SELECT * FROM to_merge
+		    ) t;
+		$$`,
+		`UPDATE apps SET meta = jsonb_merge(meta, '{"flynn-system-critical":"true"}') WHERE name IN ('discoverd', 'flannel', 'postgres', 'controller')`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

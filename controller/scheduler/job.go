@@ -148,6 +148,10 @@ func (j *Job) IsInFormation(key utils.FormationKey) bool {
 	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key && j.HasTypeFromRelease()
 }
 
+func (j *Job) IsInApp(appID string) bool {
+	return j.Formation != nil && j.Formation.key().AppID == appID && j.HasTypeFromRelease()
+}
+
 func (j *Job) ControllerJob() *ct.Job {
 	job := &ct.Job{
 		ID:        j.JobID,
