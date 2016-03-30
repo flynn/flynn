@@ -12,6 +12,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/nacl/secretbox"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -71,14 +72,14 @@ func (t *transport) setStickyBackend(res *http.Response, originalStickyBackend s
 	}
 }
 
-func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *transport) RoundTrip(req *http.Request, l log15.Logger) (*http.Response, error) {
 	// http.Transport closes the request body on a failed dial, issue #875
 	req.Body = &fakeCloseReadCloser{req.Body}
 	defer req.Body.(*fakeCloseReadCloser).RealClose()
 
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
-	for _, backend := range backends {
+	for i, backend := range backends {
 		req.URL.Host = backend
 		res, err := httpTransport.RoundTrip(req)
 		if err == nil {
@@ -86,24 +87,30 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return res, nil
 		}
 		if _, ok := err.(dialErr); !ok {
+			l.Error("unretriable request error", "backend", backend, "err", err, "attempt", i)
 			return nil, err
 		}
-		// retry, maybe log a message about it
+		l.Error("retriable dial error", "backend", backend, "err", err, "attempt", i)
 	}
+	l.Error("request failed", "status", "503", "num_backends", len(backends))
 	return nil, errNoBackends
 }
 
-func (t *transport) Connect(ctx context.Context) (net.Conn, error) {
+func (t *transport) Connect(ctx context.Context, l log15.Logger) (net.Conn, error) {
 	backends := t.getOrderedBackends("")
-	conn, _, err := dialTCP(ctx, backends)
+	conn, _, err := dialTCP(ctx, l, backends)
+	if err != nil {
+		l.Error("connection failed", "num_backends", len(backends))
+	}
 	return conn, err
 }
 
-func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, error) {
+func (t *transport) UpgradeHTTP(req *http.Request, l log15.Logger) (*http.Response, net.Conn, error) {
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
-	upconn, addr, err := dialTCP(context.Background(), backends)
+	upconn, addr, err := dialTCP(context.Background(), l, backends)
 	if err != nil {
+		l.Error("dial failed", "status", "503", "num_backends", len(backends))
 		return nil, nil, err
 	}
 	conn := &streamConn{bufio.NewReader(upconn), upconn}
@@ -111,29 +118,32 @@ func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, er
 
 	if err := req.Write(conn); err != nil {
 		conn.Close()
+		l.Error("error writing request", "err", err, "backend", addr)
 		return nil, nil, err
 	}
 	res, err := http.ReadResponse(conn.Reader, req)
 	if err != nil {
 		conn.Close()
+		l.Error("error reading response", "err", err, "backend", addr)
 		return nil, nil, err
 	}
 	t.setStickyBackend(res, stickyBackend)
 	return res, conn, nil
 }
 
-func dialTCP(ctx context.Context, addrs []string) (net.Conn, string, error) {
+func dialTCP(ctx context.Context, l log15.Logger, addrs []string) (net.Conn, string, error) {
 	donec := ctx.Done()
-	for _, addr := range addrs {
+	for i, addr := range addrs {
 		select {
 		case <-donec:
 			return nil, "", errCanceled
 		default:
 		}
-
-		if conn, err := dialer.Dial("tcp", addr); err == nil {
+		conn, err := dialer.Dial("tcp", addr)
+		if err == nil {
 			return conn, addr, nil
 		}
+		l.Error("retriable dial error", "backend", addr, "err", err, "attempt", i)
 	}
 	return nil, "", errNoBackends
 }

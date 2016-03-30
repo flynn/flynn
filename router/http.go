@@ -262,7 +262,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	} else {
 		bf = service.sc.Addrs
 	}
-	r.rp = proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky)
+	r.rp = proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky, logger)
 	r.service = service
 	h.l.routes[data.ID] = r
 	if data.Path == "/" {
