@@ -19,13 +19,14 @@ func (a *ScaleAppAction) Run(s *State) error {
 	if err != nil {
 		return err
 	}
-	data, err := getAppStep(s, a.AppStep)
-	if err != nil {
-		return err
+	if a.AppStep != "" {
+		data, err := getAppStep(s, a.AppStep)
+		if err != nil {
+			return err
+		}
+		a.Formation.AppID = data.App.ID
+		a.Formation.ReleaseID = data.Release.ID
 	}
-
-	a.Formation.AppID = data.App.ID
-	a.Formation.ReleaseID = data.Release.ID
 
 	for name, count := range a.Formation.Processes {
 		if s.Singleton && count > 1 {

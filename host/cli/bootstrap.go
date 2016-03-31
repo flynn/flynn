@@ -17,7 +17,9 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/bootstrap"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
 )
@@ -373,13 +375,49 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
 	}
 
-	// start controller/scheduler
-	data.Controller.Processes["web"] = 1
-	delete(data.Controller.Processes, "worker")
-	meta = bootstrap.StepMeta{ID: "controller", Action: "run-app"}
-
+	// start controller API
+	data.Controller.Processes = map[string]int{"web": 1}
 	_, err = bootstrap.Manifest{
 		step("controller", "run-app", &bootstrap.RunAppAction{
+			ExpandedFormation: data.Controller,
+		}),
+	}.RunWithState(ch, state)
+
+	// wait for controller to come up
+	meta = bootstrap.StepMeta{ID: "wait-controller", Action: "wait-controller"}
+	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
+	controllerInstances, err := discoverd.GetInstances("controller", 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("error getting controller instance: %s", err)
+	}
+
+	// get blobstore config
+	client, err := controller.NewClient("http://"+controllerInstances[0].Addr, data.Controller.Release.Env["AUTH_KEY"])
+	if err != nil {
+		return err
+	}
+	blobstoreRelease, err := client.GetAppRelease("blobstore")
+	if err != nil {
+		return fmt.Errorf("error getting blobstore release: %s", err)
+	}
+	blobstoreFormation, err := client.GetExpandedFormation("blobstore", blobstoreRelease.ID)
+	if err != nil {
+		return fmt.Errorf("error getting blobstore expanded formation: %s", err)
+	}
+	state.SetControllerKey(data.Controller.Release.Env["AUTH_KEY"])
+	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
+
+	// start blobstore, scheduler, and enable cluster monitor
+	data.Controller.Processes = map[string]int{"scheduler": 1}
+	_, err = bootstrap.Manifest{
+		step("blobstore", "run-app", &bootstrap.RunAppAction{
+			ExpandedFormation: blobstoreFormation,
+		}),
+		step("blobstore-wait", "wait", &bootstrap.WaitAction{
+			URL:    "http://blobstore.discoverd",
+			Status: 404,
+		}),
+		step("controller-scheduler", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: data.Controller,
 		}),
 		step("status", "status-check", &bootstrap.StatusCheckAction{
