@@ -397,11 +397,21 @@ func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
 		log.Error("error setting transaction read-write", "err", err)
 		return err
 	}
-	if _, err := tx.Exec(fmt.Sprintf(`CREATE USER flynn WITH SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD '%s'`, p.password)); err != nil {
-		if e, ok := err.(pgx.PgError); !ok || e.Code != "42710" { // role already exists
-			log.Error("error creating superuser", "err", err)
-			return err
-		}
+	if _, err := tx.Exec(fmt.Sprintf(`
+		DO
+		$body$
+		BEGIN
+		   IF NOT EXISTS (
+			  SELECT * FROM pg_catalog.pg_user
+			  WHERE	usename = 'flynn')
+		   THEN
+			  CREATE USER flynn WITH SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD '%s';
+		   END IF;
+		END
+		$body$;
+	`, p.password)); err != nil {
+		log.Error("error creating superuser", "err", err)
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		log.Error("error committing transaction", "err", err)
