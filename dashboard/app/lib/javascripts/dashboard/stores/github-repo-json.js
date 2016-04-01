@@ -1,7 +1,7 @@
 import Config from '../config';
 var rewriteGithubRepoJSON = function (repoJSON) {
 	var cloneURL = repoJSON.clone_url;
-	if (repoJSON.private) {
+	if (repoJSON.private || Config.github_clone_auth_required) {
 		cloneURL = cloneURL.replace(/^https?:\/\//, function (m) {
 			return m + Config.githubClient.accessToken + "@";
 		});

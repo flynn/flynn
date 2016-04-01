@@ -232,10 +232,11 @@ type ExpandedUser struct {
 type UserConfig struct {
 	User *ExpandedUser `json:"user,omitempty"`
 
-	Endpoints          map[string]string `json:"endpoints"`
-	DefaultRouteDomain string            `json:"default_route_domain"`
-	GithubAPIURL       string            `json:"github_api_url"`
-	GithubTokenURL     string            `json:"github_token_url"`
+	Endpoints               map[string]string `json:"endpoints"`
+	DefaultRouteDomain      string            `json:"default_route_domain"`
+	GithubAPIURL            string            `json:"github_api_url"`
+	GithubTokenURL          string            `json:"github_token_url"`
+	GithubCloneAuthRequired bool              `json:"github_clone_auth_required"`
 }
 
 var baseConfig = UserConfig{
@@ -252,6 +253,7 @@ func (api *API) GetConfig(ctx context.Context, w http.ResponseWriter, req *http.
 	config.DefaultRouteDomain = api.conf.DefaultRouteDomain
 	config.GithubAPIURL = api.conf.GithubAPIURL
 	config.GithubTokenURL = api.conf.GithubTokenURL
+	config.GithubCloneAuthRequired = api.conf.GithubCloneAuthRequired
 
 	if api.IsAuthenticated(ctx) {
 		config.User = &ExpandedUser{}

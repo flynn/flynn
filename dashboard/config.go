@@ -11,24 +11,25 @@ import (
 )
 
 type Config struct {
-	Addr                 string
-	DefaultRouteDomain   string
-	ControllerDomain     string
-	ControllerKey        string
-	URL                  string
-	InterfaceURL         string
-	PathPrefix           string
-	CookiePath           string
-	SecureCookies        bool
-	LoginToken           string
-	GithubToken          string
-	GithubAPIURL         string
-	GithubTokenURL       string
-	SessionStore         *sessions.CookieStore
-	AppName              string
-	CACert               []byte
-	Cache                bool
-	DefaultDeployTimeout int
+	Addr                    string
+	DefaultRouteDomain      string
+	ControllerDomain        string
+	ControllerKey           string
+	URL                     string
+	InterfaceURL            string
+	PathPrefix              string
+	CookiePath              string
+	SecureCookies           bool
+	LoginToken              string
+	GithubToken             string
+	GithubAPIURL            string
+	GithubTokenURL          string
+	GithubCloneAuthRequired bool
+	SessionStore            *sessions.CookieStore
+	AppName                 string
+	CACert                  []byte
+	Cache                   bool
+	DefaultDeployTimeout    int
 }
 
 func LoadConfigFromEnv() *Config {
@@ -86,6 +87,7 @@ func LoadConfigFromEnv() *Config {
 	if host := os.Getenv("GITHUB_ENTERPRISE_HOST"); host != "" {
 		conf.GithubAPIURL = fmt.Sprintf("https://%s/api/v3", host)
 		conf.GithubTokenURL = fmt.Sprintf("https://%s/settings/tokens/new", host)
+		conf.GithubCloneAuthRequired = true
 	} else {
 		conf.GithubAPIURL = "https://api.github.com"
 		conf.GithubTokenURL = "https://github.com/settings/tokens/new"
