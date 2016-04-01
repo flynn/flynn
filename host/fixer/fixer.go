@@ -16,7 +16,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/pkg/sirenia/client"
+	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
 	pgstate "github.com/flynn/flynn/pkg/sirenia/state"
 )
 
@@ -382,9 +382,9 @@ func (f *ClusterFixer) FixPostgres() error {
 	f.l.Info(fmt.Sprintf("found %d running postgres instances", len(instances)))
 
 	f.l.Info("getting postgres status")
-	var status *client.Status
+	var status *sirenia.Status
 	if leader != nil && leader.Addr != "" {
-		client := client.NewClient(leader.Addr)
+		client := sirenia.NewClient(leader.Addr)
 		var err error
 		status, err = client.Status()
 		if err != nil {
@@ -526,7 +526,7 @@ func (f *ClusterFixer) FixPostgres() error {
 			addr = leader.Addr
 		}
 		f.l.Info("waiting for postgres to come up read-write")
-		return client.NewClient(addr).WaitForReadWrite(5 * time.Minute)
+		return sirenia.NewClient(addr).WaitForReadWrite(5 * time.Minute)
 	}
 	return nil
 }
