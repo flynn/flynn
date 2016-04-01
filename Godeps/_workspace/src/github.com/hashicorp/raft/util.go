@@ -5,11 +5,28 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"math"
+	"math/big"
 	"math/rand"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/hashicorp/go-msgpack/codec"
 )
+
+func init() {
+	// Ensure we use a high-entropy seed for the psuedo-random generator
+	rand.Seed(newSeed())
+}
+
+// returns an int64 from a crypto random source
+// can be used to seed a source for a math/rand.
+func newSeed() int64 {
+	r, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
+	if err != nil {
+		panic(fmt.Errorf("failed to read random bytes: %v", err))
+	}
+	return r.Int64()
+}
 
 // randomTimeout returns a value that is between the minVal and 2x minVal.
 func randomTimeout(minVal time.Duration) <-chan time.Time {
@@ -28,7 +45,7 @@ func min(a, b uint64) uint64 {
 	return b
 }
 
-// max returns the maximum
+// max returns the maximum.
 func max(a, b uint64) uint64 {
 	if a >= b {
 		return a
