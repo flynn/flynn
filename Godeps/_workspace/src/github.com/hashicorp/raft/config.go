@@ -66,6 +66,15 @@ type Config struct {
 	// step down as leader.
 	LeaderLeaseTimeout time.Duration
 
+	// StartAsLeader forces Raft to start in the leader state. This should
+	// never be used except for testing purposes, as it can cause a split-brain.
+	StartAsLeader bool
+
+	// NotifyCh is used to provide a channel that will be notified of leadership
+	// changes. Raft will block writing to this channel, so it should either be
+	// buffered or aggressively consumed.
+	NotifyCh chan<- bool
+
 	// LogOutput is used as a sink for logs, unless Logger is specified.
 	// Defaults to os.Stderr.
 	LogOutput io.Writer

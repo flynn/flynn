@@ -125,10 +125,26 @@ func NewNetworkTransport(
 	if logOutput == nil {
 		logOutput = os.Stderr
 	}
+	return NewNetworkTransportWithLogger(stream, maxPool, timeout, log.New(logOutput, "", log.LstdFlags))
+}
+
+// NewNetworkTransportWithLogger creates a new network transport with the given dialer
+// and listener. The maxPool controls how many connections we will pool. The
+// timeout is used to apply I/O deadlines. For InstallSnapshot, we multiply
+// the timeout by (SnapshotSize / TimeoutScale).
+func NewNetworkTransportWithLogger(
+	stream StreamLayer,
+	maxPool int,
+	timeout time.Duration,
+	logger *log.Logger,
+) *NetworkTransport {
+	if logger == nil {
+		logger = log.New(os.Stderr, "", log.LstdFlags)
+	}
 	trans := &NetworkTransport{
 		connPool:     make(map[string][]*netConn),
 		consumeCh:    make(chan RPC),
-		logger:       log.New(logOutput, "", log.LstdFlags),
+		logger:       logger,
 		maxPool:      maxPool,
 		shutdownCh:   make(chan struct{}),
 		stream:       stream,
@@ -148,7 +164,7 @@ func (n *NetworkTransport) SetHeartbeatHandler(cb func(rpc RPC)) {
 	n.heartbeatFn = cb
 }
 
-// Close is used to stop the network transport
+// Close is used to stop the network transport.
 func (n *NetworkTransport) Close() error {
 	n.shutdownLock.Lock()
 	defer n.shutdownLock.Unlock()
@@ -339,7 +355,7 @@ func (n *NetworkTransport) DecodePeer(buf []byte) string {
 	return string(buf)
 }
 
-// listen is used to handling incoming connections
+// listen is used to handling incoming connections.
 func (n *NetworkTransport) listen() {
 	for {
 		// Accept incoming connections
@@ -471,7 +487,8 @@ RESP:
 	return nil
 }
 
-// decodeResponse is used to decode an RPC response and return the conn.
+// decodeResponse is used to decode an RPC response and reports whether
+// the connection can be reused.
 func decodeResponse(conn *netConn, resp interface{}) (bool, error) {
 	// Decode the error if any
 	var rpcError string

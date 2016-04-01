@@ -102,9 +102,11 @@ RPC:
 			}
 			return
 		case <-s.triggerCh:
-			shouldStop = r.replicateTo(s, r.getLastLogIndex())
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.replicateTo(s, lastLogIdx)
 		case <-randomTimeout(r.conf.CommitTimeout):
-			shouldStop = r.replicateTo(s, r.getLastLogIndex())
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.replicateTo(s, lastLogIdx)
 		}
 
 		// If things looks healthy, switch to pipeline mode
@@ -181,7 +183,11 @@ START:
 	} else {
 		s.nextIndex = max(min(s.nextIndex-1, resp.LastLog+1), 1)
 		s.matchIndex = s.nextIndex - 1
-		s.failures++
+		if resp.NoRetryBackoff {
+			s.failures = 0
+		} else {
+			s.failures++
+		}
 		r.logger.Printf("[WARN] raft: AppendEntries to %v rejected, sending older logs (next: %d)", s.peer, s.nextIndex)
 	}
 
@@ -354,9 +360,11 @@ SEND:
 			}
 			break SEND
 		case <-s.triggerCh:
-			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, r.getLastLogIndex())
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
 		case <-randomTimeout(r.conf.CommitTimeout):
-			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, r.getLastLogIndex())
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
 		}
 	}
 
@@ -442,13 +450,14 @@ func (r *Raft) setupAppendEntries(s *followerReplication, req *AppendEntriesRequ
 func (r *Raft) setPreviousLog(req *AppendEntriesRequest, nextIndex uint64) error {
 	// Guard for the first index, since there is no 0 log entry
 	// Guard against the previous index being a snapshot as well
+	lastSnapIdx, lastSnapTerm := r.getLastSnapshot()
 	if nextIndex == 1 {
 		req.PrevLogEntry = 0
 		req.PrevLogTerm = 0
 
-	} else if (nextIndex - 1) == r.getLastSnapshotIndex() {
-		req.PrevLogEntry = r.getLastSnapshotIndex()
-		req.PrevLogTerm = r.getLastSnapshotTerm()
+	} else if (nextIndex - 1) == lastSnapIdx {
+		req.PrevLogEntry = lastSnapIdx
+		req.PrevLogTerm = lastSnapTerm
 
 	} else {
 		var l Log
@@ -495,7 +504,7 @@ func (r *Raft) handleStaleTerm(s *followerReplication) {
 }
 
 // updateLastAppended is used to update follower replication state after a successful
-// AppendEntries RPC
+// AppendEntries RPC.
 func updateLastAppended(s *followerReplication, req *AppendEntriesRequest) {
 	// Mark any inflight logs as committed
 	if logs := req.Entries; len(logs) > 0 {
