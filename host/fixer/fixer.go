@@ -391,7 +391,7 @@ func (f *ClusterFixer) FixPostgres() error {
 			f.l.Error("error getting status from postgres leader", "error", err)
 		}
 	}
-	if status != nil && status.Database.ReadWrite {
+	if status != nil && status.Database != nil && status.Database.ReadWrite {
 		f.l.Info("postgres claims to be read-write")
 		return nil
 	}
