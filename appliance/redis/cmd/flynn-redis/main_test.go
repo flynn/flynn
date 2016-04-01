@@ -26,8 +26,6 @@ func TestMain_Discoverd(t *testing.T) {
 	m.DiscoverdClient.AddServiceFn = func(name string, config *discoverd.ServiceConfig) error {
 		if name != "redis" {
 			t.Fatalf("unexpected service name: %s", name)
-		} else if !reflect.DeepEqual(config, &discoverd.ServiceConfig{LeaderType: "manual"}) {
-			t.Fatalf("unexpected service config: %#v", config)
 		}
 		return nil
 	}

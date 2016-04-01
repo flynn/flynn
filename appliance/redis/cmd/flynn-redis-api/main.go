@@ -252,7 +252,7 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	host := fmt.Sprintf("%s.discoverd", app.Name)
+	host := fmt.Sprintf("leader.%s.discoverd", app.Name)
 	u := url.URL{
 		Scheme: "redis",
 		Host:   host + ":6379",

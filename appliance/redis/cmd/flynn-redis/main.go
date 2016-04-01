@@ -126,9 +126,7 @@ func (m *Main) Run() error {
 
 	// Add service to discoverd registry.
 	m.Logger.Info("adding service", "name", m.ServiceName)
-	if err = m.DiscoverdClient.AddService(m.ServiceName, &discoverd.ServiceConfig{
-		LeaderType: discoverd.LeaderTypeManual,
-	}); err != nil && !httphelper.IsObjectExistsError(err) {
+	if err = m.DiscoverdClient.AddService(m.ServiceName, nil); err != nil && !httphelper.IsObjectExistsError(err) {
 		m.Logger.Error("error adding discoverd service", "err", err)
 		return err
 	}
