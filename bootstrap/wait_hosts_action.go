@@ -21,7 +21,7 @@ func (a *WaitHostsAction) Run(s *State) error {
 		hosts[h] = struct{}{}
 	}
 
-	start := time.Now()
+	timeout := time.After(s.HostTimeout)
 	up := 0
 outer:
 	for {
@@ -39,15 +39,16 @@ outer:
 			break outer
 		}
 
-		if time.Now().Sub(start) >= s.HostTimeout {
+		select {
+		case <-timeout:
 			msg := "bootstrap: timed out waiting for hosts to come up\n\nThe following hosts were unreachable:\n"
 			for host := range hosts {
 				msg += "\t" + host.Addr() + "\n"
 			}
 			msg += "\n"
 			return fmt.Errorf(msg)
+		case <-time.After(waitInterval):
 		}
-		time.Sleep(waitInterval)
 	}
 	return nil
 }
