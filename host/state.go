@@ -305,8 +305,7 @@ func (s *State) GetJob(id string) *host.ActiveJob {
 	if job == nil {
 		return nil
 	}
-	jobCopy := *job
-	return &jobCopy
+	return job.Dup()
 }
 
 func (s *State) RemoveJob(jobID string) {
@@ -316,12 +315,12 @@ func (s *State) RemoveJob(jobID string) {
 	s.persist(jobID)
 }
 
-func (s *State) Get() map[string]host.ActiveJob {
+func (s *State) Get() map[string]*host.ActiveJob {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	res := make(map[string]host.ActiveJob, len(s.jobs))
+	res := make(map[string]*host.ActiveJob, len(s.jobs))
 	for k, v := range s.jobs {
-		res[k] = *v
+		res[k] = v.Dup()
 	}
 	return res
 }

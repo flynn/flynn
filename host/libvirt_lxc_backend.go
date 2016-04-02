@@ -512,6 +512,8 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		}
 	}
 
+	// mutating job state, take state write lock
+	l.state.mtx.Lock()
 	if job.Config.Env == nil {
 		job.Config.Env = make(map[string]string)
 	}
@@ -534,6 +536,8 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	if !job.Config.HostNetwork {
 		job.Config.Env["EXTERNAL_IP"] = container.IP.String()
 	}
+	// release the write lock, we won't mutate global structures from here on out
+	l.state.mtx.Unlock()
 
 	config := &containerinit.Config{
 		TTY:           job.Config.TTY,
