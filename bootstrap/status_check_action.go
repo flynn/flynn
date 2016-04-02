@@ -41,7 +41,7 @@ func (a *StatusCheckAction) Run(s *State) error {
 	}
 	lookupDiscoverdURLHost(s, u, waitMax)
 
-	start := time.Now()
+	timeout := time.After(waitMax)
 	for {
 		req, err := http.NewRequest("GET", u.String(), nil)
 		if err != nil {
@@ -50,37 +50,35 @@ func (a *StatusCheckAction) Run(s *State) error {
 		req.Header = make(http.Header)
 		req.Header.Set("Accept", "application/json")
 		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			goto fail
-		}
-		if res.StatusCode == 200 {
+		if err == nil && res.StatusCode == 200 {
 			s.StepData[a.ID] = &LogMessage{Msg: "all services healthy"}
-		} else if time.Now().Sub(start) < waitMax {
-			// if services are unhealthy wait out the wait period
-			// before reporting them as unhealthy to the user
-			time.Sleep(waitInterval)
-			continue
-		} else {
-			var status StatusResponse
-			err = json.NewDecoder(res.Body).Decode(&status)
-			if err != nil {
-				goto fail
-			}
-			res.Body.Close()
-			msg := "unhealthy services detected!\n\nThe following services are reporting unhealthy, this likely indicates a problem with your deployment:\n"
-			for svc, s := range status.Data.Detail {
-				if s.Status != "healthy" {
-					msg += "\t" + svc + "\n"
-				}
-			}
-			msg += "\n"
-			s.StepData[a.ID] = &LogMessage{Msg: msg}
+			return nil
 		}
-		return nil
-	fail:
-		if time.Now().Sub(start) >= waitMax {
+
+		select {
+		case <-time.After(waitInterval):
+			continue
+		case <-timeout:
+		}
+
+		if err != nil {
 			return fmt.Errorf("bootstrap: timed out waiting for %s, last response %s", a.URL, err)
 		}
-		time.Sleep(waitInterval)
+
+		var status StatusResponse
+		err = json.NewDecoder(res.Body).Decode(&status)
+		if err != nil {
+			return err
+		}
+		res.Body.Close()
+		msg := "unhealthy services detected!\n\nThe following services are reporting unhealthy, this likely indicates a problem with your deployment:\n"
+		for svc, s := range status.Data.Detail {
+			if s.Status != "healthy" {
+				msg += "\t" + svc + "\n"
+			}
+		}
+		msg += "\n"
+		s.StepData[a.ID] = &LogMessage{Msg: msg}
+		return nil
 	}
 }

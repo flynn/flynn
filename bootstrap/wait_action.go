@@ -36,7 +36,7 @@ func (a *WaitAction) Run(s *State) error {
 		return err
 	}
 
-	start := time.Now()
+	timeout := time.After(waitMax)
 	for {
 		var result string
 
@@ -71,10 +71,11 @@ func (a *WaitAction) Run(s *State) error {
 			return fmt.Errorf("bootstrap: unknown protocol")
 		}
 	fail:
-		if time.Now().Sub(start) >= waitMax {
+		select {
+		case <-timeout:
 			return fmt.Errorf("bootstrap: timed out waiting for %s, last response %s", a.URL, result)
+		case <-time.After(waitInterval):
 		}
-		time.Sleep(waitInterval)
 	}
 }
 

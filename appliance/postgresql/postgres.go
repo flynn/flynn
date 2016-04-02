@@ -504,7 +504,7 @@ func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
 	log.Info("waiting for upstream to come online")
 	client := client.NewClient(upstream.Addr)
 
-	start := time.Now()
+	timeout := time.After(upstreamTimeout)
 	for {
 		status, err := client.Status()
 		if err != nil {
@@ -513,10 +513,11 @@ func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
 			log.Info("upstream is online")
 			return nil
 		}
-		time.Sleep(checkInterval)
-		if time.Now().Sub(start) > upstreamTimeout {
+		select {
+		case <-timeout:
 			log.Error("upstream did not come online in time")
 			return errors.New("upstream is offline")
+		case <-time.After(checkInterval):
 		}
 	}
 }
@@ -575,17 +576,9 @@ func (p *Postgres) start() error {
 	}()
 
 	log.Debug("waiting for postgres to start")
-	startTime := time.Now().UTC()
+	timeout := time.After(p.opTimeout)
 	var err error
 	for {
-		if time.Now().Sub(startTime) > p.opTimeout {
-			log.Error("timed out waiting for postgres to start", "err", err)
-			if err := p.stop(); err != nil {
-				log.Error("error stopping postgres", "err", err)
-			}
-			return err
-		}
-
 		port, _ := strconv.Atoi(p.port)
 		c := pgx.ConnPoolConfig{
 			ConnConfig: pgx.ConnConfig{
@@ -606,7 +599,15 @@ func (p *Postgres) start() error {
 		}
 
 		log.Debug("ignoring error connecting to postgres", "err", err)
-		time.Sleep(checkInterval)
+		select {
+		case <-timeout:
+			log.Error("timed out waiting for postgres to start", "err", err)
+			if err := p.stop(); err != nil {
+				log.Error("error stopping postgres", "err", err)
+			}
+			return err
+		case <-time.After(checkInterval):
+		}
 	}
 }
 
@@ -670,6 +671,8 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 		defer close(doneCh)
 
 		startTime := time.Now().UTC()
+		replTimeout := time.NewTimer(p.replTimeout)
+		defer replTimeout.Stop()
 		lastFlushed := p.XLog().Zero()
 		log := p.log.New(
 			"fn", "waitForSync",
@@ -714,20 +717,21 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 				// itself out and we will exit the loop since a new event will
 				// be emitted when the standby leaves the cluster.
 				startTime = time.Now().UTC()
+				replTimeout.Reset(p.replTimeout)
 				if !sleep() {
 					return
 				}
 				continue
 			}
-			elapsedTime := time.Now().Sub(startTime)
-			log := log.New("sent", sent, "flushed", flushed, "elapsed", elapsedTime)
+			log := log.New("sent", sent, "flushed", flushed, "elapsed", time.Now().Sub(startTime))
 
 			if cmp, err := p.XLog().Compare(lastFlushed, flushed); err != nil {
 				log.Error("error parsing log locations", "err", err)
 				return
 			} else if lastFlushed == p.XLog().Zero() || cmp == -1 {
-				log.Debug("flushed row incremented, resetting startTime")
+				log.Debug("flushed row incremented, resetting timeout")
 				startTime = time.Now().UTC()
+				replTimeout.Reset(p.replTimeout)
 				lastFlushed = flushed
 			}
 
@@ -735,15 +739,18 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 				log.Info("downstream caught up")
 				p.setSyncedDownstream(inst)
 				break
-			} else if elapsedTime > p.replTimeout {
+			}
+
+			select {
+			case <-replTimeout.C:
 				log.Error("error checking replication status", "err", "downstream unable to make forward progress")
 				return
-			} else {
-				log.Debug("continuing replication check")
-				if !sleep() {
-					return
-				}
-				continue
+			default:
+			}
+
+			log.Debug("continuing replication check")
+			if !sleep() {
+				return
 			}
 		}
 
