@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/flynn/flynn/controller/client"
@@ -17,6 +18,7 @@ type FakeControllerClient struct {
 	formationStreams map[chan<- *ct.ExpandedFormation]struct{}
 	jobs             map[string]*ct.Job
 	apps             map[string]*ct.App
+	mtx              sync.Mutex
 }
 
 func NewFakeControllerClient() *FakeControllerClient {
@@ -31,6 +33,9 @@ func NewFakeControllerClient() *FakeControllerClient {
 }
 
 func (c *FakeControllerClient) GetRelease(releaseID string) (*ct.Release, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	if release, ok := c.releases[releaseID]; ok {
 		return release, nil
 	}
@@ -38,6 +43,9 @@ func (c *FakeControllerClient) GetRelease(releaseID string) (*ct.Release, error)
 }
 
 func (c *FakeControllerClient) GetArtifact(artifactID string) (*ct.Artifact, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	if artifact, ok := c.artifacts[artifactID]; ok {
 		return artifact, nil
 	}
@@ -45,6 +53,9 @@ func (c *FakeControllerClient) GetArtifact(artifactID string) (*ct.Artifact, err
 }
 
 func (c *FakeControllerClient) GetFormation(appID, releaseID string) (*ct.Formation, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	if releases, ok := c.formations[appID]; ok {
 		if formation, ok := releases[releaseID]; ok {
 			return formation, nil
@@ -54,6 +65,12 @@ func (c *FakeControllerClient) GetFormation(appID, releaseID string) (*ct.Format
 }
 
 func (c *FakeControllerClient) GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	return c.getExpandedFormation(appID, releaseID)
+}
+
+func (c *FakeControllerClient) getExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error) {
 	app, ok := c.apps[appID]
 	if !ok {
 		return nil, controller.ErrNotFound
@@ -83,6 +100,9 @@ func (c *FakeControllerClient) GetExpandedFormation(appID, releaseID string) (*c
 }
 
 func (c *FakeControllerClient) GetApp(appID string) (*ct.App, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	if app, ok := c.apps[appID]; ok {
 		return app, nil
 	}
@@ -90,21 +110,32 @@ func (c *FakeControllerClient) GetApp(appID string) (*ct.App, error) {
 }
 
 func (c *FakeControllerClient) CreateApp(app *ct.App) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	c.apps[app.ID] = app
 	return nil
 }
 
 func (c *FakeControllerClient) CreateRelease(release *ct.Release) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	c.releases[release.ID] = release
 	return nil
 }
 
 func (c *FakeControllerClient) CreateArtifact(artifact *ct.Artifact) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	c.artifacts[artifact.ID] = artifact
 	return nil
 }
 
 func (c *FakeControllerClient) PutFormation(formation *ct.Formation) error {
+	c.mtx.Lock()
+
 	releases, ok := c.formations[formation.AppID]
 	if !ok {
 		releases = make(map[string]*ct.Formation)
@@ -112,7 +143,14 @@ func (c *FakeControllerClient) PutFormation(formation *ct.Formation) error {
 	}
 	releases[formation.ReleaseID] = formation
 
+	streams := make([]chan<- *ct.ExpandedFormation, 0, len(c.formationStreams))
 	for ch := range c.formationStreams {
+		streams = append(streams, ch)
+	}
+
+	c.mtx.Unlock()
+
+	for _, ch := range streams {
 		ef, err := utils.ExpandFormation(c, formation)
 		if err == nil {
 			ch <- ef
@@ -123,6 +161,9 @@ func (c *FakeControllerClient) PutFormation(formation *ct.Formation) error {
 }
 
 func (c *FakeControllerClient) AppList() ([]*ct.App, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	apps := make([]*ct.App, 0, len(c.apps))
 	for _, app := range c.apps {
 		apps = append(apps, app)
@@ -131,6 +172,9 @@ func (c *FakeControllerClient) AppList() ([]*ct.App, error) {
 }
 
 func (c *FakeControllerClient) FormationListActive() ([]*ct.ExpandedFormation, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	var formations []*ct.ExpandedFormation
 	for appID, releases := range c.formations {
 		app, ok := c.apps[appID]
@@ -164,13 +208,15 @@ func (c *FakeControllerClient) FormationListActive() ([]*ct.ExpandedFormation, e
 }
 
 func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
 	if _, ok := c.formationStreams[ch]; ok {
 		return nil, errors.New("Already streaming to that channel")
 	}
 
 	for _, releases := range c.formations {
 		for _, f := range releases {
-			ef, err := utils.ExpandFormation(c, f)
+			ef, err := c.getExpandedFormation(f.AppID, f.ReleaseID)
 			if err == nil {
 				ch <- ef
 			}
@@ -186,11 +232,17 @@ func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.
 }
 
 func (c *FakeControllerClient) PutJob(job *ct.Job) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	c.jobs[job.ID] = job
 	return nil
 }
 
 func (c *FakeControllerClient) JobListActive() ([]*ct.Job, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	list := make([]*ct.Job, 0, len(c.jobs))
 	for _, job := range c.jobs {
 		if job.State == ct.JobStateStarting || job.State == ct.JobStateUp {
@@ -226,6 +278,8 @@ type FormationStream struct {
 }
 
 func (fs *FormationStream) Close() error {
+	fs.cc.mtx.Lock()
+	defer fs.cc.mtx.Unlock()
 	delete(fs.cc.formationStreams, fs.ch)
 	close(fs.ch)
 	return nil
