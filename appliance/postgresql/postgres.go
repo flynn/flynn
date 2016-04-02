@@ -509,7 +509,7 @@ func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
 		status, err := client.Status()
 		if err != nil {
 			log.Error("error getting upstream status", "err", err)
-		} else if status.Database.Running && status.Database.XLog != "" && status.Database.UserExists {
+		} else if status.Database != nil && status.Database.Running && status.Database.XLog != "" && status.Database.UserExists {
 			log.Info("upstream is online")
 			return nil
 		}

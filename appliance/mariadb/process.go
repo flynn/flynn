@@ -597,14 +597,16 @@ func (p *Process) waitForUpstream(upstream *discoverd.Instance) error {
 
 	for {
 		status, err := upstreamClient.Status()
-		if err == nil {
-			logger.Info("status", "running", status.Database.Running, "xlog", status.Database.XLog, "user_exists", status.Database.UserExists)
-		}
 		if err != nil {
 			logger.Error("error getting upstream status", "err", err)
-		} else if status.Database.Running && status.Database.XLog != "" && status.Database.UserExists {
-			logger.Info("upstream is online")
-			return nil
+		} else if status.Database != nil {
+			logger.Info("status", "running", status.Database.Running, "xlog", status.Database.XLog, "user_exists", status.Database.UserExists)
+			if status.Database.Running && status.Database.XLog != "" && status.Database.UserExists {
+				logger.Info("upstream is online")
+				return nil
+			}
+		} else {
+			logger.Info("status", "running", "false")
 		}
 
 		select {
