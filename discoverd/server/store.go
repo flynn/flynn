@@ -167,6 +167,7 @@ func (s *Store) Open() error {
 	config.CommitTimeout = s.CommitTimeout
 	config.LogOutput = s.LogOutput
 	config.EnableSingleNode = s.EnableSingleNode
+	config.ShutdownOnRemove = false
 
 	// Create multiplexing transport layer.
 	raftLayer := newRaftLayer(s.Listener, s.Advertise)
@@ -312,12 +313,25 @@ func (s *Store) isLeader() bool { return s.raft.Leader() == s.Advertise.String()
 
 // AddPeer adds a peer to the raft cluster. Panic if store is not open yet.
 func (s *Store) AddPeer(peer string) error {
-	return s.raft.AddPeer(peer).Error()
+	err := s.raft.AddPeer(peer).Error()
+	if err == raft.ErrNotLeader {
+		err = ErrNotLeader
+	}
+	return err
 }
 
 // RemovePeer removes a peer from the raft cluster. Panic if store is not open yet.
 func (s *Store) RemovePeer(peer string) error {
-	return s.raft.RemovePeer(peer).Error()
+	err := s.raft.RemovePeer(peer).Error()
+	if err == raft.ErrNotLeader {
+		err = ErrNotLeader
+	}
+	return err
+}
+
+// GetPeers returns a list of peers in the raft cluster.
+func (s *Store) GetPeers() ([]string, error) {
+	return s.peerStore.Peers()
 }
 
 // SetPeers sets a list of peers in the raft cluster. Panic if store is not open yet.
@@ -1304,8 +1318,8 @@ func (s *ProxyStore) ServiceLeader(service string) (*discoverd.Instance, error) 
 	return client.Service(service).Leader()
 }
 
-// storeHdr is the header byte used by the multiplexer.
-const storeHdr = byte('\xff')
+// StoreHdr is the header byte used by the multiplexer.
+const StoreHdr = byte('\xff')
 
 // raftLayer provides multiplexing for the listener.
 type raftLayer struct {
@@ -1332,7 +1346,7 @@ func (l *raftLayer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	}
 
 	// Write a header byte.
-	_, err = conn.Write([]byte{storeHdr})
+	_, err = conn.Write([]byte{StoreHdr})
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -1351,7 +1365,7 @@ func (l *raftLayer) Accept() (net.Conn, error) {
 	var hdr [1]byte
 	if _, err := io.ReadFull(conn, hdr[:]); err != nil {
 		return nil, fmt.Errorf("read store header byte: %s", err)
-	} else if hdr[0] != storeHdr {
+	} else if hdr[0] != StoreHdr {
 		return nil, fmt.Errorf("unexpected store header byte: 0x%02x", hdr[0])
 	}
 

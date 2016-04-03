@@ -713,7 +713,7 @@ type Handler struct {
 
 // NewHandler returns a new, mocked instance Handler.
 func NewHandler() *Handler {
-	h := &Handler{Handler: server.NewHandler()}
+	h := &Handler{Handler: server.NewHandler(false, []string{""})}
 	h.Handler.Store = &h.Store
 	return h
 }

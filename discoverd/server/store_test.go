@@ -690,8 +690,10 @@ func (s *Store) MustWaitForLeader() {
 // MockStore represents a mock implementation of Handler.Store.
 type MockStore struct {
 	LeaderFn           func() string
+	GetPeersFn         func() ([]string, error)
 	AddPeerFn          func(peer string) error
 	RemovePeerFn       func(peer string) error
+	LastIndexFn        func() uint64
 	AddServiceFn       func(service string, config *discoverd.ServiceConfig) error
 	RemoveServiceFn    func(service string) error
 	SetServiceMetaFn   func(service string, meta *discoverd.ServiceMeta) error
@@ -707,8 +709,10 @@ type MockStore struct {
 
 func (s *MockStore) Leader() string { return s.LeaderFn() }
 
+func (s *MockStore) GetPeers() ([]string, error)  { return s.GetPeersFn() }
 func (s *MockStore) AddPeer(peer string) error    { return s.AddPeerFn(peer) }
 func (s *MockStore) RemovePeer(peer string) error { return s.RemovePeerFn(peer) }
+func (s *MockStore) LastIndex() uint64            { return s.LastIndexFn() }
 
 func (s *MockStore) AddService(service string, config *discoverd.ServiceConfig) error {
 	return s.AddServiceFn(service, config)

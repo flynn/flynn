@@ -176,12 +176,32 @@ outer:
 	}
 }
 
-func (c *Client) Shutdown() (res dt.ShutdownInfo, err error) {
+func (c *Client) Shutdown() (res dt.TargetLogIndex, err error) {
 	return res, c.c.Post("/shutdown", nil, &res)
+}
+
+func (c *Client) Promote() error {
+	return c.c.Post("/raft/promote", nil, nil)
+}
+
+func (c *Client) Demote() error {
+	return c.c.Post("/raft/demote", nil, nil)
 }
 
 func (c *Client) RaftLeader() (res dt.RaftLeader, err error) {
 	return res, c.c.Get("/raft/leader", &res)
+}
+
+func (c *Client) RaftPeers() (res []string, err error) {
+	return res, c.c.Get("/raft/peers", &res)
+}
+
+func (c *Client) RaftAddPeer(addr string) (res dt.TargetLogIndex, err error) {
+	return res, c.c.Put(fmt.Sprintf("/raft/peers/%s", addr), nil, &res)
+}
+
+func (c *Client) RaftRemovePeer(addr string) error {
+	return c.c.Delete(fmt.Sprintf("/raft/peers/%s", addr))
 }
 
 type service struct {

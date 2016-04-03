@@ -21,6 +21,7 @@ import (
 	dt "github.com/flynn/flynn/discoverd/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/mux"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
@@ -53,6 +54,12 @@ type Main struct {
 	httpServer *http.Server
 	ln         net.Listener
 	hb         discoverd.Heartbeater
+	mux        *mux.Mux
+
+	advertiseAddr string
+	dataDir       string
+	handler       *server.Handler
+	peers         []string
 
 	logger *log.Logger
 
@@ -82,9 +89,9 @@ func (m *Main) Run(args ...string) error {
 	}
 
 	// Set up advertised address and default peer set.
-	advertiseAddr := MergeHostPort(opt.Host, opt.Addr)
+	m.advertiseAddr = MergeHostPort(opt.Host, opt.Addr)
 	if len(opt.Peers) == 0 {
-		opt.Peers = []string{advertiseAddr}
+		opt.Peers = []string{m.advertiseAddr}
 	}
 
 	// Create a slice of peers with their HTTP address set instead.
@@ -92,12 +99,13 @@ func (m *Main) Run(args ...string) error {
 	if err != nil {
 		return fmt.Errorf("set port slice: %s", err)
 	}
+	m.peers = httpPeers
 
 	// if there is a discoverd process already running on this
 	// address perform a deployment by starting a proxy DNS server
 	// and shutting down the old discoverd job
 	var deploy *dd.Deployment
-	var shutdownInfo dt.ShutdownInfo
+	var targetLogIndex dt.TargetLogIndex
 
 	target := fmt.Sprintf("http://%s:1111", opt.Host)
 	m.logger.Println("checking for existing discoverd process at", target)
@@ -114,10 +122,10 @@ func (m *Main) Run(args ...string) error {
 			return err
 		}
 		m.logger.Println("Created deployment")
-		if err := deploy.MarkPerforming(advertiseAddr, 60); err != nil {
+		if err := deploy.MarkPerforming(m.advertiseAddr, 60); err != nil {
 			return err
 		}
-		m.logger.Println("marked", advertiseAddr, "as performing in deployent")
+		m.logger.Println("marked", m.advertiseAddr, "as performing in deployent")
 		addr, resolvers := waitHostDNSConfig()
 		if opt.DNSAddr != "" {
 			addr = opt.DNSAddr
@@ -126,12 +134,12 @@ func (m *Main) Run(args ...string) error {
 			resolvers = opt.Recursors
 		}
 		m.logger.Println("starting proxy DNS server")
-		if err := m.openDNSServer(addr, resolvers, httpPeers); err != nil {
+		if err := m.openDNSServer(addr, resolvers); err != nil {
 			return fmt.Errorf("Failed to start DNS server: %s", err)
 		}
 		m.logger.Printf("discoverd listening for DNS on %s", addr)
 
-		shutdownInfo, err = discoverd.NewClientWithURL(target).Shutdown()
+		targetLogIndex, err = discoverd.NewClientWithURL(target).Shutdown()
 		if err != nil {
 			return err
 		}
@@ -150,23 +158,35 @@ func (m *Main) Run(args ...string) error {
 	}
 	m.ln = ln
 
-	// Multiplex listener to store and http api.
-	storeLn, httpLn := server.Mux(ln)
+	// Open mux
+	m.mux = mux.New(m.ln)
+	go m.mux.Serve()
 
-	// Open store if we are not proxying.
-	if err := m.openStore(opt.DataDir, storeLn, advertiseAddr, opt.Peers); err != nil {
-		return fmt.Errorf("Failed to open store: %s", err)
+	m.dataDir = opt.DataDir
+
+	// if the advertise addr is not in the peer list we are proxying
+	proxying := true
+	for _, addr := range m.peers {
+		if addr == m.advertiseAddr {
+			proxying = false
+			break
+		}
 	}
 
-	// Notify user that we're proxying if the store wasn't initialized.
-	if m.store == nil {
-		fmt.Fprintln(m.Stderr, "advertised address not in peer set, joining as proxy")
+	if proxying {
+		// Notify user that we're proxying if the store wasn't initialized.
+		m.logger.Println("advertised address not in peer set, joining as proxy")
+	} else {
+		// Open store if we are not proxying.
+		if err := m.openStore(); err != nil {
+			return fmt.Errorf("Failed to open store: %s", err)
+		}
 	}
 
 	// Wait for the store to catchup before switching to local store if we are doing a deployment
-	if m.store != nil && shutdownInfo.LastIndex > 0 {
-		for m.store.LastIndex() < shutdownInfo.LastIndex {
-			m.logger.Println("Waiting for store to catchup, current:", m.store.LastIndex(), "target:", shutdownInfo.LastIndex)
+	if m.store != nil && targetLogIndex.LastIndex > 0 {
+		for m.store.LastIndex() < targetLogIndex.LastIndex {
+			m.logger.Println("Waiting for store to catchup, current:", m.store.LastIndex(), "target:", targetLogIndex.LastIndex)
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
@@ -182,14 +202,14 @@ func (m *Main) Run(args ...string) error {
 	if m.dnsServer != nil && m.store != nil {
 		m.dnsServer.SetStore(m.store)
 	} else if opt.DNSAddr != "" {
-		if err := m.openDNSServer(opt.DNSAddr, opt.Recursors, httpPeers); err != nil {
+		if err := m.openDNSServer(opt.DNSAddr, opt.Recursors); err != nil {
 			return fmt.Errorf("Failed to start DNS server: %s", err)
 		}
 		m.logger.Printf("discoverd listening for DNS on %s", opt.DNSAddr)
 	} else if opt.WaitNetDNS {
 		go func() {
 			addr, resolvers := waitHostDNSConfig()
-			if err := m.openDNSServer(addr, resolvers, httpPeers); err != nil {
+			if err := m.openDNSServer(addr, resolvers); err != nil {
 				log.Fatalf("Failed to start DNS server: %s", err)
 			}
 			m.logger.Printf("discoverd listening for DNS on %s", addr)
@@ -201,21 +221,19 @@ func (m *Main) Run(args ...string) error {
 		}()
 	}
 
-	if err := m.openHTTPServer(httpLn, opt.Peers); err != nil {
+	if err := m.openHTTPServer(); err != nil {
 		return fmt.Errorf("Failed to start HTTP server: %s", err)
 	}
 
 	if deploy != nil {
-		if err := deploy.MarkDone(advertiseAddr); err != nil {
+		if err := deploy.MarkDone(m.advertiseAddr); err != nil {
 			return err
 		}
-		m.logger.Println("marked", advertiseAddr, "as done in deployment")
+		m.logger.Println("marked", m.advertiseAddr, "as done in deployment")
 	}
 
 	// Notify user that the servers are listening.
 	m.logger.Printf("discoverd listening for HTTP on %s", opt.Addr)
-
-	// FIXME(benbjohnson): Join to cluster.
 
 	// Wait for leadership.
 	if err := m.waitForLeader(LeaderTimeout); err != nil {
@@ -264,8 +282,125 @@ func waitHostDNSConfig() (addr string, resolvers []string) {
 	return addr, status.Network.Resolvers
 }
 
+func inPeerList(peers []string, addr string) bool {
+	for _, peer := range peers {
+		if peer == addr {
+			return true
+		}
+	}
+	return false
+}
+
+// Join the consensus set, promoting ourselves from proxy to raft node.
+func (m *Main) Promote() error {
+	m.logger.Printf("attempting promotion")
+	if m.store != nil {
+		return fmt.Errorf("can't join, already a raft peer")
+	}
+	if !m.handler.Proxy.Load().(bool) {
+		return fmt.Errorf("can't promote, handler not in proxy mode")
+	}
+
+	// Obtain leader address from one of the peers we know about.
+	var leaderAddr string
+	for _, peer := range m.peers {
+		client := discoverd.NewClientWithURL(peer)
+		leader, err := client.RaftLeader()
+		if err != nil {
+			continue
+		}
+		leaderAddr = leader.Host
+		break
+	}
+	if leaderAddr == "" {
+		return fmt.Errorf("failed to get leader address from configured peers")
+	}
+
+	// Request the leader joins us to the cluster.
+	m.logger.Println("requesting leader join us to cluster")
+	targetLogIndex, err := discoverd.NewClientWithURL(leaderAddr).RaftAddPeer(m.advertiseAddr)
+	if err != nil {
+		m.logger.Println("error requesting leader to join us to cluster:", err)
+		return err
+	}
+
+	// Open the store.
+	if err := m.openStore(); err != nil {
+		return err
+	}
+
+	// Wait for leadership.
+	if err := m.waitForLeader(LeaderTimeout); err != nil {
+		return err
+	}
+
+	// Wait for store to catchup
+	for m.store.LastIndex() < targetLogIndex.LastIndex {
+		m.logger.Println("Waiting for store to catchup, current:", m.store.LastIndex(), "target:", targetLogIndex.LastIndex)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Update the DNS server to use the local store.
+	m.dnsServer.SetStore(m.store)
+
+	// Update the HTTP server to use the local store.
+	m.handler.Store = m.store
+	m.handler.Proxy.Store(false)
+
+	m.logger.Println("promoted sucessfully")
+	return nil
+}
+
+// Leave the consensus set, demoting ourselves to proxy from raft node.
+func (m *Main) Demote() error {
+	m.logger.Println("demotion requested")
+	if m.store == nil {
+		return fmt.Errorf("can't leave, not currently a raft peer")
+	}
+	if m.handler.Proxy.Load().(bool) {
+		return fmt.Errorf("can't demote, handler in proxy mode")
+	}
+
+	leaderAddr := m.store.Leader()
+	if leaderAddr == "" {
+		return server.ErrNoKnownLeader
+	}
+
+	// Update the dns server to use proxy store
+	m.dnsServer.SetStore(&server.ProxyStore{Peers: m.peers})
+	m.handler.Proxy.Store(true)
+
+	// If we fail from here on out we should attempt to rollback
+	rollback := func() {
+		m.dnsServer.SetStore(m.store)
+		m.handler.Proxy.Store(false)
+	}
+
+	// If we are the leader remove ourselves directly,
+	// otherwise request the leader remove us from the peer set.
+	if leaderAddr == m.advertiseAddr {
+		if err := m.store.RemovePeer(m.advertiseAddr); err != nil {
+			rollback()
+			return err
+		}
+	} else {
+		if err := discoverd.NewClientWithURL(leaderAddr).RaftRemovePeer(m.advertiseAddr); err != nil {
+			rollback()
+			return err
+		}
+	}
+
+	// Close the raft store.
+	m.store.Close()
+	m.handler.Store = nil
+	m.store = nil
+
+	m.logger.Println("demoted sucessfully")
+	return nil
+}
+
 // Close shuts down all open servers.
-func (m *Main) Close() (info dt.ShutdownInfo, err error) {
+func (m *Main) Close() (info dt.TargetLogIndex, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.logger.Println("discoverd shutting down")
@@ -292,31 +427,25 @@ func (m *Main) Close() (info dt.ShutdownInfo, err error) {
 }
 
 // openStore initializes and opens the store.
-func (m *Main) openStore(path string, ln net.Listener, advertise string, peers []string) error {
+func (m *Main) openStore() error {
 	// If the advertised address is not in the peer list then we should proxy.
-	proxying := true
-	for _, addr := range peers {
-		if addr == advertise {
-			proxying = false
-		}
-	}
-	if proxying {
-		return nil
-	}
 
 	// Resolve advertised address.
-	addr, err := net.ResolveTCPAddr("tcp", advertise)
+	addr, err := net.ResolveTCPAddr("tcp", m.advertiseAddr)
 	if err != nil {
 		return err
 	}
 
+	// Listen via mux
+	storeLn := m.mux.Listen([]byte{server.StoreHdr})
+
 	// Initialize store.
-	s := server.NewStore(path)
-	s.Listener = ln
+	s := server.NewStore(m.dataDir)
+	s.Listener = storeLn
 	s.Advertise = addr
 
 	// Allow single node if there's no peers set.
-	s.EnableSingleNode = len(peers) <= 1
+	s.EnableSingleNode = len(m.peers) <= 1
 
 	// Open store.
 	if err := s.Open(); err != nil {
@@ -325,8 +454,8 @@ func (m *Main) openStore(path string, ln net.Listener, advertise string, peers [
 	m.store = s
 
 	// If peers then set peer set.
-	if len(peers) > 0 {
-		if err := s.SetPeers(peers); err != nil {
+	if len(m.peers) > 0 {
+		if err := s.SetPeers(m.peers); err != nil {
 			return fmt.Errorf("set peers: %s", err)
 		}
 	}
@@ -336,7 +465,7 @@ func (m *Main) openStore(path string, ln net.Listener, advertise string, peers [
 
 // openDNSServer initializes and opens the DNS server.
 // The store must already be open.
-func (m *Main) openDNSServer(addr string, recursors, peers []string) error {
+func (m *Main) openDNSServer(addr string, recursors []string) error {
 	s := &server.DNSServer{
 		UDPAddr:   addr,
 		TCPAddr:   addr,
@@ -347,7 +476,7 @@ func (m *Main) openDNSServer(addr string, recursors, peers []string) error {
 	if m.store != nil {
 		s.SetStore(m.store)
 	} else {
-		s.SetStore(&server.ProxyStore{Peers: peers})
+		s.SetStore(&server.ProxyStore{Peers: m.peers})
 	}
 
 	if err := s.ListenAndServe(); err != nil {
@@ -359,20 +488,23 @@ func (m *Main) openDNSServer(addr string, recursors, peers []string) error {
 
 // openHTTPServer initializes and opens the HTTP server.
 // The store must already be open.
-func (m *Main) openHTTPServer(ln net.Listener, peers []string) error {
-	// If we have no store then simply start a proxy handler.
-	if m.store == nil {
-		m.httpServer = &http.Server{Handler: &server.ProxyHandler{Peers: peers}}
-		go m.httpServer.Serve(ln)
-		return nil
-	}
-
-	// Otherwise initialize and start handler.
-	h := server.NewHandler()
+func (m *Main) openHTTPServer() error {
+	h := server.NewHandler(false, m.peers)
 	h.Main = m
-	h.Store = m.store
+	h.Peers = m.peers
+	// If we have no store then start the handler in proxy mode
+	if m.store == nil {
+		h.Proxy.Store(true)
+	} else {
+		h.Store = m.store
+	}
+	m.handler = h
 	m.httpServer = &http.Server{Handler: h}
-	go m.httpServer.Serve(ln)
+
+	// Create listener via mux
+	// HTTP listens to all methods: CONNECT, DELETE, GET, HEAD, OPTIONS, POST, PUT, TRACE.
+	httpLn := m.mux.Listen([]byte{'C', 'D', 'G', 'H', 'O', 'P', 'T'})
+	go m.httpServer.Serve(httpLn)
 	return nil
 }
 

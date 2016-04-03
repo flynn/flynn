@@ -118,17 +118,13 @@ func (mux *Mux) handleConn(conn net.Conn) error {
 }
 
 // Listen returns a listener that receives connections from any byte in hdrs.
+// Re-registering hdr bytes will overwrite existing handlers.
 func (mux *Mux) Listen(hdrs []byte) net.Listener {
 	// Create new handler.
 	h := mux.handler()
 
 	// Register each header byte.
 	for _, hdr := range hdrs {
-		// Ensure header is not already registered.
-		if _, ok := mux.handlers[hdr]; ok {
-			panic(fmt.Sprintf("header byte already registered: 0x%02x", hdr))
-		}
-
 		// Create a new listener and assign it.
 		mux.handlers[hdr] = h
 	}

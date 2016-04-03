@@ -122,17 +122,3 @@ func TestMux_Listen_ErrUnregisteredHandler(t *testing.T) {
 		t.Fatalf("unexpected log output:\n\n%s", s)
 	}
 }
-
-// Ensure two handlers cannot be registered for the same header byte.
-func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
-	defer func() {
-		if r := recover(); r != `header byte already registered: 0x05` {
-			t.Fatalf("unexpected recover: %#v", r)
-		}
-	}()
-
-	// Register two listeners with the same header byte.
-	mux := mux.New(nil)
-	mux.Listen([]byte{'\x05'})
-	mux.Listen([]byte{'\x05'})
-}
