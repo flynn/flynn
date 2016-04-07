@@ -813,6 +813,12 @@ func (c *Client) Backup() (io.ReadCloser, error) {
 	return res.Body, err
 }
 
+// GetBackupMeta returns metadata for latest backup
+func (c *Client) GetBackupMeta() (*ct.ClusterBackup, error) {
+	b := &ct.ClusterBackup{}
+	return b, c.Get("/backup", b)
+}
+
 func (c *Client) Put(path string, in, out interface{}) error {
 	return c.send("PUT", path, in, out)
 }

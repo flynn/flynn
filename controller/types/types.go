@@ -311,6 +311,7 @@ const (
 	EventTypeRoute               EventType = "route"
 	EventTypeRouteDeletion       EventType = "route_deletion"
 	EventTypeDomainMigration     EventType = "domain_migration"
+	EventTypeClusterBackup       EventType = "cluster_backup"
 )
 
 type Event struct {
@@ -348,4 +349,21 @@ type AppDeletionEvent struct {
 type DomainMigrationEvent struct {
 	DomainMigration *DomainMigration `json:"domain_migration"`
 	Error           string           `json:"error,omitempty"`
+}
+
+const (
+	ClusterBackupStatusRunning  string = "running"
+	ClusterBackupStatusComplete string = "complete"
+	ClusterBackupStatusError    string = "error"
+)
+
+type ClusterBackup struct {
+	ID          string     `json:"id,omitempty"`
+	Status      string     `json:"status"`
+	SHA512      string     `json:"sha512,omitempty"`
+	Size        int64      `json:"size,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
