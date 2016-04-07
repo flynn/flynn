@@ -409,6 +409,10 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	// start blobstore, scheduler, and enable cluster monitor
 	data.Controller.Processes = map[string]int{"scheduler": 1}
+	// only start one scheduler instance
+	schedulerProcess := data.Controller.Release.Processes["scheduler"]
+	schedulerProcess.Omni = false
+	data.Controller.Release.Processes["scheduler"] = schedulerProcess
 	_, err = bootstrap.Manifest{
 		step("blobstore", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: blobstoreFormation,
