@@ -81,6 +81,9 @@ func loadSSHKey(name string) (*sshkeygen.SSHKey, error) {
 func listSSHKeyNames() []string {
 	names := []string{}
 	filepath.Walk(keysDir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 		if info.IsDir() {
 			return nil
 		}
