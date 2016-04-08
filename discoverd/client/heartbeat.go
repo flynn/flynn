@@ -9,6 +9,7 @@ import (
 	"time"
 
 	hh "github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 // EnvInstanceMeta are environment variables which will be automatically added
@@ -134,6 +135,7 @@ func (h *heartbeater) client() *Client {
 
 const (
 	heartbeatInterval        = 5 * time.Second
+	heartbeatJitter          = 2 * time.Second
 	heartbeatFailingInterval = 200 * time.Millisecond
 )
 
@@ -150,16 +152,16 @@ func (h *heartbeater) run(firstErr chan<- error) {
 	if err != nil {
 		return
 	}
-	timer := time.NewTimer(heartbeatInterval)
+	timer := time.NewTimer(nextHeartbeat())
 	for {
 		select {
 		case <-timer.C:
 			if err := register(); err != nil {
 				h.client().Logger.Error("heartbeat failed", "service", h.service, "addr", h.inst.Addr, "err", err)
-				timer.Reset(heartbeatFailingInterval)
+				timer.Reset(nextHeartbeatFailing())
 				break
 			}
-			timer.Reset(heartbeatInterval)
+			timer.Reset(nextHeartbeat())
 		case <-h.stop:
 			h.client().c.Delete(path)
 			close(h.done)
@@ -173,4 +175,12 @@ func expandAddr(addr string) string {
 		return os.Getenv("EXTERNAL_IP") + addr
 	}
 	return addr
+}
+
+func nextHeartbeat() time.Duration {
+	return heartbeatInterval - time.Duration(random.Math.Int63n(int64(heartbeatJitter)))
+}
+
+func nextHeartbeatFailing() time.Duration {
+	return heartbeatFailingInterval + time.Duration(random.Math.Int63n(int64(heartbeatFailingInterval)))
 }
