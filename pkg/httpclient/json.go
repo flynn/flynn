@@ -227,7 +227,8 @@ func (c *Client) StreamWithHeader(method, path string, header http.Header, in, o
 }
 
 func (c *Client) Send(method, path string, in, out interface{}) error {
-	res, err := c.RawReq(method, path, nil, in, out)
+	h := http.Header{"Accept": []string{"application/json"}}
+	res, err := c.RawReq(method, path, h, in, out)
 	if err == nil && out == nil {
 		res.Body.Close()
 	}
