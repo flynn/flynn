@@ -5,6 +5,7 @@
     { "title": "Vagrant Environment", "path": "/docs/installation/vagrant" },
     { "title": "Manual Installation", "path": "/docs/installation/manual" }
   ] },
+  { "title": "Operating Flynn", "path": "/docs/operating" },
   { "title": "Languages", "children": [
     { "title": "How To Deploy Go", "path": "/docs/how-to-deploy-go" },
     { "title": "How To Deploy Java", "path": "/docs/how-to-deploy-java" },

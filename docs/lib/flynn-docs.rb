@@ -17,6 +17,10 @@ module FlynnDocs
     File.join(dir, 'docs-nav.json')
   end
 
+  def self.redirects_path
+    File.join(dir, 'redirects.json')
+  end
+
   def self.contributing_markdown
     File.read(File.join(dir, '..', 'CONTRIBUTING.md'))
   end
