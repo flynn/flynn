@@ -402,11 +402,22 @@ func setupCommon(c *Config, log log15.Logger) error {
 		return err
 	}
 
-	// fetch file artifacts now that the network is configured
+	// fetch file artifacts in parallel now that the network is configured
+	fetchErr := make(chan error)
 	for _, artifact := range c.FileArtifacts {
-		log.Info("fetching artifact", "uri", artifact.URI)
-		if err := fetchFileArtifact(artifact); err != nil {
-			log.Error("error fetching artifact artifact", "uri", artifact.URI, "err", err)
+		go func(artifact *host.Artifact) {
+			log.Info("fetching artifact", "uri", artifact.URI)
+			if err := fetchFileArtifact(artifact); err != nil {
+				log.Error("error fetching artifact", "uri", artifact.URI, "err", err)
+				fetchErr <- err
+				return
+			}
+			log.Info("finished fetching artifact", "uri", artifact.URI)
+			fetchErr <- nil
+		}(artifact)
+	}
+	for range c.FileArtifacts {
+		if err := <-fetchErr; err != nil {
 			return err
 		}
 	}
