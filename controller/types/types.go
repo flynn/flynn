@@ -80,9 +80,8 @@ func (r *Release) FileArtifactIDs() []string {
 	return r.ArtifactIDs[1:len(r.ArtifactIDs)]
 }
 
-func (r *Release) GitDeploy() bool {
-	v, ok := r.Meta["git"]
-	return ok && v == "true"
+func (r *Release) IsGitDeploy() bool {
+	return r.Meta["git"] == "true"
 }
 
 type ProcessType struct {

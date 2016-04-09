@@ -131,7 +131,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 
 	// expect releases deployed via git to have a slug as their first file
 	// artifact
-	if release.GitDeploy() && len(release.FileArtifactIDs()) > 0 {
+	if release.IsGitDeploy() && len(release.FileArtifactIDs()) > 0 {
 		slugArtifact, err := client.GetArtifact(release.FileArtifactIDs()[0])
 		if err != nil && err != controller.ErrNotFound {
 			return fmt.Errorf("error retrieving slug artifact: %s", err)
