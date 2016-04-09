@@ -506,11 +506,11 @@ func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 }
 
 func (s *State) sendEvent(job *host.ActiveJob, event string) {
-	j := *job
+	j := job.Dup()
 	go func() {
 		s.listenMtx.RLock()
 		defer s.listenMtx.RUnlock()
-		e := host.Event{JobID: job.Job.ID, Job: &j, Event: event}
+		e := host.Event{JobID: job.Job.ID, Job: j, Event: event}
 		for ch := range s.listeners["all"] {
 			ch <- e
 		}
