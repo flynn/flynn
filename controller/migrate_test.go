@@ -128,11 +128,17 @@ func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
 	c.Assert(rows.Err(), IsNil)
 	c.Assert(actual, DeepEquals, releaseArtifacts)
 
+	// check the slug release got "git=true" in metadata
+	var releaseMeta map[string]string
+	err = db.QueryRow("SELECT meta FROM releases WHERE release_id = $1", slugReleaseID).Scan(&releaseMeta)
+	c.Assert(err, IsNil)
+	c.Assert(releaseMeta, DeepEquals, map[string]string{"git": "true"})
+
 	// check the slug release got a file artifact with the correct URI and meta
 	var slugURI string
-	var meta map[string]string
-	err = db.QueryRow("SELECT uri, meta FROM artifacts INNER JOIN release_artifacts USING (artifact_id) WHERE type = 'file' AND release_id = $1", slugReleaseID).Scan(&slugURI, &meta)
+	var artifactMeta map[string]string
+	err = db.QueryRow("SELECT uri, meta FROM artifacts INNER JOIN release_artifacts USING (artifact_id) WHERE type = 'file' AND release_id = $1", slugReleaseID).Scan(&slugURI, &artifactMeta)
 	c.Assert(err, IsNil)
 	c.Assert(slugURI, Equals, slugEnv["SLUG_URL"])
-	c.Assert(meta, DeepEquals, map[string]string{"blobstore": "true"})
+	c.Assert(artifactMeta, DeepEquals, map[string]string{"blobstore": "true"})
 }

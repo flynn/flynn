@@ -301,6 +301,9 @@ $$ LANGUAGE plpgsql`,
 			FOR EACH ROW EXECUTE PROCEDURE check_release_artifacts()`,
 		`INSERT INTO release_artifacts (release_id, artifact_id) (SELECT release_id, artifact_id FROM releases WHERE artifact_id IS NOT NULL)`,
 
+		// set "git=true" for releases with SLUG_URL set
+		`UPDATE releases SET meta = jsonb_merge(meta, '{"git":"true"}') WHERE env ? 'SLUG_URL'`,
+
 		// create file artifacts for any releases with SLUG_URL set
 		`DO $$
 		DECLARE
