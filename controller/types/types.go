@@ -118,6 +118,10 @@ func (a *Artifact) HostArtifact() *host.Artifact {
 	}
 }
 
+func (a *Artifact) Blobstore() bool {
+	return a.Meta["blobstore"] == "true"
+}
+
 type Formation struct {
 	AppID     string                       `json:"app,omitempty"`
 	ReleaseID string                       `json:"release,omitempty"`
@@ -339,6 +343,7 @@ const (
 	EventTypeJob                 EventType = "job"
 	EventTypeScale               EventType = "scale"
 	EventTypeRelease             EventType = "release"
+	EventTypeReleaseDeletion     EventType = "release_deletion"
 	EventTypeArtifact            EventType = "artifact"
 	EventTypeProvider            EventType = "provider"
 	EventTypeResource            EventType = "resource"
@@ -404,4 +409,14 @@ type ClusterBackup struct {
 	CreatedAt   *time.Time `json:"created_at,omitempty"`
 	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
+}
+
+type ReleaseDeletion struct {
+	ReleaseID    string   `json:"release"`
+	DeletedFiles []string `json:"deleted_files"`
+}
+
+type ReleaseDeletionEvent struct {
+	ReleaseDeletion *ReleaseDeletion `json:"release_deletion"`
+	Error           string           `json:"error"`
 }

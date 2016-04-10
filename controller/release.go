@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
@@ -15,11 +17,13 @@ import (
 )
 
 type ReleaseRepo struct {
-	db *postgres.DB
+	db        *postgres.DB
+	artifacts *ArtifactRepo
+	que       *que.Client
 }
 
-func NewReleaseRepo(db *postgres.DB) *ReleaseRepo {
-	return &ReleaseRepo{db}
+func NewReleaseRepo(db *postgres.DB, artifacts *ArtifactRepo, que *que.Client) *ReleaseRepo {
+	return &ReleaseRepo{db, artifacts, que}
 }
 
 func scanRelease(s postgres.Scanner) (*ct.Release, error) {
@@ -123,6 +127,82 @@ func (r *ReleaseRepo) AppList(appID string) ([]*ct.Release, error) {
 	return releaseList(rows)
 }
 
+// Delete deletes the release and any associated formations and file artifacts,
+// and enqueues a worker job to delete any files stored in the blobstore
+func (r *ReleaseRepo) Delete(release *ct.Release) error {
+	fileArtifacts, err := r.artifacts.ListIDs(release.FileArtifactIDs()...)
+	if err != nil {
+		return err
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Exec("release_delete", release.ID); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Exec("formation_delete_by_release", release.ID); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	blobstoreFiles := make([]string, 0, len(fileArtifacts))
+	for _, artifact := range fileArtifacts {
+		if artifact.Blobstore() {
+			blobstoreFiles = append(blobstoreFiles, artifact.URI)
+		}
+		if err := tx.Exec("artifact_delete", artifact.ID); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	// if there are no blobstore files to delete, just save a release
+	// deletion event and return
+	if len(blobstoreFiles) == 0 {
+		event := ct.ReleaseDeletionEvent{
+			ReleaseDeletion: &ct.ReleaseDeletion{
+				ReleaseID: release.ID,
+			},
+		}
+		if err := createEvent(tx.Exec, &ct.Event{
+			ObjectID:   release.ID,
+			ObjectType: ct.EventTypeReleaseDeletion,
+		}, event); err != nil {
+			tx.Rollback()
+			return err
+		}
+		return tx.Commit()
+	}
+
+	// enqueue a job to delete the blobstore files
+	args, err := json.Marshal(struct {
+		ReleaseID string
+		FileURIs  []string
+	}{
+		release.ID,
+		blobstoreFiles,
+	})
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	job := &que.Job{
+		Type: "release_cleanup",
+		Args: args,
+	}
+	if err := r.que.EnqueueInTx(job, tx.Tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
 type releaseID struct {
 	ID string `json:"id"`
 }
@@ -172,4 +252,22 @@ func (c *controllerAPI) GetAppRelease(ctx context.Context, w http.ResponseWriter
 		return
 	}
 	httphelper.JSON(w, 200, release)
+}
+
+func (c *controllerAPI) DeleteRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	release, err := c.getRelease(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	if err := c.releaseRepo.Delete(release); err != nil {
+		if postgres.IsPostgresCode(err, postgres.CheckViolation) {
+			err = ct.ValidationError{
+				Message: "cannot delete current app release",
+			}
+		}
+		respondWithError(w, err)
+		return
+	}
+	w.WriteHeader(200)
 }

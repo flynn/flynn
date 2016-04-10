@@ -128,7 +128,7 @@ func (s *S) TestFormationListActive(c *C) {
 func (s *S) TestFormationStreamingInterrupted(c *C) {
 	before := time.Now()
 	appRepo := NewAppRepo(s.hc.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), s.hc.rc)
-	releaseRepo := NewReleaseRepo(s.hc.db)
+	releaseRepo := NewReleaseRepo(s.hc.db, nil, nil)
 	artifactRepo := NewArtifactRepo(s.hc.db)
 	formationRepo := NewFormationRepo(s.hc.db, appRepo, releaseRepo, artifactRepo)
 

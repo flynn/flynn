@@ -142,3 +142,60 @@ func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
 	c.Assert(slugURI, Equals, slugEnv["SLUG_URL"])
 	c.Assert(artifactMeta, DeepEquals, map[string]string{"blobstore": "true"})
 }
+
+// TestMigrateArtifactMeta checks that migrating to ID 16 correctly
+// sets artifact metadata for those stored in the blobstore
+func (MigrateSuite) TestMigrateArtifactMeta(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_artifact_meta")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 15
+	m.migrateTo(15)
+
+	type artifact struct {
+		ID         string
+		URI        string
+		MetaBefore map[string]string
+		MetaAfter  map[string]string
+	}
+
+	artifacts := []*artifact{
+		{
+			ID:         random.UUID(),
+			URI:        "http://example.com/file1.tar",
+			MetaBefore: nil,
+			MetaAfter:  nil,
+		},
+		{
+			ID:         random.UUID(),
+			URI:        "http://example.com/file2.tar",
+			MetaBefore: map[string]string{"foo": "bar"},
+			MetaAfter:  map[string]string{"foo": "bar"},
+		},
+		{
+			ID:         random.UUID(),
+			URI:        "http://blobstore.discoverd/file1.tar",
+			MetaBefore: nil,
+			MetaAfter:  map[string]string{"blobstore": "true"},
+		},
+		{
+			ID:         random.UUID(),
+			URI:        "http://blobstore.discoverd/file2.tar",
+			MetaBefore: map[string]string{"foo": "bar"},
+			MetaAfter:  map[string]string{"foo": "bar", "blobstore": "true"},
+		},
+	}
+
+	// create the artifacts
+	for _, a := range artifacts {
+		c.Assert(db.Exec(`INSERT INTO artifacts (artifact_id, type, uri, meta) VALUES ($1, $2, $3, $4)`, a.ID, "file", a.URI, a.MetaBefore), IsNil)
+	}
+
+	// migrate to 16 and check the artifacts have the appropriate metadata
+	m.migrateTo(16)
+	for _, a := range artifacts {
+		var meta map[string]string
+		c.Assert(db.QueryRow("SELECT meta FROM artifacts WHERE artifact_id = $1", a.ID).Scan(&meta), IsNil)
+		c.Assert(meta, DeepEquals, a.MetaAfter)
+	}
+}

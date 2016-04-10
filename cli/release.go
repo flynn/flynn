@@ -21,6 +21,7 @@ usage: flynn release [-q|--quiet]
        flynn release add [-t <type>] [-f <file>] <uri>
        flynn release update <file> [<id>] [--clean]
        flynn release show [--json] [<id>]
+       flynn release delete [-y] <id>
 
 Manage app releases.
 
@@ -30,6 +31,7 @@ Options:
 	-f, --file=<file>  release configuration file
 	--json             print release configuration in JSON format
 	--clean            update from a clean slate (ignoring prior config)
+	-y, --yes          skip the confirmation prompt when deleting a release
 
 Commands:
 	With no arguments, shows a list of releases associated with the app.
@@ -53,6 +55,10 @@ Commands:
 		It can take any of the arguments the controller Release type can take, and
 		will override existing config with any values set thus. Omit the ID to
 		update the current release.
+
+	delete  delete a release
+
+		Any associated file artifacts (e.g. slugs) will also be deleted.
 
 Examples:
 
@@ -95,6 +101,8 @@ Examples:
 	$ flynn release update 427537e78be4417fae2e24d11bc993eb update.json
 	Created release 0101020305080d1522375990e9000000.
 
+	$ flynn release delete --yes c6b7f512-ef49-46f7-bb57-dd39e97bfb09
+	Deleted release c6b7f512-ef49-46f7-bb57-dd39e97bfb09 (deleted 1 files)
 `)
 }
 
@@ -111,6 +119,9 @@ func runRelease(args *docopt.Args, client *controller.Client) error {
 	}
 	if args.Bool["update"] {
 		return runReleaseUpdate(args, client)
+	}
+	if args.Bool["delete"] {
+		return runReleaseDelete(args, client)
 	}
 	return runReleaseList(args, client)
 }
@@ -297,5 +308,20 @@ func runReleaseUpdate(args *docopt.Args, client *controller.Client) error {
 
 	log.Printf("Created release %s.", release.ID)
 
+	return nil
+}
+
+func runReleaseDelete(args *docopt.Args, client *controller.Client) error {
+	releaseID := args.String["<id>"]
+	if !args.Bool["--yes"] {
+		if !promptYesNo(fmt.Sprintf("Are you sure you want to delete release %q?", releaseID)) {
+			return nil
+		}
+	}
+	res, err := client.DeleteRelease(releaseID)
+	if err != nil {
+		return err
+	}
+	log.Printf("Deleted release %s (deleted %d files)", releaseID, len(res.DeletedFiles))
 	return nil
 }
