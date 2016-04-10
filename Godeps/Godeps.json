@@ -648,10 +648,6 @@
 			"Rev": "a57a12c1b1d8aa37cf2f9da4fa7657b1f1fed88c"
 		},
 		{
-			"ImportPath": "github.com/wadey/cryptorand",
-			"Rev": "f71da62b90e6a6df720e69d4607dcfd10443c75a"
-		},
-		{
 			"ImportPath": "golang.org/x/crypto/nacl/secretbox",
 			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
 		},
