@@ -320,6 +320,21 @@ $$ LANGUAGE plpgsql`,
 		END $$`,
 		`ALTER TABLE releases DROP COLUMN artifact_id`,
 	)
+	migrations.Add(15,
+		`INSERT INTO event_types (name) VALUES ('release_deletion')`,
+
+		// add a trigger to prevent current app releases from being deleted
+		`CREATE FUNCTION check_release_delete() RETURNS OPAQUE AS $$
+			BEGIN
+				IF NEW.deleted_at IS NOT NULL AND (SELECT COUNT(*) FROM apps WHERE release_id = NEW.release_id) != 0 THEN
+					RAISE EXCEPTION 'cannot delete current app release' USING ERRCODE = 'check_violation';
+				END IF;
+
+				RETURN NULL;
+			END;
+		$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER check_release_delete AFTER UPDATE ON releases FOR EACH ROW EXECUTE PROCEDURE check_release_delete()`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

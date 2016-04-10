@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/attempt"
@@ -1002,4 +1004,52 @@ func (s *CLISuite) TestDeploy(t *c.C) {
 	deploy := r.flynn("deployment")
 	t.Assert(deploy, Succeeds)
 	t.Assert(deploy.Output, Matches, "complete")
+}
+
+func (s *CLISuite) TestReleaseDelete(t *c.C) {
+	// create an app and release it twice
+	r := s.newGitRepo(t, "http")
+	app := "release-delete-" + random.String(8)
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	t.Assert(r.git("commit", "--allow-empty", "--message", "empty commit"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// get the releases
+	client := s.controllerClient(t)
+	releases, err := client.AppReleaseList(app)
+	t.Assert(err, c.IsNil)
+	t.Assert(releases, c.HasLen, 2)
+
+	// check the current release cannot be deleted
+	res := r.flynn("release", "delete", "--yes", releases[0].ID)
+	t.Assert(res, c.Not(Succeeds))
+	t.Assert(res.Output, c.Equals, "validation_error: cannot delete current app release\n")
+
+	// get the slug artifact URI so we can check it gets removed later
+	assertURI := func(uri string, status int) {
+		req, err := http.NewRequest("HEAD", uri, nil)
+		t.Assert(err, c.IsNil)
+		res, err := http.DefaultClient.Do(req)
+		t.Assert(err, c.IsNil)
+		res.Body.Close()
+		t.Assert(res.StatusCode, c.Equals, status)
+	}
+	slugArtifact, err := client.GetArtifact(releases[1].FileArtifactIDs()[0])
+	t.Assert(err, c.IsNil)
+	assertURI(slugArtifact.URI, http.StatusOK)
+
+	// check the old release can be deleted
+	res = r.flynn("release", "delete", "--yes", releases[1].ID)
+	t.Assert(res, Succeeds)
+	t.Assert(res.Output, c.Equals, fmt.Sprintf("Deleted release %s (deleted 1 files)\n", releases[1].ID))
+
+	// check the slug artifact was deleted
+	_, err = client.GetArtifact(slugArtifact.ID)
+	t.Assert(err, c.Equals, controller.ErrNotFound)
+	assertURI(slugArtifact.URI, http.StatusNotFound)
+
+	// check the image artifact was not deleted (since it is shared between both releases)
+	_, err = client.GetArtifact(releases[1].ImageArtifactID())
+	t.Assert(err, c.IsNil)
 }

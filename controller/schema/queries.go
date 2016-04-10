@@ -24,11 +24,13 @@ var preparedStatements = map[string]string{
 	"release_insert":                        releaseInsertQuery,
 	"release_app_list":                      releaseAppListQuery,
 	"release_artifacts_insert":              releaseArtifactsInsertQuery,
+	"release_delete":                        releaseDeleteQuery,
 	"artifact_list":                         artifactListQuery,
 	"artifact_list_ids":                     artifactListIDsQuery,
 	"artifact_select":                       artifactSelectQuery,
 	"artifact_select_by_type_and_uri":       artifactSelectByTypeAndURIQuery,
 	"artifact_insert":                       artifactInsertQuery,
+	"artifact_delete":                       artifactDeleteQuery,
 	"deployment_list":                       deploymentListQuery,
 	"deployment_select":                     deploymentSelectQuery,
 	"deployment_insert":                     deploymentInsertQuery,
@@ -47,6 +49,7 @@ var preparedStatements = map[string]string{
 	"formation_update":                      formationUpdateQuery,
 	"formation_delete":                      formationDeleteQuery,
 	"formation_delete_by_app":               formationDeleteByAppQuery,
+	"formation_delete_by_release":           formationDeleteByReleaseQuery,
 	"job_list":                              jobListQuery,
 	"job_list_active":                       jobListActiveQuery,
 	"job_select":                            jobSelectQuery,
@@ -155,6 +158,8 @@ FROM releases r JOIN formations f USING (release_id)
 WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseArtifactsInsertQuery = `
 INSERT INTO release_artifacts (release_id, artifact_id) VALUES ($1, $2)`
+	releaseDeleteQuery = `
+UPDATE releases SET deleted_at = now() WHERE release_id = $1 AND deleted_at IS NULL`
 	artifactListQuery = `
 SELECT artifact_id, type, uri, meta, created_at FROM artifacts
 WHERE deleted_at IS NULL ORDER BY created_at DESC`
@@ -168,6 +173,8 @@ WHERE artifact_id = $1 AND deleted_at IS NULL`
 SELECT artifact_id, meta, created_at FROM artifacts WHERE type = $1 AND uri = $2`
 	artifactInsertQuery = `
 INSERT INTO artifacts (artifact_id, type, uri, meta) VALUES ($1, $2, $3, $4) RETURNING created_at`
+	artifactDeleteQuery = `
+UPDATE artifacts SET deleted_at = now() WHERE artifact_id = $1 AND deleted_at IS NULL`
 	deploymentInsertQuery = `
 INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, deploy_timeout)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at`
@@ -270,6 +277,9 @@ WHERE app_id = $1 AND release_id = $2`
 	formationDeleteByAppQuery = `
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
 WHERE app_id = $1 AND deleted_at IS NULL`
+	formationDeleteByReleaseQuery = `
+UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
+WHERE release_id = $1 AND deleted_at IS NULL`
 	jobListQuery = `
 SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
 FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC`

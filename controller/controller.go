@@ -210,7 +210,7 @@ func appHandler(c handlerConfig) http.Handler {
 	resourceRepo := NewResourceRepo(c.db)
 	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
 	artifactRepo := NewArtifactRepo(c.db)
-	releaseRepo := NewReleaseRepo(c.db)
+	releaseRepo := NewReleaseRepo(c.db, artifactRepo, q)
 	jobRepo := NewJobRepo(c.db)
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
 	deploymentRepo := NewDeploymentRepo(c.db)
@@ -281,6 +281,8 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.PUT("/apps/:apps_id/release", httphelper.WrapHandler(api.appLookup(api.SetAppRelease)))
 	httpRouter.GET("/apps/:apps_id/release", httphelper.WrapHandler(api.appLookup(api.GetAppRelease)))
 	httpRouter.GET("/apps/:apps_id/releases", httphelper.WrapHandler(api.appLookup(api.GetAppReleases)))
+
+	httpRouter.DELETE("/releases/:releases_id", httphelper.WrapHandler(api.DeleteRelease))
 
 	httpRouter.GET("/resources", httphelper.WrapHandler(api.GetResources))
 	httpRouter.POST("/providers/:providers_id/resources", httphelper.WrapHandler(api.ProvisionResource))
