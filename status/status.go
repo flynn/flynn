@@ -212,17 +212,16 @@ func init() {
 }
 
 type ServiceStatus struct {
-	Name   string
-	Status status.Status
+	Name     string
+	Status   status.Status
+	optional bool
 }
 
 func GetStatus() status.Status {
 	results := make(chan ServiceStatus)
-	optional := make(map[string]bool)
 	for _, s := range services {
 		go func(s Service) {
-			optional[s.Name] = s.Optional
-			results <- ServiceStatus{s.Name, s.Status()}
+			results <- ServiceStatus{s.Name, s.Status(), s.Optional}
 		}(s)
 	}
 
@@ -231,7 +230,7 @@ func GetStatus() status.Status {
 	for i := 0; i < len(services); i++ {
 		res := <-results
 		data[res.Name] = res.Status
-		if res.Status.Status != status.CodeHealthy && !optional[res.Name] {
+		if res.Status.Status != status.CodeHealthy && !res.optional {
 			healthy = false
 		}
 	}
