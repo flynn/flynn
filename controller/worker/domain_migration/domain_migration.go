@@ -345,7 +345,7 @@ func (m *migration) appCreateMissingRoutes(appID string, routes []*router.Route)
 		if route.Type != "http" {
 			continue
 		}
-		if strings.HasSuffix(route.Domain, m.dm.OldDomain) && route.TLSCert == m.dm.OldTLSCert.Cert {
+		if strings.HasSuffix(route.Domain, m.dm.OldDomain) {
 			if err := m.appMaybeCreateRoute(appID, route, routes); err != nil {
 				return err
 			}

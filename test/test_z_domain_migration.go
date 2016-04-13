@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -119,9 +120,16 @@ func (s *ZDomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
 }
 
 func (s *ZDomainMigrationSuite) TestDomainMigration(t *c.C) {
-	release, err := s.controllerClient(t).GetAppRelease("controller")
+	cc := s.controllerClient(t)
+	release, err := cc.GetAppRelease("controller")
 	t.Assert(err, c.IsNil)
 	oldDomain := release.Env["DEFAULT_ROUTE_DOMAIN"]
+
+	// create app
+	app, _ := s.createApp(t)
+	appRoutes, err := cc.RouteList(app.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(len(appRoutes), c.Equals, 1)
 
 	// using xip.io to get around modifying /etc/hosts
 	dm := &ct.DomainMigration{
@@ -129,8 +137,21 @@ func (s *ZDomainMigrationSuite) TestDomainMigration(t *c.C) {
 		Domain:    fmt.Sprintf("%s.xip.io", routerIP),
 	}
 	s.migrateDomain(t, dm)
+
+	// make sure a new route was created for the app
+	appRoutes, err = cc.RouteList(app.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(len(appRoutes), c.Equals, 2)
+	t.Assert(strings.HasSuffix(appRoutes[0].Domain, dm.Domain), c.Equals, true)
+	t.Assert(strings.HasSuffix(appRoutes[1].Domain, dm.OldDomain), c.Equals, true)
+
 	s.migrateDomain(t, &ct.DomainMigration{
 		OldDomain: dm.Domain,
 		Domain:    dm.OldDomain,
 	})
+
+	// app should still only have the two routes
+	appRoutes, err = cc.RouteList(app.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(len(appRoutes), c.Equals, 2)
 }
