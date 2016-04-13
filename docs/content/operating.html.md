@@ -148,14 +148,14 @@ route, add the `--routes` flag.
 ## Monitoring
 
 Flynn provides a status endpoint over HTTP that exposes the health of system
-components at `http://status.$CLUSTER_DOMAIN?key=$auth_key` (for example,
-`http://status.1.localflynn.com?key=$auth_key`). The status endpoint returns a status code
+components at `http://status.$CLUSTER_DOMAIN?key=$AUTH_KEY` (for example,
+`http://status.1.localflynn.com?key=$AUTH_KEY`). The status endpoint returns a status code
 along with a more detailed JSON response. If any core components are unhealthy,
 the HTTP status will be 500.
 
 To get the $auth_key for your cluster:
 ```
-auth_key=$(flynn -a status env get AUTH_KEY)
+AUTH_KEY=$(flynn -a status env get AUTH_KEY)
 ```
 
 ## Debugging
