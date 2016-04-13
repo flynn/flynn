@@ -155,7 +155,7 @@ the HTTP status will be 500.
 
 The $AUTH_KEY is necessary only if the request comes from a non-public IP.
 
-To get the $AUTH_KEY for your cluster:
+To get the $AUTH_KEY for your cluster(s):
 ```
 AUTH_KEY=$(flynn -a status env get AUTH_KEY)
 ```
