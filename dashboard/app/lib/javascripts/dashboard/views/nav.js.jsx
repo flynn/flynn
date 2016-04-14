@@ -32,7 +32,8 @@ var Nav = React.createClass({
 		return {
 			items: [
 				{ title: "Dashboard", icon: "icn-dashboard", path: "/" },
-				{ title: "Providers", icon: "icn-databases", path: "/providers" }
+				{ title: "Providers", icon: "icn-databases", path: "/providers" },
+				{ title: "Cluster backup", icon: "icn-download", path: "/backup" }
 			]
 		};
 	},

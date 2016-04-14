@@ -4,6 +4,7 @@ import Config from '../config';
 import LoginModel from '../views/models/login';
 import LoginComponent from '../views/login';
 import InstallCertComponent from '../views/install-cert';
+import ClusterBackupComponent from '../views/cluster-backup';
 
 var MainRouter = Router.createClass({
 	displayName: "routers.main",
@@ -11,7 +12,8 @@ var MainRouter = Router.createClass({
 	routes: [
 		{ path: "", handler: "root" },
 		{ path: "login", handler: "login", auth: false },
-		{ path: "installcert", handler: "installCert", auth: false }
+		{ path: "installcert", handler: "installCert", auth: false },
+		{ path: "backup", handler: "clusterBackup", auth: false }
 	],
 
 	root: function (params) {
@@ -73,6 +75,12 @@ var MainRouter = Router.createClass({
 					InstallCertComponent, {
 						certURL: Config.API_SERVER.replace("https", "http") + "/cert"
 					}))), this.context.el);
+	},
+
+	clusterBackup: function () {
+		React.render(
+			React.createElement(ClusterBackupComponent),
+			this.context.el);
 	}
 
 });
