@@ -6,6 +6,7 @@
     { "title": "Manual Installation", "path": "/docs/installation/manual" }
   ] },
   { "title": "Operating Flynn", "path": "/docs/operating" },
+  { "title": "Architecture", "path": "/docs/architecture" },
   { "title": "Languages", "children": [
     { "title": "How To Deploy Go", "path": "/docs/how-to-deploy-go" },
     { "title": "How To Deploy Java", "path": "/docs/how-to-deploy-java" },
