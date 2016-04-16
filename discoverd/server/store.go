@@ -217,7 +217,7 @@ func (s *Store) LastIndex() uint64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.raft != nil {
-		return s.raft.LastIndex()
+		return s.raft.AppliedIndex()
 	}
 	return 0
 }
