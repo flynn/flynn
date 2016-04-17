@@ -64,6 +64,19 @@ mvn -B -DskipTests=true clean install
 This downloads the necessary dependencies and compiles the application into the
 `target` directory.
 
+If this command needs to be customized, it can be done by setting the
+environment variable `MAVEN_CUSTOM_OPTS`:
+
+```
+flynn env set MAVEN_CUSTOM_OPTS="-dFirstCustomProperty=abc -dSecondCustomProperty=xyz"
+```
+
+This results in the following Maven command:
+
+```
+mvn -B -dFirstCustomProperty=abc -dSecondCustomProperty=xyz clean dependency:list install
+```
+
 By default, Flynn uses a recent version of Maven. To use a specific version of
 Maven, the `maven.version` property should be set in the `system.properties`
 file in the root directory of the application, for example:
