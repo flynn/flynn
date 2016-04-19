@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -134,7 +135,12 @@ type BaseCluster struct {
 	DiscoveryToken      string            `json:"discovery_token"`
 	InstanceIPs         []string          `json:"instance_ips,omitempty" ql:"-"`
 	DeletedAt           *time.Time        `json:"deleted_at,omitempty"`
+	HasBackup           bool              `json:"has_backup,omitempty" ql:"-"`
 
+	backupPath        string
+	backup            *ClusterBackupReceiver
+	backupMtx         sync.RWMutex
+	oldDomain         string
 	credential        *Credential
 	installer         *Installer
 	pendingPrompt     *Prompt
@@ -165,15 +171,29 @@ type Event struct {
 
 type Prompt struct {
 	ID        string     `json:"id"`
-	Type      string     `json:"type,omitempty"`
+	Type      PromptType `json:"type,omitempty"`
 	Message   string     `json:"message,omitempty"`
 	Yes       bool       `json:"yes,omitempty"`
 	Input     string     `json:"input,omitempty"`
+	File      io.Reader  `json:"-" ql:"-"`
+	FileSize  int        `json:"-" ql:"-"`
 	Resolved  bool       `json:"resolved,omitempty"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	resChan   chan *Prompt
+	errChan   chan error
 	cluster   *BaseCluster
 }
+
+type PromptType string
+
+var (
+	PromptTypeYesNo          PromptType = "yes_no"
+	PromptTypeChoice         PromptType = "choice"
+	PromptTypeCredential     PromptType = "credential"
+	PromptTypeInput          PromptType = "input"
+	PromptTypeProtectedInput PromptType = "protected_input"
+	PromptTypeFile           PromptType = "file"
+)
 
 func (i *Installer) updatedbColumns(in interface{}, t string) error {
 	s, err := ql.StructSchema(in)

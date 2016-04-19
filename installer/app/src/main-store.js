@@ -34,7 +34,8 @@ export default createClass({
 				credentials: []
 			},
 			prompts: {},
-			credentialsPromptValue: {}
+			credentialsPromptValue: {},
+			progressMeters: {}
 		};
 	},
 
@@ -43,9 +44,7 @@ export default createClass({
 		switch (event.name) {
 		case 'SELECT_CLOUD':
 			if (newCluster.constructor.type !== event.cloud) {
-				newCluster.removeChangeListener(this.__handleClusterChanged);
-				newCluster = Cluster.newOfType(event.cloud, {id: 'new', credentials: this.state.credentials});
-				newCluster.addChangeListener(this.__handleClusterChanged);
+				this.__setNewCluster(event.cloud);
 				this.setState({
 					currentCloudSlug: event.cloud,
 					currentCluster: newCluster
@@ -54,7 +53,11 @@ export default createClass({
 			break;
 
 		case 'LAUNCH_CLUSTER':
-			Client.launchCluster(newCluster.toJSON());
+			Client.launchCluster(newCluster.toJSON(), newCluster.getBackupFile());
+			break;
+
+		case 'LAUNCH_CLUSTER_SUCCESS':
+			this.__setNewCluster(newCluster.type);
 			break;
 
 		case 'NEW_CLUSTER':
@@ -169,6 +172,17 @@ export default createClass({
 			Client.sendPromptResponse(event.clusterID, event.promptID, event.data);
 			break;
 
+		case 'PROGRESS':
+			this.setState({
+				progressMeters: (function (progressMeters) {
+					var clusterID = event.clusterID;
+					progressMeters[clusterID] = progressMeters[clusterID] || {};
+					progressMeters[clusterID][event.data.id] = event.data;
+					return progressMeters;
+				})(extend({}, this.state.progressMeters))
+			});
+			break;
+
 		case 'CHECK_CERT':
 			cluster = this.__findCluster(event.clusterID);
 			if (cluster) {
@@ -212,8 +226,25 @@ export default createClass({
 			if (event.state === 'deleted') {
 				this.__removeCluster(event.clusterID);
 			}
+			if (event.state !== 'starting') {
+				this.setState({
+					progressMeters: (function (progressMeters) {
+						var clusterID = event.clusterID;
+						if (progressMeters.hasOwnProperty(clusterID)) {
+							delete progressMeters[clusterID];
+						}
+						return progressMeters;
+					})(extend({}, this.state.progressMeters))
+				});
+			}
 			break;
 		}
+	},
+
+	__setNewCluster: function (t) {
+		newCluster.removeChangeListener(this.__handleClusterChanged);
+		newCluster = Cluster.newOfType(t, {id: 'new', credentials: this.state.credentials});
+		newCluster.addChangeListener(this.__handleClusterChanged);
 	},
 
 	__addError: function (type, err) {

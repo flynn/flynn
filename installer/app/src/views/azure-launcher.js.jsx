@@ -2,6 +2,7 @@ import Dispatcher from '../dispatcher';
 import PrettySelect from './pretty-select';
 import IntegerPicker from './integer-picker';
 import ExternalLink from './external-link';
+import AdvancedOptions from './advanced-options';
 import { green as GreenBtnCSS, disabled as DisabledBtnCSS } from './css/button';
 import Sheet from './css/sheet';
 
@@ -96,6 +97,8 @@ var InstallConfig = React.createClass({
 							onChange={this.__handleNumInstancesChange} />
 					</div>
 				</label>
+
+				<AdvancedOptions state={clusterState} />
 
 				<button type="submit" disabled={launchBtnDisabled}>Launch</button>
 			</form>

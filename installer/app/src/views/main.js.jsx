@@ -2,6 +2,7 @@ import Sheet from './css/sheet';
 import Panel from './panel';
 import Clusters from './clusters';
 import Prompt from './prompt';
+import ProgressMeter from './progress-meter';
 import BtnCSS from './css/button';
 
 var Main = React.createClass({
@@ -29,6 +30,7 @@ var Main = React.createClass({
 	render: function () {
 		var state = this.props.dataStore.state;
 		var prompt = state.prompts[state.currentClusterID] || null;
+		var progressMeters = state.progressMeters[state.currentClusterID] || {};
 		return (
 			<div id={this.state.styleEl.id}>
 				<div style={{
@@ -54,6 +56,15 @@ var Main = React.createClass({
 								state={state} />
 						</Panel>
 					) : null}
+
+					{state.currentCluster.attrs.state === 'starting' ? Object.keys(progressMeters).sort().map(function (mID) {
+						var m = progressMeters[mID];
+						return (
+							<Panel key={mID} style={{ marginBottom: '1rem' }}>
+								<ProgressMeter percent={m.percent} description={m.description} />
+							</Panel>
+						);
+					}) : null}
 
 					{this.props.children}
 				</div>

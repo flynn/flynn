@@ -1,7 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
 	"GoVersion": "go1.4",
-	"GodepVersion": "v60",
 	"Packages": [
 		"./..."
 	],
@@ -66,8 +65,8 @@
 			"Rev": "6e1ca38c6a73025366cd8705553b404746ee6e63"
 		},
 		{
-			"ImportPath": "github.com/camlistore/lock",
-			"Rev": "ae27720f340952636b826119b58130b9c1a847a0"
+			"ImportPath": "github.com/camlistore/go4/lock",
+			"Rev": "03efcb870d84809319ea509714dd6d19a1498483"
 		},
 		{
 			"ImportPath": "github.com/cheggaaa/pb",
@@ -104,11 +103,13 @@
 		},
 		{
 			"ImportPath": "github.com/cznic/ql",
-			"Rev": "69ca5f1dbae7e230dbfc8812d3e9764e144bbf45"
+			"Comment": "v1.0.3",
+			"Rev": "16df2de8e03c0d80c4045de3b3ebad1f1f10d62c"
 		},
 		{
 			"ImportPath": "github.com/cznic/ql/driver",
-			"Rev": "69ca5f1dbae7e230dbfc8812d3e9764e144bbf45"
+			"Comment": "v1.0.3",
+			"Rev": "16df2de8e03c0d80c4045de3b3ebad1f1f10d62c"
 		},
 		{
 			"ImportPath": "github.com/cznic/sortutil",

@@ -93,6 +93,7 @@ func (c *DigitalOceanCluster) Run() {
 			c.createDroplets,
 			c.fetchInstanceIPs,
 			c.configureDomain,
+			c.base.uploadBackup,
 			c.installFlynn,
 			c.bootstrap,
 			c.base.waitForDNS,

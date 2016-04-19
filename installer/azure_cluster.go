@@ -107,6 +107,7 @@ func (c *AzureCluster) Run() {
 			c.createTemplateDeployment,
 			c.base.allocateDomain,
 			c.configureDNS,
+			c.base.uploadBackup,
 			c.installFlynn,
 			c.bootstrap,
 		}

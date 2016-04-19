@@ -44,8 +44,7 @@ var InstallConfig = React.createClass({
 					<br />
 					<br />
 					<AWSAdvancedOptions
-						vpcCidr={clusterState.vpcCidr}
-						subnetCidr={clusterState.subnetCidr}
+						state={this.props.state}
 						onChange={this.__handleAdvancedOptionsChange}/>
 					<br />
 					<br />

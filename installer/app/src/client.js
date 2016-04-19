@@ -107,10 +107,10 @@ var Client = {
 		});
 	},
 
-	launchCluster: function (data) {
+	launchCluster: function (data, backupFile) {
 		this.performRequest('POST', {
 			url: Config.endpoints.clusters,
-			body: data,
+			body: extend({}, data, {has_backup: !!backupFile}),
 			headers: {
 				'Content-Type': 'application/json'
 			}
@@ -121,13 +121,29 @@ var Client = {
 				res: args[0],
 				xhr: args[1]
 			});
-		}).catch(function (args) {
+			if (backupFile) {
+				this.uploadBackup(args[0].id, backupFile);
+			}
+		}.bind(this)).catch(function (args) {
 			Dispatcher.dispatch({
 				name: 'LAUNCH_CLUSTER_FAILURE',
 				clusterID: 'new',
 				res: args[0],
 				xhr: args[1]
 			});
+		});
+	},
+
+	uploadBackup: function (clusterID, file) {
+		this.performRequest('POST', {
+			url: Config.endpoints.upload_backup.replace(':id', clusterID),
+			body: file,
+			headers: {
+				'Content-Type': file.type,
+				'Content-Length': file.size
+			}
+		}).catch(function (err) {
+			window.console.error(err);
 		});
 	},
 
@@ -138,8 +154,19 @@ var Client = {
 	},
 
 	sendPromptResponse: function (clusterID, promptID, data) {
+		var url = Config.endpoints.prompt.replace(':id', clusterID).replace(':prompt_id', promptID);
+		if (data.type === "file") {
+			this.performRequest('POST', {
+				url: url,
+				body: data.file,
+				headers: {
+					'Content-Length': data.file.size
+				}
+			});
+			return;
+		}
 		this.performRequest('POST', {
-			url: Config.endpoints.prompt.replace(':id', clusterID).replace(':prompt_id', promptID),
+			url: url,
 			body: data,
 			headers: {
 				'Content-Type': 'application/json'
@@ -216,6 +243,11 @@ var Client = {
 						event.prompt.options = choice.options;
 					}
 				}
+				break;
+
+			case 'progress':
+				event.name = 'PROGRESS';
+				event.data = JSON.parse(data.description);
 				break;
 
 			case 'install_done':

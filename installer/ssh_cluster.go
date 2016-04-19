@@ -103,6 +103,7 @@ func (c *SSHCluster) Run() {
 			c.saveInstanceIPs,
 			c.base.allocateDomain,
 			c.configureDNS,
+			c.uploadBackup,
 			c.installFlynn,
 			c.bootstrap,
 		}
@@ -459,12 +460,14 @@ outer:
 }
 
 func (c *SSHCluster) importSSHKeyPair(t *TargetServer) error {
-	base64Data := c.base.PromptFileInput(fmt.Sprintf("Please provide your private key for %s@%s", t.User, t.IP))
-	data, err := base64.StdEncoding.DecodeString(base64Data)
-	if err != nil {
+	var buf bytes.Buffer
+	_, file, readFileErrChan := c.base.PromptFileInput(fmt.Sprintf("Please provide your private key for %s@%s", t.User, t.IP))
+	if _, err := io.Copy(&buf, file); err != nil {
+		readFileErrChan <- err
 		return err
 	}
-	b, _ := pem.Decode(data)
+	readFileErrChan <- nil // no error reading file
+	b, _ := pem.Decode(buf.Bytes())
 	if b == nil {
 		return fmt.Errorf("Invalid private key")
 	}
@@ -520,6 +523,11 @@ func (c *SSHCluster) installFlynn() error {
 		Targets: c.Targets,
 	}
 	return bareCluster.InstallFlynn()
+}
+
+func (c *SSHCluster) uploadBackup() error {
+	// upload backup to bootstrap instance
+	return c.base.uploadBackupToTargetWithRetry(c.Targets[0])
 }
 
 func (c *SSHCluster) bootstrap() error {
