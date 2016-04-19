@@ -215,6 +215,7 @@ func appHandler(c handlerConfig) http.Handler {
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
 	deploymentRepo := NewDeploymentRepo(c.db)
 	eventRepo := NewEventRepo(c.db)
+	backupRepo := NewBackupRepo(c.db)
 
 	api := controllerAPI{
 		domainMigrationRepo: domainMigrationRepo,
@@ -227,6 +228,7 @@ func appHandler(c handlerConfig) http.Handler {
 		resourceRepo:        resourceRepo,
 		deploymentRepo:      deploymentRepo,
 		eventRepo:           eventRepo,
+		backupRepo:          backupRepo,
 		clusterClient:       c.cc,
 		logaggc:             c.lc,
 		routerc:             c.rc,
@@ -347,6 +349,7 @@ type controllerAPI struct {
 	resourceRepo        *ResourceRepo
 	deploymentRepo      *DeploymentRepo
 	eventRepo           *EventRepo
+	backupRepo          *BackupRepo
 	clusterClient       utils.ClusterClient
 	logaggc             logClient
 	routerc             routerc.Client

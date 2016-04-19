@@ -65,6 +65,9 @@ var preparedStatements = map[string]string{
 	"app_resource_delete_by_app":            appResourceDeleteByAppQuery,
 	"app_resource_delete_by_resource":       appResourceDeleteByResourceQuery,
 	"domain_migration_insert":               domainMigrationInsert,
+	"backup_insert":                         backupInsert,
+	"backup_update":                         backupUpdate,
+	"backup_select_latest":                  backupSelectLatest,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
@@ -319,4 +322,10 @@ DELETE FROM app_resources WHERE app_id = $1`
 DELETE FROM app_resources WHERE resource_id = $1`
 	domainMigrationInsert = `
 INSERT INTO domain_migrations (old_domain, domain, old_tls_cert, tls_cert) VALUES ($1, $2, $3, $4) RETURNING migration_id, created_at`
+	backupInsert = `
+INSERT INTO backups (status, sha512, size, error, completed_at) VALUES ($1, $2, $3, $4, $5) RETURNING backup_id, created_at, updated_at`
+	backupUpdate = `
+UPDATE backups SET status = $2, sha512 = $3, size = $4, error = $5, completed_at = $6, updated_at = now() WHERE backup_id = $1 RETURNING updated_at`
+	backupSelectLatest = `
+SELECT backup_id, status, sha512, size, error, created_at, updated_at, completed_at FROM backups ORDER BY updated_at DESC LIMIT 1`
 )

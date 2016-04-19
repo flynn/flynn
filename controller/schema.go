@@ -271,6 +271,23 @@ $$ LANGUAGE plpgsql`,
 		$$`,
 		`UPDATE apps SET meta = jsonb_merge(meta, '{"flynn-system-critical":"true"}') WHERE name IN ('discoverd', 'flannel', 'postgres', 'controller')`,
 	)
+	migrations.Add(14,
+		`CREATE TABLE backup_statuses (name text PRIMARY KEY)`,
+		`INSERT INTO backup_statuses (name) VALUES
+			('running'), ('complete'), ('error')`,
+		`CREATE TABLE backups (
+			backup_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+			status text NOT NULL REFERENCES backup_statuses (name),
+			sha512 text,
+			size bigint,
+			error text,
+			created_at timestamptz NOT NULL DEFAULT now(),
+			updated_at timestamptz NOT NULL DEFAULT now(),
+			completed_at timestamptz,
+			deleted_at timestamptz
+		)`,
+		`INSERT INTO event_types (name) VALUES ('cluster_backup')`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

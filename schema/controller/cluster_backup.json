@@ -1,11 +1,52 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/cluster_backup#",
-  "title": "Backup",
+  "title": "Cluster Backup",
   "description": "",
   "sortIndex": 18,
-  "type": "string",
+  "type": "object",
   "examples": [
     "schema/examples/controller/cluster_backup#"
-  ]
+  ],
+  "definitions": {
+    "backup_status": {
+      "type": "string",
+      "enum": ["running", "complete", "error"]
+    },
+    "completed_at": {
+      "description": "timestamp of backup completion",
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "status": {
+      "$ref": "#/definitions/backup_status"
+    },
+    "sha512": {
+      "description": "sha512 of backup",
+      "type": "string",
+      "format": "hex"
+    },
+    "size": {
+      "description": "number of bytes in the backup",
+      "type": "integer"
+    },
+    "error": {
+      "type": "string"
+    },
+    "completed_at": {
+      "$ref": "#/definitions/completed_at"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    }
+  }
 }
