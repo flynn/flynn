@@ -149,9 +149,19 @@ route, add the `--routes` flag.
 
 Flynn provides a status endpoint over HTTP that exposes the health of system
 components at `http://status.$CLUSTER_DOMAIN` (for example,
-`http://status.1.localflynn.com`). The status endpoint returns a status code
+`https://status.1.localflynn.com`). The status endpoint returns a status code
 along with a more detailed JSON response. If any core components are unhealthy,
 the HTTP status will be 500.
+
+Requests to the status endpoint require a `key` parameter (example:
+`https://status.1.localflynn.com/?key=$AUTH_KEY`) when they come from IP
+addresses that are not reserved for private use.
+
+The `$AUTH_KEY` may be retrieved with this command:
+
+```text
+flynn -a status env get AUTH_KEY
+```
 
 ## Debugging
 
