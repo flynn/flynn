@@ -34,6 +34,7 @@ func main() {
 
 	// Initialize main program and execute.
 	m := NewMain()
+	shutdown.BeforeExit(func() { fmt.Fprintln(m.Stderr, "discoverd is exiting") })
 	if err := m.Run(os.Args[1:]...); err != nil {
 		fmt.Fprintln(m.Stderr, err.Error())
 		os.Exit(1)
