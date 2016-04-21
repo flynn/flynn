@@ -52,6 +52,7 @@ type Main struct {
 	dnsServer  *server.DNSServer
 	httpServer *http.Server
 	ln         net.Listener
+	hb         discoverd.Heartbeater
 
 	logger *log.Logger
 
@@ -224,8 +225,20 @@ func (m *Main) Run(args ...string) error {
 		httpAddr = net.JoinHostPort(os.Getenv("EXTERNAL_IP"), port)
 	}
 	m.Notify(opt.Notify, "http://"+httpAddr, opt.DNSAddr)
-	go discoverd.NewClientWithURL("http://"+httpAddr).AddServiceAndRegister("discoverd", httpAddr)
-
+	go func() {
+		for {
+			hb, err := discoverd.NewClientWithURL("http://"+httpAddr).AddServiceAndRegister("discoverd", httpAddr)
+			if err != nil {
+				m.logger.Println("failed to register service/instance, retrying in 5 seconds:", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			m.mu.Lock()
+			m.hb = hb
+			m.mu.Unlock()
+			break
+		}
+	}()
 	return nil
 }
 
@@ -249,6 +262,8 @@ func waitHostDNSConfig() (addr string, resolvers []string) {
 
 // Close shuts down all open servers.
 func (m *Main) Close() (info dt.ShutdownInfo, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.logger.Println("discoverd shutting down")
 	if m.httpServer != nil {
 		// Disable keep alives so that persistent connections will close
@@ -265,6 +280,9 @@ func (m *Main) Close() (info dt.ShutdownInfo, err error) {
 	if m.store != nil {
 		info.LastIndex, err = m.store.Close()
 		m.store = nil
+	}
+	if m.hb != nil {
+		m.hb.Close()
 	}
 	return info, err
 }
