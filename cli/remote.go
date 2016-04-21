@@ -44,12 +44,14 @@ func runRemote(args *docopt.Args, client *controller.Client) error {
 		return nil
 	}
 
-	update, err := promptReplaceRemote(remote)
-	if err != nil {
-		return err
-	}
-	if update == false {
-		return nil
+	if !args.Bool["--yes"] {
+		update, err := promptReplaceRemote(remote)
+		if err != nil {
+			return err
+		}
+		if update == false {
+			return nil
+		}
 	}
 
 	// Register git remote
