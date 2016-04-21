@@ -263,7 +263,7 @@
         "flynn-system-critical": "true"
       },
       "strategy": "discoverd-meta",
-      "deploy_timeout": 120
+      "deploy_timeout": 300
     }
   },
   {

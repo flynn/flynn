@@ -27,7 +27,7 @@ func (d *DeployJob) deployDiscoverdMeta() (err error) {
 			return err
 		}
 		discDeploys[typ] = discDeploy
-		if err := discDeploy.Reset(); err != nil {
+		if err := discDeploy.Create(d.ID); err != nil {
 			return err
 		}
 		defer discDeploy.Close()
@@ -37,7 +37,7 @@ func (d *DeployJob) deployDiscoverdMeta() (err error) {
 		for typ, events := range expected {
 			if count, ok := events[ct.JobStateUp]; ok && count > 0 {
 				if discDeploy, ok := discDeploys[typ]; ok {
-					if err := discDeploy.Wait(count, 120, log); err != nil {
+					if err := discDeploy.Wait(d.ID, count, 120, log); err != nil {
 						return err
 					}
 					// clear up events for this type so we can safely
