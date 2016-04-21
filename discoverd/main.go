@@ -249,6 +249,7 @@ func waitHostDNSConfig() (addr string, resolvers []string) {
 
 // Close shuts down all open servers.
 func (m *Main) Close() (info dt.ShutdownInfo, err error) {
+	m.logger.Println("discoverd shutting down")
 	if m.httpServer != nil {
 		// Disable keep alives so that persistent connections will close
 		m.httpServer.SetKeepAlivesEnabled(false)
