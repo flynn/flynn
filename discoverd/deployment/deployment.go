@@ -18,6 +18,17 @@ const (
 	DeploymentStateDone       DeploymentState = "done"
 )
 
+func NewDeploymentMeta(id string) DeploymentMeta {
+	meta := DeploymentMeta{ID: id}
+	meta.States = make(map[string]DeploymentState)
+	return meta
+}
+
+type DeploymentMeta struct {
+	ID     string                     `json:"id"`
+	States map[string]DeploymentState `json:"states"`
+}
+
 func NewDeployment(service string) (*Deployment, error) {
 	s := discoverd.NewService(service)
 	events := make(chan *discoverd.Event)
@@ -48,13 +59,13 @@ outer:
 			return err
 		}
 
-		states, err := d.decode(meta)
+		deploymentMeta, err := d.decode(meta)
 		if err != nil {
 			return err
 		}
 
 		performing := ""
-		for a, state := range states {
+		for a, state := range deploymentMeta.States {
 			if a == addr {
 				// already marked as performing, nothing to do
 				return nil
@@ -85,9 +96,9 @@ outer:
 		}
 
 		// no performing addresses, attempt to mark addr
-		states[addr] = DeploymentStatePerforming
+		deploymentMeta.States[addr] = DeploymentStatePerforming
 
-		data, err := json.Marshal(states)
+		data, err := json.Marshal(deploymentMeta)
 		if err != nil {
 			return err
 		}
@@ -113,19 +124,19 @@ func (d *Deployment) MarkDone(addr string) error {
 			return err
 		}
 
-		states, err := d.decode(meta)
+		deploymentMeta, err := d.decode(meta)
 		if err != nil {
 			return err
 		}
 
-		states[addr] = DeploymentStateDone
+		deploymentMeta.States[addr] = DeploymentStateDone
 
-		return d.set(meta, states)
+		return d.set(meta, deploymentMeta)
 	})
 }
 
 // Wait waits for an expected number of "done" addresses in the service metadata
-func (d *Deployment) Wait(expected int, timeout int, log log15.Logger) error {
+func (d *Deployment) Wait(id string, expected int, timeout int, log log15.Logger) error {
 	for {
 		actual := 0
 		select {
@@ -134,20 +145,25 @@ func (d *Deployment) Wait(expected int, timeout int, log log15.Logger) error {
 				return fmt.Errorf("service stream closed unexpectedly: %s", d.stream.Err())
 			}
 			if event.Kind == discoverd.EventKindServiceMeta {
-				states, err := d.decode(event.ServiceMeta)
+				deploymentMeta, err := d.decode(event.ServiceMeta)
 				if err != nil {
 					return err
 				}
-				log.Info("got service meta event", "states", states)
-				actual = 0
-				for _, state := range states {
-					if state == DeploymentStateDone {
-						actual++
+				log.Info("got service meta event", "state", deploymentMeta)
+				if deploymentMeta.ID == id {
+					actual = 0
+					for _, state := range deploymentMeta.States {
+						if state == DeploymentStateDone {
+							actual++
+						}
 					}
+					if actual == expected {
+						return nil
+					}
+				} else {
+					log.Warn("ignoring service meta even with wrong ID", "expected", id, "got", deploymentMeta.ID)
 				}
-				if actual == expected {
-					return nil
-				}
+
 			}
 		case <-time.After(time.Duration(timeout) * time.Second):
 			return fmt.Errorf("timed out waiting for discoverd deployment (expected=%d actual=%d)", expected, actual)
@@ -155,17 +171,17 @@ func (d *Deployment) Wait(expected int, timeout int, log log15.Logger) error {
 	}
 }
 
-// Reset sets the service metadata to null
-func (d *Deployment) Reset() error {
+// Create starts a new deployment with a given ID
+func (d *Deployment) Create(id string) error {
 	return attempts.Run(func() error {
-		if err := d.set(&discoverd.ServiceMeta{}, nil); err == nil {
+		if err := d.set(&discoverd.ServiceMeta{}, NewDeploymentMeta(id)); err == nil {
 			return nil
 		}
 		meta, err := d.service.GetMeta()
 		if err != nil {
 			return err
 		}
-		return d.set(meta, nil)
+		return d.set(meta, NewDeploymentMeta(id))
 	})
 }
 
@@ -173,19 +189,18 @@ func (d *Deployment) Close() error {
 	return d.stream.Close()
 }
 
-func (d *Deployment) decode(meta *discoverd.ServiceMeta) (map[string]DeploymentState, error) {
-	var states map[string]DeploymentState
-	if err := json.Unmarshal(meta.Data, &states); err != nil {
-		return nil, err
+func (d *Deployment) decode(meta *discoverd.ServiceMeta) (DeploymentMeta, error) {
+	var deploymentMeta DeploymentMeta
+	if err := json.Unmarshal(meta.Data, &deploymentMeta); err != nil {
+		return deploymentMeta, err
 	}
-	if states == nil {
-		states = make(map[string]DeploymentState)
-	}
-	return states, nil
+	return deploymentMeta, nil
 }
 
-func (d *Deployment) set(meta *discoverd.ServiceMeta, states map[string]DeploymentState) error {
-	data, err := json.Marshal(states)
+// set updates the service metadata given the current version and the updated version
+// will return err if the current version is no longer current (performs CaS)
+func (d *Deployment) set(meta *discoverd.ServiceMeta, deploymentMeta DeploymentMeta) error {
+	data, err := json.Marshal(deploymentMeta)
 	if err != nil {
 		return err
 	}
