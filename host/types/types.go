@@ -15,9 +15,10 @@ type Job struct {
 
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	Artifact  Artifact           `json:"artifact,omitempty"`
-	Resources resource.Resources `json:"resources,omitempty"`
-	Partition string             `json:"partition,omitempty"`
+	ImageArtifact *Artifact          `json:"artifact,omitempty"`
+	FileArtifacts []*Artifact        `json:"file_artifacts,omitempty"`
+	Resources     resource.Resources `json:"resources,omitempty"`
+	Partition     string             `json:"partition,omitempty"`
 
 	Config ContainerConfig `json:"config,omitempty"`
 
@@ -180,9 +181,16 @@ type VolumeBinding struct {
 }
 
 type Artifact struct {
-	URI  string `json:"url,omitempty"`
-	Type string `json:"type,omitempty"`
+	URI  string       `json:"url,omitempty"`
+	Type ArtifactType `json:"type,omitempty"`
 }
+
+type ArtifactType string
+
+const (
+	ArtifactTypeDocker ArtifactType = "docker"
+	ArtifactTypeFile   ArtifactType = "file"
+)
 
 type Host struct {
 	ID string `json:"id,omitempty"`

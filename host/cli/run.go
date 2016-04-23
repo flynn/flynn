@@ -29,7 +29,7 @@ Options:
 
 func runRun(args *docopt.Args, client *cluster.Client) error {
 	cmd := exec.Cmd{
-		Artifact: exec.DockerImage(args.String["<image>"]),
+		ImageArtifact: exec.DockerImage(args.String["<image>"]),
 		Job: &host.Job{
 			Config: host.ContainerConfig{
 				Entrypoint: []string{args.String["<command>"]},

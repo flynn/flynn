@@ -1,5 +1,5 @@
 #!/bin/bash
-## Load slug from Bind Mount, URL or STDIN
+## Load slug from Bind Mount, Artifacts dir, URL or STDIN
 
 set -eo pipefail
 
@@ -8,6 +8,8 @@ mkdir -p "${HOME}"
 
 if [[ -n $(ls -A "${HOME}") ]]; then
   true
+elif [[ -s "/artifacts/slug.tgz" ]]; then
+  tar xzf "/artifacts/slug.tgz" -C "${HOME}"
 elif ! [[ -z "${SLUG_URL}" ]]; then
   curl --silent --location --noproxy "discoverd" --retry 5 --fail "${SLUG_URL}" | tar -xzC "${HOME}"
   unset SLUG_URL

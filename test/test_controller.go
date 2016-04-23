@@ -561,7 +561,7 @@ func (s *ControllerSuite) TestBackup(t *c.C) {
 		t.Assert(ok, c.Equals, true)
 		t.Assert(ef.App, c.Not(c.IsNil))
 		t.Assert(ef.Release, c.Not(c.IsNil))
-		t.Assert(ef.Artifact, c.Not(c.IsNil))
+		t.Assert(ef.ImageArtifact, c.Not(c.IsNil))
 		t.Assert(ef.Processes, c.Not(c.IsNil))
 		t.Assert(ef.App.Name, c.Equals, name)
 	}

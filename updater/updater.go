@@ -187,7 +187,7 @@ func deployApp(client *controller.Client, app *ct.App, uri string, updateFn upda
 		log.Error("error getting release", "err", err)
 		return err
 	}
-	artifact, err := client.GetArtifact(release.ArtifactID)
+	artifact, err := client.GetArtifact(release.ImageArtifactID())
 	if err != nil {
 		log.Error("error getting release artifact", "err", err)
 		return err
@@ -215,7 +215,7 @@ func deployApp(client *controller.Client, app *ct.App, uri string, updateFn upda
 		return err
 	}
 	release.ID = ""
-	release.ArtifactID = artifact.ID
+	release.SetImageArtifactID(artifact.ID)
 	if updateFn != nil {
 		updateFn(release)
 	}

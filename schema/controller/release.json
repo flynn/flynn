@@ -19,7 +19,14 @@
       "$ref": "/schema/controller/common#/definitions/id"
     },
     "artifact": {
+      "description": "DEPRECATED: legacy artifact ID",
       "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "/schema/controller/common#/definitions/id"
+      }
     },
     "meta": {
       "$ref": "/schema/controller/common#/definitions/meta"

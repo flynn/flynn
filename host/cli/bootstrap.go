@@ -227,22 +227,37 @@ $function$;
 				artifactURIs["slugbuilder"] = step.Release.Env["SLUGBUILDER_IMAGE_URI"]
 				artifactURIs["slugrunner"] = step.Release.Env["SLUGRUNNER_IMAGE_URI"]
 			}
-			// update current artifact in database for service
+			// update current artifact in database for service, taking care to
+			// check the database version as migration 15 changed the way
+			// artifacts are related to releases in the database
 			sqlBuf.WriteString(fmt.Sprintf(`
-UPDATE artifacts SET uri = '%s'
-WHERE artifact_id = (SELECT artifact_id FROM releases
-                     WHERE release_id = (SELECT release_id FROM apps
-                     WHERE name = '%s'));`, step.Artifact.URI, step.ID))
+DO $$
+  BEGIN
+    IF (SELECT MAX(id) FROM schema_migrations) < 15 THEN
+      UPDATE artifacts SET uri = '%[1]s' WHERE artifact_id = (
+	SELECT artifact_id FROM releases WHERE release_id = (
+	  SELECT release_id FROM apps WHERE name = '%[2]s'
+	)
+      );
+    ELSE
+      UPDATE artifacts SET uri = '%[1]s' WHERE type = 'docker' AND artifact_id = (
+	SELECT artifact_id FROM release_artifacts WHERE release_id = (
+	  SELECT release_id FROM apps WHERE name = '%[2]s'
+	)
+      );
+    END IF;
+  END;
+$$;`, step.Artifact.URI, step.ID))
 		}
 	}
 
-	data.Discoverd.Artifact.URI = artifactURIs["discoverd"]
+	data.Discoverd.ImageArtifact.URI = artifactURIs["discoverd"]
 	data.Discoverd.Release.Env["DISCOVERD_PEERS"] = "{{ range $ip := .SortedHostIPs }}{{ $ip }}:1111,{{ end }}"
-	data.Postgres.Artifact.URI = artifactURIs["postgres"]
-	data.Flannel.Artifact.URI = artifactURIs["flannel"]
-	data.Controller.Artifact.URI = artifactURIs["controller"]
+	data.Postgres.ImageArtifact.URI = artifactURIs["postgres"]
+	data.Flannel.ImageArtifact.URI = artifactURIs["flannel"]
+	data.Controller.ImageArtifact.URI = artifactURIs["controller"]
 	if data.MariaDB != nil {
-		data.MariaDB.Artifact.URI = artifactURIs["mariadb"]
+		data.MariaDB.ImageArtifact.URI = artifactURIs["mariadb"]
 		if data.MariaDB.Processes["mariadb"] == 0 {
 			// skip mariadb if it wasn't scaled up in the backup
 			data.MariaDB = nil
@@ -312,7 +327,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 `, state.StepData["discoverd"].(*bootstrap.RunAppState).Release.Env["DISCOVERD_PEERS"]))
 
 	// load data into postgres
-	cmd := exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.Postgres.Artifact.Type, URI: data.Postgres.Artifact.URI}, nil)
+	cmd := exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.Postgres.ImageArtifact.Type, URI: data.Postgres.ImageArtifact.URI}, nil)
 	cmd.Entrypoint = []string{"psql"}
 	cmd.Env = map[string]string{
 		"PGHOST":     "leader.postgres.discoverd",
@@ -349,7 +364,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	// load data into mariadb if it was present in the backup.
 	if mysqldb != nil && data.MariaDB != nil {
-		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MariaDB.Artifact.Type, URI: data.MariaDB.Artifact.URI}, nil)
+		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MariaDB.ImageArtifact.Type, URI: data.MariaDB.ImageArtifact.URI}, nil)
 		cmd.Entrypoint = []string{"mysql"}
 		cmd.Cmd = []string{"-u", "flynn", "-h", "leader.mariadb.discoverd"}
 		cmd.Env = map[string]string{

@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -49,16 +50,17 @@ import (
 var logger log15.Logger
 
 type Config struct {
-	User      string
-	Gateway   string
-	WorkDir   string
-	IP        string
-	TTY       bool
-	OpenStdin bool
-	Env       map[string]string
-	Args      []string
-	Ports     []host.Port
-	Resources resource.Resources
+	User          string
+	Gateway       string
+	WorkDir       string
+	IP            string
+	TTY           bool
+	OpenStdin     bool
+	Env           map[string]string
+	Args          []string
+	Ports         []host.Port
+	Resources     resource.Resources
+	FileArtifacts []*host.Artifact
 }
 
 const SharedPath = "/.container-shared"
@@ -400,6 +402,26 @@ func setupCommon(c *Config, log log15.Logger) error {
 		return err
 	}
 
+	// fetch file artifacts in parallel now that the network is configured
+	fetchErr := make(chan error)
+	for _, artifact := range c.FileArtifacts {
+		go func(artifact *host.Artifact) {
+			log.Info("fetching artifact", "uri", artifact.URI)
+			if err := fetchFileArtifact(artifact); err != nil {
+				log.Error("error fetching artifact", "uri", artifact.URI, "err", err)
+				fetchErr <- err
+				return
+			}
+			log.Info("finished fetching artifact", "uri", artifact.URI)
+			fetchErr <- nil
+		}(artifact)
+	}
+	for range c.FileArtifacts {
+		if err := <-fetchErr; err != nil {
+			return err
+		}
+	}
+
 	setupLimits(c, log)
 
 	return nil
@@ -584,6 +606,30 @@ func babySit(process *os.Process) int {
 		return 0
 	}
 	return wstatus.ExitStatus()
+}
+
+// fetchFileArtifact fetches a file from an artifact URI and places it in
+// /artifacts
+func fetchFileArtifact(artifact *host.Artifact) error {
+	if err := os.MkdirAll("/artifacts", 0755); err != nil {
+		return err
+	}
+	path := filepath.Join("/artifacts", filepath.Base(artifact.URI))
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	res, err := http.Get(artifact.URI)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected HTTP status code: %s", res.Status)
+	}
+	_, err = io.Copy(file, res.Body)
+	return err
 }
 
 // Run as pid 1 and monitor the contained process to return its exit code.

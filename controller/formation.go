@@ -143,23 +143,19 @@ func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 
 func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 	f := &ct.ExpandedFormation{
-		App:      &ct.App{},
-		Release:  &ct.Release{},
-		Artifact: &ct.Artifact{},
+		App:     &ct.App{},
+		Release: &ct.Release{},
 	}
-	var artifactID *string
+	var artifactIDs string
 	err := s.Scan(
 		&f.App.ID,
 		&f.App.Name,
 		&f.App.Meta,
 		&f.Release.ID,
-		&artifactID,
+		&artifactIDs,
 		&f.Release.Meta,
 		&f.Release.Env,
 		&f.Release.Processes,
-		&f.Artifact.ID,
-		&f.Artifact.Type,
-		&f.Artifact.URI,
 		&f.Processes,
 		&f.Tags,
 		&f.UpdatedAt,
@@ -170,10 +166,19 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		}
 		return nil, err
 	}
-	if artifactID != nil {
-		f.Release.ArtifactID = *artifactID
+	if artifactIDs != "" {
+		f.Release.ArtifactIDs = split(artifactIDs[1:len(artifactIDs)-1], ",")
 	}
 	return f, nil
+}
+
+func populateFormationArtifacts(ef *ct.ExpandedFormation, artifacts map[string]*ct.Artifact) {
+	ef.ImageArtifact = artifacts[ef.Release.ImageArtifactID()]
+
+	ef.FileArtifacts = make([]*ct.Artifact, len(ef.Release.FileArtifactIDs()))
+	for i, id := range ef.Release.FileArtifactIDs() {
+		ef.FileArtifacts[i] = artifacts[id]
+	}
 }
 
 func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
@@ -183,7 +188,16 @@ func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
 
 func (r *FormationRepo) GetExpanded(appID, releaseID string) (*ct.ExpandedFormation, error) {
 	row := r.db.QueryRow("formation_select_expanded", appID, releaseID)
-	return scanExpandedFormation(row)
+	ef, err := scanExpandedFormation(row)
+	if err != nil {
+		return nil, err
+	}
+	artifacts, err := r.artifacts.ListIDs(ef.Release.ArtifactIDs...)
+	if err != nil {
+		return nil, err
+	}
+	populateFormationArtifacts(ef, artifacts)
+	return ef, nil
 }
 
 func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
@@ -208,7 +222,13 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 	if err != nil {
 		return nil, err
 	}
-	formations := []*ct.ExpandedFormation{}
+	var formations []*ct.ExpandedFormation
+
+	// artifactIDs is a list of artifact IDs related to the formation list
+	// and is used to populate the formation's artifact fields using a
+	// subsequent artifact list query
+	artifactIDs := make(map[string]struct{})
+
 	for rows.Next() {
 		formation, err := scanExpandedFormation(rows)
 		if err != nil {
@@ -216,7 +236,26 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 			return nil, err
 		}
 		formations = append(formations, formation)
+
+		for _, id := range formation.Release.ArtifactIDs {
+			artifactIDs[id] = struct{}{}
+		}
 	}
+
+	if len(artifactIDs) > 0 {
+		ids := make([]string, 0, len(artifactIDs))
+		for id := range artifactIDs {
+			ids = append(ids, id)
+		}
+		artifacts, err := r.artifacts.ListIDs(ids...)
+		if err != nil {
+			return nil, err
+		}
+		for _, formation := range formations {
+			populateFormationArtifacts(formation, artifacts)
+		}
+	}
+
 	return formations, rows.Err()
 }
 
@@ -283,17 +322,19 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 	if err != nil {
 		return nil, err
 	}
-	artifact, err := r.artifacts.Get(release.(*ct.Release).ArtifactID)
-	if err != nil {
-		return nil, err
-	}
 	f := &ct.ExpandedFormation{
 		App:       app.(*ct.App),
 		Release:   release.(*ct.Release),
-		Artifact:  artifact.(*ct.Artifact),
 		Processes: formation.Processes,
 		Tags:      formation.Tags,
 		UpdatedAt: *formation.UpdatedAt,
+	}
+	if len(f.Release.ArtifactIDs) > 0 {
+		artifacts, err := r.artifacts.ListIDs(f.Release.ArtifactIDs...)
+		if err != nil {
+			return nil, err
+		}
+		populateFormationArtifacts(f, artifacts)
 	}
 	return f, nil
 }
@@ -416,7 +457,7 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	if release.ArtifactID == "" {
+	if release.ImageArtifactID() == "" {
 		respondWithError(w, ct.ValidationError{Message: "release is not deployable"})
 		return
 	}

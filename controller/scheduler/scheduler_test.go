@@ -215,7 +215,7 @@ func (TestSuite) TestFormationChange(c *C) {
 	c.Assert(err, IsNil)
 	release, err := s.GetRelease(testReleaseID)
 	c.Assert(err, IsNil)
-	artifact, err := s.GetArtifact(release.ArtifactID)
+	artifact, err := s.GetArtifact(release.ImageArtifactID())
 	c.Assert(err, IsNil)
 
 	// Test scaling up an existing formation
@@ -293,7 +293,7 @@ func (TestSuite) TestRectify(c *C) {
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
 	processes := map[string]int{testJobType: testJobCount}
 	release := NewRelease("test-release-2", artifact, processes)
-	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
+	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, ImageArtifact: artifact, Processes: processes})
 	newJob = &Job{Formation: form, AppID: testAppID, ReleaseID: testReleaseID, Type: testJobType}
 	config = jobConfig(newJob, testHostID)
 	// Add the job to the host without adding the formation. Expected error.
@@ -636,7 +636,7 @@ func (TestSuite) TestJobPlacementTags(c *C) {
 			"worker": {},
 			"clock":  {},
 		}},
-		Artifact: &ct.Artifact{},
+		ImageArtifact: &ct.Artifact{},
 		Tags: map[string]map[string]string{
 			"web":    nil,
 			"db":     {"disk": "ssd"},

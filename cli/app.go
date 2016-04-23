@@ -172,7 +172,7 @@ func runInfo(_ *docopt.Args, client *controller.Client) error {
 	defer w.Flush()
 
 	if release, err := client.GetAppRelease(appName); err == nil || err == controller.ErrNotFound {
-		if err == controller.ErrNotFound || release.Env["SLUG_URL"] != "" {
+		if err == controller.ErrNotFound || release.IsGitDeploy() {
 			listRec(w, "Git URL:", gitURL(clusterConf, appName))
 		}
 	} else {

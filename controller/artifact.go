@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -31,16 +35,15 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	if err != nil {
 		return err
 	}
-	err = tx.QueryRow("artifact_insert",
-		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)
+
+	err = tx.QueryRow("artifact_insert", a.ID, string(a.Type), a.URI, a.Meta).Scan(&a.CreatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		tx.Rollback()
 		tx, err = r.db.Begin()
 		if err != nil {
 			return err
 		}
-		err = tx.QueryRow("artifact_select_by_type_and_uri",
-			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
+		err = tx.QueryRow("artifact_select_by_type_and_uri", string(a.Type), a.URI).Scan(&a.ID, &a.Meta, &a.CreatedAt)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -63,10 +66,12 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 
 func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	artifact := &ct.Artifact{}
-	err := s.Scan(&artifact.ID, &artifact.Type, &artifact.URI, &artifact.CreatedAt)
+	var typ string
+	err := s.Scan(&artifact.ID, &typ, &artifact.URI, &artifact.Meta, &artifact.CreatedAt)
 	if err == pgx.ErrNoRows {
 		err = ErrNotFound
 	}
+	artifact.Type = host.ArtifactType(typ)
 	return artifact, err
 }
 
@@ -80,7 +85,7 @@ func (r *ArtifactRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	artifacts := []*ct.Artifact{}
+	var artifacts []*ct.Artifact
 	for rows.Next() {
 		artifact, err := scanArtifact(rows)
 		if err != nil {
@@ -89,5 +94,38 @@ func (r *ArtifactRepo) List() (interface{}, error) {
 		}
 		artifacts = append(artifacts, artifact)
 	}
-	return artifacts, nil
+	return artifacts, rows.Err()
+}
+
+func (r *ArtifactRepo) ListIDs(ids ...string) (map[string]*ct.Artifact, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query("artifact_list_ids", fmt.Sprintf("{%s}", strings.Join(ids, ",")))
+	if err != nil {
+		return nil, err
+	}
+	artifacts := make(map[string]*ct.Artifact, len(ids))
+	for rows.Next() {
+		artifact, err := scanArtifact(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		artifacts[artifact.ID] = artifact
+	}
+	return artifacts, rows.Err()
+}
+
+func scanArtifacts(rows *pgx.Rows) (interface{}, error) {
+	var artifacts []*ct.Artifact
+	for rows.Next() {
+		artifact, err := scanArtifact(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		artifacts = append(artifacts, artifact)
+	}
+	return artifacts, rows.Err()
 }

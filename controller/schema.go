@@ -288,6 +288,55 @@ $$ LANGUAGE plpgsql`,
 		)`,
 		`INSERT INTO event_types (name) VALUES ('cluster_backup')`,
 	)
+	migrations.Add(15,
+		`ALTER TABLE artifacts ADD COLUMN meta jsonb`,
+		`CREATE TABLE release_artifacts (
+			release_id uuid NOT NULL REFERENCES releases (release_id),
+			artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
+			created_at timestamptz NOT NULL DEFAULT now(),
+			deleted_at timestamptz,
+			PRIMARY KEY (release_id, artifact_id))`,
+
+		// add a check to ensure releases only have a single "docker"
+		// artifact, and that artifact is added first
+		`CREATE FUNCTION check_release_artifacts() RETURNS OPAQUE AS $$
+			BEGIN
+			    IF (
+			      SELECT COUNT(*)
+			      FROM release_artifacts r
+			      INNER JOIN artifacts a ON r.artifact_id = a.artifact_id
+			      WHERE r.release_id = NEW.release_id AND a.type = 'docker'
+			    ) != 1 THEN
+			      RAISE EXCEPTION 'must have exactly one artifact of type "docker"' USING ERRCODE = 'check_violation';
+			    END IF;
+
+			    RETURN NULL;
+			END;
+			$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER release_artifacts_trigger
+			AFTER INSERT ON release_artifacts
+			FOR EACH ROW EXECUTE PROCEDURE check_release_artifacts()`,
+		`INSERT INTO release_artifacts (release_id, artifact_id) (SELECT release_id, artifact_id FROM releases WHERE artifact_id IS NOT NULL)`,
+
+		// set "git=true" for releases with SLUG_URL set
+		`UPDATE releases SET meta = jsonb_merge(CASE WHEN meta = 'null' THEN '{}' ELSE meta END, '{"git":"true"}') WHERE env ? 'SLUG_URL'`,
+
+		// create file artifacts for any releases with SLUG_URL set
+		`DO $$
+		DECLARE
+			release RECORD;
+		BEGIN
+			FOR release IN SELECT * FROM releases WHERE env ? 'SLUG_URL' LOOP
+				WITH artifact AS (
+					INSERT INTO artifacts (type, uri, meta)
+					VALUES ('file', release.env->>'SLUG_URL', '{"blobstore":"true"}')
+					RETURNING *
+				)
+				INSERT INTO release_artifacts (release_id, artifact_id) (SELECT release.release_id, artifact_id FROM artifact);
+			END LOOP;
+		END $$`,
+		`ALTER TABLE releases DROP COLUMN artifact_id`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
