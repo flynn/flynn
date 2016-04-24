@@ -28,9 +28,10 @@ type formationKey struct {
 type FormationSubscription struct {
 	mtx sync.RWMutex
 	ch  chan *ct.ExpandedFormation
+	err error
 }
 
-func (f *FormationSubscription) notify(ef *ct.ExpandedFormation) bool {
+func (f *FormationSubscription) Notify(ef *ct.ExpandedFormation) bool {
 	f.mtx.RLock()
 	defer f.mtx.RUnlock()
 	if f.ch == nil {
@@ -40,13 +41,28 @@ func (f *FormationSubscription) notify(ef *ct.ExpandedFormation) bool {
 	return true
 }
 
-func (f *FormationSubscription) close() {
+func (f *FormationSubscription) NotifyCurrent() {
+	f.Notify(&ct.ExpandedFormation{})
+}
+
+func (f *FormationSubscription) Close() {
+	f.CloseWithError(nil)
+}
+
+func (f *FormationSubscription) CloseWithError(err error) {
 	f.mtx.Lock()
 	defer f.mtx.Unlock()
+	f.err = err
 	if f.ch != nil {
 		close(f.ch)
 		f.ch = nil
 	}
+}
+
+func (f *FormationSubscription) Err() error {
+	f.mtx.RLock()
+	defer f.mtx.RUnlock()
+	return f.err
 }
 
 type FormationRepo struct {
@@ -307,7 +323,7 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 	defer r.subMtx.RUnlock()
 
 	for sub := range r.subscriptions {
-		sub.notify(f) // ignore failure for this subscriber (went away) and keep sending to remaining subscribers
+		sub.Notify(f)
 	}
 }
 
@@ -390,7 +406,12 @@ func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, since time.Time
 	sub := &FormationSubscription{ch: ch}
 	r.subscriptions[sub] = struct{}{}
 
-	go r.sendUpdatedSince(sub, since, updated)
+	go func() {
+		if err := r.sendUpdatedSince(sub, since, updated); err != nil {
+			sub.CloseWithError(err)
+		}
+	}()
+
 	return sub, nil
 }
 
@@ -413,12 +434,17 @@ func (r *FormationRepo) sendUpdatedSince(sub *FormationSubscription, since time.
 		if err != nil {
 			return err
 		}
-		if ok := sub.notify(ef); !ok {
+		// return if Notify returns false (which indicates that the
+		// subscriber channel is closed)
+		if ok := sub.Notify(ef); !ok {
 			return nil
 		}
 	}
-	sub.notify(&ct.ExpandedFormation{}) // sentinel
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	sub.NotifyCurrent()
+	return nil
 }
 
 func (r *FormationRepo) Unsubscribe(sub *FormationSubscription) {
@@ -434,7 +460,7 @@ func (r *FormationRepo) unsubscribeLocked(sub *FormationSubscription) {
 		}
 	}(sub.ch)
 	delete(r.subscriptions, sub)
-	sub.close() // idempotent: will be a no-op if already closed (i.e. sub.ch == nil)
+	sub.Close()
 	if len(r.subscriptions) == 0 {
 		select {
 		case r.stopListener <- struct{}{}:
@@ -562,5 +588,10 @@ func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWri
 	}
 	defer c.formationRepo.Unsubscribe(sub)
 	l, _ := ctxhelper.LoggerFromContext(ctx)
-	sse.ServeStream(w, ch, l)
+	stream := sse.NewStream(w, ch, l)
+	stream.Serve()
+	stream.Wait()
+	if err := sub.Err(); err != nil {
+		stream.Error(err)
+	}
 }
