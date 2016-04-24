@@ -296,16 +296,16 @@ func (s *Scheduler) Run() error {
 		return err
 	}
 
+	if err := s.streamFormationEvents(); err != nil {
+		return err
+	}
+
 	isLeader, err := s.discoverd.Register()
 	if err != nil {
 		return err
 	}
 	s.HandleLeaderChange(isLeader)
 	leaderCh := s.discoverd.LeaderCh()
-
-	if err := s.streamFormationEvents(); err != nil {
-		return err
-	}
 
 	s.tickSyncJobs(30 * time.Second)
 	s.tickSyncFormations(time.Minute)
