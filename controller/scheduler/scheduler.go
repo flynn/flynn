@@ -1127,8 +1127,8 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 		s.persistJob(job)
 	}
 
-	// ensure the job has a known formation
-	if job.Formation == nil {
+	// ensure jobs started as part of a formation change have a known formation
+	if job.metadata["flynn-controller.formation"] == "true" && job.Formation == nil {
 		formation := s.formations.Get(job.AppID, job.ReleaseID)
 		if formation == nil {
 			ef, err := s.GetExpandedFormation(job.AppID, job.ReleaseID)
@@ -1156,9 +1156,8 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 		job.Formation = formation
 	}
 
-	// if the job has no type, or has a type which is not part of the
-	// release (e.g. a slugbuilder job), then we are done
-	if job.Type == "" || !job.HasTypeFromRelease() {
+	// if the job was not started as part of a formation, then we are done
+	if job.Formation == nil {
 		return
 	}
 

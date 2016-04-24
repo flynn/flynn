@@ -121,17 +121,6 @@ func (j *Job) needsVolume() bool {
 	return j.Formation.Release.Processes[j.Type].Data
 }
 
-// HasTypeFromRelease indicates whether the job has a type which is present
-// in the release
-func (j *Job) HasTypeFromRelease() bool {
-	for typ := range j.Formation.Release.Processes {
-		if j.Type == typ {
-			return true
-		}
-	}
-	return false
-}
-
 func (j *Job) IsStopped() bool {
 	return j.state == JobStateStopping || j.state == JobStateStopped
 }
@@ -145,11 +134,11 @@ func (j *Job) IsSchedulable() bool {
 }
 
 func (j *Job) IsInFormation(key utils.FormationKey) bool {
-	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key && j.HasTypeFromRelease()
+	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key
 }
 
 func (j *Job) IsInApp(appID string) bool {
-	return j.Formation != nil && j.Formation.key().AppID == appID && j.HasTypeFromRelease()
+	return j.Formation != nil && j.Formation.key().AppID == appID
 }
 
 func (j *Job) ControllerJob() *ct.Job {
