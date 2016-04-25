@@ -1,3 +1,11 @@
+---
+title: Architecture
+layout: docs
+toc_min_level: 2
+---
+
+# Architecture
+
 The Flynn architecture is designed to be simple and understandable. Most of the
 components of Flynn are no different than the applications that are deployed on
 top of Flynn.
