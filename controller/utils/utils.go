@@ -14,9 +14,9 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
-func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.Job {
+func JobConfigFormation(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.Job {
 	t := f.Release.Processes[name]
-	env := make(map[string]string, len(f.Release.Env)+len(t.Env)+4)
+	env := make(map[string]string, len(f.Release.Env)+len(t.Env)+5)
 	for k, v := range f.Release.Env {
 		env[k] = v
 	}
@@ -69,6 +69,66 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		job.Config.Ports[i].Proto = p.Proto
 		job.Config.Ports[i].Port = p.Port
 		job.Config.Ports[i].Service = p.Service
+	}
+	return job
+}
+
+func JobConfigRequest(req *ct.ExpandedJobRequest, hostID string) *host.Job {
+	config := req.Config
+	if config == nil {
+		config = &ct.JobConfig{}
+	}
+	env := make(map[string]string, len(req.Release.Env)+len(config.Env)+5)
+	if config.ReleaseEnv {
+		for k, v := range req.Release.Env {
+			env[k] = v
+		}
+	}
+	for k, v := range config.Env {
+		env[k] = v
+	}
+	id := cluster.GenerateJobID(hostID, req.JobID)
+	env["FLYNN_APP_ID"] = req.App.ID
+	env["FLYNN_APP_NAME"] = req.App.Name
+	env["FLYNN_RELEASE_ID"] = req.Release.ID
+	env["FLYNN_PROCESS_TYPE"] = config.Type
+	env["FLYNN_JOB_ID"] = id
+	metadata := make(map[string]string, len(req.App.Meta)+5)
+	for k, v := range req.App.Meta {
+		metadata[k] = v
+	}
+	metadata["flynn-controller.app"] = req.App.ID
+	metadata["flynn-controller.app_name"] = req.App.Name
+	metadata["flynn-controller.release"] = req.Release.ID
+	metadata["flynn-controller.type"] = config.Type
+	metadata["flynn-controller.job_request"] = req.ID
+	job := &host.Job{
+		ID:       id,
+		Metadata: metadata,
+		Config: host.ContainerConfig{
+			Cmd:           config.Cmd,
+			Env:           env,
+			TTY:           config.TTY,
+			Stdin:         config.Attach,
+			DisableLog:    config.DisableLog,
+			RequireAttach: config.Attach,
+		},
+		Resources: config.Resources,
+	}
+	if req.App.Meta["flynn-system-app"] == "true" {
+		job.Partition = "system"
+	}
+	if len(config.Entrypoint) > 0 {
+		job.Config.Entrypoint = config.Entrypoint
+	}
+	if artifact := req.ImageArtifact(); artifact != nil {
+		job.ImageArtifact = artifact.HostArtifact()
+	}
+	if fileArtifacts := req.FileArtifacts(); len(fileArtifacts) > 0 {
+		job.FileArtifacts = make([]*host.Artifact, len(fileArtifacts))
+		for i, artifact := range fileArtifacts {
+			job.FileArtifacts[i] = artifact.HostArtifact()
+		}
 	}
 	return job
 }
@@ -154,6 +214,33 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 	return ef, nil
 }
 
+func ExpandJobRequest(c ControllerClient, req *ct.JobRequest) (*ct.ExpandedJobRequest, error) {
+	app, err := c.GetApp(req.AppID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting app: %s", err)
+	}
+
+	release, err := c.GetRelease(req.ReleaseID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting release: %s", err)
+	}
+
+	artifacts, err := c.GetArtifacts(req.ArtifactIDs...)
+	if err != nil {
+		return nil, fmt.Errorf("error getting artifacts: %s", err)
+	}
+
+	return &ct.ExpandedJobRequest{
+		ID:        req.ID,
+		JobID:     req.JobID,
+		State:     req.State,
+		Config:    req.Config,
+		App:       app,
+		Release:   release,
+		Artifacts: artifacts,
+	}, nil
+}
+
 type VolumeCreator interface {
 	CreateVolume(string) (*volume.Info, error)
 }
@@ -181,16 +268,19 @@ type ControllerClient interface {
 	GetApp(appID string) (*ct.App, error)
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
+	GetArtifacts(artifactIDs ...string) ([]*ct.Artifact, error)
 	GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error)
 	CreateApp(app *ct.App) error
 	CreateRelease(release *ct.Release) error
 	CreateArtifact(artifact *ct.Artifact) error
 	PutFormation(formation *ct.Formation) error
 	StreamFormations(since *time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error)
+	StreamJobRequests(ch chan *ct.JobRequest) (stream.Stream, error)
 	AppList() ([]*ct.App, error)
 	FormationListActive() ([]*ct.ExpandedFormation, error)
 	PutJob(*ct.Job) error
 	JobListActive() ([]*ct.Job, error)
+	JobRequestListPending() ([]*ct.ExpandedJobRequest, error)
 }
 
 func ClusterClientWrapper(c *cluster.Client) clusterClientWrapper {

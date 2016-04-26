@@ -155,18 +155,19 @@ type Job struct {
 	// empty if the job is pending
 	HostID string `json:"host_id,omitempty"`
 
-	AppID      string            `json:"app,omitempty"`
-	ReleaseID  string            `json:"release,omitempty"`
-	Type       string            `json:"type,omitempty"`
-	State      JobState          `json:"state,omitempty"`
-	Cmd        []string          `json:"cmd,omitempty"`
-	Meta       map[string]string `json:"meta,omitempty"`
-	ExitStatus *int32            `json:"exit_status,omitempty"`
-	HostError  *string           `json:"host_error,omitempty"`
-	RunAt      *time.Time        `json:"run_at,omitempty"`
-	Restarts   *int32            `json:"restarts,omitempty"`
-	CreatedAt  *time.Time        `json:"created_at,omitempty"`
-	UpdatedAt  *time.Time        `json:"updated_at,omitempty"`
+	AppID        string            `json:"app,omitempty"`
+	ReleaseID    string            `json:"release,omitempty"`
+	JobRequestID string            `json:"job_request,omitempty"`
+	Type         string            `json:"type,omitempty"`
+	State        JobState          `json:"state,omitempty"`
+	Cmd          []string          `json:"cmd,omitempty"`
+	Meta         map[string]string `json:"meta,omitempty"`
+	ExitStatus   *int32            `json:"exit_status,omitempty"`
+	HostError    *string           `json:"host_error,omitempty"`
+	RunAt        *time.Time        `json:"run_at,omitempty"`
+	Restarts     *int32            `json:"restarts,omitempty"`
+	CreatedAt    *time.Time        `json:"created_at,omitempty"`
+	UpdatedAt    *time.Time        `json:"updated_at,omitempty"`
 }
 
 type JobState string
@@ -183,6 +184,16 @@ const (
 	// schedulers still using the legacy code.
 	JobStateCrashed JobState = "crashed"
 	JobStateFailed  JobState = "failed"
+)
+
+type JobRequestState string
+
+const (
+	JobRequestStatePending   JobRequestState = "pending"
+	JobRequestStateStarting  JobRequestState = "starting"
+	JobRequestStateRunning   JobRequestState = "running"
+	JobRequestStateSucceeded JobRequestState = "succeeded"
+	JobRequestStateFailed    JobRequestState = "failed"
 )
 
 type DomainMigration struct {
@@ -234,8 +245,16 @@ func JobDownEvents(count int) map[JobState]int {
 	return map[JobState]int{JobStateDown: count}
 }
 
+// NewJob is DEPRECATED in favour of JobRequest
 type NewJob struct {
-	ReleaseID  string             `json:"release,omitempty"`
+	ReleaseID string `json:"release,omitempty"`
+
+	JobConfig
+}
+
+type JobConfig struct {
+	Type       string             `json:"type,omitempty"`
+	Tags       map[string]string  `json:"tags,omitempty"`
 	ReleaseEnv bool               `json:"release_env,omitempty"`
 	Cmd        []string           `json:"cmd,omitempty"`
 	Entrypoint []string           `json:"entrypoint,omitempty"`
@@ -246,6 +265,49 @@ type NewJob struct {
 	Lines      int                `json:"tty_lines,omitempty"`
 	DisableLog bool               `json:"disable_log,omitempty"`
 	Resources  resource.Resources `json:"resources,omitempty"`
+	Attach     bool               `json:"attach,omitempty"`
+	Data       bool               `json:"data,omitempty"`
+}
+
+type JobRequest struct {
+	ID          string          `json:"id,omitempty"`
+	JobID       string          `json:"job,omitempty"`
+	AppID       string          `json:"app,omitempty"`
+	ReleaseID   string          `json:"release,omitempty"`
+	ArtifactIDs []string        `json:"artifacts,omitempty"`
+	State       JobRequestState `json:"state,omitempty"`
+	Config      *JobConfig      `json:"config,omitempty"`
+	Error       *string         `json:"error,omitempty"`
+	CreatedAt   *time.Time      `json:"created_at,omitempty"`
+}
+
+type ExpandedJobRequest struct {
+	ID        string          `json:"id,omitempty"`
+	JobID     string          `json:"job,omitempty"`
+	State     JobRequestState `json:"state,omitempty"`
+	Config    *JobConfig      `json:"config,omitempty"`
+	App       *App            `json:"app,omitempty"`
+	Release   *Release        `json:"release,omitempty"`
+	Artifacts []*Artifact     `json:"artifacts,omitempty"`
+}
+
+func (e *ExpandedJobRequest) ImageArtifact() *Artifact {
+	for _, artifact := range e.Artifacts {
+		if artifact.Type == host.ArtifactTypeDocker {
+			return artifact
+		}
+	}
+	return nil
+}
+
+func (e *ExpandedJobRequest) FileArtifacts() []*Artifact {
+	artifacts := make([]*Artifact, 0, len(e.Artifacts))
+	for _, artifact := range e.Artifacts {
+		if artifact.Type == host.ArtifactTypeFile {
+			artifacts = append(artifacts, artifact)
+		}
+	}
+	return artifacts
 }
 
 const DefaultDeployTimeout = 120 // seconds
@@ -345,6 +407,7 @@ const (
 	EventTypeAppRelease           EventType = "app_release"
 	EventTypeDeployment           EventType = "deployment"
 	EventTypeJob                  EventType = "job"
+	EventTypeJobRequest           EventType = "job_request"
 	EventTypeScale                EventType = "scale"
 	EventTypeRelease              EventType = "release"
 	EventTypeReleaseDeletion      EventType = "release_deletion"

@@ -52,6 +52,10 @@ func (c *FakeControllerClient) GetArtifact(artifactID string) (*ct.Artifact, err
 	return nil, controller.ErrNotFound
 }
 
+func (c *FakeControllerClient) GetArtifacts(artifactIDs ...string) ([]*ct.Artifact, error) {
+	return nil, nil
+}
+
 func (c *FakeControllerClient) GetFormation(appID, releaseID string) (*ct.Formation, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
@@ -231,6 +235,10 @@ func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.
 	}, nil
 }
 
+func (c *FakeControllerClient) StreamJobRequests(ch chan *ct.JobRequest) (stream.Stream, error) {
+	return nil, nil
+}
+
 func (c *FakeControllerClient) PutJob(job *ct.Job) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
@@ -250,6 +258,10 @@ func (c *FakeControllerClient) JobListActive() ([]*ct.Job, error) {
 		}
 	}
 	return list, nil
+}
+
+func (c *FakeControllerClient) JobRequestListPending() ([]*ct.ExpandedJobRequest, error) {
+	return nil, nil
 }
 
 func NewRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {

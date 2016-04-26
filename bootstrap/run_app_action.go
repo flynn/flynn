@@ -108,7 +108,7 @@ func (a *RunAppAction) Run(s *State) error {
 		}
 		for i := 0; i < count; i++ {
 			host := hosts[i%len(hosts)]
-			config := utils.JobConfig(a.ExpandedFormation, typ, host.ID(), "")
+			config := utils.JobConfigFormation(a.ExpandedFormation, typ, host.ID(), "")
 			hostresource.SetDefaults(&config.Resources)
 			if a.ExpandedFormation.Release.Processes[typ].Data {
 				if err := utils.ProvisionVolume(host, config); err != nil {

@@ -211,10 +211,12 @@ func (s *ControllerSuite) TestKeyRotation(t *c.C) {
 func (s *ControllerSuite) TestResourceLimitsOneOffJob(t *c.C) {
 	app, release := s.createApp(t)
 
-	rwc, err := s.controllerClient(t).RunJobAttached(app.ID, &ct.NewJob{
+	rwc, err := s.controllerClient(t).RunJobAttached(app.ID, &ct.JobRequest{
 		ReleaseID: release.ID,
-		Cmd:       []string{"sh", "-c", resourceCmd},
-		Resources: testResources(),
+		Config: &ct.JobConfig{
+			Cmd:       []string{"sh", "-c", resourceCmd},
+			Resources: testResources(),
+		},
 	})
 	t.Assert(err, c.IsNil)
 	attachClient := cluster.NewAttachClient(rwc)
@@ -499,10 +501,12 @@ func (s *ControllerSuite) TestAppEvents(t *c.C) {
 	defer stream.Close()
 
 	runJob := func(appID, releaseID string) {
-		rwc, err := client.RunJobAttached(appID, &ct.NewJob{
-			ReleaseID:  releaseID,
-			Cmd:        []string{"/bin/true"},
-			DisableLog: true,
+		rwc, err := client.RunJobAttached(appID, &ct.JobRequest{
+			ReleaseID: releaseID,
+			Config: &ct.JobConfig{
+				Cmd:        []string{"/bin/true"},
+				DisableLog: true,
+			},
 		})
 		t.Assert(err, c.IsNil)
 		rwc.Close()

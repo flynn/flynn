@@ -73,19 +73,20 @@ type JobResources struct {
 }
 
 type ContainerConfig struct {
-	TTY         bool              `json:"tty,omitempty"`
-	Stdin       bool              `json:"stdin,omitempty"`
-	Data        bool              `json:"data,omitempty"`
-	Entrypoint  []string          `json:"entry_point,omitempty"`
-	Cmd         []string          `json:"cmd,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	Mounts      []Mount           `json:"mounts,omitempty"`
-	Volumes     []VolumeBinding   `json:"volumes,omitempty"`
-	Ports       []Port            `json:"ports,omitempty"`
-	WorkingDir  string            `json:"working_dir,omitempty"`
-	Uid         int               `json:"uid,omitempty"`
-	HostNetwork bool              `json:"host_network,omitempty"`
-	DisableLog  bool              `json:"disable_log,omitempty"`
+	TTY           bool              `json:"tty,omitempty"`
+	Stdin         bool              `json:"stdin,omitempty"`
+	Data          bool              `json:"data,omitempty"`
+	Entrypoint    []string          `json:"entry_point,omitempty"`
+	Cmd           []string          `json:"cmd,omitempty"`
+	Env           map[string]string `json:"env,omitempty"`
+	Mounts        []Mount           `json:"mounts,omitempty"`
+	Volumes       []VolumeBinding   `json:"volumes,omitempty"`
+	Ports         []Port            `json:"ports,omitempty"`
+	WorkingDir    string            `json:"working_dir,omitempty"`
+	Uid           int               `json:"uid,omitempty"`
+	HostNetwork   bool              `json:"host_network,omitempty"`
+	DisableLog    bool              `json:"disable_log,omitempty"`
+	RequireAttach bool              `json:"require_attach,omitempty"`
 }
 
 // Apply 'y' to 'x', returning a new structure.  'y' trumps.

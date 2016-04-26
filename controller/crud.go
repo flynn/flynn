@@ -14,6 +14,9 @@ import (
 type Repository interface {
 	Add(thing interface{}) error
 	Get(id string) (interface{}, error)
+}
+
+type Lister interface {
 	List() (interface{}, error)
 }
 
@@ -59,14 +62,16 @@ func crud(r *httprouter.Router, resource string, example interface{}, repo Repos
 		httphelper.JSON(rw, 200, thing)
 	}))
 
-	r.GET(prefix, httphelper.WrapHandler(func(ctx context.Context, rw http.ResponseWriter, _ *http.Request) {
-		list, err := repo.List()
-		if err != nil {
-			respondWithError(rw, err)
-			return
-		}
-		httphelper.JSON(rw, 200, list)
-	}))
+	if lister, ok := repo.(Lister); ok {
+		r.GET(prefix, httphelper.WrapHandler(func(ctx context.Context, rw http.ResponseWriter, _ *http.Request) {
+			list, err := lister.List()
+			if err != nil {
+				respondWithError(rw, err)
+				return
+			}
+			httphelper.JSON(rw, 200, list)
+		}))
+	}
 
 	if remover, ok := repo.(Remover); ok {
 		r.DELETE(singletonPath, httphelper.WrapHandler(func(ctx context.Context, rw http.ResponseWriter, _ *http.Request) {

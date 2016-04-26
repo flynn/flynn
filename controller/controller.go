@@ -211,7 +211,7 @@ func appHandler(c handlerConfig) http.Handler {
 	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
 	artifactRepo := NewArtifactRepo(c.db)
 	releaseRepo := NewReleaseRepo(c.db, artifactRepo, q)
-	jobRepo := NewJobRepo(c.db)
+	jobRepo := NewJobRepo(c.db, artifactRepo)
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
 	releaseRepo.formations = formationRepo
 	deploymentRepo := NewDeploymentRepo(c.db)
@@ -272,12 +272,17 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/apps/:apps_id/formations", httphelper.WrapHandler(api.appLookup(api.ListFormations)))
 	httpRouter.GET("/formations", httphelper.WrapHandler(api.GetFormations))
 
+	httpRouter.GET("/artifacts", httphelper.WrapHandler(api.ListArtifacts))
+
 	httpRouter.POST("/apps/:apps_id/jobs", httphelper.WrapHandler(api.appLookup(api.RunJob)))
+	httpRouter.POST("/apps/:apps_id/job-requests", httphelper.WrapHandler(api.appLookup(api.AddJobRequest)))
 	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.GetJob)))
 	httpRouter.PUT("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.PutJob)))
+	httpRouter.POST("/apps/:apps_id/jobs/:jobs_id/attach", httphelper.WrapHandler(api.appLookup(api.AttachJob)))
 	httpRouter.GET("/apps/:apps_id/jobs", httphelper.WrapHandler(api.appLookup(api.ListJobs)))
 	httpRouter.DELETE("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.KillJob)))
 	httpRouter.GET("/active-jobs", httphelper.WrapHandler(api.ListActiveJobs))
+	httpRouter.GET("/job-requests", httphelper.WrapHandler(api.ListJobRequests))
 
 	httpRouter.POST("/apps/:apps_id/deploy", httphelper.WrapHandler(api.appLookup(api.CreateDeployment)))
 	httpRouter.GET("/apps/:apps_id/deployments", httphelper.WrapHandler(api.appLookup(api.ListDeployments)))

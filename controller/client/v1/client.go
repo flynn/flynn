@@ -17,6 +17,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
@@ -379,6 +380,15 @@ func (c *Client) GetArtifact(artifactID string) (*ct.Artifact, error) {
 	return artifact, c.Get(fmt.Sprintf("/artifacts/%s", artifactID), artifact)
 }
 
+// GetArtifacts returns details for the specified artifacts.
+func (c *Client) GetArtifacts(artifactIDs ...string) ([]*ct.Artifact, error) {
+	if len(artifactIDs) == 0 {
+		return nil, nil
+	}
+	var artifacts []*ct.Artifact
+	return artifacts, c.Get(fmt.Sprintf("/artifacts?ids=%s", strings.Join(artifactIDs, ",")), &artifacts)
+}
+
 // GetApp returns details for the specified app.
 func (c *Client) GetApp(appID string) (*ct.App, error) {
 	app := &ct.App{}
@@ -537,6 +547,15 @@ func (c *Client) StreamJobEvents(appID string, output chan *ct.Job) (stream.Stre
 	}, appEvents)
 }
 
+// StreamJobRequests streams job request events to the output channel.
+func (c *Client) StreamJobRequests(output chan *ct.JobRequest) (stream.Stream, error) {
+	events := make(chan *ct.Event)
+	go convertEvents(events, output)
+	return c.StreamEvents(ct.StreamEventsOptions{
+		ObjectTypes: []ct.EventType{ct.EventTypeJobRequest},
+	}, events)
+}
+
 func (c *Client) WatchJobEvents(appID, releaseID string) (ct.JobWatcher, error) {
 	events := make(chan *ct.Job)
 	stream, err := c.StreamJobEvents(appID, events)
@@ -641,15 +660,73 @@ func (c *Client) ExpectedScalingEvents(actual, expected map[string]int, releaseP
 // RunJobAttached runs a new job under the specified app, attaching to the job
 // and returning a ReadWriteCloser stream, which can then be used for
 // communicating with the job.
-func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (httpclient.ReadWriteCloser, error) {
-	return c.Hijack("POST", fmt.Sprintf("/apps/%s/jobs", appID), http.Header{"Upgrade": {"flynn-attach/0"}}, job)
+func (c *Client) RunJobAttached(appID string, req *ct.JobRequest) (httpclient.ReadWriteCloser, error) {
+	if req.Config == nil {
+		req.Config = &ct.JobConfig{}
+	}
+	req.Config.Attach = true
+	job, err := c.runJob(appID, req)
+	if err != nil {
+		return nil, err
+	}
+	return c.Hijack("POST", fmt.Sprintf("/apps/%s/jobs/%s/attach", appID, job.UUID), http.Header{"Upgrade": {"flynn-attach/0"}}, req)
 }
 
 // RunJobDetached runs a new job under the specified app, returning the job's
 // details.
-func (c *Client) RunJobDetached(appID string, req *ct.NewJob) (*ct.Job, error) {
-	job := &ct.Job{}
-	return job, c.Post(fmt.Sprintf("/apps/%s/jobs", appID), req, job)
+func (c *Client) RunJobDetached(appID string, req *ct.JobRequest) (*ct.Job, error) {
+	return c.runJob(appID, req)
+}
+
+func (c *Client) runJob(appID string, req *ct.JobRequest) (*ct.Job, error) {
+	if req.ID == "" {
+		req.ID = random.UUID()
+	}
+
+	// subscribe to job request events
+	events := make(chan *ct.Event)
+	stream, err := c.StreamEvents(ct.StreamEventsOptions{
+		AppID:       appID,
+		ObjectID:    req.ID,
+		ObjectTypes: []ct.EventType{ct.EventTypeJobRequest},
+	}, events)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	// create job request
+	if err := c.Post(fmt.Sprintf("/apps/%s/job-requests", appID), req, req); err != nil {
+		return nil, err
+	}
+
+	// wait for the job to be scheduled
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return nil, stream.Err()
+			}
+			var r ct.JobRequest
+			if err := json.Unmarshal(event.Data, &r); err != nil {
+				return nil, err
+			}
+			switch r.State {
+			case ct.JobRequestStatePending:
+				continue
+			case ct.JobRequestStateFailed:
+				errMsg := "job failed to start"
+				if r.Error != nil {
+					errMsg += ": " + *r.Error
+				}
+				return nil, errors.New(errMsg)
+			default:
+				return c.GetJob(appID, r.JobID)
+			}
+		case <-time.After(60 * time.Second):
+			return nil, errors.New("timed out waiting for job to be scheduled")
+		}
+	}
 }
 
 // GetJob returns a Job for the given app and job ID
@@ -668,6 +745,12 @@ func (c *Client) JobList(appID string) ([]*ct.Job, error) {
 func (c *Client) JobListActive() ([]*ct.Job, error) {
 	var jobs []*ct.Job
 	return jobs, c.Get("/active-jobs", &jobs)
+}
+
+// JobRequestListPending returns a list of all pending job requests.
+func (c *Client) JobRequestListPending() ([]*ct.ExpandedJobRequest, error) {
+	var reqs []*ct.ExpandedJobRequest
+	return reqs, c.Get("/job-requests?state=pending", &reqs)
 }
 
 // AppList returns a list of all apps.

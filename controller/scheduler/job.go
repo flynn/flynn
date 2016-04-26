@@ -65,6 +65,8 @@ type Job struct {
 	// Formation is the formation this job belongs to
 	Formation *Formation `json:"-"`
 
+	JobRequest *ct.ExpandedJobRequest
+
 	// Restarts is the number of times this job has been restarted and is
 	// used to calculate the amount of time to wait before restarting the
 	// job again when it stops (see scheduler.restartJob)
@@ -101,6 +103,9 @@ type Job struct {
 
 // Tags returns the tags for the job's process type from the formation
 func (j *Job) Tags() map[string]string {
+	if j.JobRequest != nil {
+		return j.JobRequest.Config.Tags
+	}
 	return j.Formation.Tags[j.Type]
 }
 
@@ -118,6 +123,9 @@ func (j *Job) TagsMatchHost(host *Host) bool {
 // needsVolume indicates whether a volume should be provisioned in the cluster
 // for the job, determined from the corresponding process type in the release
 func (j *Job) needsVolume() bool {
+	if j.JobRequest != nil {
+		return j.JobRequest.Config.Data
+	}
 	return j.Formation.Release.Processes[j.Type].Data
 }
 
@@ -152,6 +160,10 @@ func (j *Job) ControllerJob() *ct.Job {
 		Meta:      utils.JobMetaFromMetadata(j.metadata),
 		HostError: j.hostError,
 		RunAt:     j.RunAt,
+	}
+
+	if j.JobRequest != nil {
+		job.JobRequestID = j.JobRequest.ID
 	}
 
 	switch j.State {

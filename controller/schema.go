@@ -384,6 +384,27 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(18,
 		`INSERT INTO event_types (name) VALUES ('app_garbage_collection')`,
 	)
+	migrations.Add(19,
+		`CREATE TABLE job_requests (
+			job_request_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+			job_id uuid REFERENCES job_cache (job_id),
+			app_id uuid NOT NULL REFERENCES apps (app_id),
+			release_id uuid NOT NULL REFERENCES releases (release_id),
+			state text NOT NULL,
+			error text,
+			config jsonb,
+			created_at timestamptz NOT NULL DEFAULT now(),
+			updated_at timestamptz NOT NULL DEFAULT now()
+		)`,
+		`CREATE TABLE job_request_artifacts (
+			job_request_id uuid NOT NULL REFERENCES job_requests (job_request_id),
+			artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
+			created_at timestamptz NOT NULL DEFAULT now(),
+			deleted_at timestamptz,
+			PRIMARY KEY (job_request_id, artifact_id)
+		)`,
+		`INSERT INTO event_types (name) VALUES ('job_request')`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

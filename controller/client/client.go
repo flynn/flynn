@@ -56,6 +56,7 @@ type Client interface {
 	DeleteFormation(appID, releaseID string) error
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
+	GetArtifacts(artifactIDs ...string) ([]*ct.Artifact, error)
 	GetApp(appID string) (*ct.App, error)
 	GetAppLog(appID string, options *ct.LogOpts) (io.ReadCloser, error)
 	StreamAppLog(appID string, options *ct.LogOpts, output chan<- *ct.SSELogChunk) (stream.Stream, error)
@@ -65,16 +66,18 @@ type Client interface {
 	StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEvent) (stream.Stream, error)
 	DeployAppRelease(appID, releaseID string, stopWait <-chan struct{}) error
 	StreamJobEvents(appID string, output chan *ct.Job) (stream.Stream, error)
+	StreamJobRequests(output chan *ct.JobRequest) (stream.Stream, error)
 	WatchJobEvents(appID, releaseID string) (ct.JobWatcher, error)
 	StreamEvents(opts ct.StreamEventsOptions, output chan *ct.Event) (stream.Stream, error)
 	ListEvents(opts ct.ListEventsOptions) ([]*ct.Event, error)
 	GetEvent(id int64) (*ct.Event, error)
 	ExpectedScalingEvents(actual, expected map[string]int, releaseProcesses map[string]ct.ProcessType, clusterSize int) ct.JobEvents
-	RunJobAttached(appID string, job *ct.NewJob) (httpclient.ReadWriteCloser, error)
-	RunJobDetached(appID string, req *ct.NewJob) (*ct.Job, error)
+	RunJobAttached(appID string, req *ct.JobRequest) (httpclient.ReadWriteCloser, error)
+	RunJobDetached(appID string, req *ct.JobRequest) (*ct.Job, error)
 	GetJob(appID, jobID string) (*ct.Job, error)
 	JobList(appID string) ([]*ct.Job, error)
 	JobListActive() ([]*ct.Job, error)
+	JobRequestListPending() ([]*ct.ExpandedJobRequest, error)
 	AppList() ([]*ct.App, error)
 	KeyList() ([]*ct.Key, error)
 	ArtifactList() ([]*ct.Artifact, error)

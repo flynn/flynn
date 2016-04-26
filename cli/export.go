@@ -245,12 +245,14 @@ func runExport(args *docopt.Args, client controller.Client) error {
 
 	if pgConfig, err := getAppPgRunConfig(client); err == nil {
 		configPgDump(pgConfig)
-		if err := tw.WriteCommandOutput(client, "postgres.dump", pgConfig.App, &ct.NewJob{
-			ReleaseID:  pgConfig.Release,
-			Entrypoint: pgConfig.Entrypoint,
-			Cmd:        pgConfig.Args,
-			Env:        pgConfig.Env,
-			DisableLog: pgConfig.DisableLog,
+		if err := tw.WriteCommandOutput(client, "postgres.dump", pgConfig.App, &ct.JobRequest{
+			ReleaseID: pgConfig.Release,
+			Config: &ct.JobConfig{
+				Entrypoint: pgConfig.Entrypoint,
+				Cmd:        pgConfig.Args,
+				Env:        pgConfig.Env,
+				DisableLog: pgConfig.DisableLog,
+			},
 		}); err != nil {
 			return fmt.Errorf("error creating postgres dump: %s", err)
 		}
@@ -258,12 +260,14 @@ func runExport(args *docopt.Args, client controller.Client) error {
 
 	if mysqlConfig, err := getAppMysqlRunConfig(client); err == nil {
 		configMysqlDump(mysqlConfig)
-		if err := tw.WriteCommandOutput(client, "mysql.dump", mysqlConfig.App, &ct.NewJob{
-			ReleaseID:  mysqlConfig.Release,
-			Entrypoint: mysqlConfig.Entrypoint,
-			Cmd:        mysqlConfig.Args,
-			Env:        mysqlConfig.Env,
-			DisableLog: mysqlConfig.DisableLog,
+		if err := tw.WriteCommandOutput(client, "mysql.dump", mysqlConfig.App, &ct.JobRequest{
+			ReleaseID: mysqlConfig.Release,
+			Config: &ct.JobConfig{
+				Entrypoint: mysqlConfig.Entrypoint,
+				Cmd:        mysqlConfig.Args,
+				Env:        mysqlConfig.Env,
+				DisableLog: mysqlConfig.DisableLog,
+			},
 		}); err != nil {
 			return fmt.Errorf("error creating mysql dump: %s", err)
 		}
