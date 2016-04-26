@@ -916,6 +916,7 @@ log_destination = 'stderr'
 logging_collector = false
 log_line_prefix = '{{.ID}} %m '
 log_timezone = 'UTC'
+log_min_messages = 'LOG'
 log_connections = on
 log_disconnections = on
 datestyle = 'iso, mdy'
