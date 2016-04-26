@@ -27,8 +27,6 @@ import (
 
 const (
 	eventBufferSize      = 1000
-	maxJobAttempts       = 30
-	jobAttemptInterval   = 500 * time.Millisecond
 	defaultMaxHostChecks = 10
 )
 
@@ -821,10 +819,18 @@ func (s *Scheduler) StartJob(job *Job) {
 	log := s.logger.New("fn", "StartJob", "app.id", job.AppID, "release.id", job.ReleaseID, "job.type", job.Type)
 	log.Info("starting job")
 
-	for attempt := 0; attempt < maxJobAttempts; attempt++ {
+	for attempt := 0; ; attempt++ {
 		if attempt > 0 {
-			time.Sleep(jobAttemptInterval)
+			// when making multiple attempts, backoff in increments
+			// of 500ms (capped at 30s)
+			delay := 500 * time.Millisecond * time.Duration(attempt)
+			if delay > 30*time.Second {
+				delay = 30 * time.Second
+			}
+			log.Info(fmt.Sprintf("failed to start job after %d attempts, waiting %s before trying again", attempt, delay))
+			time.Sleep(delay)
 		}
+
 		log.Info("placing job in the cluster")
 		config, host, err := s.PlaceJob(job)
 		if err == ErrNotLeader {
@@ -856,7 +862,6 @@ func (s *Scheduler) StartJob(job *Job) {
 		}
 		return
 	}
-	log.Error(fmt.Sprintf("error starting job after %d attempts", maxJobAttempts))
 }
 
 // PlacementRequest is sent from a StartJob goroutine to the main scheduler
