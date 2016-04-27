@@ -389,6 +389,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 			g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
 			return err
 		}
+		g.Log(grohl.Data{"at": "request_ip", "network": l.bridgeNet.String(), "ip": container.IP.String()})
 		l.state.SetContainerIP(job.ID, container.IP)
 	}
 	defer func() {
