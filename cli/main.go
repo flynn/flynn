@@ -49,6 +49,7 @@ Commands:
 	ps          list jobs
 	kill        kill a job
 	log         get app log
+	mysql       manage mysql/mariadb database
 	scale       change formation
 	run         run a job
 	env         manage env variables
@@ -57,6 +58,7 @@ Commands:
 	route       manage routes
 	pg          manage postgres database
 	provider    manage resource providers
+	redis       manage redis database
 	remote      manage git remotes
 	resource    provision a new resource
 	release     add a docker image release
