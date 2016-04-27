@@ -492,6 +492,10 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		}
 		release.ID = ""
 		release.ArtifactIDs = append(release.ArtifactIDs, slugArtifact.ID)
+		if release.Meta == nil {
+			release.Meta = make(map[string]string, 1)
+		}
+		release.Meta["git"] = "true"
 		if err := client.CreateRelease(release); err != nil {
 			return fmt.Errorf("error creating release: %s", err)
 		}

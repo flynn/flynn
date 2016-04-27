@@ -261,6 +261,40 @@ func (c *Client) DeleteApp(appID string) (*ct.AppDeletion, error) {
 	}
 }
 
+// DeleteRelease deletes a release and any associated file artifacts.
+func (c *Client) DeleteRelease(releaseID string) (*ct.ReleaseDeletion, error) {
+	events := make(chan *ct.Event)
+	stream, err := c.StreamEvents(StreamEventsOptions{
+		ObjectID:    releaseID,
+		ObjectTypes: []ct.EventType{ct.EventTypeReleaseDeletion},
+	}, events)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	if err := c.Delete(fmt.Sprintf("/releases/%s", releaseID), nil); err != nil {
+		return nil, err
+	}
+
+	select {
+	case event, ok := <-events:
+		if !ok {
+			return nil, stream.Err()
+		}
+		var e ct.ReleaseDeletionEvent
+		if err := json.Unmarshal(event.Data, &e); err != nil {
+			return nil, err
+		}
+		if e.Error != "" {
+			return nil, errors.New(e.Error)
+		}
+		return e.ReleaseDeletion, nil
+	case <-time.After(60 * time.Second):
+		return nil, errors.New("timed out waiting for release deletion")
+	}
+}
+
 // CreateProvider creates a new provider.
 func (c *Client) CreateProvider(provider *ct.Provider) error {
 	return c.Post("/providers", provider, provider)
