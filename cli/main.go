@@ -56,6 +56,8 @@ Commands:
 	meta        manage app metadata
 	route       manage routes
 	pg          manage postgres database
+	mysql       manage mysql database
+	redis       manage redis database
 	provider    manage resource providers
 	remote      manage git remotes
 	resource    provision a new resource
