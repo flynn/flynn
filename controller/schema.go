@@ -321,18 +321,23 @@ $$ LANGUAGE plpgsql`,
 		// set "git=true" for releases with SLUG_URL set
 		`UPDATE releases SET meta = jsonb_merge(CASE WHEN meta = 'null' THEN '{}' ELSE meta END, '{"git":"true"}') WHERE env ? 'SLUG_URL'`,
 
-		// create file artifacts for any releases with SLUG_URL set
+		// create file artifacts for any releases with SLUG_URL set,
+		// taking care not to create duplicate artifacts
 		`DO $$
 		DECLARE
 			release RECORD;
+			artifact uuid;
 		BEGIN
 			FOR release IN SELECT * FROM releases WHERE env ? 'SLUG_URL' LOOP
-				WITH artifact AS (
+				SELECT INTO artifact artifact_id FROM artifacts WHERE type = 'file' AND uri = release.env->>'SLUG_URL';
+
+				IF NOT FOUND THEN
 					INSERT INTO artifacts (type, uri, meta)
 					VALUES ('file', release.env->>'SLUG_URL', '{"blobstore":"true"}')
-					RETURNING *
-				)
-				INSERT INTO release_artifacts (release_id, artifact_id) (SELECT release.release_id, artifact_id FROM artifact);
+					RETURNING artifact_id INTO artifact;
+				END IF;
+
+				INSERT INTO release_artifacts (release_id, artifact_id) VALUES(release.release_id, artifact);
 			END LOOP;
 		END $$`,
 		`ALTER TABLE releases DROP COLUMN artifact_id`,

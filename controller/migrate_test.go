@@ -106,13 +106,15 @@ func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
 	}
 	c.Assert(db.Exec(`INSERT INTO releases (release_id) VALUES ($1)`, random.UUID()), IsNil)
 
-	// insert a slug based release
-	slugReleaseID := random.UUID()
+	// insert multiple slug based releases with the same slug URI
+	slugReleaseIDs := []string{random.UUID(), random.UUID()}
 	imageArtifactID := random.UUID()
 	slugEnv := map[string]string{"SLUG_URL": "http://example.com/slug.tgz"}
 	c.Assert(db.Exec(`INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3)`, imageArtifactID, "docker", "http://example.com/"+imageArtifactID), IsNil)
-	c.Assert(db.Exec(`INSERT INTO releases (release_id, artifact_id, env) VALUES ($1, $2, $3)`, slugReleaseID, imageArtifactID, slugEnv), IsNil)
-	releaseArtifacts[slugReleaseID] = imageArtifactID
+	for _, id := range slugReleaseIDs {
+		c.Assert(db.Exec(`INSERT INTO releases (release_id, artifact_id, env) VALUES ($1, $2, $3)`, id, imageArtifactID, slugEnv), IsNil)
+		releaseArtifacts[id] = imageArtifactID
+	}
 
 	// migrate to 15 and check release_artifacts was populated correctly
 	m.migrateTo(15)
@@ -128,19 +130,21 @@ func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
 	c.Assert(rows.Err(), IsNil)
 	c.Assert(actual, DeepEquals, releaseArtifacts)
 
-	// check the slug release got "git=true" in metadata
-	var releaseMeta map[string]string
-	err = db.QueryRow("SELECT meta FROM releases WHERE release_id = $1", slugReleaseID).Scan(&releaseMeta)
-	c.Assert(err, IsNil)
-	c.Assert(releaseMeta, DeepEquals, map[string]string{"git": "true"})
+	for _, id := range slugReleaseIDs {
+		// check the slug releases got "git=true" in metadata
+		var releaseMeta map[string]string
+		err = db.QueryRow("SELECT meta FROM releases WHERE release_id = $1", id).Scan(&releaseMeta)
+		c.Assert(err, IsNil)
+		c.Assert(releaseMeta, DeepEquals, map[string]string{"git": "true"})
 
-	// check the slug release got a file artifact with the correct URI and meta
-	var slugURI string
-	var artifactMeta map[string]string
-	err = db.QueryRow("SELECT uri, meta FROM artifacts INNER JOIN release_artifacts USING (artifact_id) WHERE type = 'file' AND release_id = $1", slugReleaseID).Scan(&slugURI, &artifactMeta)
-	c.Assert(err, IsNil)
-	c.Assert(slugURI, Equals, slugEnv["SLUG_URL"])
-	c.Assert(artifactMeta, DeepEquals, map[string]string{"blobstore": "true"})
+		// check the slug releases got a file artifact with the correct URI and meta
+		var slugURI string
+		var artifactMeta map[string]string
+		err = db.QueryRow("SELECT uri, meta FROM artifacts INNER JOIN release_artifacts USING (artifact_id) WHERE type = 'file' AND release_id = $1", id).Scan(&slugURI, &artifactMeta)
+		c.Assert(err, IsNil)
+		c.Assert(slugURI, Equals, slugEnv["SLUG_URL"])
+		c.Assert(artifactMeta, DeepEquals, map[string]string{"blobstore": "true"})
+	}
 }
 
 // TestMigrateArtifactMeta checks that migrating to ID 16 correctly
