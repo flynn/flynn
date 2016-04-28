@@ -1403,7 +1403,7 @@ func (s *Scheduler) restartJob(job *Job) {
 	// persist the job so that it appears as pending in the database
 	s.persistJob(newJob)
 
-	s.logger.Info("scheduling job restart", "fn", "restartJob", "job.id", newJob.ID, "attempts", newJob.restarts, "delay", backoff)
+	s.logger.Info("scheduling job restart", "fn", "restartJob", "old_job.id", job.ID, "new_job.id", newJob.ID, "attempts", newJob.restarts, "delay", backoff)
 	newJob.restartTimer = time.AfterFunc(backoff, func() { s.StartJob(newJob) })
 }
 
