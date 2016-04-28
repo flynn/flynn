@@ -135,6 +135,10 @@ func (m *Main) Run(args ...string) error {
 		if err != nil {
 			return err
 		}
+		// Sleep for 2x the election timeout.
+		// This is to work around an issue with hashicorp/raft that can allow us to be elected with
+		// no log entries, hence truncating the log and losing all data!
+		time.Sleep(2 * time.Second)
 	} else {
 		m.logger.Println("failed to contact existing discoverd server, starting up without takeover")
 	}
@@ -265,6 +269,9 @@ func (m *Main) Close() (info dt.ShutdownInfo, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.logger.Println("discoverd shutting down")
+	if m.hb != nil {
+		m.hb.Close()
+	}
 	if m.httpServer != nil {
 		// Disable keep alives so that persistent connections will close
 		m.httpServer.SetKeepAlivesEnabled(false)
@@ -280,9 +287,6 @@ func (m *Main) Close() (info dt.ShutdownInfo, err error) {
 	if m.store != nil {
 		info.LastIndex, err = m.store.Close()
 		m.store = nil
-	}
-	if m.hb != nil {
-		m.hb.Close()
 	}
 	return info, err
 }
