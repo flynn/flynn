@@ -202,7 +202,7 @@ func (s sortJobs) Sort()              { sort.Sort(s) }
 func (j Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]int {
 	counts := make(map[string]int)
 	for _, job := range j {
-		if job.IsInFormation(key) && job.Type == typ && job.restartTimer == nil {
+		if job.IsInFormation(key) && job.Type == typ && job.HostID != "" {
 			counts[job.HostID]++
 		}
 	}
