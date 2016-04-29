@@ -192,22 +192,22 @@ func (h *Helper) stopJob(t *c.C, id string) {
 	t.Assert(hc.StopJob(id), c.IsNil)
 }
 
-func (h *Helper) addHost(t *c.C) *tc.Instance {
-	return h.addHosts(t, 1, false)[0]
+func (h *Helper) addHost(t *c.C, service string) *tc.Instance {
+	return h.addHosts(t, 1, false, service)[0]
 }
 
 func (h *Helper) addVanillaHost(t *c.C) *tc.Instance {
-	return h.addHosts(t, 1, true)[0]
+	return h.addHosts(t, 1, true, "router-api")[0]
 }
 
-func (h *Helper) addHosts(t *c.C, count int, vanilla bool) []*tc.Instance {
+func (h *Helper) addHosts(t *c.C, count int, vanilla bool, service string) []*tc.Instance {
 	debugf(t, "adding %d hosts", count)
 
 	// wait for the router-api to start on the host (rather than using
 	// StreamHostEvents) as we wait for router-api when removing the
 	// host (so that could fail if the router-api never starts).
 	events := make(chan *discoverd.Event)
-	stream, err := h.discoverdClient(t).Service("router-api").Watch(events)
+	stream, err := h.discoverdClient(t).Service(service).Watch(events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
@@ -237,11 +237,11 @@ loop:
 	return hosts
 }
 
-func (h *Helper) removeHost(t *c.C, host *tc.Instance) {
-	h.removeHosts(t, []*tc.Instance{host})
+func (h *Helper) removeHost(t *c.C, host *tc.Instance, service string) {
+	h.removeHosts(t, []*tc.Instance{host}, service)
 }
 
-func (h *Helper) removeHosts(t *c.C, hosts []*tc.Instance) {
+func (h *Helper) removeHosts(t *c.C, hosts []*tc.Instance, service string) {
 	debugf(t, "removing %d hosts", len(hosts))
 
 	// Clean shutdown requires waiting for that host to unadvertise on discoverd.
@@ -249,7 +249,7 @@ func (h *Helper) removeHosts(t *c.C, hosts []*tc.Instance) {
 	// removal (rather than using StreamHostEvents), so that other
 	// tests won't try and connect to this host via service discovery.
 	events := make(chan *discoverd.Event)
-	stream, err := h.discoverdClient(t).Service("router-api").Watch(events)
+	stream, err := h.discoverdClient(t).Service(service).Watch(events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
