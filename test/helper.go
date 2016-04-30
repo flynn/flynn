@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -257,6 +258,15 @@ func (h *Helper) removeHosts(t *c.C, hosts []*tc.Instance, service string) {
 		t.Assert(testCluster.RemoveHost(events, host), c.IsNil)
 		debugf(t, "host removed: %s", host.ID)
 	}
+}
+
+func (h *Helper) assertURI(t *c.C, uri string, status int) {
+	req, err := http.NewRequest("HEAD", uri, nil)
+	t.Assert(err, c.IsNil)
+	res, err := http.DefaultClient.Do(req)
+	t.Assert(err, c.IsNil)
+	res.Body.Close()
+	t.Assert(res.StatusCode, c.Equals, status)
 }
 
 type gitRepo struct {

@@ -87,6 +87,7 @@ type Client interface {
 	Backup() (io.ReadCloser, error)
 	GetBackupMeta() (*ct.ClusterBackup, error)
 	DeleteRelease(appID, releaseID string) (*ct.ReleaseDeletion, error)
+	ScheduleAppGarbageCollection(appID string) error
 }
 
 type Config struct {

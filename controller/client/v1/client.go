@@ -778,6 +778,11 @@ func (c *Client) DeleteRelease(appID, releaseID string) (*ct.ReleaseDeletion, er
 	}
 }
 
+// ScheduleAppGarbageCollection schedules a garbage collection cycle for the app
+func (c *Client) ScheduleAppGarbageCollection(appID string) error {
+	return c.Post(fmt.Sprintf("/apps/%s/gc", appID), nil, nil)
+}
+
 func (c *Client) Put(path string, in, out interface{}) error {
 	return c.send("PUT", path, in, out)
 }
