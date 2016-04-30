@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/types"
 )
 
@@ -23,12 +23,15 @@ type attachHandler struct {
 	// ones which have DisableLog set)
 	attached    map[string]struct{}
 	attachedMtx sync.Mutex
+
+	logger log15.Logger
 }
 
-func newAttachHandler(state *State, backend Backend) *attachHandler {
+func newAttachHandler(state *State, backend Backend, logger log15.Logger) *attachHandler {
 	return &attachHandler{
 		state:    state,
 		backend:  backend,
+		logger:   logger,
 		attached: make(map[string]struct{}),
 	}
 }
@@ -52,9 +55,8 @@ func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request, _ ht
 
 func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 	defer conn.Close()
-
-	g := grohl.NewContext(grohl.Data{"fn": "attach", "job.id": req.JobID})
-	g.Log(grohl.Data{"at": "start"})
+	log := h.logger.New("fn", "attach", "job.id", req.JobID)
+	log.Info("starting")
 	attachWait := make(chan struct{})
 	job := h.state.AddAttacher(req.JobID, attachWait)
 	if job == nil {
@@ -63,7 +65,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 			return
 		}
 		// TODO: add timeout
-		g.Log(grohl.Data{"at": "wait"})
+		log.Info("waiting for attach")
 		<-attachWait
 		job = h.state.GetJob(req.JobID)
 	}
@@ -132,12 +134,12 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 
 		select {
 		case <-attached:
-			g.Log(grohl.Data{"at": "success"})
+			log.Info("sucessfully attached")
 			conn.Write([]byte{host.AttachSuccess})
 			writeMtx.Unlock()
 			close(attached)
 		case <-failed:
-			g.Log(grohl.Data{"at": "failed"})
+			log.Error("failed to attach to job")
 			writeMtx.Unlock()
 			return
 		}
@@ -174,9 +176,9 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 					return
 				}
 				signal := int(binary.BigEndian.Uint32(buf[:]))
-				g.Log(grohl.Data{"at": "signal", "signal": signal})
+				log.Info("signaling", "signal", signal)
 				if err := h.backend.Signal(req.JobID, signal); err != nil {
-					g.Log(grohl.Data{"at": "signal", "status": "error", "err": err})
+					log.Error("error signalling job", "err", err)
 					return
 				}
 			case host.AttachResize:
@@ -188,9 +190,9 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 				}
 				height := binary.BigEndian.Uint16(buf[:])
 				width := binary.BigEndian.Uint16(buf[2:])
-				g.Log(grohl.Data{"at": "tty_resize", "height": height, "width": width})
+				log.Info("resizing tty", "height", height, "width", width)
 				if err := h.backend.ResizeTTY(req.JobID, height, width); err != nil {
-					g.Log(grohl.Data{"at": "tty_resize", "status": "error", "err": err})
+					log.Error("error resizing tty", "err", err)
 					return
 				}
 			default:
@@ -199,7 +201,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		}
 	}()
 
-	g.Log(grohl.Data{"at": "attach"})
+	log.Info("attaching")
 	if err := h.backend.Attach(opts); err != nil && err != io.EOF {
 		if exit, ok := err.(ExitError); ok {
 			writeMtx.Lock()
@@ -212,7 +214,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 			writeMtx.Lock()
 			writeError(err.Error())
 			writeMtx.Unlock()
-			g.Log(grohl.Data{"at": "attach", "status": "error", "err": err.Error()})
+			log.Error("attach error", "err", err)
 		}
 	} else {
 		if opts.Stdout != nil {
@@ -222,7 +224,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 			opts.Stderr.Close()
 		}
 	}
-	g.Log(grohl.Data{"at": "finish"})
+	log.Info("finished")
 }
 
 type ExitError int

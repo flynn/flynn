@@ -25,7 +25,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logmux"
@@ -47,7 +47,7 @@ const (
 	defaultPartition = "user"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath, umountPath string, mux *logmux.Mux, partitionCGroups map[string]int64) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath, umountPath string, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -81,6 +81,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName,
 		discoverdConfigured: make(chan struct{}),
 		networkConfigured:   make(chan struct{}),
 		partitionCGroups:    partitionCGroups,
+		logger:              logger,
 	}, nil
 }
 
@@ -113,6 +114,8 @@ type LibvirtLXCBackend struct {
 	networkConfigured   chan struct{}
 
 	partitionCGroups map[string]int64 // name -> cpu shares
+
+	logger log15.Logger
 }
 
 type libvirtContainer struct {
@@ -192,6 +195,7 @@ var networkConfigAttempts = attempt.Strategy{
 // strategy and identifier of the networking coordinatior job. Currently the
 // only strategy implemented uses flannel.
 func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) error {
+	log := l.logger.New("fn", "ConfigureNetworking")
 	var err error
 	l.bridgeAddr, l.bridgeNet, err = net.ParseCIDR(config.Subnet)
 	if err != nil {
@@ -311,7 +315,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 			var err error
 			l.containers[i].IP, err = l.ipalloc.RequestIP(l.bridgeNet, container.IP)
 			if err != nil {
-				grohl.Log(grohl.Data{"fn": "ConfigureNetworking", "at": "request_ip", "status": "error", "err": err})
+				log.Error("error requesting ip", "job.id", container.job.ID, "err", err)
 			}
 		}
 	}
@@ -352,8 +356,8 @@ func (l *LibvirtLXCBackend) SetDefaultEnv(k, v string) {
 }
 
 func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
-	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.ImageArtifact.URI, "job.cmd": job.Config.Cmd})
+	log := l.logger.New("fn", "run", "job.id", job.ID)
+	log.Info("starting job", "job.artifact.uri", job.ImageArtifact.URI, "job.cmd", job.Config.Cmd)
 
 	defer func() {
 		if err != nil {
@@ -386,10 +390,10 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	if !job.Config.HostNetwork {
 		container.IP, err = l.ipalloc.RequestIP(l.bridgeNet, runConfig.IP)
 		if err != nil {
-			g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
+			log.Error("error requesting ip", "err", err)
 			return err
 		}
-		g.Log(grohl.Data{"at": "request_ip", "network": l.bridgeNet.String(), "ip": container.IP.String()})
+		log.Info("obtained ip", "network", l.bridgeNet.String(), "ip", container.IP.String())
 		l.state.SetContainerIP(job.ID, container.IP)
 	}
 	defer func() {
@@ -398,28 +402,28 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		}
 	}()
 
-	g.Log(grohl.Data{"at": "pull_image"})
+	log.Info("pulling image")
 	layers, err := l.pinkertonPull(job.ImageArtifact.URI)
 	if err != nil {
-		g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
+		log.Error("error pulling image", "err", err)
 		return err
 	}
 	imageID, err := pinkerton.ImageID(job.ImageArtifact.URI)
 	if err == pinkerton.ErrNoImageID && len(layers) > 0 {
 		imageID = layers[len(layers)-1].ID
 	} else if err != nil {
-		g.Log(grohl.Data{"at": "image_id", "status": "error", "err": err})
+		log.Error("error getting image id", "err", err)
 		return err
 	}
 
-	g.Log(grohl.Data{"at": "read_config"})
+	log.Info("reading image config")
 	imageConfig, err := readDockerImageConfig(imageID)
 	if err != nil {
-		g.Log(grohl.Data{"at": "read_config", "status": "error", "err": err})
+		log.Error("error reading image config", "err", err)
 		return err
 	}
 
-	g.Log(grohl.Data{"at": "checkout"})
+	log.Info("checking out image")
 	var rootPath string
 	// creating an AUFS mount can fail intermittently with EINVAL, so try a
 	// few times (see https://github.com/flynn/flynn/issues/2044)
@@ -430,23 +434,23 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		}
 	}
 	if err != nil {
-		g.Log(grohl.Data{"at": "checkout", "status": "error", "err": err})
+		log.Error("error checking out image", "err", err)
 		return err
 	}
 	container.RootPath = rootPath
 
-	g.Log(grohl.Data{"at": "mount"})
+	log.Info("mounting container directories and files")
 	if err := bindMount(l.InitPath, filepath.Join(rootPath, ".containerinit"), false, true); err != nil {
-		g.Log(grohl.Data{"at": "mount", "file": ".containerinit", "status": "error", "err": err})
+		log.Error("error bind mounting .containerinit", "err", err)
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(rootPath, "etc"), 0755); err != nil {
-		g.Log(grohl.Data{"at": "mkdir", "dir": "etc", "status": "error", "err": err})
+		log.Error("error creating /etc in container root", "err", err)
 		return err
 	}
 
 	if err := bindMount(l.resolvConf, filepath.Join(rootPath, "etc/resolv.conf"), false, true); err != nil {
-		g.Log(grohl.Data{"at": "mount", "file": "resolv.conf", "status": "error", "err": err})
+		log.Error("error bind mounting resolv.conf", "err", err)
 		return err
 	}
 
@@ -462,23 +466,23 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}
 
 	if err := writeHostname(filepath.Join(rootPath, "etc/hosts"), hostname); err != nil {
-		g.Log(grohl.Data{"at": "write_hosts", "status": "error", "err": err})
+		log.Error("error writing hosts file", "err", err)
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(rootPath, ".container-shared"), 0700); err != nil {
-		g.Log(grohl.Data{"at": "mkdir", "dir": ".container-shared", "status": "error", "err": err})
+		log.Error("error createing .container-shared", "err", err)
 		return err
 	}
 	for _, m := range job.Config.Mounts {
 		if err := os.MkdirAll(filepath.Join(rootPath, m.Location), 0755); err != nil {
-			g.Log(grohl.Data{"at": "mkdir_mount", "dir": m.Location, "status": "error", "err": err})
+			log.Error("error creating directory for mount point", "dir", m.Location, "err", err)
 			return err
 		}
 		if m.Target == "" {
 			return errors.New("host: invalid empty mount target")
 		}
 		if err := bindMount(m.Target, filepath.Join(rootPath, m.Location), m.Writeable, true); err != nil {
-			g.Log(grohl.Data{"at": "mount", "target": m.Target, "location": m.Location, "status": "error", "err": err})
+			log.Error("error bind mounting", "target", m.Target, "location", m.Location, "err", err)
 			return err
 		}
 	}
@@ -488,19 +492,15 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		vol := l.vman.GetVolume(v.VolumeID)
 		if vol == nil {
 			err := fmt.Errorf("job %s required volume %s, but that volume does not exist", job.ID, v.VolumeID)
-			g.Log(grohl.Data{"at": "volume", "volumeID": v.VolumeID, "status": "error", "err": err})
+			log.Error("missing required volume", "volumeID", v.VolumeID, "err", err)
 			return err
 		}
 		if err := os.MkdirAll(filepath.Join(rootPath, v.Target), 0755); err != nil {
-			g.Log(grohl.Data{"at": "volume_mkdir", "dir": v.Target, "status": "error", "err": err})
-			return err
-		}
-		if err != nil {
-			g.Log(grohl.Data{"at": "volume_mount", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
+			log.Error("error creating mount point for volume", "dir", v.Target, "err", err)
 			return err
 		}
 		if err := bindMount(vol.Location(), filepath.Join(rootPath, v.Target), v.Writeable, true); err != nil {
-			g.Log(grohl.Data{"at": "volume_mount2", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
+			log.Error("error bind mounting volume", "target", v.Target, "volumeID", v.VolumeID, "err", err)
 			return err
 		}
 	}
@@ -511,7 +511,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	for i, p := range job.Config.Ports {
 		if p.Proto != "tcp" && p.Proto != "udp" {
 			err := fmt.Errorf("unknown port proto %q", p.Proto)
-			g.Log(grohl.Data{"at": "alloc_port", "proto": p.Proto, "status": "error", "err": err})
+			log.Error("error allocating port", "proto", p.Proto, "err", err)
 			return err
 		}
 
@@ -562,7 +562,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		config.Ports = append(config.Ports, port)
 	}
 
-	g.Log(grohl.Data{"at": "write_config"})
+	log.Info("writing config")
 	l.envMtx.RLock()
 	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), config,
 		map[string]string{
@@ -578,7 +578,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	)
 	l.envMtx.RUnlock()
 	if err != nil {
-		g.Log(grohl.Data{"at": "write_config", "status": "error", "err": err})
+		log.Error("error writing config", "err", err)
 		return err
 	}
 
@@ -627,44 +627,44 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 
 	// attempt to run libvirt commands multiple times in case the libvirt daemon is
 	// temporarily unavailable (e.g. it has restarted, which sometimes happens in CI)
-	g.Log(grohl.Data{"at": "define_domain"})
+	log.Info("defining domain")
 	var vd libvirt.VirDomain
 	if err := l.withConnRetries(func() (err error) {
 		vd, err = l.libvirt.DomainDefineXML(string(domain.XML()))
 		return
 	}); err != nil {
-		g.Log(grohl.Data{"at": "define_domain", "status": "error", "err": err})
+		log.Error("error defining domain", "err", err)
 		return err
 	}
 	defer vd.Free()
 
-	g.Log(grohl.Data{"at": "create_domain"})
+	log.Info("creating domain")
 	if err := l.withConnRetries(vd.Create); err != nil {
-		g.Log(grohl.Data{"at": "create_domain", "status": "error", "err": err})
+		log.Error("error creating domain", "err", err)
 		return err
 	}
+	log.Info("getting domain uuid")
 	uuid, err := vd.GetUUIDString()
 	if err != nil {
-		g.Log(grohl.Data{"at": "get_domain_uuid", "status": "error", "err": err})
+		log.Error("error getting domain uuid", "err", err)
 		return err
 	}
-	g.Log(grohl.Data{"at": "get_uuid", "uuid": uuid})
 	l.state.SetContainerID(job.ID, uuid)
 
 	domainXML, err := vd.GetXMLDesc(0)
 	if err != nil {
-		g.Log(grohl.Data{"at": "get_domain_xml", "status": "error", "err": err})
+		log.Error("error getting domain xml", "err", err)
 		return err
 	}
 	container.Domain = &lt.Domain{}
 	if err := xml.Unmarshal([]byte(domainXML), container.Domain); err != nil {
-		g.Log(grohl.Data{"at": "unmarshal_domain_xml", "status": "error", "err": err})
+		log.Error("error unmarshalling domain xml", "err", err)
 		return err
 	}
 
 	go container.watch(nil, nil)
 
-	g.Log(grohl.Data{"at": "finish"})
+	log.Info("job started")
 	return nil
 }
 
@@ -701,11 +701,11 @@ func (c *libvirtContainer) cleanupMounts(pid int) error {
 // waitExit waits for the libvirt domain to be marked as done or five seconds to
 // elapse
 func (c *libvirtContainer) waitExit() {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "waitExit", "job.id": c.job.ID})
-	g.Log(grohl.Data{"at": "start"})
+	log := c.l.logger.New("fn", "waitExit", "job.id", c.job.ID)
+	log.Info("waiting for domain to exit")
 	domain, err := c.l.libvirt.LookupDomainByName(c.job.ID)
 	if err != nil {
-		g.Log(grohl.Data{"at": "domain_error", "err": err.Error()})
+		log.Error("error looking up domain", "err", err)
 		return
 	}
 	defer domain.Free()
@@ -714,16 +714,16 @@ func (c *libvirtContainer) waitExit() {
 	for {
 		state, err := domain.GetState()
 		if err != nil {
-			g.Log(grohl.Data{"at": "state_error", "err": err.Error()})
+			log.Error("error getting domain state", "err", err)
 			return
 		}
 		if state[0] != libvirt.VIR_DOMAIN_RUNNING && state[0] != libvirt.VIR_DOMAIN_SHUTDOWN {
-			g.Log(grohl.Data{"at": "done"})
+			log.Info("finished waiting for domain")
 			return
 		}
 		select {
 		case <-maxWait:
-			g.Log(grohl.Data{"at": "maxWait"})
+			log.Info("reached max wait")
 			return
 		default:
 			time.Sleep(100 * time.Millisecond)
@@ -732,8 +732,8 @@ func (c *libvirtContainer) waitExit() {
 }
 
 func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) error {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "watch_container", "job.id": c.job.ID})
-	g.Log(grohl.Data{"at": "start"})
+	log := c.l.logger.New("fn", "watch", "job.id", c.job.ID)
+	log.Info("start watching container")
 
 	defer func() {
 		c.waitExit()
@@ -755,7 +755,7 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 			// the path to it is longer than 108 characters (UNIX_PATH_MAX).
 			// Create a temporary symlink to connect to.
 			if err = os.Symlink(socketPath, symlink); err != nil && !os.IsExist(err) {
-				g.Log(grohl.Data{"at": "symlink_socket", "status": "error", "err": err, "source": socketPath, "target": symlink})
+				log.Error("error symlinking socket", "err", err)
 				continue
 			}
 			defer os.Remove(symlink)
@@ -771,7 +771,7 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 		ready <- err
 	}
 	if err != nil {
-		g.Log(grohl.Data{"at": "connect", "status": "error", "err": err.Error()})
+		log.Error("error connecting to container", "err", err)
 		c.l.state.SetStatusFailed(c.job.ID, errors.New("failed to connect to container"))
 
 		d, e := c.l.libvirt.LookupDomainByName(c.job.ID)
@@ -780,7 +780,7 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 		}
 		defer d.Free()
 		if err := d.Destroy(); err != nil {
-			g.Log(grohl.Data{"at": "destroy", "status": "error", "err": err.Error()})
+			log.Error("error destroying domain", "err", err)
 		}
 		return err
 	}
@@ -790,15 +790,15 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 		// Workaround for mounts leaking into the libvirt_lxc supervisor process,
 		// see https://github.com/flynn/flynn/issues/1125 for details. Remove
 		// nsumount from the tree when deleting.
-		g.Log(grohl.Data{"at": "cleanup_mounts", "status": "start"})
+		log.Info("cleaning up mounts")
 		if err := c.cleanupMounts(c.Domain.ID); err != nil {
-			g.Log(grohl.Data{"at": "cleanup_mounts", "status": "error", "err": err})
+			log.Error("error cleaning up mounts", "err", err)
 		}
 
 		// The bind mounts are copied when we spin up the container, we don't
 		// need them in the root mount namespace any more.
 		c.unbindMounts()
-		g.Log(grohl.Data{"at": "cleanup_mounts", "status": "finish"})
+		log.Info("finished cleaning up mounts")
 	}()
 
 	c.l.containersMtx.Lock()
@@ -806,30 +806,30 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 	c.l.containersMtx.Unlock()
 
 	if !c.job.Config.DisableLog && !c.job.Config.TTY {
-		if err := c.followLogs(g, buffer); err != nil {
+		if err := c.followLogs(log, buffer); err != nil {
 			return err
 		}
 	}
 
-	g.Log(grohl.Data{"at": "watch_changes"})
+	log.Info("watching for changes")
 	for change := range c.Client.StreamState() {
-		g.Log(grohl.Data{"at": "change", "state": change.State.String()})
+		log.Info("state change", "state", change.State.String())
 		if change.Error != "" {
 			err := errors.New(change.Error)
-			g.Log(grohl.Data{"at": "change", "status": "error", "err": err})
+			log.Error("error in change state", "err", err)
 			c.Client.Resume()
 			c.l.state.SetStatusFailed(c.job.ID, err)
 			return err
 		}
 		switch change.State {
 		case containerinit.StateInitial:
-			g.Log(grohl.Data{"at": "wait_attach"})
+			log.Info("waiting for attach")
 			c.l.state.WaitAttach(c.job.ID)
-			g.Log(grohl.Data{"at": "resume"})
+			log.Info("resuming")
 			c.Client.Resume()
-			g.Log(grohl.Data{"at": "resumed"})
+			log.Info("resumed")
 		case containerinit.StateRunning:
-			g.Log(grohl.Data{"at": "running"})
+			log.Info("container running")
 			c.l.state.SetStatusRunning(c.job.ID)
 
 			// if the job was stopped before it started, exit
@@ -837,34 +837,34 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 				c.Stop()
 			}
 		case containerinit.StateExited:
-			g.Log(grohl.Data{"at": "exited", "status": change.ExitStatus})
+			log.Info("container exited", "status", change.ExitStatus)
 			c.Client.Resume()
 			c.l.state.SetStatusDone(c.job.ID, change.ExitStatus)
 			return nil
 		case containerinit.StateFailed:
-			g.Log(grohl.Data{"at": "failed"})
+			log.Info("container failed to start")
 			c.Client.Resume()
 			c.l.state.SetStatusFailed(c.job.ID, errors.New("container failed to start"))
 			return nil
 		}
 	}
-	g.Log(grohl.Data{"at": "unknown_failure"})
+	log.Error("unknown failure")
 	c.l.state.SetStatusFailed(c.job.ID, errors.New("unknown failure"))
 
 	return nil
 }
 
-func (c *libvirtContainer) followLogs(g *grohl.Context, buffer host.LogBuffer) error {
+func (c *libvirtContainer) followLogs(log log15.Logger, buffer host.LogBuffer) error {
 	c.l.logStreamMtx.Lock()
 	defer c.l.logStreamMtx.Unlock()
 	if _, ok := c.l.logStreams[c.job.ID]; ok {
 		return nil
 	}
 
-	g.Log(grohl.Data{"at": "get_stdout"})
+	log.Info("getting stdout")
 	stdout, stderr, initLog, err := c.Client.GetStreams()
 	if err != nil {
-		g.Log(grohl.Data{"at": "get_streams", "status": "error", "err": err.Error()})
+		log.Error("error getting streams", "err", err)
 		return err
 	}
 
@@ -887,21 +887,21 @@ func (c *libvirtContainer) followLogs(g *grohl.Context, buffer host.LogBuffer) e
 	logStreams := make(map[string]*logmux.LogStream, 3)
 	stdoutR, err := nonblocking(stdout)
 	if err != nil {
-		g.Log(grohl.Data{"at": "log_stream", "type": "stdout", "status": "error", "err": err.Error()})
+		log.Error("error streaming stdout", "err", err)
 		return err
 	}
 	logStreams["stdout"] = c.l.mux.Follow(stdoutR, buffer["stdout"], 1, muxConfig)
 
 	stderrR, err := nonblocking(stderr)
 	if err != nil {
-		g.Log(grohl.Data{"at": "log_stream", "type": "stderr", "status": "error", "err": err.Error()})
+		log.Error("error streaming stderr", "err", err)
 		return err
 	}
 	logStreams["stderr"] = c.l.mux.Follow(stderrR, buffer["stderr"], 2, muxConfig)
 
 	initLogR, err := nonblocking(initLog)
 	if err != nil {
-		g.Log(grohl.Data{"at": "log_stream", "type": "initLog", "status": "error", "err": err.Error()})
+		log.Error("error streaming initial log", "err", err)
 		return err
 	}
 	logStreams["initLog"] = c.l.mux.Follow(initLogR, buffer["initLog"], 3, muxConfig)
@@ -911,32 +911,31 @@ func (c *libvirtContainer) followLogs(g *grohl.Context, buffer host.LogBuffer) e
 }
 
 func (c *libvirtContainer) unbindMounts() {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "unbind_mounts", "job.id": c.job.ID})
-	g.Log(grohl.Data{"at": "start"})
+	log := c.l.logger.New("fn", "unbindMounts", "job.id", c.job.ID)
+	log.Info("unbinding mounts")
 
 	if err := syscall.Unmount(filepath.Join(c.RootPath, ".containerinit"), 0); err != nil {
-		g.Log(grohl.Data{"at": "unmount", "file": ".containerinit", "status": "error", "err": err})
+		log.Error("error umounting .containerinit", "err", err)
 	}
 	if err := syscall.Unmount(filepath.Join(c.RootPath, "etc/resolv.conf"), 0); err != nil {
-		g.Log(grohl.Data{"at": "unmount", "file": "resolv.conf", "status": "error", "err": err})
+		log.Error("error umounting resolv.conf", "err", err)
 	}
 	for _, m := range c.job.Config.Mounts {
 		if err := syscall.Unmount(filepath.Join(c.RootPath, m.Location), 0); err != nil {
-			g.Log(grohl.Data{"at": "unmount", "location": m.Location, "status": "error", "err": err})
+			log.Error("error umounting mount point", "location", m.Location, "err", err)
 		}
 	}
 	for _, v := range c.job.Config.Volumes {
 		if err := syscall.Unmount(filepath.Join(c.RootPath, v.Target), 0); err != nil {
-			g.Log(grohl.Data{"at": "unmount", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
+			log.Error("error umounting volume", "target", v.Target, "volumeID", v.VolumeID, "err", err)
 		}
 	}
-
-	g.Log(grohl.Data{"at": "finish"})
+	log.Info("finishing unbinding mounts")
 }
 
 func (c *libvirtContainer) cleanup() error {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "cleanup", "job.id": c.job.ID})
-	g.Log(grohl.Data{"at": "start"})
+	log := c.l.logger.New("fn", "cleanup", "job.id", c.job.ID)
+	log.Info("starting cleanup")
 
 	c.l.logStreamMtx.Lock()
 	for _, s := range c.l.logStreams[c.job.ID] {
@@ -947,12 +946,12 @@ func (c *libvirtContainer) cleanup() error {
 
 	c.unbindMounts()
 	if err := c.l.pinkerton.Cleanup(c.job.ID); err != nil {
-		g.Log(grohl.Data{"at": "pinkerton", "status": "error", "err": err})
+		log.Error("error running pinkerton cleanup", "err", err)
 	}
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
 		c.l.ipalloc.ReleaseIP(c.l.bridgeNet, c.IP)
 	}
-	g.Log(grohl.Data{"at": "finish"})
+	log.Info("finished cleanup")
 	return nil
 }
 
@@ -1140,7 +1139,7 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 }
 
 func (l *LibvirtLXCBackend) Cleanup(except []string) error {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "Cleanup"})
+	log := l.logger.New("fn", "Cleanup")
 	shouldSkip := func(id string) bool {
 		for _, s := range except {
 			if id == s {
@@ -1158,14 +1157,14 @@ func (l *LibvirtLXCBackend) Cleanup(except []string) error {
 		ids = append(ids, id)
 	}
 	l.containersMtx.Unlock()
-	g.Log(grohl.Data{"at": "start", "count": len(ids)})
+	log.Info("starting cleanup", "count", len(ids))
 	errs := make(chan error)
 	for _, id := range ids {
 		go func(id string) {
-			g.Log(grohl.Data{"at": "stop", "job.id": id})
+			log.Info("stopping job", "job.id", id)
 			err := l.Stop(id)
 			if err != nil {
-				g.Log(grohl.Data{"at": "error", "job.id": id, "err": err.Error()})
+				log.Error("error stopping job", "job.id", id, "err", err)
 			}
 			errs <- err
 		}(id)
@@ -1177,7 +1176,7 @@ func (l *LibvirtLXCBackend) Cleanup(except []string) error {
 			err = stopErr
 		}
 	}
-	g.Log(grohl.Data{"at": "finish"})
+	log.Info("finished")
 	return err
 }
 
@@ -1238,8 +1237,7 @@ func (l *LibvirtLXCBackend) OpenLogs(buffers host.LogBuffers) error {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	for id, c := range l.containers {
-		g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "OpenLogs", "job.id": id})
-		if err := c.followLogs(g, buffers[id]); err != nil {
+		if err := c.followLogs(l.logger.New("fn", "OpenLogs", "job.id", id), buffers[id]); err != nil {
 			return err
 		}
 	}
@@ -1247,12 +1245,12 @@ func (l *LibvirtLXCBackend) OpenLogs(buffers host.LogBuffers) error {
 }
 
 func (l *LibvirtLXCBackend) CloseLogs() (host.LogBuffers, error) {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "CloseLogs"})
+	log := l.logger.New("fn", "CloseLogs")
 	l.logStreamMtx.Lock()
 	defer l.logStreamMtx.Unlock()
 	buffers := make(host.LogBuffers, len(l.logStreams))
 	for id, streams := range l.logStreams {
-		g.Log(grohl.Data{"job.id": id})
+		log.Info("closing", "job.id", id)
 		buffer := make(host.LogBuffer, len(streams))
 		for fd, stream := range streams {
 			buffer[fd] = stream.Close()
