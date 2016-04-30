@@ -463,6 +463,41 @@
     }
   },
   {
+    "id": "docker-receive",
+    "action": "deploy-app",
+    "app": {
+      "name": "docker-receive",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/docker-receive&id=$image_id[docker-receive]"
+    },
+    "release": {
+      "env": {
+        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}"
+      },
+      "processes": {
+        "app": {
+          "ports": [
+            {
+              "port": 80,
+              "proto": "tcp",
+              "service": {
+                "name": "docker-receive",
+                "create": true,
+                "check": {"type": "http", "path": "/v2/"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "processes": {
+      "app": 2
+    }
+  },
+  {
     "id": "router-wait",
     "action": "wait",
     "url": "http://router-api.discoverd",
@@ -476,6 +511,15 @@
     "type": "http",
     "service": "gitreceive",
     "domain": "git.{{ getenv \"CLUSTER_DOMAIN\" }}"
+  },
+  {
+    "id": "docker-receive-route",
+    "action": "add-route",
+    "app_step": "docker-receive",
+    "cert_step": "controller-cert",
+    "type": "http",
+    "service": "docker-receive",
+    "domain": "docker.{{ getenv \"CLUSTER_DOMAIN\" }}"
   },
   {
     "id": "controller-route",
@@ -653,6 +697,11 @@
     "id": "gitreceive-wait",
     "action": "wait",
     "url": "tcp://gitreceive.discoverd"
+  },
+  {
+    "id": "docker-receive-wait",
+    "action": "wait",
+    "url": "http://docker-receive.discoverd/v2/"
   },
   {
     "id": "status-check",
