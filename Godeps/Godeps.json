@@ -1,6 +1,7 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
 	"GoVersion": "go1.4",
+	"GodepVersion": "v60",
 	"Packages": [
 		"./..."
 	],
@@ -615,10 +616,6 @@
 			"ImportPath": "github.com/tchap/go-patricia/patricia",
 			"Comment": "v1.0.1",
 			"Rev": "f64d0a63cd3363481c898faa9339de04d12213f9"
-		},
-		{
-			"ImportPath": "github.com/technoweenie/grohl",
-			"Rev": "91868e10032390c992d419d10b17cc8bfdc35808"
 		},
 		{
 			"ImportPath": "github.com/tent/canonical-json-go",
