@@ -13,9 +13,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/manifest"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/handlers"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/middleware/repository"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/docker-receive/blobstore"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/version"
 )
@@ -39,9 +39,7 @@ func main() {
 	config := configuration.Configuration{
 		Version: configuration.CurrentVersion,
 		Storage: configuration.Storage{
-			"filesystem": configuration.Parameters{
-				"rootdirectory": "/data",
-			},
+			blobstore.DriverName: configuration.Parameters{},
 		},
 		Middleware: map[string][]configuration.Middleware{
 			"repository": {
