@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
@@ -59,7 +60,6 @@ func handler(fs Filesystem) http.Handler {
 				return
 			}
 			defer file.Close()
-			log.Println("GET", req.RequestURI)
 			w.Header().Set("Content-Length", strconv.FormatInt(file.Size(), 10))
 			w.Header().Set("Content-Type", file.Type())
 			w.Header().Set("Etag", file.ETag())
@@ -70,14 +70,14 @@ func handler(fs Filesystem) http.Handler {
 				errorResponse(w, err)
 				return
 			}
-			log.Println("PUT", req.RequestURI)
+			w.WriteHeader(200)
 		case "DELETE":
 			err := fs.Delete(req.URL.Path)
 			if err != nil {
 				errorResponse(w, err)
 				return
 			}
-			log.Println("DELETE", req.RequestURI)
+			w.WriteHeader(200)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -121,8 +121,10 @@ func main() {
 
 	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
 
-	http.Handle("/", handler(fs))
-	status.AddHandler(fs.Status)
+	mux := http.NewServeMux()
+	mux.Handle("/", handler(fs))
+	mux.Handle(status.Path, status.Handler(fs.Status))
 
-	shutdown.Fatal(http.ListenAndServe(addr, nil))
+	h := httphelper.ContextInjector("blobstore", httphelper.NewRequestLogger(mux))
+	shutdown.Fatal(http.ListenAndServe(addr, h))
 }
