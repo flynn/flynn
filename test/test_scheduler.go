@@ -428,8 +428,8 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	}
 
 	// Check that new hosts get omni jobs
-	newHosts := s.addHosts(t, 2, false)
-	defer s.removeHosts(t, newHosts)
+	newHosts := s.addHosts(t, 2, false, "router-api")
+	defer s.removeHosts(t, newHosts, "router-api")
 	err = watcher.WaitFor(ct.JobEvents{"omni": {ct.JobStateUp: 2}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 }

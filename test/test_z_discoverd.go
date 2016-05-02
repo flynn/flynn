@@ -5,6 +5,8 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
+	tc "github.com/flynn/flynn/test/cluster"
 )
 
 // Prefix the suite with "Z" so that it runs after all other tests
@@ -56,4 +58,68 @@ loop:
 			t.Fatal("timed out waiting for deployment event")
 		}
 	}
+}
+
+func peerPresent(host *tc.Instance, peers []string) bool {
+	present := false
+	for _, p := range peers {
+		if p == host.IP+":1111" {
+			present = true
+			break
+		}
+	}
+	return present
+}
+
+func (s *ZDiscoverdSuite) TestPromoteDemote(t *c.C) {
+	if testCluster == nil {
+		t.Skip("cannot boot new hosts")
+	}
+	// ensure we have 3 node cluster, TODO(jpg): Support running test on anything larger than 2 node cluster
+	hosts, err := s.clusterClient(t).Hosts()
+	t.Assert(err, c.IsNil)
+	if len(hosts) != 3 {
+		t.Skip("promotion and demotion tests require a 3 node cluster")
+	}
+
+	// Check the original number of peers is correct
+	initialPeers, err := s.discoverdClient(t).RaftPeers()
+	t.Assert(err, c.IsNil)
+	t.Assert(len(initialPeers), c.Equals, 3)
+
+	// Add a new host to the cluster, initially it will join as a proxy
+	newHost := s.addHost(t, "discoverd")
+	defer s.removeHost(t, newHost, "discoverd")
+
+	// Sleep just a little to give discoverd time to get started
+	time.Sleep(2 * time.Second)
+
+	// Promote the new node to a Raft member
+	dd := discoverd.NewClientWithURL("http://" + newHost.IP + ":1111")
+	err = dd.Promote()
+	t.Assert(err, c.IsNil)
+
+	// Check that we now have one additional peer, also ensure our new peer is in the list
+	newPeers, err := s.discoverdClient(t).RaftPeers()
+	t.Assert(err, c.IsNil)
+	t.Assert(len(newPeers), c.Equals, 4)
+	t.Assert(peerPresent(newHost, newPeers), c.Equals, true)
+
+	// Now demote the newly promoted node
+	err = dd.Demote()
+	t.Assert(err, c.IsNil)
+
+	//XXX(jpg): Better way to wait for leadership?
+	time.Sleep(2 * time.Second)
+
+	// We are going to ask the leader for the list of peers as it's definitely canonical
+	leader, err := s.discoverdClient(t).RaftLeader()
+	t.Assert(err, c.IsNil)
+	dd = discoverd.NewClientWithURL(leader.Host)
+
+	// There should now be only the original peers, additionally make sure our host isn't one of them
+	finalPeers, err := dd.RaftPeers()
+	t.Assert(err, c.IsNil)
+	t.Assert(len(finalPeers), c.Equals, 3)
+	t.Assert(peerPresent(newHost, finalPeers), c.Equals, false)
 }
