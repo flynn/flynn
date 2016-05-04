@@ -203,4 +203,7 @@ RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.li
       zlib1g-dev \
       pigz &&\
 
+    # Workaround for CVE-2016–3714 until new ImageMagick packages come out.
+    echo '<policymap> <policy domain="coder" rights="none" pattern="EPHEMERAL" /> <policy domain="coder" rights="none" pattern="URL" /> <policy domain="coder" rights="none" pattern="HTTPS" /> <policy domain="coder" rights="none" pattern="MVG" /> <policy domain="coder" rights="none" pattern="MSL" /> <policy domain="coder" rights="none" pattern="TEXT" /> <policy domain="coder" rights="none" pattern="SHOW" /> <policy domain="coder" rights="none" pattern="WIN" /> <policy domain="coder" rights="none" pattern="PLT" /> </policymap>' > /etc/ImageMagick/policy.xml &&\
+
     rm /etc/ssh/ssh_host_*
