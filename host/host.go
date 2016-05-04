@@ -274,7 +274,7 @@ func runDaemon(args *docopt.Args) {
 	var err error
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, bridgeName, flynnInit, nsumount, mux, partitionCGroups)
+		backend, err = NewLibvirtLXCBackend(state, vman, bridgeName, flynnInit, nsumount, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libvirt-lxc"))
 	case "mock":
 		backend = MockBackend{}
 	default:

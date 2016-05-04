@@ -522,7 +522,7 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 func (h *Host) ServeHTTP() {
 	r := httprouter.New()
 
-	r.POST("/attach", newAttachHandler(h.state, h.backend).ServeHTTP)
+	r.POST("/attach", newAttachHandler(h.state, h.backend, h.log).ServeHTTP)
 
 	jobAPI := &jobAPI{
 		host: h,
