@@ -100,7 +100,7 @@ Options:
 	}
 	slugURL := fmt.Sprintf("%s/%s/slug.tgz", blobstoreURL, random.UUID())
 
-	cmd := exec.Job(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), &host.Job{
+	job := &host.Job{
 		Config: host.ContainerConfig{
 			Cmd:        []string{slugURL},
 			Env:        jobEnv,
@@ -114,7 +114,12 @@ Options:
 			"flynn-controller.release":  prevRelease.ID,
 			"flynn-controller.type":     "slugbuilder",
 		},
-	})
+	}
+	if sb, ok := prevRelease.Processes["slugbuilder"]; ok {
+		job.Resources = sb.Resources
+	}
+
+	cmd := exec.Job(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), job)
 	var output bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
