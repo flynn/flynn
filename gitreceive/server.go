@@ -45,7 +45,7 @@ func main() {
 }
 
 type gitHandler struct {
-	controller *controller.Client
+	controller controller.Client
 	authKey    []byte
 }
 
@@ -67,7 +67,7 @@ var gitServices = [...]gitService{
 	{"POST", "/git-receive-pack", handlePostRPC, "git-receive-pack"},
 }
 
-func newGitHandler(controller *controller.Client, authKey []byte) *gitHandler {
+func newGitHandler(controller controller.Client, authKey []byte) *gitHandler {
 	return &gitHandler{controller, authKey}
 }
 

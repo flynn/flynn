@@ -32,7 +32,7 @@ type Helper struct {
 	cluster    *cluster.Client
 
 	controllerMtx sync.Mutex
-	controller    *controller.Client
+	controller    controller.Client
 
 	discMtx sync.Mutex
 	disc    *discoverd.Client
@@ -62,7 +62,7 @@ func (h *Helper) clusterClient(t *c.C) *cluster.Client {
 	return h.cluster
 }
 
-func (h *Helper) controllerClient(t *c.C) *controller.Client {
+func (h *Helper) controllerClient(t *c.C) controller.Client {
 	h.controllerMtx.Lock()
 	defer h.controllerMtx.Unlock()
 	if h.controller == nil {
@@ -311,7 +311,7 @@ func (h *Helper) newCliTestApp(t *c.C) *cliTestApp {
 type cliTestApp struct {
 	id, name string
 	release  *ct.Release
-	watcher  *controller.JobWatcher
+	watcher  ct.JobWatcher
 	disc     *discoverd.Client
 	t        *c.C
 }

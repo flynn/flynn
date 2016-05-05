@@ -1,112 +1,97 @@
-// Package controller provides a client for the controller API.
+// Package controller provides a client for each version of the controller API.
 package controller
 
 import (
-	"bytes"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"reflect"
-	"strconv"
-	"strings"
 	"time"
 
+	"github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
-	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
 
+type Client interface {
+	GetCACert() ([]byte, error)
+	StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error)
+	PutDomain(dm *ct.DomainMigration) error
+	CreateArtifact(artifact *ct.Artifact) error
+	CreateRelease(release *ct.Release) error
+	CreateApp(app *ct.App) error
+	UpdateApp(app *ct.App) error
+	UpdateAppMeta(app *ct.App) error
+	DeleteApp(appID string) (*ct.AppDeletion, error)
+	CreateProvider(provider *ct.Provider) error
+	GetProvider(providerID string) (*ct.Provider, error)
+	ProvisionResource(req *ct.ResourceReq) (*ct.Resource, error)
+	GetResource(providerID, resourceID string) (*ct.Resource, error)
+	ResourceListAll() ([]*ct.Resource, error)
+	ResourceList(providerID string) ([]*ct.Resource, error)
+	AddResourceApp(providerID, resourceID, appID string) (*ct.Resource, error)
+	DeleteResourceApp(providerID, resourceID, appID string) (*ct.Resource, error)
+	AppResourceList(appID string) ([]*ct.Resource, error)
+	PutResource(resource *ct.Resource) error
+	DeleteResource(providerID, resourceID string) (*ct.Resource, error)
+	PutFormation(formation *ct.Formation) error
+	PutJob(job *ct.Job) error
+	DeleteJob(appID, jobID string) error
+	SetAppRelease(appID, releaseID string) error
+	GetAppRelease(appID string) (*ct.Release, error)
+	RouteList(appID string) ([]*router.Route, error)
+	GetRoute(appID string, routeID string) (*router.Route, error)
+	CreateRoute(appID string, route *router.Route) error
+	UpdateRoute(appID string, routeID string, route *router.Route) error
+	DeleteRoute(appID string, routeID string) error
+	GetFormation(appID, releaseID string) (*ct.Formation, error)
+	GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error)
+	FormationList(appID string) ([]*ct.Formation, error)
+	FormationListActive() ([]*ct.ExpandedFormation, error)
+	DeleteFormation(appID, releaseID string) error
+	GetRelease(releaseID string) (*ct.Release, error)
+	GetArtifact(artifactID string) (*ct.Artifact, error)
+	GetApp(appID string) (*ct.App, error)
+	GetAppLog(appID string, options *ct.LogOpts) (io.ReadCloser, error)
+	StreamAppLog(appID string, options *ct.LogOpts, output chan<- *ct.SSELogChunk) (stream.Stream, error)
+	GetDeployment(deploymentID string) (*ct.Deployment, error)
+	CreateDeployment(appID, releaseID string) (*ct.Deployment, error)
+	DeploymentList(appID string) ([]*ct.Deployment, error)
+	StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEvent) (stream.Stream, error)
+	DeployAppRelease(appID, releaseID string) error
+	StreamJobEvents(appID string, output chan *ct.Job) (stream.Stream, error)
+	WatchJobEvents(appID, releaseID string) (ct.JobWatcher, error)
+	StreamEvents(opts ct.StreamEventsOptions, output chan *ct.Event) (stream.Stream, error)
+	ListEvents(opts ct.ListEventsOptions) ([]*ct.Event, error)
+	GetEvent(id int64) (*ct.Event, error)
+	ExpectedScalingEvents(actual, expected map[string]int, releaseProcesses map[string]ct.ProcessType, clusterSize int) ct.JobEvents
+	RunJobAttached(appID string, job *ct.NewJob) (httpclient.ReadWriteCloser, error)
+	RunJobDetached(appID string, req *ct.NewJob) (*ct.Job, error)
+	GetJob(appID, jobID string) (*ct.Job, error)
+	JobList(appID string) ([]*ct.Job, error)
+	JobListActive() ([]*ct.Job, error)
+	AppList() ([]*ct.App, error)
+	KeyList() ([]*ct.Key, error)
+	ArtifactList() ([]*ct.Artifact, error)
+	ReleaseList() ([]*ct.Release, error)
+	AppReleaseList(appID string) ([]*ct.Release, error)
+	CreateKey(pubKey string) (*ct.Key, error)
+	GetKey(keyID string) (*ct.Key, error)
+	DeleteKey(id string) error
+	ProviderList() ([]*ct.Provider, error)
+	Backup() (io.ReadCloser, error)
+	GetBackupMeta() (*ct.ClusterBackup, error)
+	DeleteRelease(releaseID string) (*ct.ReleaseDeletion, error)
+}
+
 type Config struct {
 	Pin    []byte
 	Domain string
-}
-
-// Client is a client for the controller API.
-type Client struct {
-	*httpclient.Client
-}
-
-type JobWatcher struct {
-	events    chan *ct.Job
-	stream    stream.Stream
-	releaseID string
-}
-
-func newJobWatcher(events chan *ct.Job, stream stream.Stream, releaseID string) *JobWatcher {
-	w := &JobWatcher{
-		events:    events,
-		stream:    stream,
-		releaseID: releaseID,
-	}
-	return w
-}
-
-func jobEventsEqual(expected, actual ct.JobEvents) bool {
-	for typ, events := range expected {
-		diff, ok := actual[typ]
-		if !ok {
-			if len(events) == 0 {
-				continue
-			}
-			return false
-		}
-		for state, count := range events {
-			actualCount, ok := diff[state]
-			if !ok || actualCount != count {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func (w *JobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callback func(*ct.Job) error) error {
-	actual := make(ct.JobEvents)
-	for {
-		select {
-		case e, ok := <-w.events:
-			if !ok {
-				if err := w.stream.Err(); err != nil {
-					return err
-				}
-				return fmt.Errorf("Event stream unexpectedly ended")
-			}
-			if _, ok := actual[e.Type]; !ok {
-				actual[e.Type] = make(map[ct.JobState]int)
-			}
-			if w.releaseID != "" && w.releaseID != e.ReleaseID {
-				continue
-			}
-			// treat the legacy "crashed" and "failed" states as "down"
-			if e.State == ct.JobStateCrashed || e.State == ct.JobStateFailed {
-				e.State = ct.JobStateDown
-			}
-			actual[e.Type][e.State] += 1
-			if callback != nil {
-				err := callback(e)
-				if err != nil {
-					return err
-				}
-			}
-			if jobEventsEqual(expected, actual) {
-				return nil
-			}
-		case <-time.After(timeout):
-			return fmt.Errorf("Timed out waiting for job events. Waited %.f seconds.\nexpected: %v\nactual: %v", timeout.Seconds(), expected, actual)
-		}
-	}
-}
-
-func (w *JobWatcher) Close() error {
-	return w.stream.Close()
 }
 
 // ErrNotFound is returned when a resource is not found (HTTP status 404).
@@ -114,8 +99,8 @@ var ErrNotFound = errors.New("controller: resource not found")
 
 // newClient creates a generic Client object, additional attributes must
 // be set by the caller
-func newClient(key string, url string, http *http.Client) *Client {
-	c := &Client{
+func newClient(key string, url string, http *http.Client) *v1controller.Client {
+	c := &v1controller.Client{
 		Client: &httpclient.Client{
 			ErrNotFound: ErrNotFound,
 			Key:         key,
@@ -128,12 +113,12 @@ func newClient(key string, url string, http *http.Client) *Client {
 
 // NewClient creates a new Client pointing at uri and using key for
 // authentication.
-func NewClient(uri, key string) (*Client, error) {
+func NewClient(uri, key string) (Client, error) {
 	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
 	return NewClientWithHTTP(uri, key, httpClient)
 }
 
-func NewClientWithHTTP(uri, key string, httpClient *http.Client) (*Client, error) {
+func NewClientWithHTTP(uri, key string, httpClient *http.Client) (Client, error) {
 	if uri == "" {
 		uri = "http://controller.discoverd"
 	}
@@ -145,7 +130,7 @@ func NewClientWithHTTP(uri, key string, httpClient *http.Client) (*Client, error
 }
 
 // NewClientWithConfig acts like NewClient, but supports custom configuration.
-func NewClientWithConfig(uri, key string, config Config) (*Client, error) {
+func NewClientWithConfig(uri, key string, config Config) (Client, error) {
 	if config.Pin == nil {
 		return NewClient(uri, key)
 	}
@@ -158,723 +143,4 @@ func NewClientWithConfig(uri, key string, config Config) (*Client, error) {
 	c.Host = config.Domain
 	c.HijackDial = d.Dial
 	return c, nil
-}
-
-// GetCACert returns the CA cert for the controller
-func (c *Client) GetCACert() ([]byte, error) {
-	var cert bytes.Buffer
-	res, err := c.RawReq("GET", "/ca-cert", nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if _, err := io.Copy(&cert, res.Body); err != nil {
-		return nil, err
-	}
-	return cert.Bytes(), nil
-}
-
-// StreamFormations yields a series of ExpandedFormation into the provided channel.
-// If since is not nil, only retrieves formation updates since the specified time.
-func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error) {
-	if since == nil {
-		s := time.Unix(0, 0)
-		since = &s
-	}
-	t := since.UTC().Format(time.RFC3339)
-	return c.Stream("GET", "/formations?since="+t, nil, output)
-}
-
-// PutDomain migrates the cluster domain
-func (c *Client) PutDomain(dm *ct.DomainMigration) error {
-	if dm.Domain == "" {
-		return errors.New("controller: missing domain")
-	}
-	if dm.OldDomain == "" {
-		return errors.New("controller: missing old domain")
-	}
-	return c.Put("/domain", dm, dm)
-}
-
-// CreateArtifact creates a new artifact.
-func (c *Client) CreateArtifact(artifact *ct.Artifact) error {
-	return c.Post("/artifacts", artifact, artifact)
-}
-
-// CreateRelease creates a new release.
-func (c *Client) CreateRelease(release *ct.Release) error {
-	return c.Post("/releases", release, release)
-}
-
-// CreateApp creates a new app.
-func (c *Client) CreateApp(app *ct.App) error {
-	return c.Post("/apps", app, app)
-}
-
-// UpdateApp updates the meta and strategy using app.ID.
-func (c *Client) UpdateApp(app *ct.App) error {
-	if app.ID == "" {
-		return errors.New("controller: missing id")
-	}
-	return c.Post(fmt.Sprintf("/apps/%s", app.ID), app, app)
-}
-
-// UpdateAppMeta updates the meta using app.ID, allowing empty meta to be set explicitly.
-func (c *Client) UpdateAppMeta(app *ct.App) error {
-	if app.ID == "" {
-		return errors.New("controller: missing id")
-	}
-	return c.Post(fmt.Sprintf("/apps/%s/meta", app.ID), app, app)
-}
-
-// DeleteApp deletes an app.
-func (c *Client) DeleteApp(appID string) (*ct.AppDeletion, error) {
-	events := make(chan *ct.Event)
-	stream, err := c.StreamEvents(StreamEventsOptions{
-		AppID:       appID,
-		ObjectTypes: []ct.EventType{ct.EventTypeAppDeletion},
-	}, events)
-	if err != nil {
-		return nil, err
-	}
-	defer stream.Close()
-
-	if err := c.Delete(fmt.Sprintf("/apps/%s", appID), nil); err != nil {
-		return nil, err
-	}
-
-	select {
-	case event, ok := <-events:
-		if !ok {
-			return nil, stream.Err()
-		}
-		var e ct.AppDeletionEvent
-		if err := json.Unmarshal(event.Data, &e); err != nil {
-			return nil, err
-		}
-		if e.Error != "" {
-			return nil, errors.New(e.Error)
-		}
-		return e.AppDeletion, nil
-	case <-time.After(60 * time.Second):
-		return nil, errors.New("timed out waiting for app deletion")
-	}
-}
-
-// DeleteRelease deletes a release and any associated file artifacts.
-func (c *Client) DeleteRelease(releaseID string) (*ct.ReleaseDeletion, error) {
-	events := make(chan *ct.Event)
-	stream, err := c.StreamEvents(StreamEventsOptions{
-		ObjectID:    releaseID,
-		ObjectTypes: []ct.EventType{ct.EventTypeReleaseDeletion},
-	}, events)
-	if err != nil {
-		return nil, err
-	}
-	defer stream.Close()
-
-	if err := c.Delete(fmt.Sprintf("/releases/%s", releaseID), nil); err != nil {
-		return nil, err
-	}
-
-	select {
-	case event, ok := <-events:
-		if !ok {
-			return nil, stream.Err()
-		}
-		var e ct.ReleaseDeletionEvent
-		if err := json.Unmarshal(event.Data, &e); err != nil {
-			return nil, err
-		}
-		if e.Error != "" {
-			return nil, errors.New(e.Error)
-		}
-		return e.ReleaseDeletion, nil
-	case <-time.After(60 * time.Second):
-		return nil, errors.New("timed out waiting for release deletion")
-	}
-}
-
-// CreateProvider creates a new provider.
-func (c *Client) CreateProvider(provider *ct.Provider) error {
-	return c.Post("/providers", provider, provider)
-}
-
-// GetProvider returns the provider identified by providerID.
-func (c *Client) GetProvider(providerID string) (*ct.Provider, error) {
-	provider := &ct.Provider{}
-	return provider, c.Get(fmt.Sprintf("/providers/%s", providerID), provider)
-}
-
-// ProvisionResource uses a provider to provision a new resource for the
-// application. Returns details about the resource.
-func (c *Client) ProvisionResource(req *ct.ResourceReq) (*ct.Resource, error) {
-	if req.ProviderID == "" {
-		return nil, errors.New("controller: missing provider id")
-	}
-	res := &ct.Resource{}
-	err := c.Post(fmt.Sprintf("/providers/%s/resources", req.ProviderID), req, res)
-	return res, err
-}
-
-// GetResource returns the resource identified by resourceID under providerID.
-func (c *Client) GetResource(providerID, resourceID string) (*ct.Resource, error) {
-	res := &ct.Resource{}
-	err := c.Get(fmt.Sprintf("/providers/%s/resources/%s", providerID, resourceID), res)
-	return res, err
-}
-
-// ResourceListAll returns all resources.
-func (c *Client) ResourceListAll() ([]*ct.Resource, error) {
-	var resources []*ct.Resource
-	return resources, c.Get("/resources", &resources)
-}
-
-// ResourceList returns all resources under providerID.
-func (c *Client) ResourceList(providerID string) ([]*ct.Resource, error) {
-	var resources []*ct.Resource
-	return resources, c.Get(fmt.Sprintf("/providers/%s/resources", providerID), &resources)
-}
-
-// AddResourceApp adds appID to the resource identified by resourceID and returns the resource
-func (c *Client) AddResourceApp(providerID, resourceID, appID string) (*ct.Resource, error) {
-	var resource *ct.Resource
-	return resource, c.Put(fmt.Sprintf("/providers/%s/resources/%s/apps/%s", providerID, resourceID, appID), nil, &resource)
-}
-
-// DeleteResourceApp removes appID from the resource identified by resourceID and returns the resource
-func (c *Client) DeleteResourceApp(providerID, resourceID, appID string) (*ct.Resource, error) {
-	var resource *ct.Resource
-	return resource, c.Delete(fmt.Sprintf("/providers/%s/resources/%s/apps/%s", providerID, resourceID, appID), &resource)
-}
-
-// AppResourceList returns a list of all resources under appID.
-func (c *Client) AppResourceList(appID string) ([]*ct.Resource, error) {
-	var resources []*ct.Resource
-	return resources, c.Get(fmt.Sprintf("/apps/%s/resources", appID), &resources)
-}
-
-// PutResource updates a resource.
-func (c *Client) PutResource(resource *ct.Resource) error {
-	if resource.ID == "" || resource.ProviderID == "" {
-		return errors.New("controller: missing id and/or provider id")
-	}
-	return c.Put(fmt.Sprintf("/providers/%s/resources/%s", resource.ProviderID, resource.ID), resource, resource)
-}
-
-// DeleteResource deprovisions and deletes the resource identified by resourceID under providerID.
-func (c *Client) DeleteResource(providerID, resourceID string) (*ct.Resource, error) {
-	res := &ct.Resource{}
-	err := c.Delete(fmt.Sprintf("/providers/%s/resources/%s", providerID, resourceID), res)
-	return res, err
-}
-
-// PutFormation updates an existing formation.
-func (c *Client) PutFormation(formation *ct.Formation) error {
-	if formation.AppID == "" || formation.ReleaseID == "" {
-		return errors.New("controller: missing app id and/or release id")
-	}
-	return c.Put(fmt.Sprintf("/apps/%s/formations/%s", formation.AppID, formation.ReleaseID), formation, formation)
-}
-
-// PutJob updates an existing job.
-func (c *Client) PutJob(job *ct.Job) error {
-	if job.UUID == "" || job.AppID == "" {
-		return errors.New("controller: missing job uuid and/or app id")
-	}
-	return c.Put(fmt.Sprintf("/apps/%s/jobs/%s", job.AppID, job.UUID), job, job)
-}
-
-// DeleteJob kills a specific job id under the specified app.
-func (c *Client) DeleteJob(appID, jobID string) error {
-	return c.Delete(fmt.Sprintf("/apps/%s/jobs/%s", appID, jobID), nil)
-}
-
-// SetAppRelease sets the specified release as the current release for an app.
-func (c *Client) SetAppRelease(appID, releaseID string) error {
-	return c.Put(fmt.Sprintf("/apps/%s/release", appID), &ct.Release{ID: releaseID}, nil)
-}
-
-// GetAppRelease returns the current release of an app.
-func (c *Client) GetAppRelease(appID string) (*ct.Release, error) {
-	release := &ct.Release{}
-	return release, c.Get(fmt.Sprintf("/apps/%s/release", appID), release)
-}
-
-// RouteList returns all routes for an app.
-func (c *Client) RouteList(appID string) ([]*router.Route, error) {
-	var routes []*router.Route
-	return routes, c.Get(fmt.Sprintf("/apps/%s/routes", appID), &routes)
-}
-
-// GetRoute returns details for the routeID under the specified app.
-func (c *Client) GetRoute(appID string, routeID string) (*router.Route, error) {
-	route := &router.Route{}
-	return route, c.Get(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID), route)
-}
-
-// CreateRoute creates a new route for the specified app.
-func (c *Client) CreateRoute(appID string, route *router.Route) error {
-	return c.Post(fmt.Sprintf("/apps/%s/routes", appID), route, route)
-}
-
-// UpdateRoute updates details for the routeID under the specified app.
-func (c *Client) UpdateRoute(appID string, routeID string, route *router.Route) error {
-	return c.Put(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID), route, route)
-}
-
-// DeleteRoute deletes a route under the specified app.
-func (c *Client) DeleteRoute(appID string, routeID string) error {
-	return c.Delete(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID), nil)
-}
-
-// GetFormation returns details for the specified formation under app and
-// release.
-func (c *Client) GetFormation(appID, releaseID string) (*ct.Formation, error) {
-	formation := &ct.Formation{}
-	return formation, c.Get(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), formation)
-}
-
-// GetExpandedFormation returns expanded details for the specified formation
-// under app and release.
-func (c *Client) GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error) {
-	formation := &ct.ExpandedFormation{}
-	return formation, c.Get(fmt.Sprintf("/apps/%s/formations/%s?expand=true", appID, releaseID), formation)
-}
-
-// FormationList returns a list of all formations under appID.
-func (c *Client) FormationList(appID string) ([]*ct.Formation, error) {
-	var formations []*ct.Formation
-	return formations, c.Get(fmt.Sprintf("/apps/%s/formations", appID), &formations)
-}
-
-// FormationListActive returns a list of all active formations (i.e. formations
-// whose process count is greater than zero).
-func (c *Client) FormationListActive() ([]*ct.ExpandedFormation, error) {
-	var formations []*ct.ExpandedFormation
-	return formations, c.Get("/formations?active=true", &formations)
-}
-
-// DeleteFormation deletes the formation matching appID and releaseID.
-func (c *Client) DeleteFormation(appID, releaseID string) error {
-	return c.Delete(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), nil)
-}
-
-// GetRelease returns details for the specified release.
-func (c *Client) GetRelease(releaseID string) (*ct.Release, error) {
-	release := &ct.Release{}
-	return release, c.Get(fmt.Sprintf("/releases/%s", releaseID), release)
-}
-
-// GetArtifact returns details for the specified artifact.
-func (c *Client) GetArtifact(artifactID string) (*ct.Artifact, error) {
-	artifact := &ct.Artifact{}
-	return artifact, c.Get(fmt.Sprintf("/artifacts/%s", artifactID), artifact)
-}
-
-// GetApp returns details for the specified app.
-func (c *Client) GetApp(appID string) (*ct.App, error) {
-	app := &ct.App{}
-	return app, c.Get(fmt.Sprintf("/apps/%s", appID), app)
-}
-
-// GetAppLog returns a ReadCloser log stream of the app with ID appID. If lines
-// is zero or above, the number of lines returned will be capped at that value.
-// Otherwise, all available logs are returned. If follow is true, new log lines
-// are streamed after the buffered log.
-func (c *Client) GetAppLog(appID string, options *ct.LogOpts) (io.ReadCloser, error) {
-	path := fmt.Sprintf("/apps/%s/log", appID)
-	if options != nil {
-		opts := *options
-		query := url.Values{}
-		if opts.Follow {
-			query.Set("follow", "true")
-		}
-		if opts.JobID != "" {
-			query.Set("job_id", opts.JobID)
-		}
-		if opts.Lines != nil {
-			query.Set("lines", strconv.Itoa(*opts.Lines))
-		}
-		if opts.ProcessType != nil {
-			query.Set("process_type", *opts.ProcessType)
-		}
-		if encodedQuery := query.Encode(); encodedQuery != "" {
-			path = fmt.Sprintf("%s?%s", path, encodedQuery)
-		}
-	}
-
-	res, err := c.RawReq("GET", path, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return res.Body, nil
-}
-
-// StreamAppLog is the same as GetAppLog but returns log lines via an SSE stream
-func (c *Client) StreamAppLog(appID string, options *ct.LogOpts, output chan<- *ct.SSELogChunk) (stream.Stream, error) {
-	path := fmt.Sprintf("/apps/%s/log", appID)
-	if options != nil {
-		opts := *options
-		query := url.Values{}
-		if opts.Follow {
-			query.Set("follow", "true")
-		}
-		if opts.JobID != "" {
-			query.Set("job_id", opts.JobID)
-		}
-		if opts.Lines != nil {
-			query.Set("lines", strconv.Itoa(*opts.Lines))
-		}
-		if opts.ProcessType != nil {
-			query.Set("process_type", *opts.ProcessType)
-		}
-		if encodedQuery := query.Encode(); encodedQuery != "" {
-			path = fmt.Sprintf("%s?%s", path, encodedQuery)
-		}
-	}
-	return c.Stream("GET", path, nil, output)
-}
-
-// GetDeployment returns a deployment queued on the deployer.
-func (c *Client) GetDeployment(deploymentID string) (*ct.Deployment, error) {
-	res := &ct.Deployment{}
-	return res, c.Get(fmt.Sprintf("/deployments/%s", deploymentID), res)
-}
-
-func (c *Client) CreateDeployment(appID, releaseID string) (*ct.Deployment, error) {
-	deployment := &ct.Deployment{}
-	return deployment, c.Post(fmt.Sprintf("/apps/%s/deploy", appID), &ct.Release{ID: releaseID}, deployment)
-}
-
-// DeploymentList returns a list of all deployments.
-func (c *Client) DeploymentList(appID string) ([]*ct.Deployment, error) {
-	var deployments []*ct.Deployment
-	return deployments, c.Get(fmt.Sprintf("/apps/%s/deployments", appID), &deployments)
-}
-
-func convertEvents(appEvents chan *ct.Event, outputCh interface{}) {
-	outValue := reflect.ValueOf(outputCh)
-	msgType := outValue.Type().Elem().Elem()
-	defer outValue.Close()
-	for {
-		a, ok := <-appEvents
-		if !ok {
-			return
-		}
-		e := reflect.New(msgType)
-		if err := json.Unmarshal(a.Data, e.Interface()); err != nil {
-			return
-		}
-		outValue.Send(e)
-	}
-}
-
-func (c *Client) StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEvent) (stream.Stream, error) {
-	appEvents := make(chan *ct.Event)
-	go convertEvents(appEvents, output)
-	return c.StreamEvents(StreamEventsOptions{
-		AppID:       d.AppID,
-		ObjectID:    d.ID,
-		ObjectTypes: []ct.EventType{ct.EventTypeDeployment},
-		Past:        true,
-	}, appEvents)
-}
-
-func (c *Client) DeployAppRelease(appID, releaseID string) error {
-	d, err := c.CreateDeployment(appID, releaseID)
-	if err != nil {
-		return err
-	}
-
-	// if initial deploy, just stop here
-	if d.FinishedAt != nil {
-		return nil
-	}
-
-	events := make(chan *ct.DeploymentEvent)
-	stream, err := c.StreamDeployment(d, events)
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
-
-	timeout := d.DeployTimeout
-	if timeout == 0 {
-		// although a non-zero timeout is set for all new apps, it
-		// could still be zero in the case of updating a cluster which
-		// doesn't have deploy timeouts set (as the controller
-		// migration may not have run yet) so use the default
-		timeout = ct.DefaultDeployTimeout
-	}
-outer:
-	for {
-		select {
-		case e, ok := <-events:
-			if !ok {
-				return errors.New("unexpected close of deployment event stream")
-			}
-			switch e.Status {
-			case "complete":
-				break outer
-			case "failed":
-				return e.Err()
-			}
-		case <-time.After(time.Duration(timeout) * time.Second):
-			return errors.New("timed out waiting for deployment completion")
-
-		}
-	}
-	return nil
-}
-
-// StreamJobEvents streams job events to the output channel.
-func (c *Client) StreamJobEvents(appID string, output chan *ct.Job) (stream.Stream, error) {
-	appEvents := make(chan *ct.Event)
-	go convertEvents(appEvents, output)
-	return c.StreamEvents(StreamEventsOptions{
-		AppID:       appID,
-		ObjectTypes: []ct.EventType{ct.EventTypeJob},
-	}, appEvents)
-}
-
-func (c *Client) WatchJobEvents(appID, releaseID string) (*JobWatcher, error) {
-	events := make(chan *ct.Job)
-	stream, err := c.StreamJobEvents(appID, events)
-	if err != nil {
-		return nil, err
-	}
-	return newJobWatcher(events, stream, releaseID), nil
-}
-
-type StreamEventsOptions struct {
-	AppID       string
-	ObjectTypes []ct.EventType
-	ObjectID    string
-	Past        bool
-	Count       int
-}
-
-func (c *Client) StreamEvents(opts StreamEventsOptions, output chan *ct.Event) (stream.Stream, error) {
-	path, _ := url.Parse("/events")
-	q := path.Query()
-	if opts.AppID != "" {
-		q.Set("app_id", opts.AppID)
-	}
-	if opts.Past {
-		q.Set("past", "true")
-	}
-	if len(opts.ObjectTypes) > 0 {
-		types := make([]string, len(opts.ObjectTypes))
-		for i, t := range opts.ObjectTypes {
-			types[i] = string(t)
-		}
-		q.Set("object_types", strings.Join(types, ","))
-	}
-	if opts.ObjectID != "" {
-		q.Set("object_id", opts.ObjectID)
-	}
-	if opts.Count > 0 {
-		q.Set("count", strconv.Itoa(opts.Count))
-	}
-	path.RawQuery = q.Encode()
-	return c.ResumingStream("GET", path.String(), output)
-}
-
-type ListEventsOptions struct {
-	AppID       string
-	ObjectTypes []ct.EventType
-	ObjectID    string
-	BeforeID    *int64
-	SinceID     *int64
-	Count       int
-}
-
-func (c *Client) ListEvents(opts ListEventsOptions) ([]*ct.Event, error) {
-	var events []*ct.Event
-	path, err := url.Parse("/events")
-	if err != nil {
-		return nil, err
-	}
-	q := path.Query()
-	if opts.AppID != "" {
-		q.Set("app_id", opts.AppID)
-	}
-	if opts.BeforeID != nil {
-		q.Set("before_id", strconv.FormatInt(*opts.BeforeID, 10))
-	}
-	if opts.SinceID != nil {
-		q.Set("since_id", strconv.FormatInt(*opts.SinceID, 10))
-	}
-	if len(opts.ObjectTypes) > 0 {
-		types := make([]string, len(opts.ObjectTypes))
-		for i, t := range opts.ObjectTypes {
-			types[i] = string(t)
-		}
-		q.Set("object_types", strings.Join(types, ","))
-	}
-	if opts.ObjectID != "" {
-		q.Set("object_id", opts.ObjectID)
-	}
-	if opts.Count > 0 {
-		q.Set("count", strconv.Itoa(opts.Count))
-	}
-	path.RawQuery = q.Encode()
-	h := make(http.Header)
-	h.Set("Accept", "application/json")
-	res, err := c.RawReq("GET", path.String(), h, nil, &events)
-	if err != nil {
-		return nil, err
-	}
-	res.Body.Close()
-	return events, nil
-}
-
-func (c *Client) GetEvent(id int64) (*ct.Event, error) {
-	var event *ct.Event
-	return event, c.Get(fmt.Sprintf("/events/%d", id), &event)
-}
-
-func (c *Client) ExpectedScalingEvents(actual, expected map[string]int, releaseProcesses map[string]ct.ProcessType, clusterSize int) ct.JobEvents {
-	events := make(ct.JobEvents, len(expected))
-	for typ, count := range expected {
-		diff := count
-		val, ok := actual[typ]
-		if ok {
-			diff = count - val
-		}
-		proc, ok := releaseProcesses[typ]
-		if ok && proc.Omni {
-			diff *= clusterSize
-		}
-		if diff > 0 {
-			events[typ] = ct.JobUpEvents(diff)
-		} else if diff < 0 {
-			events[typ] = ct.JobDownEvents(-diff)
-		}
-	}
-	return events
-}
-
-// RunJobAttached runs a new job under the specified app, attaching to the job
-// and returning a ReadWriteCloser stream, which can then be used for
-// communicating with the job.
-func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (httpclient.ReadWriteCloser, error) {
-	return c.Hijack("POST", fmt.Sprintf("/apps/%s/jobs", appID), http.Header{"Upgrade": {"flynn-attach/0"}}, job)
-}
-
-// RunJobDetached runs a new job under the specified app, returning the job's
-// details.
-func (c *Client) RunJobDetached(appID string, req *ct.NewJob) (*ct.Job, error) {
-	job := &ct.Job{}
-	return job, c.Post(fmt.Sprintf("/apps/%s/jobs", appID), req, job)
-}
-
-// GetJob returns a Job for the given app and job ID
-func (c *Client) GetJob(appID, jobID string) (*ct.Job, error) {
-	job := &ct.Job{}
-	return job, c.Get(fmt.Sprintf("/apps/%s/jobs/%s", appID, jobID), job)
-}
-
-// JobList returns a list of all jobs.
-func (c *Client) JobList(appID string) ([]*ct.Job, error) {
-	var jobs []*ct.Job
-	return jobs, c.Get(fmt.Sprintf("/apps/%s/jobs", appID), &jobs)
-}
-
-// JobListActive returns a list of all active jobs.
-func (c *Client) JobListActive() ([]*ct.Job, error) {
-	var jobs []*ct.Job
-	return jobs, c.Get("/active-jobs", &jobs)
-}
-
-// AppList returns a list of all apps.
-func (c *Client) AppList() ([]*ct.App, error) {
-	var apps []*ct.App
-	return apps, c.Get("/apps", &apps)
-}
-
-// KeyList returns a list of all ssh public keys added.
-func (c *Client) KeyList() ([]*ct.Key, error) {
-	var keys []*ct.Key
-	return keys, c.Get("/keys", &keys)
-}
-
-// ArtifactList returns a list of all artifacts
-func (c *Client) ArtifactList() ([]*ct.Artifact, error) {
-	var artifacts []*ct.Artifact
-	return artifacts, c.Get("/artifacts", &artifacts)
-}
-
-// ReleaseList returns a list of all releases
-func (c *Client) ReleaseList() ([]*ct.Release, error) {
-	var releases []*ct.Release
-	return releases, c.Get("/releases", &releases)
-}
-
-// AppReleaseList returns a list of all releases under appID.
-func (c *Client) AppReleaseList(appID string) ([]*ct.Release, error) {
-	var releases []*ct.Release
-	return releases, c.Get(fmt.Sprintf("/apps/%s/releases", appID), &releases)
-}
-
-// CreateKey uploads pubKey as the ssh public key.
-func (c *Client) CreateKey(pubKey string) (*ct.Key, error) {
-	key := &ct.Key{}
-	return key, c.Post("/keys", &ct.Key{Key: pubKey}, key)
-}
-
-// GetKey returns details for the keyID.
-func (c *Client) GetKey(keyID string) (*ct.Key, error) {
-	key := &ct.Key{}
-	return key, c.Get(fmt.Sprintf("/keys/%s", keyID), key)
-}
-
-// DeleteKey deletes a key with the specified id.
-func (c *Client) DeleteKey(id string) error {
-	return c.Delete("/keys/"+strings.Replace(id, ":", "", -1), nil)
-}
-
-// ProviderList returns a list of all providers.
-func (c *Client) ProviderList() ([]*ct.Provider, error) {
-	var providers []*ct.Provider
-	return providers, c.Get("/providers", &providers)
-}
-
-// Backup takes a backup of the cluster
-func (c *Client) Backup() (io.ReadCloser, error) {
-	res, err := c.RawReq("GET", "/backup", nil, nil, nil)
-	return res.Body, err
-}
-
-// GetBackupMeta returns metadata for latest backup
-func (c *Client) GetBackupMeta() (*ct.ClusterBackup, error) {
-	b := &ct.ClusterBackup{}
-	return b, c.Get("/backup", b)
-}
-
-func (c *Client) Put(path string, in, out interface{}) error {
-	return c.send("PUT", path, in, out)
-}
-
-func (c *Client) Post(path string, in, out interface{}) error {
-	return c.send("POST", path, in, out)
-}
-
-func (c *Client) Get(path string, out interface{}) error {
-	return c.send("GET", path, nil, out)
-}
-
-func (c *Client) Delete(path string, out interface{}) error {
-	return c.send("DELETE", path, nil, out)
-}
-
-func (c *Client) send(method, path string, in, out interface{}) (err error) {
-	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(100 * time.Millisecond) {
-		err = c.Send(method, path, in, out)
-		if !httphelper.IsRetryableError(err) {
-			break
-		}
-	}
-	return
 }

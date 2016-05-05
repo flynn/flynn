@@ -25,7 +25,7 @@ Examples:
 `)
 }
 
-func runDeployments(args *docopt.Args, client *controller.Client) error {
+func runDeployments(args *docopt.Args, client controller.Client) error {
 	deployments, err := client.DeploymentList(mustApp())
 	if err != nil {
 		return err

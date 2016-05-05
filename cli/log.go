@@ -34,7 +34,7 @@ Options:
 // trailing zeros
 const rfc3339micro = "2006-01-02T15:04:05.000000Z07:00"
 
-func runLog(args *docopt.Args, client *controller.Client) error {
+func runLog(args *docopt.Args, client controller.Client) error {
 	rawOutput := args.Bool["--raw-output"]
 	opts := ct.LogOpts{
 		Follow: args.Bool["--follow"],

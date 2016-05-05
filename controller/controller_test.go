@@ -34,7 +34,7 @@ type S struct {
 	cc     *tu.FakeCluster
 	srv    *httptest.Server
 	hc     handlerConfig
-	c      *controller.Client
+	c      controller.Client
 	flac   *fakeLogAggregatorClient
 	caCert []byte
 }

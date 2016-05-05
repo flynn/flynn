@@ -21,7 +21,7 @@ type Cluster struct {
 	GitURL        string `json:"git_url"`
 }
 
-func (c *Cluster) Client() (*controller.Client, error) {
+func (c *Cluster) Client() (controller.Client, error) {
 	var pin []byte
 	if c.TLSPin != "" {
 		var err error

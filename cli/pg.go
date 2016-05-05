@@ -39,7 +39,7 @@ Examples:
 `)
 }
 
-func runPg(args *docopt.Args, client *controller.Client) error {
+func runPg(args *docopt.Args, client controller.Client) error {
 	config, err := getAppPgRunConfig(client)
 	if err != nil {
 		return err
@@ -55,7 +55,7 @@ func runPg(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func getAppPgRunConfig(client *controller.Client) (*runConfig, error) {
+func getAppPgRunConfig(client controller.Client) (*runConfig, error) {
 	appRelease, err := client.GetAppRelease(mustApp())
 	if err != nil {
 		return nil, fmt.Errorf("error getting app release: %s", err)
@@ -63,7 +63,7 @@ func getAppPgRunConfig(client *controller.Client) (*runConfig, error) {
 	return getPgRunConfig(client, mustApp(), appRelease)
 }
 
-func getPgRunConfig(client *controller.Client, app string, appRelease *ct.Release) (*runConfig, error) {
+func getPgRunConfig(client controller.Client, app string, appRelease *ct.Release) (*runConfig, error) {
 	pgApp := appRelease.Env["FLYNN_POSTGRES"]
 	if pgApp == "" {
 		return nil, fmt.Errorf("No postgres database found. Provision one with `flynn resource add postgres`")
@@ -91,7 +91,7 @@ func getPgRunConfig(client *controller.Client, app string, appRelease *ct.Releas
 	return config, nil
 }
 
-func runPsql(args *docopt.Args, client *controller.Client, config *runConfig) error {
+func runPsql(args *docopt.Args, client controller.Client, config *runConfig) error {
 	config.Entrypoint = []string{"psql"}
 	config.Env["PAGER"] = "less"
 	config.Env["LESS"] = "--ignore-case --LONG-PROMPT --SILENT --tabs=4 --quit-if-one-screen --no-init --quit-at-eof"
@@ -99,7 +99,7 @@ func runPsql(args *docopt.Args, client *controller.Client, config *runConfig) er
 	return runJob(client, *config)
 }
 
-func runPgDump(args *docopt.Args, client *controller.Client, config *runConfig) error {
+func runPgDump(args *docopt.Args, client controller.Client, config *runConfig) error {
 	config.Stdout = os.Stdout
 	if filename := args.String["--file"]; filename != "" {
 		f, err := os.Create(filename)
@@ -127,12 +127,12 @@ func configPgDump(config *runConfig) {
 	config.Args = []string{"--format=custom", "--no-owner", "--no-acl"}
 }
 
-func pgDump(client *controller.Client, config *runConfig) error {
+func pgDump(client controller.Client, config *runConfig) error {
 	configPgDump(config)
 	return runJob(client, *config)
 }
 
-func runPgRestore(args *docopt.Args, client *controller.Client, config *runConfig) error {
+func runPgRestore(args *docopt.Args, client controller.Client, config *runConfig) error {
 	config.Stdin = os.Stdin
 	var size int64
 	if filename := args.String["--file"]; filename != "" {
@@ -165,7 +165,7 @@ func runPgRestore(args *docopt.Args, client *controller.Client, config *runConfi
 	return pgRestore(client, config)
 }
 
-func pgRestore(client *controller.Client, config *runConfig) error {
+func pgRestore(client controller.Client, config *runConfig) error {
 	config.Entrypoint = []string{"pg_restore"}
 	config.Args = []string{"-d", config.Env["PGDATABASE"], "--clean", "--if-exists", "--no-owner", "--no-acl"}
 	err := runJob(client, *config)

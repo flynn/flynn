@@ -15,11 +15,11 @@ import (
 
 type context struct {
 	db     *postgres.DB
-	client *controller.Client
+	client controller.Client
 	logger log15.Logger
 }
 
-func JobHandler(db *postgres.DB, client *controller.Client, logger log15.Logger) func(*que.Job) error {
+func JobHandler(db *postgres.DB, client controller.Client, logger log15.Logger) func(*que.Job) error {
 	return (&context{db, client, logger}).HandleAppDeletion
 }
 

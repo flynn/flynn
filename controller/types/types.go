@@ -420,3 +420,25 @@ type ReleaseDeletionEvent struct {
 	ReleaseDeletion *ReleaseDeletion `json:"release_deletion"`
 	Error           string           `json:"error"`
 }
+
+type JobWatcher interface {
+	WaitFor(expected JobEvents, timeout time.Duration, callback func(*Job) error) error
+	Close() error
+}
+
+type ListEventsOptions struct {
+	AppID       string
+	ObjectTypes []EventType
+	ObjectID    string
+	BeforeID    *int64
+	SinceID     *int64
+	Count       int
+}
+
+type StreamEventsOptions struct {
+	AppID       string
+	ObjectTypes []EventType
+	ObjectID    string
+	Past        bool
+	Count       int
+}

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -81,7 +80,7 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 	nextRelease := s.createTestRelease(c, &ct.Release{})
 
 	events := make(chan *ct.Event)
-	stream, err := s.c.StreamEvents(cc.StreamEventsOptions{}, events)
+	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{}, events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
@@ -170,7 +169,7 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 
 func (s *S) TestStreamReleaseEvents(c *C) {
 	events := make(chan *ct.Event)
-	stream, err := s.c.StreamEvents(cc.StreamEventsOptions{}, events)
+	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{}, events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
@@ -215,7 +214,7 @@ func (s *S) TestStreamFormationEvents(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "stream-formation-test"})
 
 	events := make(chan *ct.Event)
-	stream, err := s.c.StreamEvents(cc.StreamEventsOptions{
+	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{
 		ObjectTypes: []ct.EventType{ct.EventTypeScale},
 	}, events)
 	c.Assert(err, IsNil)
@@ -290,7 +289,7 @@ func (s *S) TestStreamFormationEvents(c *C) {
 
 func (s *S) TestStreamProviderEvents(c *C) {
 	events := make(chan *ct.Event)
-	stream, err := s.c.StreamEvents(cc.StreamEventsOptions{}, events)
+	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{}, events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
@@ -319,7 +318,7 @@ func (s *S) TestStreamResourceEvents(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "app4"})
 
 	events := make(chan *ct.Event)
-	stream, err := s.c.StreamEvents(cc.StreamEventsOptions{
+	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{
 		ObjectTypes: []ct.EventType{
 			ct.EventTypeResource,
 			ct.EventTypeResourceDeletion,
@@ -384,7 +383,7 @@ func (s *S) TestListEvents(c *C) {
 		Meta: newMeta,
 	}), IsNil)
 
-	events, err := s.c.ListEvents(cc.ListEventsOptions{
+	events, err := s.c.ListEvents(ct.ListEventsOptions{
 		ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeAppRelease},
 		AppID:       app.ID,
 	})
@@ -436,7 +435,7 @@ func (s *S) TestListEvents(c *C) {
 		fn(events[eventsLen-i-1])
 	}
 
-	eventsSlice, err := s.c.ListEvents(cc.ListEventsOptions{
+	eventsSlice, err := s.c.ListEvents(ct.ListEventsOptions{
 		ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeAppRelease},
 		BeforeID:    &events[0].ID,
 		SinceID:     &events[eventsLen-1].ID,
@@ -446,7 +445,7 @@ func (s *S) TestListEvents(c *C) {
 	c.Assert(eventsSlice[0].ID, Equals, events[1].ID)
 	c.Assert(eventsSlice[1].ID, Equals, events[2].ID)
 
-	eventsSlice, err = s.c.ListEvents(cc.ListEventsOptions{
+	eventsSlice, err = s.c.ListEvents(ct.ListEventsOptions{
 		ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeAppRelease},
 		BeforeID:    &events[0].ID,
 		SinceID:     &events[eventsLen-1].ID,
@@ -461,7 +460,7 @@ func (s *S) TestGetEvent(c *C) {
 	// ensure there's at least one event
 	_ = s.createTestRelease(c, &ct.Release{})
 
-	events, err := s.c.ListEvents(cc.ListEventsOptions{})
+	events, err := s.c.ListEvents(ct.ListEventsOptions{})
 	c.Assert(err, IsNil)
 	c.Assert(len(events), Not(Equals), 0)
 

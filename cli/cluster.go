@@ -170,18 +170,17 @@ func runClusterAdd(args *docopt.Args) error {
 	return nil
 }
 
-func writeCACert(c *controller.Client, name string) (string, error) {
-	res, err := c.RawReq("GET", "/ca-cert", nil, nil, nil)
+func writeCACert(c controller.Client, name string) (string, error) {
+	data, err := c.GetCACert()
 	if err != nil {
 		return "", err
 	}
-	defer res.Body.Close()
 	dest, err := cfg.CACertFile(name)
 	if err != nil {
 		return "", err
 	}
 	defer dest.Close()
-	_, err = io.Copy(dest, res.Body)
+	_, err = dest.Write(data)
 	return dest.Name(), err
 }
 
@@ -265,7 +264,7 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 	fmt.Printf("Migrating cluster domain (this can take up to %s)...\n", maxDuration)
 
 	events := make(chan *ct.Event)
-	stream, err := client.StreamEvents(controller.StreamEventsOptions{
+	stream, err := client.StreamEvents(ct.StreamEventsOptions{
 		ObjectTypes: []ct.EventType{ct.EventTypeDomainMigration},
 	}, events)
 	if err != nil {

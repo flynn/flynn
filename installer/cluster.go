@@ -20,6 +20,7 @@ import (
 	"github.com/flynn/flynn/bootstrap/discovery"
 	cfg "github.com/flynn/flynn/cli/config"
 	cc "github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
@@ -708,7 +709,9 @@ func (c *BaseCluster) getAppEnv(appName string, t *TargetServer) (map[string]str
 	if err != nil {
 		return nil, err
 	}
-	client.Host = fmt.Sprintf("controller.%s", c.oldDomain)
+	if v1client, ok := client.(*v1controller.Client); ok {
+		v1client.Host = fmt.Sprintf("controller.%s", c.oldDomain)
+	}
 
 	release, err := client.GetAppRelease(appName)
 	if err != nil {
@@ -724,10 +727,12 @@ func (c *BaseCluster) migrateDomain(dm *ct.DomainMigration, t *TargetServer) (*c
 	if err != nil {
 		return nil, err
 	}
-	client.Host = fmt.Sprintf("controller.%s", dm.OldDomain)
+	if v1client, ok := client.(*v1controller.Client); ok {
+		v1client.Host = fmt.Sprintf("controller.%s", dm.OldDomain)
+	}
 
 	events := make(chan *ct.Event)
-	stream, err := client.StreamEvents(cc.StreamEventsOptions{
+	stream, err := client.StreamEvents(ct.StreamEventsOptions{
 		ObjectTypes: []ct.EventType{ct.EventTypeDomainMigration},
 	}, events)
 	if err != nil {

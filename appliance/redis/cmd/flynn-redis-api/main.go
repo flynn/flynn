@@ -158,7 +158,7 @@ type Handler struct {
 	ServiceName string
 
 	// Key used to access the controller.
-	ControllerClient *controller.Client
+	ControllerClient controller.Client
 
 	// URI of the flynn/redis appliance.
 	RedisImageURI string

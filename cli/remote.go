@@ -28,7 +28,7 @@ Examples:
 `)
 }
 
-func runRemote(args *docopt.Args, client *controller.Client) error {
+func runRemote(args *docopt.Args, client controller.Client) error {
 	app, err := client.GetApp(mustApp())
 	if err != nil {
 		return err
