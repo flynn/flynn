@@ -257,3 +257,14 @@ func (s *GitDeploySuite) TestGitSubmodules(t *c.C) {
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 	t.Assert(r.flynn("run", "ls", "go-flynn-example"), SuccessfulOutputContains, "main.go")
 }
+
+func (s *GitDeploySuite) TestSlugbuilderLimit(t *c.C) {
+	r := s.newGitRepo(t, "slugbuilder-limit")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=git@github.com:kr/heroku-buildpack-inline.git"), Succeeds)
+	t.Assert(r.flynn("limit", "set", "slugbuilder", "memory=500MB"), Succeeds)
+
+	push := r.git("push", "flynn", "master")
+	t.Assert(push, Succeeds)
+	t.Assert(push, OutputContains, "524288000")
+}

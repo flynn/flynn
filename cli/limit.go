@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 
@@ -96,17 +97,16 @@ func runLimitSet(args *docopt.Args, client *controller.Client) error {
 	release, err := client.GetAppRelease(mustApp())
 	if err == controller.ErrNotFound {
 		release = &ct.Release{}
-		if proc != "" {
-			release.Processes = make(map[string]ct.ProcessType)
-			release.Processes[proc] = ct.ProcessType{}
-		}
 	} else if err != nil {
 		return err
 	}
 
+	if release.Processes == nil {
+		release.Processes = make(map[string]ct.ProcessType)
+	}
 	t, ok := release.Processes[proc]
-	if !ok {
-		return fmt.Errorf("unknown process type %q", proc)
+	if !ok && proc != "slugbuilder" {
+		fmt.Fprintf(os.Stderr, "Warning: %q is not an existing process type, setting anyway\n", proc)
 	}
 	if t.Resources == nil {
 		t.Resources = resource.Defaults()
