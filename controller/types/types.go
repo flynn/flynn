@@ -63,7 +63,7 @@ func (r *Release) ImageArtifactID() string {
 	if len(r.ArtifactIDs) > 0 {
 		return r.ArtifactIDs[0]
 	}
-	return ""
+	return r.LegacyArtifactID
 }
 
 func (r *Release) SetImageArtifactID(id string) {

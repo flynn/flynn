@@ -130,50 +130,56 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 	}
 
 	// expect releases deployed via git to have a slug as their first file
-	// artifact
+	// artifact, and legacy releases to have SLUG_URL set
+	var slugURL string
 	if release.IsGitDeploy() && len(release.FileArtifactIDs()) > 0 {
 		slugArtifact, err := client.GetArtifact(release.FileArtifactIDs()[0])
 		if err != nil && err != controller.ErrNotFound {
 			return fmt.Errorf("error retrieving slug artifact: %s", err)
 		} else if err == nil {
-			reqR, reqW := io.Pipe()
-			config := runConfig{
-				App:        mustApp(),
-				Release:    release.ID,
-				DisableLog: true,
-				Entrypoint: []string{"curl"},
-				Args:       []string{"--include", "--raw", slugArtifact.URI},
-				Stdout:     reqW,
-				Stderr:     ioutil.Discard,
-			}
-			if bar != nil {
-				config.Stdout = io.MultiWriter(config.Stdout, bar)
-			}
-			go func() {
-				if err := runJob(client, config); err != nil {
-					shutdown.Fatalf("error retrieving slug: %s", err)
-				}
-			}()
-			res, err := http.ReadResponse(bufio.NewReader(reqR), nil)
-			if err != nil {
-				return fmt.Errorf("error reading slug response: %s", err)
-			}
-			if res.StatusCode != 200 {
-				return fmt.Errorf("unexpected status getting slug: %d", res.StatusCode)
-			}
-			length, err := strconv.Atoi(res.Header.Get("Content-Length"))
-			if err != nil {
-				return fmt.Errorf("slug has missing or malformed Content-Length")
-			}
-
-			if err := tw.WriteHeader("slug.tar.gz", length); err != nil {
-				return fmt.Errorf("error writing slug header: %s", err)
-			}
-			if _, err := io.Copy(tw, res.Body); err != nil {
-				return fmt.Errorf("error writing slug: %s", err)
-			}
-			res.Body.Close()
+			slugURL = slugArtifact.URI
 		}
+	} else if u, ok := release.Env["SLUG_URL"]; ok {
+		slugURL = u
+	}
+	if slugURL != "" {
+		reqR, reqW := io.Pipe()
+		config := runConfig{
+			App:        mustApp(),
+			Release:    release.ID,
+			DisableLog: true,
+			Entrypoint: []string{"curl"},
+			Args:       []string{"--include", "--raw", slugURL},
+			Stdout:     reqW,
+			Stderr:     ioutil.Discard,
+		}
+		if bar != nil {
+			config.Stdout = io.MultiWriter(config.Stdout, bar)
+		}
+		go func() {
+			if err := runJob(client, config); err != nil {
+				shutdown.Fatalf("error retrieving slug: %s", err)
+			}
+		}()
+		res, err := http.ReadResponse(bufio.NewReader(reqR), nil)
+		if err != nil {
+			return fmt.Errorf("error reading slug response: %s", err)
+		}
+		if res.StatusCode != 200 {
+			return fmt.Errorf("unexpected status getting slug: %d", res.StatusCode)
+		}
+		length, err := strconv.Atoi(res.Header.Get("Content-Length"))
+		if err != nil {
+			return fmt.Errorf("slug has missing or malformed Content-Length")
+		}
+
+		if err := tw.WriteHeader("slug.tar.gz", length); err != nil {
+			return fmt.Errorf("error writing slug header: %s", err)
+		}
+		if _, err := io.Copy(tw, res.Body); err != nil {
+			return fmt.Errorf("error writing slug: %s", err)
+		}
+		res.Body.Close()
 	}
 
 	if pgConfig, err := getAppPgRunConfig(client); err == nil {
