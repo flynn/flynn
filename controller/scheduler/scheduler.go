@@ -1294,9 +1294,16 @@ func (s *Scheduler) stopJob(job *Job) error {
 
 	switch job.state {
 	case JobStatePending:
-		// If it's a pending job, we are either in the process
-		// of starting it, or it is scheduled to start in the
-		// future.
+		// If it's a pending job with a HostID, then it has been
+		// placed in the cluster but we are yet to receive a
+		// "starting" event, so we need to explicitly stop it.
+		if job.HostID != "" {
+			break
+		}
+
+		// If it's a pending job which hasn't been placed, we
+		// are either in the process of starting it, or it is
+		// scheduled to start in the future.
 		//
 		// Jobs being actively started can just be marked as
 		// stopped, causing the StartJob goroutine to fail the
