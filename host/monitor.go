@@ -177,7 +177,9 @@ func (m *Monitor) checkCluster() {
 
 	if !m.deadline.IsZero() && time.Now().After(m.deadline) {
 		log.Error("fault deadline reached")
-		m.repairCluster()
+		if err := m.repairCluster(); err != nil {
+			log.Error("error repairing cluster", "err", err)
+		}
 		return
 	}
 }
@@ -193,7 +195,9 @@ func (m *Monitor) repairCluster() error {
 	// killing the schedulers to prevent interference
 	f.KillSchedulers()
 	// ensure postgres is working
-	f.FixPostgres()
+	if err := f.FixPostgres(); err != nil {
+		return err
+	}
 	// ensure controller api is working
 	controllerService := discoverd.NewService("controller")
 	controllerInstances, _ := controllerService.Instances()
