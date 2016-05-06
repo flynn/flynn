@@ -84,7 +84,7 @@ Examples:
 `)
 }
 
-func runCreate(args *docopt.Args, client *controller.Client) error {
+func runCreate(args *docopt.Args, client controller.Client) error {
 	app := &ct.App{}
 	app.Name = args.String["<name>"]
 	remote := args.String["--remote"]
@@ -114,7 +114,7 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runDelete(args *docopt.Args, client *controller.Client) error {
+func runDelete(args *docopt.Args, client controller.Client) error {
 	appName := mustApp()
 	remote := args.String["--remote"]
 
@@ -147,7 +147,7 @@ func runDelete(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runApps(args *docopt.Args, client *controller.Client) error {
+func runApps(args *docopt.Args, client controller.Client) error {
 	apps, err := client.AppList()
 	if err != nil {
 		return err
@@ -163,7 +163,7 @@ func runApps(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runInfo(_ *docopt.Args, client *controller.Client) error {
+func runInfo(_ *docopt.Args, client controller.Client) error {
 	appName := mustApp()
 
 	fmt.Println("===", appName)
@@ -196,7 +196,7 @@ func runInfo(_ *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func scaleToZero(appName string, client *controller.Client) error {
+func scaleToZero(appName string, client controller.Client) error {
 	release, err := client.GetAppRelease(appName)
 	if err == controller.ErrNotFound {
 		return nil

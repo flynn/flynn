@@ -124,7 +124,7 @@ func run() error {
 		log.Info("starting deploy of system app")
 
 		app, err := client.GetApp(appInfo.Name)
-		if err == client.ErrNotFound && appInfo.Optional {
+		if err == controller.ErrNotFound && appInfo.Optional {
 			log.Info(
 				"skipped deploy of system app",
 				"reason", "optional app not present",
@@ -181,7 +181,7 @@ func (e errDeploySkipped) Error() string {
 	return e.reason
 }
 
-func deployApp(client *controller.Client, app *ct.App, uri string, updateFn updater.UpdateReleaseFn, log log15.Logger) error {
+func deployApp(client controller.Client, app *ct.App, uri string, updateFn updater.UpdateReleaseFn, log log15.Logger) error {
 	release, err := client.GetAppRelease(app.ID)
 	if err != nil {
 		log.Error("error getting release", "err", err)

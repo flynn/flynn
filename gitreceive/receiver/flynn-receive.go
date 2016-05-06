@@ -242,7 +242,7 @@ Options:
 // needsDefaultScale indicates whether a release needs a default scale based on
 // whether it has a web process type and either has no previous release or no
 // previous scale.
-func needsDefaultScale(appID, prevReleaseID string, procs map[string]ct.ProcessType, client *controller.Client) bool {
+func needsDefaultScale(appID, prevReleaseID string, procs map[string]ct.ProcessType, client controller.Client) bool {
 	if _, ok := procs["web"]; !ok {
 		return false
 	}

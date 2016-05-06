@@ -54,7 +54,7 @@ Examples:
 `)
 }
 
-func runRoute(args *docopt.Args, client *controller.Client) error {
+func runRoute(args *docopt.Args, client controller.Client) error {
 	if args.Bool["add"] {
 		switch {
 		case args.Bool["http"]:
@@ -110,7 +110,7 @@ func runRoute(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runRouteAddTCP(args *docopt.Args, client *controller.Client) error {
+func runRouteAddTCP(args *docopt.Args, client controller.Client) error {
 	service := args.String["--service"]
 	if service == "" {
 		service = mustApp() + "-web"
@@ -140,7 +140,7 @@ func runRouteAddTCP(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
+func runRouteAddHTTP(args *docopt.Args, client controller.Client) error {
 	service := args.String["--service"]
 	if service == "" {
 		service = mustApp() + "-web"
@@ -173,7 +173,7 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runRouteUpdateTCP(args *docopt.Args, client *controller.Client) error {
+func runRouteUpdateTCP(args *docopt.Args, client controller.Client) error {
 	id := args.String["<id>"]
 	appName := mustApp()
 
@@ -202,7 +202,7 @@ func runRouteUpdateTCP(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runRouteUpdateHTTP(args *docopt.Args, client *controller.Client) error {
+func runRouteUpdateHTTP(args *docopt.Args, client controller.Client) error {
 	id := args.String["<id>"]
 	appName := mustApp()
 
@@ -291,7 +291,7 @@ func readPEM(typ string, path string, stdin []byte) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }
 
-func runRouteRemove(args *docopt.Args, client *controller.Client) error {
+func runRouteRemove(args *docopt.Args, client controller.Client) error {
 	routeID := args.String["<id>"]
 
 	if err := client.DeleteRoute(mustApp(), routeID); err != nil {

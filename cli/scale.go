@@ -62,7 +62,7 @@ Example:
 const scaleTimeout = 20 * time.Second
 
 // takes args of the form "web=1[,key=val...]", "worker=3[,key=val...]", etc
-func runScale(args *docopt.Args, client *controller.Client) error {
+func runScale(args *docopt.Args, client controller.Client) error {
 	app := mustApp()
 
 	typeSpecs := args.All["<type>=<spec>"].([]string)
@@ -202,7 +202,7 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func showFormations(client *controller.Client, releaseID string, showAll bool, app string) error {
+func showFormations(client controller.Client, releaseID string, showAll bool, app string) error {
 	release, err := determineRelease(client, releaseID, app)
 	if err != nil {
 		return err
@@ -255,7 +255,7 @@ func showFormations(client *controller.Client, releaseID string, showAll bool, a
 	return nil
 }
 
-func determineRelease(client *controller.Client, releaseID, app string) (*ct.Release, error) {
+func determineRelease(client controller.Client, releaseID, app string) (*ct.Release, error) {
 	if releaseID == "" {
 		release, err := client.GetAppRelease(app)
 		if err == controller.ErrNotFound {

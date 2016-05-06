@@ -140,7 +140,7 @@ var commands = make(map[string]*command)
 
 func register(cmd string, f interface{}, usage string) *command {
 	switch f.(type) {
-	case func(*docopt.Args, *controller.Client) error, func(*docopt.Args) error, func() error, func():
+	case func(*docopt.Args, controller.Client) error, func(*docopt.Args) error, func() error, func():
 	default:
 		panic(fmt.Sprintf("invalid command function %s '%T'", cmd, f))
 	}
@@ -164,7 +164,7 @@ func runCommand(name string, args []string) (err error) {
 	}
 
 	switch f := cmd.f.(type) {
-	case func(*docopt.Args, *controller.Client) error:
+	case func(*docopt.Args, controller.Client) error:
 		// create client and run command
 		client, err := getClusterClient()
 		if err != nil {
@@ -207,7 +207,7 @@ func readConfig() (err error) {
 	return
 }
 
-func getClusterClient() (*controller.Client, error) {
+func getClusterClient() (controller.Client, error) {
 	cluster, err := getCluster()
 	if err != nil {
 		return nil, err

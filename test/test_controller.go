@@ -432,7 +432,7 @@ func (s *ControllerSuite) TestRouteEvents(t *c.C) {
 
 	// stream events
 	events := make(chan *ct.Event)
-	stream, err := client.StreamEvents(controller.StreamEventsOptions{
+	stream, err := client.StreamEvents(ct.StreamEventsOptions{
 		AppID:       app,
 		ObjectTypes: []ct.EventType{ct.EventTypeRoute, ct.EventTypeRouteDeletion},
 		Past:        true,

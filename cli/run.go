@@ -37,7 +37,7 @@ Options:
 // Declared here for Windows portability
 const SIGWINCH syscall.Signal = 28
 
-func runRun(args *docopt.Args, client *controller.Client) error {
+func runRun(args *docopt.Args, client controller.Client) error {
 	config := runConfig{
 		App:        mustApp(),
 		Detached:   args.Bool["--detached"],
@@ -78,7 +78,7 @@ type runConfig struct {
 	Exit       bool
 }
 
-func runJob(client *controller.Client, config runConfig) error {
+func runJob(client controller.Client, config runConfig) error {
 	req := &ct.NewJob{
 		Cmd:        config.Args,
 		TTY:        config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,

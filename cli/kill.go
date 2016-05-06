@@ -14,7 +14,7 @@ usage: flynn kill <job>
 Kill a job.`)
 }
 
-func runKill(args *docopt.Args, client *controller.Client) error {
+func runKill(args *docopt.Args, client controller.Client) error {
 	job := args.String["<job>"]
 	if err := client.DeleteJob(mustApp(), job); err != nil {
 		return err

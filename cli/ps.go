@@ -41,7 +41,7 @@ Example:
 `)
 }
 
-func runPs(args *docopt.Args, client *controller.Client) error {
+func runPs(args *docopt.Args, client controller.Client) error {
 	jobs, err := client.JobList(mustApp())
 	if err != nil {
 		return err

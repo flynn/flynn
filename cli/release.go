@@ -106,7 +106,7 @@ Examples:
 `)
 }
 
-func runRelease(args *docopt.Args, client *controller.Client) error {
+func runRelease(args *docopt.Args, client controller.Client) error {
 	if args.Bool["show"] {
 		return runReleaseShow(args, client)
 	}
@@ -126,7 +126,7 @@ func runRelease(args *docopt.Args, client *controller.Client) error {
 	return runReleaseList(args, client)
 }
 
-func runReleaseList(args *docopt.Args, client *controller.Client) error {
+func runReleaseList(args *docopt.Args, client controller.Client) error {
 	list, err := client.AppReleaseList(mustApp())
 	if err != nil {
 		return err
@@ -148,7 +148,7 @@ func runReleaseList(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runReleaseShow(args *docopt.Args, client *controller.Client) error {
+func runReleaseShow(args *docopt.Args, client controller.Client) error {
 	var release *ct.Release
 	var err error
 	if args.String["<id>"] != "" {
@@ -188,7 +188,7 @@ func runReleaseShow(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
+func runReleaseAddDocker(args *docopt.Args, client controller.Client) error {
 	release := &ct.Release{}
 	if args.String["--file"] != "" {
 		data, err := ioutil.ReadFile(args.String["--file"])
@@ -222,7 +222,7 @@ func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runReleaseUpdate(args *docopt.Args, client *controller.Client) error {
+func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 	var release *ct.Release
 	var err error
 	if args.String["<id>"] != "" {
@@ -311,7 +311,7 @@ func runReleaseUpdate(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runReleaseDelete(args *docopt.Args, client *controller.Client) error {
+func runReleaseDelete(args *docopt.Args, client controller.Client) error {
 	releaseID := args.String["<id>"]
 	if !args.Bool["--yes"] {
 		if !promptYesNo(fmt.Sprintf("Are you sure you want to delete release %q?", releaseID)) {

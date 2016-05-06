@@ -51,7 +51,7 @@ Examples:
 `)
 }
 
-func runLimit(args *docopt.Args, client *controller.Client) error {
+func runLimit(args *docopt.Args, client controller.Client) error {
 	if args.Bool["set"] {
 		return runLimitSet(args, client)
 	}
@@ -92,7 +92,7 @@ func formatLimits(w io.Writer, s string, r resource.Resources) {
 	fmt.Fprintf(w, "%s:\t%s\n", s, strings.Join(limits, "\t"))
 }
 
-func runLimitSet(args *docopt.Args, client *controller.Client) error {
+func runLimitSet(args *docopt.Args, client controller.Client) error {
 	proc := args.String["<proc>"]
 	release, err := client.GetAppRelease(mustApp())
 	if err == controller.ErrNotFound {

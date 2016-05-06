@@ -39,7 +39,7 @@ Examples:
 `)
 }
 
-func runMysql(args *docopt.Args, client *controller.Client) error {
+func runMysql(args *docopt.Args, client controller.Client) error {
 	config, err := getAppMysqlRunConfig(client)
 	if err != nil {
 		return err
@@ -56,7 +56,7 @@ func runMysql(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func getAppMysqlRunConfig(client *controller.Client) (*runConfig, error) {
+func getAppMysqlRunConfig(client controller.Client) (*runConfig, error) {
 	appRelease, err := client.GetAppRelease(mustApp())
 	if err != nil {
 		return nil, fmt.Errorf("error getting app release: %s", err)
@@ -64,7 +64,7 @@ func getAppMysqlRunConfig(client *controller.Client) (*runConfig, error) {
 	return getMysqlRunConfig(client, mustApp(), appRelease)
 }
 
-func getMysqlRunConfig(client *controller.Client, appName string, appRelease *ct.Release) (*runConfig, error) {
+func getMysqlRunConfig(client controller.Client, appName string, appRelease *ct.Release) (*runConfig, error) {
 	app := appRelease.Env["FLYNN_MYSQL"]
 	if app == "" {
 		return nil, fmt.Errorf("No mysql database found. Provision one with `flynn resource add mysql`")
@@ -97,7 +97,7 @@ func getMysqlRunConfig(client *controller.Client, appName string, appRelease *ct
 	return config, nil
 }
 
-func runMysqlMysql(args *docopt.Args, client *controller.Client, config *runConfig) error {
+func runMysqlMysql(args *docopt.Args, client controller.Client, config *runConfig) error {
 	config.Entrypoint = []string{"mysql"}
 	config.Env["PAGER"] = "less"
 	config.Env["LESS"] = "--ignore-case --LONG-PROMPT --SILENT --tabs=4 --quit-if-one-screen --no-init --quit-at-eof"
@@ -108,7 +108,7 @@ func runMysqlMysql(args *docopt.Args, client *controller.Client, config *runConf
 	return runJob(client, *config)
 }
 
-func runMysqlDump(args *docopt.Args, client *controller.Client, config *runConfig) error {
+func runMysqlDump(args *docopt.Args, client controller.Client, config *runConfig) error {
 	config.Stdout = os.Stdout
 	if filename := args.String["--file"]; filename != "" {
 		f, err := os.Create(filename)
@@ -143,7 +143,7 @@ func configMysqlDump(config *runConfig) {
 	}
 }
 
-func runMysqlRestore(args *docopt.Args, client *controller.Client, config *runConfig) error {
+func runMysqlRestore(args *docopt.Args, client controller.Client, config *runConfig) error {
 	config.Stdin = os.Stdin
 	var size int64
 	if filename := args.String["--file"]; filename != "" {
@@ -176,7 +176,7 @@ func runMysqlRestore(args *docopt.Args, client *controller.Client, config *runCo
 	return mysqlRestore(client, config)
 }
 
-func mysqlRestore(client *controller.Client, config *runConfig) error {
+func mysqlRestore(client controller.Client, config *runConfig) error {
 	config.Entrypoint = []string{"mysql"}
 	config.Args = []string{"-u", config.Env["MYSQL_USER"], "-D", config.Env["MYSQL_DATABASE"]}
 	err := runJob(client, *config)

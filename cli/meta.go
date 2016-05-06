@@ -38,7 +38,7 @@ Examples:
 `)
 }
 
-func runMeta(args *docopt.Args, client *controller.Client) error {
+func runMeta(args *docopt.Args, client controller.Client) error {
 	app, err := client.GetApp(mustApp())
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func runMeta(args *docopt.Args, client *controller.Client) error {
 	}
 }
 
-func runMetaGet(app *types.App, args *docopt.Args, client *controller.Client) error {
+func runMetaGet(app *types.App, args *docopt.Args, client controller.Client) error {
 	w := tabWriter()
 	defer w.Flush()
 	listRec(w, "KEY", "VALUE")
@@ -63,7 +63,7 @@ func runMetaGet(app *types.App, args *docopt.Args, client *controller.Client) er
 	return nil
 }
 
-func runMetaSet(app *types.App, args *docopt.Args, client *controller.Client) error {
+func runMetaSet(app *types.App, args *docopt.Args, client controller.Client) error {
 	pairs := args.All["<var>=<val>"].([]string)
 	if app.Meta == nil {
 		app.Meta = make(map[string]string, len(pairs))
@@ -78,7 +78,7 @@ func runMetaSet(app *types.App, args *docopt.Args, client *controller.Client) er
 	return client.UpdateAppMeta(app)
 }
 
-func runMetaUnset(app *types.App, args *docopt.Args, client *controller.Client) error {
+func runMetaUnset(app *types.App, args *docopt.Args, client controller.Client) error {
 	vars := args.All["<var>"].([]string)
 	for _, s := range vars {
 		delete(app.Meta, s)

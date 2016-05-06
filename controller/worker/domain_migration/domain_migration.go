@@ -23,13 +23,13 @@ const maxActiveRouteUpdates = 5
 
 type context struct {
 	db     *postgres.DB
-	client *controller.Client
+	client controller.Client
 	logger log15.Logger
 }
 
 type migration struct {
 	db                 *postgres.DB
-	client             *controller.Client
+	client             controller.Client
 	rc                 routerc.Client
 	logger             log15.Logger
 	dm                 *ct.DomainMigration
@@ -37,7 +37,7 @@ type migration struct {
 	stop               chan struct{}
 }
 
-func JobHandler(db *postgres.DB, client *controller.Client, logger log15.Logger) func(*que.Job) error {
+func JobHandler(db *postgres.DB, client controller.Client, logger log15.Logger) func(*que.Job) error {
 	return (&context{db, client, logger}).HandleDomainMigration
 }
 
@@ -166,7 +166,7 @@ func (m *migration) waitForDeployment(app string) error {
 	}
 
 	events := make(chan *ct.Event)
-	stream, err := m.client.StreamEvents(controller.StreamEventsOptions{
+	stream, err := m.client.StreamEvents(ct.StreamEventsOptions{
 		AppID:       d.AppID,
 		ObjectID:    d.ID,
 		ObjectTypes: []ct.EventType{ct.EventTypeDeployment},

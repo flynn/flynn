@@ -33,11 +33,11 @@ type State struct {
 	HostTimeout time.Duration
 
 	discoverd     *discoverd.Client
-	controller    *controller.Client
+	controller    controller.Client
 	controllerKey string
 }
 
-func (s *State) ControllerClient() (*controller.Client, error) {
+func (s *State) ControllerClient() (controller.Client, error) {
 	if s.controller == nil {
 		disc, err := s.DiscoverdClient()
 		if err != nil {

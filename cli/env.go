@@ -50,7 +50,7 @@ Examples:
 
 var envProc string
 
-func runEnv(args *docopt.Args, client *controller.Client) error {
+func runEnv(args *docopt.Args, client controller.Client) error {
 	envProc = args.String["--process-type"]
 
 	if args.Bool["set"] {
@@ -90,7 +90,7 @@ func runEnv(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runEnvSet(args *docopt.Args, client *controller.Client) error {
+func runEnvSet(args *docopt.Args, client controller.Client) error {
 	pairs := args.All["<var>=<val>"].([]string)
 	env := make(map[string]*string, len(pairs))
 	for _, s := range pairs {
@@ -108,7 +108,7 @@ func runEnvSet(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runEnvUnset(args *docopt.Args, client *controller.Client) error {
+func runEnvUnset(args *docopt.Args, client controller.Client) error {
 	vars := args.All["<var>"].([]string)
 	env := make(map[string]*string, len(vars))
 	for _, s := range vars {
@@ -122,7 +122,7 @@ func runEnvUnset(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runEnvGet(args *docopt.Args, client *controller.Client) error {
+func runEnvGet(args *docopt.Args, client controller.Client) error {
 	arg := args.All["<var>"].([]string)[0]
 	release, err := client.GetAppRelease(mustApp())
 	if err == controller.ErrNotFound {
@@ -148,7 +148,7 @@ func runEnvGet(args *docopt.Args, client *controller.Client) error {
 	return fmt.Errorf("var %q not found in release %q", arg, release.ID)
 }
 
-func setEnv(client *controller.Client, proc string, env map[string]*string) (string, error) {
+func setEnv(client controller.Client, proc string, env map[string]*string) (string, error) {
 	release, err := client.GetAppRelease(mustApp())
 	if err == controller.ErrNotFound {
 		release = &ct.Release{}

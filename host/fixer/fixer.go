@@ -323,7 +323,7 @@ func (f *ClusterFixer) FixController(instances []*discoverd.Instance, startSched
 	return nil
 }
 
-func (f *ClusterFixer) StartScheduler(client *controller.Client, cf *ct.Formation) error {
+func (f *ClusterFixer) StartScheduler(client controller.Client, cf *ct.Formation) error {
 	if _, err := discoverd.NewService("controller-scheduler").Leader(); err != nil && !discoverd.IsNotFound(err) {
 		return fmt.Errorf("error getting scheduler leader: %s", err)
 	} else if err == nil {

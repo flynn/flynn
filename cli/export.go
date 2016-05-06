@@ -56,7 +56,7 @@ Options:
 `)
 }
 
-func runExport(args *docopt.Args, client *controller.Client) error {
+func runExport(args *docopt.Args, client controller.Client) error {
 	var dest io.Writer = os.Stdout
 	if filename := args.String["--file"]; filename != "" {
 		f, err := os.Create(filename)
@@ -211,7 +211,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runImport(args *docopt.Args, client *controller.Client) error {
+func runImport(args *docopt.Args, client controller.Client) error {
 	var src io.Reader = os.Stdin
 	if filename := args.String["--file"]; filename != "" {
 		f, err := os.Open(filename)

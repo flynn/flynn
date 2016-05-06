@@ -81,7 +81,7 @@ func testDeploySingleAsync(oldRelease, newRelease string) []expectedSireniaState
 	}
 }
 
-func testSireniaDeploy(client *controller.Client, disc *discoverd.Client, t *c.C, d *sireniaDeploy) {
+func testSireniaDeploy(client controller.Client, disc *discoverd.Client, t *c.C, d *sireniaDeploy) {
 	// create app
 	app := &ct.App{Name: d.name, Strategy: "sirenia"}
 	t.Assert(client.CreateApp(app), c.IsNil)

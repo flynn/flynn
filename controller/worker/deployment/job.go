@@ -39,7 +39,7 @@ type JobEvent struct {
 
 type DeployJob struct {
 	*ct.Deployment
-	client       *controller.Client
+	client       controller.Client
 	deployEvents chan<- ct.DeploymentEvent
 
 	// jobEvents is a map of release IDs to channels which receive job

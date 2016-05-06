@@ -8,7 +8,6 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/dialer"
 )
@@ -26,7 +25,7 @@ func (s *ZDomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
 	client := s.controllerClient(t)
 
 	events := make(chan *ct.Event)
-	stream, err := client.StreamEvents(controller.StreamEventsOptions{
+	stream, err := client.StreamEvents(ct.StreamEventsOptions{
 		ObjectTypes: []ct.EventType{ct.EventTypeDomainMigration},
 	}, events)
 	t.Assert(err, c.IsNil)

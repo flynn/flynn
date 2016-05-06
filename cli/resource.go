@@ -24,7 +24,7 @@ Commands:
 `)
 }
 
-func runResource(args *docopt.Args, client *controller.Client) error {
+func runResource(args *docopt.Args, client controller.Client) error {
 	if args.Bool["add"] {
 		return runResourceAdd(args, client)
 	}
@@ -54,7 +54,7 @@ func runResource(args *docopt.Args, client *controller.Client) error {
 	return err
 }
 
-func runResourceAdd(args *docopt.Args, client *controller.Client) error {
+func runResourceAdd(args *docopt.Args, client controller.Client) error {
 	provider := args.String["<provider>"]
 
 	res, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: provider, Apps: []string{mustApp()}})
@@ -78,7 +78,7 @@ func runResourceAdd(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func runResourceRemove(args *docopt.Args, client *controller.Client) error {
+func runResourceRemove(args *docopt.Args, client controller.Client) error {
 	provider := args.String["<provider>"]
 	resource := args.String["<resource>"]
 
