@@ -917,7 +917,7 @@ func (s *Scheduler) unfollowHost(host *Host) {
 	// rectify the omni job counts so that when omni jobs are marked as
 	// stopped, they are not restarted
 	for _, formation := range s.formations {
-		formation.RectifyOmni(len(s.hosts))
+		formation.RectifyOmni(s.activeHostCount())
 	}
 
 	for _, job := range s.jobs {
@@ -965,6 +965,14 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 		if isShutdown {
 			log.Info("marking host as shutdown", "host.id", host.ID)
 			host.shutdown = true
+
+			// rectify the omni job counts now the host is shutdown
+			// so that when down events are received for omni jobs,
+			// they are not restarted
+			for _, formation := range s.formations {
+				formation.RectifyOmni(s.activeHostCount())
+			}
+
 			return
 		}
 
@@ -1013,6 +1021,19 @@ func (s *Scheduler) handleNewHost(id string) {
 	// we have a new host which may now match the tags of some pending jobs
 	// so try to start them
 	s.maybeStartPendingTagJobs(host)
+}
+
+// activeHostCount returns the number of active hosts (i.e. all hosts which
+// are not shutting down) and is used to determine how many omni jobs should
+// be running when calling formation.RectifyOmni
+func (s *Scheduler) activeHostCount() int {
+	count := 0
+	for _, host := range s.hosts {
+		if !host.shutdown {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *Scheduler) PerformHostChecks() {
@@ -1203,7 +1224,7 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Format
 
 	defer func() {
 		// ensure the formation has the correct omni job counts
-		if formation.RectifyOmni(len(s.hosts)) {
+		if formation.RectifyOmni(s.activeHostCount()) {
 			s.triggerRectify(formation.key())
 		}
 
@@ -1273,9 +1294,16 @@ func (s *Scheduler) stopJob(job *Job) error {
 
 	switch job.state {
 	case JobStatePending:
-		// If it's a pending job, we are either in the process
-		// of starting it, or it is scheduled to start in the
-		// future.
+		// If it's a pending job with a HostID, then it has been
+		// placed in the cluster but we are yet to receive a
+		// "starting" event, so we need to explicitly stop it.
+		if job.HostID != "" {
+			break
+		}
+
+		// If it's a pending job which hasn't been placed, we
+		// are either in the process of starting it, or it is
+		// scheduled to start in the future.
 		//
 		// Jobs being actively started can just be marked as
 		// stopped, causing the StartJob goroutine to fail the
@@ -1322,6 +1350,16 @@ func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 		case JobStatePending:
 			return job, nil
 		case JobStateStarting, JobStateRunning:
+			// if the job is on a host which is shutting down,
+			// return it (it is about to stop anyway, and this
+			// avoids a race where modifying the omni counts to
+			// remove a shut down host could cause a subsequent
+			// rectify to stop a job on an active host before the
+			// shutting down host's job has stopped)
+			if host, ok := s.hosts[job.HostID]; ok && host.shutdown {
+				return job, nil
+			}
+
 			// return the most recent job (which is the first in
 			// the slice we are iterating over) if none of the
 			// above cases match
