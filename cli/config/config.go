@@ -93,6 +93,8 @@ func (c *Config) Add(s *Cluster, force bool) error {
 			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.GitURL)
 		case existing.ControllerURL == s.ControllerURL:
 			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.ControllerURL)
+		case existing.DockerURL != "" && existing.DockerURL == s.DockerURL:
+			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.DockerURL)
 		}
 		if m != "" {
 			if conflictIdx != -1 && conflictIdx != i {

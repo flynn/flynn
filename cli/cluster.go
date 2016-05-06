@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -24,7 +26,7 @@ import (
 func init() {
 	register("cluster", runCluster, `
 usage: flynn cluster
-       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [-p <tlspin>] <cluster-name> <domain> <key>
+       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [--docker-url <dockerurl>] [--docker] [-p <tlspin>] <cluster-name> <domain> <key>
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
@@ -44,6 +46,8 @@ Commands:
             -d, --default             set as default cluster
             --git-url=<giturl>        git URL
             --no-git                  skip git configuration
+            --docker-url=<dockerurl>  Docker URL
+            --docker                  configure Docker to push to the cluster
             -p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert
 
     remove
@@ -100,9 +104,17 @@ func runCluster(args *docopt.Args) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	listRec(w, "NAME", "CONTROLLER URL", "GIT URL")
+	listRec(w, "NAME", "CONTROLLER URL", "GIT URL", "DOCKER URL")
 	for _, s := range config.Clusters {
-		data := []interface{}{s.Name, s.ControllerURL, s.GitURL}
+		gitURL := s.GitURL
+		if gitURL == "" {
+			gitURL = "(none)"
+		}
+		dockerURL := s.DockerURL
+		if dockerURL == "" {
+			dockerURL = "(none)"
+		}
+		data := []interface{}{s.Name, s.ControllerURL, gitURL, dockerURL}
 		if s.Name == config.Default {
 			data = append(data, "(default)")
 		}
@@ -113,10 +125,11 @@ func runCluster(args *docopt.Args) error {
 
 func runClusterAdd(args *docopt.Args) error {
 	s := &cfg.Cluster{
-		Name:   args.String["<cluster-name>"],
-		Key:    args.String["<key>"],
-		GitURL: args.String["--git-url"],
-		TLSPin: args.String["--tls-pin"],
+		Name:      args.String["<cluster-name>"],
+		Key:       args.String["<key>"],
+		GitURL:    args.String["--git-url"],
+		DockerURL: args.String["--docker-url"],
+		TLSPin:    args.String["--tls-pin"],
 	}
 	domain := args.String["<domain>"]
 	if strings.HasPrefix(domain, "https://") {
@@ -124,8 +137,11 @@ func runClusterAdd(args *docopt.Args) error {
 	} else {
 		s.ControllerURL = "https://controller." + domain
 	}
-	if s.GitURL == "" {
+	if s.GitURL == "" && !args.Bool["--no-git"] {
 		s.GitURL = "https://git." + domain
+	}
+	if s.DockerURL == "" && args.Bool["--docker"] {
+		s.DockerURL = "https://docker." + domain
 	}
 
 	if err := config.Add(s, args.Bool["--force"]); err != nil {
@@ -138,22 +154,42 @@ func runClusterAdd(args *docopt.Args) error {
 		return errors.New(fmt.Sprintf("Cluster %q does not exist and cannot be set as default.", s.Name))
 	}
 
-	if !args.Bool["--no-git"] {
+	var caPath string
+	if s.GitURL != "" || s.DockerURL != "" {
+		client, err := s.Client()
+		if err != nil {
+			return err
+		}
+		caPath, err = writeCACert(client, s.Name)
+		if err != nil {
+			return fmt.Errorf("Error writing CA certificate: %s", err)
+		}
+	}
+
+	if s.GitURL != "" {
 		if _, err := exec.LookPath("git"); err != nil {
 			if serr, ok := err.(*exec.Error); ok && serr.Err == exec.ErrNotFound {
 				return errors.New("Executable 'git' was not found. Use --no-git to skip git configuration")
 			}
 			return err
 		}
-		client, err := s.Client()
+		if err := cfg.WriteGlobalGitConfig(s.GitURL, caPath); err != nil {
+			return err
+		}
+	}
+
+	if s.DockerURL != "" {
+		u, err := url.Parse(s.DockerURL)
 		if err != nil {
 			return err
 		}
-		caPath, err := writeCACert(client, s.Name)
-		if err != nil {
-			return fmt.Errorf("Error writing CA certificate: %s", err)
-		}
-		if err := cfg.WriteGlobalGitConfig(s.GitURL, caPath); err != nil {
+		if err := runDockerLogin(u.Host, s.Key); err != nil {
+			if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
+				err = errors.New("Executable 'docker' was not found.")
+			} else if err == ErrDockerTLSError {
+				printDockerTLSWarning(u.Host, caPath)
+				err = errors.New("Error configuring docker, follow the instructions above then try again")
+			}
 			return err
 		}
 	}
@@ -168,6 +204,35 @@ func runClusterAdd(args *docopt.Args) error {
 		log.Printf("Cluster %q added.", s.Name)
 	}
 	return nil
+}
+
+var ErrDockerTLSError = errors.New("docker TLS error")
+
+func runDockerLogin(host, key string) error {
+	var out bytes.Buffer
+	cmd := exec.Command("docker", "login", "--email=user@"+host, "--username=user", "--password="+key, host)
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	if strings.Contains(out.String(), "certificate signed by unknown authority") {
+		err = ErrDockerTLSError
+	}
+	return err
+}
+
+func runDockerLogout(host string) error {
+	return exec.Command("docker", "logout", host).Run()
+}
+
+func printDockerTLSWarning(host, caPath string) {
+	fmt.Printf(`
+WARN: docker configuration failed with a TLS error.
+WARN:
+WARN: Copy the TLS CA certificate %s
+WARN: to /etc/docker/certs.d/%s/ca.crt
+WARN: on the docker daemon's host and restart docker.
+
+`[1:], caPath, host)
 }
 
 func writeCACert(c controller.Client, name string) (string, error) {
@@ -201,6 +266,12 @@ func runClusterRemove(args *docopt.Args) error {
 		}
 
 		cfg.RemoveGlobalGitConfig(c.GitURL)
+
+		if c.DockerURL != "" {
+			if u, err := url.Parse(c.DockerURL); err == nil {
+				runDockerLogout(u.Host)
+			}
+		}
 
 		log.Print(msg)
 	}
@@ -298,6 +369,7 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 				cluster.TLSPin = dm.TLSCert.Pin
 				cluster.ControllerURL = fmt.Sprintf("https://controller.%s", dm.Domain)
 				cluster.GitURL = fmt.Sprintf("https://git.%s", dm.Domain)
+				cluster.DockerURL = fmt.Sprintf("https://docker.%s", dm.Domain)
 				if err := config.SaveTo(configPath()); err != nil {
 					return fmt.Errorf("Error saving config: %s", err)
 				}
@@ -315,6 +387,14 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 					return err
 				}
 				cfg.RemoveGlobalGitConfig(fmt.Sprintf("https://git.%s", dm.OldDomain))
+
+				// try to run "docker login" for the new domain, but just print a warning
+				// if it fails so the user can fix it later
+				u, _ := url.Parse(cluster.DockerURL)
+				if err := runDockerLogin(u.Host, cluster.Key); err == ErrDockerTLSError {
+					printDockerTLSWarning(u.Host, caFile.Name())
+				}
+				runDockerLogout(dm.OldDomain)
 
 				fmt.Println("Updated local CLI configuration")
 				return nil
