@@ -58,12 +58,19 @@ type DiscoverdClient interface {
 func (s *HTTPListener) Close() error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+	if s.closed {
+		return nil
+	}
 	s.stopSync()
 	for _, service := range s.services {
 		service.sc.Close()
 	}
-	s.listener.Close()
-	s.tlsListener.Close()
+	if s.listener != nil {
+		s.listener.Close()
+	}
+	if s.tlsListener != nil {
+		s.tlsListener.Close()
+	}
 	s.closed = true
 	return nil
 }
@@ -94,11 +101,12 @@ func (s *HTTPListener) Start() error {
 	}
 
 	if err := s.startSync(ctx); err != nil {
+		s.Close()
 		return err
 	}
 
 	if err := s.startListen(); err != nil {
-		s.stopSync()
+		s.Close()
 		return err
 	}
 
