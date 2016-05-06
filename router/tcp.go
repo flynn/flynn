@@ -126,6 +126,7 @@ func (l *TCPListener) Start() error {
 	// TODO(benburkert): the sync API cannot handle routes deleted while the
 	// listen/notify connection is disconnected
 	if err := l.startSync(ctx); err != nil {
+		l.Close()
 		return err
 	}
 
@@ -173,6 +174,9 @@ func (l *TCPListener) doSync(ctx context.Context, errc chan<- error) <-chan stru
 func (l *TCPListener) Close() error {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
+	if l.closed {
+		return nil
+	}
 	l.stopSync()
 	for _, s := range l.routes {
 		s.Close()

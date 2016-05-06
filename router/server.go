@@ -55,6 +55,7 @@ func (s *Router) Start() error {
 	log.Info("starting TCP listener")
 	if err := s.TCP.Start(); err != nil {
 		log.Error("error starting TCP listener", "err", err)
+		s.HTTP.Close()
 		return err
 	}
 	return nil
