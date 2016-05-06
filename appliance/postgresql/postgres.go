@@ -902,6 +902,8 @@ wal_level = hot_standby
 fsync = on
 max_wal_senders = 15
 wal_keep_segments = 1000
+checkpoint_completion_target = 0.9
+checkpoint_segments = 64
 synchronous_commit = remote_write
 synchronous_standby_names = '{{.Sync}}'
 {{if .ReadOnly}}
