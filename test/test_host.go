@@ -51,13 +51,14 @@ func (s *HostSuite) TestAddFailingJob(t *c.C) {
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
-	// add a job with a non existent artifact
+	// add a job with a non existent partition
 	job := &host.Job{
 		ID: jobID,
 		ImageArtifact: &host.Artifact{
 			Type: host.ArtifactTypeDocker,
 			URI:  "http://example.com?name=foo&id=bar",
 		},
+		Partition: "nonexistent",
 	}
 	t.Assert(h.AddJob(job), c.IsNil)
 
@@ -83,7 +84,7 @@ loop:
 	t.Assert(actual[1].Event, c.Equals, host.JobEventError)
 	jobErr := actual[1].Job.Error
 	t.Assert(jobErr, c.NotNil)
-	t.Assert(*jobErr, c.Equals, "registry: repo not found")
+	t.Assert(*jobErr, c.Equals, `host: invalid job partition "nonexistent"`)
 }
 
 func (s *HostSuite) TestAttachNonExistentJob(t *c.C) {
