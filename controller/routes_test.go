@@ -35,6 +35,9 @@ func (r *fakeRouter) CreateRoute(route *router.Route) error {
 	now := time.Now()
 	route.CreatedAt = now
 	route.UpdatedAt = now
+	if route.Certificate != nil {
+		route.Certificate.ID = random.UUID()
+	}
 	r.routes[route.ID] = route
 	return nil
 }
@@ -90,7 +93,15 @@ func (r *fakeRouter) ListCerts() ([]*router.Certificate, error) {
 }
 
 func (r *fakeRouter) ListCertRoutes(id string) ([]*router.Route, error) {
-	return nil, nil
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	routes := []*router.Route{}
+	for id, route := range r.routes {
+		if route.Certificate != nil && route.Certificate.ID == id {
+			routes = append(routes, route)
+		}
+	}
+	return routes, nil
 }
 
 type sortedRoutes []*router.Route
@@ -126,9 +137,11 @@ func (s *S) TestCreateRoute(c *C) {
 	route := s.createTestRoute(c, app.ID, (&router.TCPRoute{Service: "foo"}).ToRoute())
 	c.Assert(route.ID, Not(Equals), "")
 
-	gotRoute, err := s.c.GetRoute(app.ID, route.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotRoute, DeepEquals, route)
+	s.withEachClient(func(client controller.Client) {
+		gotRoute, err := client.GetRoute(app.ID, route.ID)
+		c.Assert(err, IsNil)
+		c.Assert(gotRoute, DeepEquals, route)
+	})
 }
 
 func (s *S) TestDeleteRoute(c *C) {
@@ -137,8 +150,10 @@ func (s *S) TestDeleteRoute(c *C) {
 
 	c.Assert(s.c.DeleteRoute(app.ID, route.ID), IsNil)
 
-	_, err := s.c.GetRoute(app.ID, route.ID)
-	c.Assert(err, Equals, controller.ErrNotFound)
+	s.withEachClient(func(client controller.Client) {
+		_, err := client.GetRoute(app.ID, route.ID)
+		c.Assert(err, Equals, controller.ErrNotFound)
+	})
 }
 
 func (s *S) TestUpdateRoute(c *C) {
@@ -153,15 +168,17 @@ func (s *S) TestUpdateRoute(c *C) {
 	c.Assert(s.c.UpdateRoute(app.ID, route0.ID, route0), IsNil)
 	c.Assert(s.c.UpdateRoute(app.ID, route1.ID, route1), IsNil)
 
-	routes, err := s.c.RouteList(app.ID)
-	c.Assert(err, IsNil)
+	s.withEachClient(func(client controller.Client) {
+		routes, err := client.RouteList(app.ID)
+		c.Assert(err, IsNil)
 
-	c.Assert(routes, HasLen, 2)
-	c.Assert(routes[1].ID, Equals, route0.ID)
-	c.Assert(routes[1].Service, Equals, route0.Service)
-	c.Assert(routes[0].ID, Equals, route1.ID)
-	c.Assert(routes[0].Service, Equals, route1.Service)
-	c.Assert(routes[0].Sticky, Equals, route1.Sticky)
+		c.Assert(routes, HasLen, 2)
+		c.Assert(routes[1].ID, Equals, route0.ID)
+		c.Assert(routes[1].Service, Equals, route0.Service)
+		c.Assert(routes[0].ID, Equals, route1.ID)
+		c.Assert(routes[0].Service, Equals, route1.Service)
+		c.Assert(routes[0].Sticky, Equals, route1.Sticky)
+	})
 }
 
 func (s *S) TestListRoutes(c *C) {
@@ -173,10 +190,12 @@ func (s *S) TestListRoutes(c *C) {
 	s.createTestRoute(c, app1.ID, (&router.TCPRoute{Service: "bar"}).ToRoute())
 	s.createTestRoute(c, app1.ID, (&router.HTTPRoute{Service: "buzz", Domain: "example.net"}).ToRoute())
 
-	routes, err := s.c.RouteList(app0.ID)
-	c.Assert(err, IsNil)
+	s.withEachClient(func(client controller.Client) {
+		routes, err := client.RouteList(app0.ID)
+		c.Assert(err, IsNil)
 
-	c.Assert(routes, HasLen, 2)
-	c.Assert(routes[1].ID, Equals, route0.ID)
-	c.Assert(routes[0].ID, Equals, route1.ID)
+		c.Assert(routes, HasLen, 2)
+		c.Assert(routes[1].ID, Equals, route0.ID)
+		c.Assert(routes[0].ID, Equals, route1.ID)
+	})
 }

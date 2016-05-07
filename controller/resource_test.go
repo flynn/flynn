@@ -53,12 +53,14 @@ func (s *S) TestProvisionResource(c *C) {
 	c.Assert(resource.ID, Not(Equals), "")
 	c.Assert(resource.Apps, DeepEquals, []string{app1.ID, app2.ID})
 
-	gotResource, err := s.c.GetResource(provider.ID, resource.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotResource, DeepEquals, resource)
+	s.withEachClient(func(client controller.Client) {
+		gotResource, err := client.GetResource(provider.ID, resource.ID)
+		c.Assert(err, IsNil)
+		c.Assert(gotResource, DeepEquals, resource)
 
-	gotResource, err = s.c.GetResource(provider.ID, resource.ID+"fail")
-	c.Assert(err, Equals, controller.ErrNotFound)
+		gotResource, err = client.GetResource(provider.ID, resource.ID+"fail")
+		c.Assert(err, Equals, controller.ErrNotFound)
+	})
 }
 
 func (s *S) TestPutResource(c *C) {
@@ -77,9 +79,11 @@ func (s *S) TestPutResource(c *C) {
 	c.Assert(resource.ProviderID, Equals, provider.ID)
 	c.Assert(resource.CreatedAt, Not(IsNil))
 
-	gotResource, err := s.c.GetResource(provider.ID, resource.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotResource, DeepEquals, resource)
+	s.withEachClient(func(client controller.Client) {
+		gotResource, err := client.GetResource(provider.ID, resource.ID)
+		c.Assert(err, IsNil)
+		c.Assert(gotResource, DeepEquals, resource)
+	})
 }
 
 func (s *S) TestAddResourceApp(c *C) {
@@ -143,11 +147,13 @@ func (s *S) TestResourceLists(c *C) {
 		c.Assert(list[0].Apps, DeepEquals, apps)
 	}
 
-	check(s.c.ResourceList(provider.ID))
-	check(s.c.ResourceList(provider.Name))
-	check(s.c.AppResourceList(app1.ID))
-	check(s.c.AppResourceList(app2.ID))
-	check(s.c.ResourceListAll())
+	s.withEachClient(func(client controller.Client) {
+		check(client.ResourceList(provider.ID))
+		check(client.ResourceList(provider.Name))
+		check(client.AppResourceList(app1.ID))
+		check(client.AppResourceList(app2.ID))
+		check(client.ResourceListAll())
+	})
 }
 
 func (s *S) TestAppResourceListWithDeletedAppResource(c *C) {
@@ -159,13 +165,15 @@ func (s *S) TestAppResourceListWithDeletedAppResource(c *C) {
 	_, err := s.c.DeleteResourceApp(provider.ID, resource.ID, app1.ID)
 	c.Assert(err, IsNil)
 
-	list, err := s.c.AppResourceList(app1.ID)
-	c.Assert(err, IsNil)
-	c.Assert(len(list), Equals, 0)
+	s.withEachClient(func(client controller.Client) {
+		list, err := client.AppResourceList(app1.ID)
+		c.Assert(err, IsNil)
+		c.Assert(len(list), Equals, 0)
 
-	list, err = s.c.AppResourceList(app2.ID)
-	c.Assert(err, IsNil)
-	c.Assert(len(list), Equals, 1)
-	c.Assert(list[0].ID, Equals, resource.ID)
-	c.Assert(list[0].Apps, DeepEquals, []string{app2.ID})
+		list, err = client.AppResourceList(app2.ID)
+		c.Assert(err, IsNil)
+		c.Assert(len(list), Equals, 1)
+		c.Assert(list[0].ID, Equals, resource.ID)
+		c.Assert(list[0].Apps, DeepEquals, []string{app2.ID})
+	})
 }

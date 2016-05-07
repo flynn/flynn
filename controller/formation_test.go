@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	. "github.com/flynn/go-check"
@@ -117,8 +118,8 @@ outer:
 func (s *S) TestFormationListActive(c *C) {
 	app1 := s.createTestApp(c, &ct.App{})
 	app2 := s.createTestApp(c, &ct.App{})
-	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	fileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
+	imageArtifact := s.createTestArtifact(c, s.c, &ct.Artifact{Type: host.ArtifactTypeDocker})
+	fileArtifact := s.createTestArtifact(c, s.c, &ct.Artifact{Type: host.ArtifactTypeFile})
 
 	createFormation := func(app *ct.App, procs map[string]int) *ct.ExpandedFormation {
 		release := &ct.Release{
@@ -151,19 +152,24 @@ func (s *S) TestFormationListActive(c *C) {
 		createFormation(app2, map[string]int{"web": 1, "worker": 2}),
 	}
 
-	list, err := s.c.FormationListActive()
-	c.Assert(err, IsNil)
-	c.Assert(list, HasLen, 3)
-
-	// check that we only get the formations with a non-zero process count,
-	// most recently updated first
 	expected := []*ct.ExpandedFormation{formations[4], formations[3], formations[1]}
-	for i, f := range expected {
-		actual := list[i]
-		c.Assert(actual.App.ID, Equals, f.App.ID)
-		c.Assert(actual.Release.ID, Equals, f.Release.ID)
-		c.Assert(actual.ImageArtifact.ID, Equals, f.ImageArtifact.ID)
-		c.Assert(actual.FileArtifacts, DeepEquals, f.FileArtifacts)
-		c.Assert(actual.Processes, DeepEquals, f.Processes)
-	}
+	s.withEachClient(func(client controller.Client) {
+		list, err := client.FormationListActive()
+		c.Assert(err, IsNil)
+		c.Assert(list, HasLen, 3)
+
+		// check that we only get the formations with a non-zero process count,
+		// most recently updated first
+		for i, f := range expected {
+			actual := list[i]
+			c.Assert(actual.App, Not(IsNil))
+			c.Assert(actual.App.ID, Equals, f.App.ID)
+			c.Assert(actual.Release, Not(IsNil))
+			c.Assert(actual.Release.ID, Equals, f.Release.ID)
+			c.Assert(actual.ImageArtifact, Not(IsNil))
+			c.Assert(actual.ImageArtifact.ID, Equals, f.ImageArtifact.ID)
+			c.Assert(actual.FileArtifacts, DeepEquals, f.FileArtifacts)
+			c.Assert(actual.Processes, DeepEquals, f.Processes)
+		}
+	})
 }
