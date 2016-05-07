@@ -744,9 +744,10 @@ func (c *Client) GetBackupMeta() (*ct.ClusterBackup, error) {
 }
 
 // DeleteRelease deletes a release and any associated file artifacts.
-func (c *Client) DeleteRelease(releaseID string) (*ct.ReleaseDeletion, error) {
+func (c *Client) DeleteRelease(appID, releaseID string) (*ct.ReleaseDeletion, error) {
 	events := make(chan *ct.Event)
 	stream, err := c.StreamEvents(ct.StreamEventsOptions{
+		AppID:       appID,
 		ObjectID:    releaseID,
 		ObjectTypes: []ct.EventType{ct.EventTypeReleaseDeletion},
 	}, events)
@@ -755,7 +756,7 @@ func (c *Client) DeleteRelease(releaseID string) (*ct.ReleaseDeletion, error) {
 	}
 	defer stream.Close()
 
-	if err := c.Delete(fmt.Sprintf("/releases/%s", releaseID), nil); err != nil {
+	if err := c.Delete(fmt.Sprintf("/apps/%s/releases/%s", appID, releaseID), nil); err != nil {
 		return nil, err
 	}
 

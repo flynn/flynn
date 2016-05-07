@@ -412,8 +412,10 @@ type ClusterBackup struct {
 }
 
 type ReleaseDeletion struct {
-	ReleaseID    string   `json:"release"`
-	DeletedFiles []string `json:"deleted_files"`
+	AppID         string   `json:"app"`
+	ReleaseID     string   `json:"release"`
+	RemainingApps []string `json:"remaining_apps"`
+	DeletedFiles  []string `json:"deleted_files"`
 }
 
 type ReleaseDeletionEvent struct {

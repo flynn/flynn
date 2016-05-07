@@ -41,6 +41,7 @@ var preparedStatements = map[string]string{
 	"event_insert":                          eventInsertQuery,
 	"event_insert_unique":                   eventInsertUniqueQuery,
 	"formation_list_by_app":                 formationListByAppQuery,
+	"formation_list_by_release":             formationListByReleaseQuery,
 	"formation_list_active":                 formationListActiveQuery,
 	"formation_list_since":                  formationListSinceQuery,
 	"formation_select":                      formationSelectQuery,
@@ -49,7 +50,6 @@ var preparedStatements = map[string]string{
 	"formation_update":                      formationUpdateQuery,
 	"formation_delete":                      formationDeleteQuery,
 	"formation_delete_by_app":               formationDeleteByAppQuery,
-	"formation_delete_by_release":           formationDeleteByReleaseQuery,
 	"job_list":                              jobListQuery,
 	"job_list_active":                       jobListActiveQuery,
 	"job_select":                            jobSelectQuery,
@@ -220,8 +220,10 @@ INSERT INTO events (app_id, object_id, unique_id, object_type, data)
 VALUES ($1, $2, $3, $4, $5)`
 	formationListByAppQuery = `
 SELECT app_id, release_id, processes, tags, created_at, updated_at
-FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC
-	`
+FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`
+	formationListByReleaseQuery = `
+SELECT app_id, release_id, processes, tags, created_at, updated_at
+FROM formations WHERE release_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`
 	formationListActiveQuery = `
 SELECT
   apps.app_id, apps.name, apps.meta,
@@ -280,9 +282,6 @@ WHERE app_id = $1 AND release_id = $2`
 	formationDeleteByAppQuery = `
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
 WHERE app_id = $1 AND deleted_at IS NULL`
-	formationDeleteByReleaseQuery = `
-UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
-WHERE release_id = $1 AND deleted_at IS NULL`
 	jobListQuery = `
 SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
 FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC`

@@ -86,7 +86,7 @@ type Client interface {
 	ProviderList() ([]*ct.Provider, error)
 	Backup() (io.ReadCloser, error)
 	GetBackupMeta() (*ct.ClusterBackup, error)
-	DeleteRelease(releaseID string) (*ct.ReleaseDeletion, error)
+	DeleteRelease(appID, releaseID string) (*ct.ReleaseDeletion, error)
 }
 
 type Config struct {

@@ -1043,7 +1043,17 @@ func (s *CLISuite) TestReleaseDelete(t *c.C) {
 	t.Assert(res, c.Not(Succeeds))
 	t.Assert(res.Output, c.Equals, "validation_error: cannot delete current app release\n")
 
-	// get the slug artifact URI so we can check it gets removed later
+	// associate the initial release with another app
+	otherApp := &ct.App{Name: "release-delete-" + random.String(8)}
+	t.Assert(client.CreateApp(otherApp), c.IsNil)
+	t.Assert(client.PutFormation(&ct.Formation{AppID: otherApp.ID, ReleaseID: releases[1].ID}), c.IsNil)
+
+	// check deleting the initial release just deletes the formation
+	res = r.flynn("release", "delete", "--yes", releases[1].ID)
+	t.Assert(res, Succeeds)
+	t.Assert(res.Output, c.Equals, "Release scaled down for app but not fully deleted (still associated with 1 other apps)\n")
+
+	// check the slug artifact still exists
 	assertURI := func(uri string, status int) {
 		req, err := http.NewRequest("HEAD", uri, nil)
 		t.Assert(err, c.IsNil)
@@ -1056,8 +1066,8 @@ func (s *CLISuite) TestReleaseDelete(t *c.C) {
 	t.Assert(err, c.IsNil)
 	assertURI(slugArtifact.URI, http.StatusOK)
 
-	// check the old release can be deleted
-	res = r.flynn("release", "delete", "--yes", releases[1].ID)
+	// check the inital release can now be deleted
+	res = r.flynn("-a", otherApp.ID, "release", "delete", "--yes", releases[1].ID)
 	t.Assert(res, Succeeds)
 	t.Assert(res.Output, c.Equals, fmt.Sprintf("Deleted release %s (deleted 1 files)\n", releases[1].ID))
 
