@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	. "github.com/flynn/go-check"
 )
@@ -153,18 +154,20 @@ func (s *S) TestFormationListActive(c *C) {
 		createFormation(app2, map[string]int{"web": 1, "worker": 2}),
 	}
 
-	list, err := s.c.FormationListActive()
-	c.Assert(err, IsNil)
-	c.Assert(list, HasLen, 3)
-
-	// check that we only get the formations with a non-zero process count,
-	// most recently updated first
 	expected := []*ct.ExpandedFormation{formations[4], formations[3], formations[1]}
-	for i, f := range expected {
-		actual := list[i]
-		c.Assert(actual.App.ID, Equals, f.App.ID)
-		c.Assert(actual.Release.ID, Equals, f.Release.ID)
-		c.Assert(actual.Artifacts, DeepEquals, f.Artifacts)
-		c.Assert(actual.Processes, DeepEquals, f.Processes)
-	}
+	s.withEachClient(func(client controller.Client) {
+		list, err := client.FormationListActive()
+		c.Assert(err, IsNil)
+		c.Assert(list, HasLen, 3)
+
+		// check that we only get the formations with a non-zero process count,
+		// most recently updated first
+		for i, f := range expected {
+			actual := list[i]
+			c.Assert(actual.App.ID, Equals, f.App.ID)
+			c.Assert(actual.Release.ID, Equals, f.Release.ID)
+			c.Assert(actual.Artifacts, DeepEquals, f.Artifacts)
+			c.Assert(actual.Processes, DeepEquals, f.Processes)
+		}
+	})
 }

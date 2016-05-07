@@ -35,7 +35,7 @@ func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (c *controllerAPI) GetRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	route, err := c.getRoute(ctx)
+	route, err := c.getRouteFromContext(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -72,7 +72,7 @@ func (c *controllerAPI) UpdateRoute(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (c *controllerAPI) DeleteRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	route, err := c.getRoute(ctx)
+	route, err := c.getRouteFromContext(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
