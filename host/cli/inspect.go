@@ -68,6 +68,10 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	listRec(w, "EndedAt", displayTime(job.EndedAt))
 	listRec(w, "ExitStatus", exitStatus)
 	listRec(w, "IP Address", job.InternalIP)
+	listRec(w, "ImageArtifact", job.Job.ImageArtifact.URI)
+	for i, artifact := range job.Job.FileArtifacts {
+		listRec(w, fmt.Sprintf("FileArtifact[%d]", i), artifact.URI)
+	}
 	for k, v := range job.Job.Metadata {
 		listRec(w, k, v)
 	}
