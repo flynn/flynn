@@ -360,6 +360,27 @@ $$ LANGUAGE plpgsql`,
 		$$ LANGUAGE plpgsql`,
 		`CREATE TRIGGER check_release_delete AFTER UPDATE ON releases FOR EACH ROW EXECUTE PROCEDURE check_release_delete()`,
 	)
+	migrations.Add(17,
+		// add an "index" column to release_artifacts which is set
+		// explicitly to the array index of release.ArtifactIDs
+		`ALTER TABLE release_artifacts ADD COLUMN index integer`,
+		`CREATE UNIQUE INDEX ON release_artifacts (release_id, index) WHERE deleted_at IS NULL`,
+		`DO $$
+		DECLARE
+			row RECORD;
+			release uuid;
+			i int;
+		BEGIN
+			FOR release IN SELECT DISTINCT(release_id) FROM release_artifacts LOOP
+				i := 0;
+				FOR row IN SELECT * FROM release_artifacts WHERE release_id = release ORDER BY created_at ASC LOOP
+					UPDATE release_artifacts SET index = i WHERE release_id = release AND artifact_id = row.artifact_id;
+					i := i + 1;
+				END LOOP;
+			END LOOP;
+		END $$`,
+		`ALTER TABLE release_artifacts ALTER COLUMN index SET NOT NULL`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

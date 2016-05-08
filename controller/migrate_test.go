@@ -203,3 +203,37 @@ func (MigrateSuite) TestMigrateArtifactMeta(c *C) {
 		c.Assert(meta, DeepEquals, a.MetaAfter)
 	}
 }
+
+func (MigrateSuite) TestMigrateReleaseArtifactIndex(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_release_artifact_index")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 16
+	m.migrateTo(16)
+
+	// create some releases and artifacts
+	releaseIDs := []string{random.UUID(), random.UUID()}
+	for _, releaseID := range releaseIDs {
+		c.Assert(db.Exec(`INSERT INTO releases (release_id) VALUES ($1)`, releaseID), IsNil)
+	}
+	artifactIDs := []string{random.UUID(), random.UUID()}
+	c.Assert(db.Exec(`INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3)`, artifactIDs[0], "docker", "http://example.com"), IsNil)
+	c.Assert(db.Exec(`INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3)`, artifactIDs[1], "file", "http://example.com"), IsNil)
+
+	// insert some rows into release_artifacts
+	for _, releaseID := range releaseIDs {
+		for _, artifactID := range artifactIDs {
+			c.Assert(db.Exec(`INSERT INTO release_artifacts (release_id, artifact_id) VALUES ($1, $2)`, releaseID, artifactID), IsNil)
+		}
+	}
+
+	// migrate to 17 and check the index column was set correctly
+	m.migrateTo(17)
+	for _, releaseID := range releaseIDs {
+		for i, artifactID := range artifactIDs {
+			var index int32
+			c.Assert(db.QueryRow(`SELECT index FROM release_artifacts WHERE release_id = $1 AND artifact_id = $2`, releaseID, artifactID).Scan(&index), IsNil)
+			c.Assert(index, Equals, int32(i))
+		}
+	}
+}
