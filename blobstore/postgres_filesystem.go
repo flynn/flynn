@@ -105,6 +105,15 @@ create:
 	return tx.Commit()
 }
 
+func (p *PostgresFilesystem) Copy(dstPath, srcPath string) error {
+	src, err := p.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	return p.Put(dstPath, src, "")
+}
+
 func (p *PostgresFilesystem) Delete(name string) error {
 	// use a regular expression so that either a file with the name is
 	// deleted, or any file prefixed with "{name}/" is deleted (so in other

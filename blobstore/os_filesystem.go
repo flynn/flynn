@@ -51,6 +51,17 @@ func (s *OSFilesystem) Put(name string, r io.Reader, typ string) error {
 	return err
 }
 
+func (s *OSFilesystem) Copy(dstPath, srcPath string) error {
+	src, err := s.Open(srcPath)
+	if err != nil {
+		return err
+	} else if src.(*osFile).IsDir() {
+		return ErrNotFound
+	}
+	defer src.Close()
+	return s.Put(dstPath, src, "")
+}
+
 func (s *OSFilesystem) Delete(name string) error {
 	return os.RemoveAll(s.path(name))
 }

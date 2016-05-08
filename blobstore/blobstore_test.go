@@ -191,6 +191,36 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 				}
 			}
 
+			newPath := srv.URL + "/foo/bar/" + random.Hex(16)
+			req, err = http.NewRequest("PUT", newPath, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Blobstore-Copy-From", strings.TrimPrefix(path, srv.URL))
+			res, err = http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.StatusCode != 200 {
+				t.Errorf("Expected 200 for copy PUT, got %d", res.StatusCode)
+			}
+			res, err = http.Get(newPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resData, err = ioutil.ReadAll(res.Body)
+			res.Body.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.StatusCode != 200 {
+				t.Errorf("Expected 200 for copy GET, got %d", res.StatusCode)
+			}
+			if string(resData) != data {
+				t.Errorf("Expected copied data to be %q, got %q", data, string(resData))
+			}
+
 			newData := random.Hex(32)
 			req, err = http.NewRequest("PUT", path, strings.NewReader(newData))
 			if err != nil {

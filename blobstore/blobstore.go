@@ -44,6 +44,7 @@ type File interface {
 type Filesystem interface {
 	Open(name string) (File, error)
 	Put(name string, r io.Reader, typ string) error
+	Copy(dst, src string) error
 	Delete(name string) error
 	Status() status.Status
 }
@@ -65,7 +66,12 @@ func handler(fs Filesystem) http.Handler {
 			w.Header().Set("Etag", file.ETag())
 			http.ServeContent(w, req, req.URL.Path, file.ModTime(), file)
 		case "PUT":
-			err := fs.Put(req.URL.Path, req.Body, req.Header.Get("Content-Type"))
+			var err error
+			if src := req.Header.Get("Blobstore-Copy-From"); src != "" {
+				err = fs.Copy(req.URL.Path, src)
+			} else {
+				err = fs.Put(req.URL.Path, req.Body, req.Header.Get("Content-Type"))
+			}
 			if err != nil {
 				errorResponse(w, err)
 				return
