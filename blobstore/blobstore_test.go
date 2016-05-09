@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -21,8 +22,10 @@ func TestOSFilesystem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testFilesystem(NewOSFilesystem(dir), false, t)
-	os.RemoveAll(dir)
+	defer os.RemoveAll(dir)
+	fs := NewOSFilesystem(dir)
+	testDelete(fs, t)
+	testFilesystem(fs, false, t)
 }
 
 func TestPostgresFilesystem(t *testing.T) {
@@ -46,7 +49,50 @@ func TestPostgresFilesystem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	testDelete(fs, t)
 	testFilesystem(fs, true, t)
+}
+
+func testDelete(fs Filesystem, t *testing.T) {
+	put := func(path string) {
+		if err := fs.Put(path, bytes.NewReader([]byte("data")), "text/plain"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	del := func(path string) {
+		if err := fs.Delete(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertExists := func(path string) {
+		f, err := fs.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+	}
+	assertNotExists := func(path string) {
+		f, err := fs.Open(path)
+		if err == nil {
+			f.Close()
+		}
+		if err != ErrNotFound {
+			t.Fatalf("expected path %q to not exist, got err=%v", path, err)
+		}
+	}
+
+	put("/dir/foo")
+	put("/dir/foo.txt")
+	put("/dir/bar.txt")
+	del("/dir/foo")
+	assertNotExists("/dir/foo")
+	assertExists("/dir/foo.txt")
+	assertExists("/dir/bar.txt")
+
+	del("/dir")
+	assertNotExists("/dir/foo")
+	assertNotExists("/dir/foo.txt")
+	assertNotExists("/dir/bar.txt")
 }
 
 const concurrency = 5
