@@ -4,6 +4,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
@@ -46,6 +47,25 @@ func (p *PostgresFilesystem) Status() status.Status {
 		return status.Unhealthy
 	}
 	return status.Healthy
+}
+
+func (p *PostgresFilesystem) List(dir string) ([]string, error) {
+	rows, err := p.db.Query("SELECT substring(name FROM '^' || $1 || '/[^/]+/?') AS path FROM files WHERE name LIKE $1 || '%' GROUP BY path", strings.TrimSuffix(dir, "/"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var paths []string
+	for rows.Next() {
+		var path *string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		if path != nil {
+			paths = append(paths, *path)
+		}
+	}
+	return paths, rows.Err()
 }
 
 func (p *PostgresFilesystem) Put(name string, r io.Reader, typ string) error {

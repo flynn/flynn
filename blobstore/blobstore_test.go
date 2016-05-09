@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +26,7 @@ func TestOSFilesystem(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	fs := NewOSFilesystem(dir)
+	testList(fs, t)
 	testDelete(fs, t)
 	testFilesystem(fs, false, t)
 }
@@ -49,8 +52,88 @@ func TestPostgresFilesystem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	testList(fs, t)
 	testDelete(fs, t)
 	testFilesystem(fs, true, t)
+}
+
+func testList(fs Filesystem, t *testing.T) {
+	srv := httptest.NewServer(handler(fs))
+	defer srv.Close()
+
+	assertList := func(dir string, expected []string) {
+		res, err := http.Get(srv.URL + "?dir=" + dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var actual []string
+		if err := json.NewDecoder(res.Body).Decode(&actual); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(actual, expected) {
+			t.Fatalf("expected list to be %v, got %v", expected, actual)
+		}
+	}
+	put := func(path string) {
+		req, err := http.NewRequest("PUT", srv.URL+path, bytes.NewReader([]byte("data")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 for PUT %s, got %d", path, res.StatusCode)
+		}
+	}
+	del := func(path string) {
+		req, err := http.NewRequest("DELETE", srv.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 for DELETE %s, got %d", path, res.StatusCode)
+		}
+	}
+
+	assertList("/", []string{})
+
+	put("/foo.txt")
+	assertList("/", []string{"/foo.txt"})
+	assertList("/foo.txt", []string{})
+
+	put("/bar.txt")
+	put("/baz.txt")
+	assertList("/", []string{"/bar.txt", "/baz.txt", "/foo.txt"})
+
+	del("/foo.txt")
+	assertList("/", []string{"/bar.txt", "/baz.txt"})
+
+	put("/dir1/foo.txt")
+	put("/dir1/bar.txt")
+	put("/dir1/baz.txt")
+	put("/dir2/foo.txt")
+	assertList("/", []string{"/bar.txt", "/baz.txt", "/dir1/", "/dir2/"})
+	assertList("/dir1", []string{"/dir1/bar.txt", "/dir1/baz.txt", "/dir1/foo.txt"})
+	assertList("/dir2", []string{"/dir2/foo.txt"})
+
+	del("/dir1/foo.txt")
+	assertList("/", []string{"/bar.txt", "/baz.txt", "/dir1/", "/dir2/"})
+	assertList("/dir1", []string{"/dir1/bar.txt", "/dir1/baz.txt"})
+	assertList("/dir2", []string{"/dir2/foo.txt"})
+
+	del("/dir1")
+	assertList("/", []string{"/bar.txt", "/baz.txt", "/dir2/"})
+	assertList("/dir1", []string{})
+	assertList("/dir2", []string{"/dir2/foo.txt"})
 }
 
 func testDelete(fs Filesystem, t *testing.T) {

@@ -24,6 +24,30 @@ type OSFilesystem struct {
 	root string
 }
 
+func (s *OSFilesystem) List(dir string) ([]string, error) {
+	f, err := s.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if !f.(*osFile).IsDir() {
+		return nil, ErrNotFound
+	}
+	entries, err := f.(*osFile).Readdir(0)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, len(entries))
+	for i, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		if entry.IsDir() {
+			path = path + "/"
+		}
+		paths[i] = path
+	}
+	return paths, nil
+}
+
 func (s *OSFilesystem) Open(name string) (File, error) {
 	f, err := os.Open(s.path(name))
 	if err != nil {
