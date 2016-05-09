@@ -124,7 +124,7 @@ SELECT r.release_id,
 	SELECT a.artifact_id
 	FROM release_artifacts a
 	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
-	ORDER BY a.created_at
+	ORDER BY a.index
   ), r.env, r.processes, r.meta, r.created_at
 FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1`
 
@@ -134,7 +134,7 @@ SELECT r.release_id,
 	SELECT a.artifact_id
 	FROM release_artifacts a
 	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
-	ORDER BY a.created_at
+	ORDER BY a.index
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseSelectQuery = `
@@ -143,7 +143,7 @@ SELECT r.release_id,
 	SELECT a.artifact_id
 	FROM release_artifacts a
 	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
-	ORDER BY a.created_at
+	ORDER BY a.index
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r WHERE r.release_id = $1 AND r.deleted_at IS NULL`
 	releaseInsertQuery = `
@@ -155,12 +155,12 @@ SELECT DISTINCT(r.release_id),
 	SELECT a.artifact_id
 	FROM release_artifacts a
 	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
-	ORDER BY a.created_at
+	ORDER BY a.index
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r JOIN formations f USING (release_id)
 WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseArtifactsInsertQuery = `
-INSERT INTO release_artifacts (release_id, artifact_id) VALUES ($1, $2)`
+INSERT INTO release_artifacts (release_id, artifact_id, index) VALUES ($1, $2, $3)`
 	releaseDeleteQuery = `
 UPDATE releases SET deleted_at = now() WHERE release_id = $1 AND deleted_at IS NULL`
 	artifactListQuery = `
@@ -230,7 +230,7 @@ SELECT
 	SELECT r.artifact_id
 	FROM release_artifacts r
 	WHERE r.release_id = releases.release_id AND r.deleted_at IS NULL
-	ORDER BY r.created_at
+	ORDER BY r.index
   ),
   releases.meta, releases.env, releases.processes,
   formations.processes, formations.tags, formations.updated_at
@@ -260,7 +260,7 @@ SELECT
 	SELECT a.artifact_id
 	FROM release_artifacts a
 	WHERE a.release_id = releases.release_id AND a.deleted_at IS NULL
-	ORDER BY a.created_at
+	ORDER BY a.index
   ),
   releases.meta, releases.env, releases.processes,
   formations.processes, formations.tags, formations.updated_at

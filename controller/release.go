@@ -69,8 +69,8 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		return err
 	}
 
-	for _, artifactID := range release.ArtifactIDs {
-		if err := tx.Exec("release_artifacts_insert", release.ID, artifactID); err != nil {
+	for i, artifactID := range release.ArtifactIDs {
+		if err := tx.Exec("release_artifacts_insert", release.ID, artifactID, i); err != nil {
 			tx.Rollback()
 			if e, ok := err.(pgx.PgError); ok && e.Code == postgres.CheckViolation {
 				return ct.ValidationError{
