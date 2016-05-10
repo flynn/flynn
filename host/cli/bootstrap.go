@@ -440,7 +440,8 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 			ExpandedFormation: data.Controller,
 		}),
 		step("status", "status-check", &bootstrap.StatusCheckAction{
-			URL: "http://status-web.discoverd",
+			URL:     "http://status-web.discoverd",
+			Timeout: 600,
 		}),
 		step("cluster-monitor", "cluster-monitor", &bootstrap.ClusterMonitorAction{
 			Enabled: true,
