@@ -9,9 +9,10 @@ import (
 )
 
 type StatusCheckAction struct {
-	ID     string `json:"id"`
-	URL    string `json:"url"`
-	Output string `json:"output"`
+	ID      string `json:"id"`
+	URL     string `json:"url"`
+	Output  string `json:"output"`
+	Timeout int    `json:"timeout"` // in seconds
 }
 
 type StatusResponse struct {
@@ -32,7 +33,10 @@ func init() {
 }
 
 func (a *StatusCheckAction) Run(s *State) error {
-	const waitMax = time.Minute
+	waitMax := time.Minute
+	if a.Timeout > 0 {
+		waitMax = time.Duration(a.Timeout) * time.Second
+	}
 	const waitInterval = 500 * time.Millisecond
 
 	u, err := url.Parse(interpolate(s, a.URL))
