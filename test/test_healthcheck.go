@@ -131,7 +131,10 @@ func (s *HealthcheckSuite) TestStatus(t *c.C) {
 
 	t.Assert(data.Data.Status, c.Equals, status.CodeHealthy)
 	t.Assert(data.Data.Detail, c.HasLen, 12)
+	optional := map[string]bool{"mariadb": true}
 	for name, s := range data.Data.Detail {
-		t.Assert(s.Status, c.Equals, status.CodeHealthy, c.Commentf("name = %s", name))
+		if !optional[name] {
+			t.Assert(s.Status, c.Equals, status.CodeHealthy, c.Commentf("name = %s", name))
+		}
 	}
 }
