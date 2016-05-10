@@ -24,6 +24,7 @@ var preparedStatements = map[string]string{
 	"release_insert":                        releaseInsertQuery,
 	"release_app_list":                      releaseAppListQuery,
 	"release_artifacts_insert":              releaseArtifactsInsertQuery,
+	"release_artifacts_delete":              releaseArtifactsDeleteQuery,
 	"release_delete":                        releaseDeleteQuery,
 	"artifact_list":                         artifactListQuery,
 	"artifact_list_ids":                     artifactListIDsQuery,
@@ -31,6 +32,7 @@ var preparedStatements = map[string]string{
 	"artifact_select_by_type_and_uri":       artifactSelectByTypeAndURIQuery,
 	"artifact_insert":                       artifactInsertQuery,
 	"artifact_delete":                       artifactDeleteQuery,
+	"artifact_release_count":                artifactReleaseCountQuery,
 	"deployment_list":                       deploymentListQuery,
 	"deployment_select":                     deploymentSelectQuery,
 	"deployment_insert":                     deploymentInsertQuery,
@@ -161,6 +163,8 @@ FROM releases r JOIN formations f USING (release_id)
 WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseArtifactsInsertQuery = `
 INSERT INTO release_artifacts (release_id, artifact_id, index) VALUES ($1, $2, $3)`
+	releaseArtifactsDeleteQuery = `
+UPDATE release_artifacts SET deleted_at = now() WHERE release_id = $1 AND artifact_id = $2 AND deleted_at IS NULL`
 	releaseDeleteQuery = `
 UPDATE releases SET deleted_at = now() WHERE release_id = $1 AND deleted_at IS NULL`
 	artifactListQuery = `
@@ -178,6 +182,8 @@ SELECT artifact_id, meta, created_at FROM artifacts WHERE type = $1 AND uri = $2
 INSERT INTO artifacts (artifact_id, type, uri, meta) VALUES ($1, $2, $3, $4) RETURNING created_at`
 	artifactDeleteQuery = `
 UPDATE artifacts SET deleted_at = now() WHERE artifact_id = $1 AND deleted_at IS NULL`
+	artifactReleaseCountQuery = `
+SELECT COUNT(*) FROM release_artifacts WHERE artifact_id = $1 AND deleted_at IS NULL`
 	deploymentInsertQuery = `
 INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, deploy_timeout)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at`

@@ -193,6 +193,21 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 
 	blobstoreFiles := make([]string, 0, len(fileArtifacts))
 	for _, artifact := range fileArtifacts {
+		if err := tx.Exec("release_artifacts_delete", release.ID, artifact.ID); err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		// only delete artifacts which aren't still referenced by other releases
+		var count int64
+		if err := tx.QueryRow("artifact_release_count", artifact.ID).Scan(&count); err != nil {
+			tx.Rollback()
+			return err
+		}
+		if count > 0 {
+			continue
+		}
+
 		if artifact.Blobstore() {
 			blobstoreFiles = append(blobstoreFiles, artifact.URI)
 		}
