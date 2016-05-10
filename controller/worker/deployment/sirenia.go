@@ -27,6 +27,22 @@ func (d *DeployJob) deploySirenia() (err error) {
 		return errors.New(e)
 	}
 
+	processType := d.oldRelease.Env["SIRENIA_PROCESS"]
+	// if the process type isn't set try getting it from the new release
+	if processType == "" {
+		processType = d.newRelease.Env["SIRENIA_PROCESS"]
+	}
+	// if it's still not set we have a problem.
+	if processType == "" {
+		return fmt.Errorf("unable to determine sirenia process type")
+	}
+
+	// if sirenia process type is scaled to 0, skip and deploy non-sirenia processes
+	if d.Processes[processType] == 0 {
+		log.Info("sirenia process type scale = 0, skipping")
+		return d.deployOneByOne()
+	}
+
 	if d.serviceMeta == nil {
 		return loggedErr("missing sirenia cluster state")
 	}
@@ -36,16 +52,6 @@ func (d *DeployJob) deploySirenia() (err error) {
 	if err := json.Unmarshal(d.serviceMeta.Data, &state); err != nil {
 		log.Error("error decoding sirenia cluster state", "err", err)
 		return err
-	}
-
-	processType := d.oldRelease.Env["SIRENIA_PROCESS"]
-	// if the process type isn't set try getting it from the new release
-	if processType == "" {
-		processType = d.newRelease.Env["SIRENIA_PROCESS"]
-	}
-	// if it's still not set we have a problem.
-	if processType == "" {
-		return fmt.Errorf("unable to determine sirenia process type")
 	}
 
 	// abort if in singleton mode or not deploying from a clean state
