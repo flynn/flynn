@@ -209,9 +209,11 @@ func (m *Main) Run(args ...string) error {
 	} else if opt.WaitNetDNS {
 		go func() {
 			addr, resolvers := waitHostDNSConfig()
+			m.mu.Lock()
 			if err := m.openDNSServer(addr, resolvers); err != nil {
 				log.Fatalf("Failed to start DNS server: %s", err)
 			}
+			m.mu.Unlock()
 			m.logger.Printf("discoverd listening for DNS on %s", addr)
 
 			// Notify webhook.
@@ -293,6 +295,9 @@ func inPeerList(peers []string, addr string) bool {
 
 // Join the consensus set, promoting ourselves from proxy to raft node.
 func (m *Main) Promote() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.logger.Printf("attempting promotion")
 	if m.store != nil {
 		return fmt.Errorf("can't join, already a raft peer")
@@ -341,7 +346,9 @@ func (m *Main) Promote() error {
 	}
 
 	// Update the DNS server to use the local store.
-	m.dnsServer.SetStore(m.store)
+	if m.dnsServer != nil {
+		m.dnsServer.SetStore(m.store)
+	}
 
 	// Update the HTTP server to use the local store.
 	m.handler.Store = m.store
@@ -353,6 +360,9 @@ func (m *Main) Promote() error {
 
 // Leave the consensus set, demoting ourselves to proxy from raft node.
 func (m *Main) Demote() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.logger.Println("demotion requested")
 	if m.store == nil {
 		return fmt.Errorf("can't leave, not currently a raft peer")
@@ -367,12 +377,18 @@ func (m *Main) Demote() error {
 	}
 
 	// Update the dns server to use proxy store
-	m.dnsServer.SetStore(&server.ProxyStore{Peers: m.peers})
+	if m.dnsServer != nil {
+		m.dnsServer.SetStore(&server.ProxyStore{Peers: m.peers})
+	}
+
+	// Set handler into proxy mode
 	m.handler.Proxy.Store(true)
 
 	// If we fail from here on out we should attempt to rollback
 	rollback := func() {
-		m.dnsServer.SetStore(m.store)
+		if m.dnsServer != nil {
+			m.dnsServer.SetStore(m.store)
+		}
 		m.handler.Proxy.Store(false)
 	}
 
