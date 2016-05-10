@@ -91,10 +91,10 @@ func testSireniaDeploy(client controller.Client, disc *discoverd.Client, t *c.C,
 	t.Assert(err, c.IsNil)
 	release.ID = ""
 	release.Env[d.db.hostKey] = fmt.Sprintf("leader.%s.discoverd", d.name)
+	release.Env[d.db.serviceKey] = d.name
 	procName := release.Env["SIRENIA_PROCESS"]
 	proc := release.Processes[procName]
 	delete(proc.Env, "SINGLETON")
-	proc.Env[d.db.serviceKey] = d.name
 	proc.Service = d.name
 	release.Processes[procName] = proc
 	t.Assert(client.CreateRelease(release), c.IsNil)

@@ -3,8 +3,10 @@ package client
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -72,7 +74,9 @@ func (c *Client) waitFor(expected func(*Status) bool, timeout time.Duration) err
 	for {
 		status, err := c.Status()
 		if err != nil {
-			return err
+			if !isNetError(err) {
+				return err
+			}
 		} else if expected(status) {
 			return nil
 		}
@@ -81,4 +85,17 @@ func (c *Client) waitFor(expected func(*Status) bool, timeout time.Duration) err
 			return ErrTimeout
 		}
 	}
+}
+
+func isNetError(err error) bool {
+	switch err.(type) {
+	case *net.OpError:
+		return true
+	case *url.Error:
+		return true
+	}
+	if err == io.EOF {
+		return true
+	}
+	return false
 }

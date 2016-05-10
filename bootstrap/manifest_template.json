@@ -351,7 +351,10 @@
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["api"]
+          "cmd": ["api"],
+          "env": {
+            "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}"
+          }
         }
       }
     },
@@ -360,7 +363,7 @@
       "uri": "$image_repository?name=flynn/mariadb&id=$image_id[mariadb]"
     },
     "processes": {
-      "mariadb": 3,
+      "mariadb": 0,
       "web": 2
     }
   },
