@@ -314,6 +314,23 @@ func (s *CLISuite) TestRunSignal(t *c.C) {
 	t.Assert(out.String(), c.Equals, "got signal: interrupt")
 }
 
+func (s *CLISuite) TestRunNoImage(t *c.C) {
+	r := s.newGitRepo(t, "empty-release")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "FOO=BAR", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	// running a command before pushing should error
+	cmd := r.flynn("run", "env")
+	t.Assert(cmd, c.Not(Succeeds))
+	t.Assert(cmd, OutputContains, "App release has no image, push a release first")
+
+	// command should work after push
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	cmd = r.flynn("run", "env")
+	t.Assert(cmd, Succeeds)
+	t.Assert(cmd, OutputContains, "FOO=BAR")
+}
+
 func (s *CLISuite) TestEnv(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()

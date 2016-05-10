@@ -249,6 +249,10 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	release := data.(*ct.Release)
+	if release.ImageArtifactID() == "" {
+		httphelper.ValidationError(w, "release.ImageArtifact", "must be set")
+		return
+	}
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
 	hosts, err := c.clusterClient.Hosts()
