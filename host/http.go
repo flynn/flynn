@@ -292,6 +292,11 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		httphelper.Error(w, err)
 		return
 	}
+	if job.ImageArtifact == nil {
+		log.Warn("rejecting job as no ImageArtifact set")
+		httphelper.ValidationError(w, "ImageArtifact", "must be set")
+		return
+	}
 
 	log.Info("acquiring state database")
 	if err := h.host.state.Acquire(); err != nil {

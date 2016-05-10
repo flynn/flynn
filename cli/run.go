@@ -55,6 +55,9 @@ func runRun(args *docopt.Args, client controller.Client) error {
 		if err != nil {
 			return err
 		}
+		if release.ImageArtifactID() == "" {
+			return errors.New("App release has no image, push a release first")
+		}
 		config.Release = release.ID
 	}
 	if e := args.String["-e"]; e != "" {
