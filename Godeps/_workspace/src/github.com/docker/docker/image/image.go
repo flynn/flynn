@@ -3,257 +3,66 @@ package image
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path"
-	"strconv"
+	"regexp"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/archive"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/digest"
+	derr "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/errors"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/version"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/runconfig"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
 
-// Set the max depth to the aufs default that most
-// kernels are compiled with
-// For more information see: http://sourceforge.net/p/aufs/aufs3-standalone/ci/aufs3.12/tree/config.mk
-const MaxImageDepth = 127
+var validHex = regexp.MustCompile(`^([a-f0-9]{64})$`)
 
+// noFallbackMinVersion is the minimum version for which v1compatibility
+// information will not be marshaled through the Image struct to remove
+// blank fields.
+var noFallbackMinVersion = version.Version("1.8.3")
+
+// Descriptor provides the information necessary to register an image in
+// the graph.
+type Descriptor interface {
+	ID() string
+	Parent() string
+	MarshalConfig() ([]byte, error)
+}
+
+// Image stores the image configuration.
+// All fields in this struct must be marked `omitempty` to keep getting
+// predictable hashes from the old `v1Compatibility` configuration.
 type Image struct {
-	ID              string            `json:"id"`
-	Parent          string            `json:"parent,omitempty"`
-	Comment         string            `json:"comment,omitempty"`
-	Created         time.Time         `json:"created"`
-	Container       string            `json:"container,omitempty"`
-	ContainerConfig runconfig.Config  `json:"container_config,omitempty"`
-	DockerVersion   string            `json:"docker_version,omitempty"`
-	Author          string            `json:"author,omitempty"`
-	Config          *runconfig.Config `json:"config,omitempty"`
-	Architecture    string            `json:"architecture,omitempty"`
-	OS              string            `json:"os,omitempty"`
-	Size            int64
-
-	graph Graph
+	// ID a unique 64 character identifier of the image
+	ID string `json:"id,omitempty"`
+	// Parent id of the image
+	Parent string `json:"parent,omitempty"`
+	// Comment user added comment
+	Comment string `json:"comment,omitempty"`
+	// Created timestamp when image was created
+	Created time.Time `json:"created"`
+	// Container is the id of the container used to commit
+	Container string `json:"container,omitempty"`
+	// ContainerConfig  is the configuration of the container that is committed into the image
+	ContainerConfig runconfig.Config `json:"container_config,omitempty"`
+	// DockerVersion specifies version on which image is built
+	DockerVersion string `json:"docker_version,omitempty"`
+	// Author of the image
+	Author string `json:"author,omitempty"`
+	// Config is the configuration of the container received from the client
+	Config *runconfig.Config `json:"config,omitempty"`
+	// Architecture is the hardware that the image is build and runs on
+	Architecture string `json:"architecture,omitempty"`
+	// OS is the operating system used to build and run the image
+	OS string `json:"os,omitempty"`
+	// Size is the total size of the image including all layers it is composed of
+	Size int64 `json:",omitempty"` // capitalized for backwards compatibility
+	// ParentID specifies the strong, content address of the parent configuration.
+	ParentID digest.Digest `json:"parent_id,omitempty"`
+	// LayerID provides the content address of the associated layer.
+	LayerID digest.Digest `json:"layer_id,omitempty"`
 }
 
-func LoadImage(root string) (*Image, error) {
-	// Open the JSON file to decode by streaming
-	jsonSource, err := os.Open(jsonPath(root))
-	if err != nil {
-		return nil, err
-	}
-	defer jsonSource.Close()
-
-	img := &Image{}
-	dec := json.NewDecoder(jsonSource)
-
-	// Decode the JSON data
-	if err := dec.Decode(img); err != nil {
-		return nil, err
-	}
-	if err := utils.ValidateID(img.ID); err != nil {
-		return nil, err
-	}
-
-	if buf, err := ioutil.ReadFile(path.Join(root, "layersize")); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-		// If the layersize file does not exist then set the size to a negative number
-		// because a layer size of 0 (zero) is valid
-		img.Size = -1
-	} else {
-		// Using Atoi here instead would temporarily convert the size to a machine
-		// dependent integer type, which causes images larger than 2^31 bytes to
-		// display negative sizes on 32-bit machines:
-		size, err := strconv.ParseInt(string(buf), 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		img.Size = int64(size)
-	}
-
-	return img, nil
-}
-
-// StoreImage stores file system layer data for the given image to the
-// image's registered storage driver. Image metadata is stored in a file
-// at the specified root directory.
-func StoreImage(img *Image, layerData archive.ArchiveReader, root string) (err error) {
-	// Store the layer. If layerData is not nil, unpack it into the new layer
-	if layerData != nil {
-		if img.Size, err = img.graph.Driver().ApplyDiff(img.ID, img.Parent, layerData); err != nil {
-			return err
-		}
-	}
-
-	if err := img.SaveSize(root); err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(jsonPath(root), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(0600))
-	if err != nil {
-		return err
-	}
-
-	defer f.Close()
-
-	return json.NewEncoder(f).Encode(img)
-}
-
-func (img *Image) SetGraph(graph Graph) {
-	img.graph = graph
-}
-
-// SaveSize stores the current `size` value of `img` in the directory `root`.
-func (img *Image) SaveSize(root string) error {
-	if err := ioutil.WriteFile(path.Join(root, "layersize"), []byte(strconv.Itoa(int(img.Size))), 0600); err != nil {
-		return fmt.Errorf("Error storing image size in %s/layersize: %s", root, err)
-	}
-	return nil
-}
-
-func (img *Image) SaveCheckSum(root, checksum string) error {
-	if err := ioutil.WriteFile(path.Join(root, "checksum"), []byte(checksum), 0600); err != nil {
-		return fmt.Errorf("Error storing checksum in %s/checksum: %s", root, err)
-	}
-	return nil
-}
-
-func (img *Image) GetCheckSum(root string) (string, error) {
-	cs, err := ioutil.ReadFile(path.Join(root, "checksum"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", err
-	}
-	return string(cs), err
-}
-
-func jsonPath(root string) string {
-	return path.Join(root, "json")
-}
-
-func (img *Image) RawJson() ([]byte, error) {
-	root, err := img.root()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get root for image %s: %s", img.ID, err)
-	}
-
-	buf, err := ioutil.ReadFile(jsonPath(root))
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read json for image %s: %s", img.ID, err)
-	}
-
-	return buf, nil
-}
-
-// TarLayer returns a tar archive of the image's filesystem layer.
-func (img *Image) TarLayer() (arch archive.Archive, err error) {
-	if img.graph == nil {
-		return nil, fmt.Errorf("Can't load storage driver for unregistered image %s", img.ID)
-	}
-
-	driver := img.graph.Driver()
-
-	return driver.Diff(img.ID, img.Parent)
-}
-
-// Image includes convenience proxy functions to its graph
-// These functions will return an error if the image is not registered
-// (ie. if image.graph == nil)
-func (img *Image) History() ([]*Image, error) {
-	var parents []*Image
-	if err := img.WalkHistory(
-		func(img *Image) error {
-			parents = append(parents, img)
-			return nil
-		},
-	); err != nil {
-		return nil, err
-	}
-	return parents, nil
-}
-
-func (img *Image) WalkHistory(handler func(*Image) error) (err error) {
-	currentImg := img
-	for currentImg != nil {
-		if handler != nil {
-			if err := handler(currentImg); err != nil {
-				return err
-			}
-		}
-		currentImg, err = currentImg.GetParent()
-		if err != nil {
-			return fmt.Errorf("Error while getting parent image: %v", err)
-		}
-	}
-	return nil
-}
-
-func (img *Image) GetParent() (*Image, error) {
-	if img.Parent == "" {
-		return nil, nil
-	}
-	if img.graph == nil {
-		return nil, fmt.Errorf("Can't lookup parent of unregistered image")
-	}
-	return img.graph.Get(img.Parent)
-}
-
-func (img *Image) root() (string, error) {
-	if img.graph == nil {
-		return "", fmt.Errorf("Can't lookup root of unregistered image")
-	}
-	return img.graph.ImageRoot(img.ID), nil
-}
-
-func (img *Image) GetParentsSize(size int64) int64 {
-	parentImage, err := img.GetParent()
-	if err != nil || parentImage == nil {
-		return size
-	}
-	size += parentImage.Size
-	return parentImage.GetParentsSize(size)
-}
-
-// Depth returns the number of parents for a
-// current image
-func (img *Image) Depth() (int, error) {
-	var (
-		count  = 0
-		parent = img
-		err    error
-	)
-
-	for parent != nil {
-		count++
-		parent, err = parent.GetParent()
-		if err != nil {
-			return -1, err
-		}
-	}
-	return count, nil
-}
-
-// CheckDepth returns an error if the depth of an image, as returned
-// by ImageDepth, is too large to support creating a container from it
-// on this daemon.
-func (img *Image) CheckDepth() error {
-	// We add 2 layers to the depth because the container's rw and
-	// init layer add to the restriction
-	depth, err := img.Depth()
-	if err != nil {
-		return err
-	}
-	if depth+2 >= MaxImageDepth {
-		return fmt.Errorf("Cannot create container with more than %d parents", MaxImageDepth)
-	}
-	return nil
-}
-
-// Build an Image object from raw json data
+// NewImgJSON creates an Image configuration from json.
 func NewImgJSON(src []byte) (*Image, error) {
 	ret := &Image{}
 
@@ -262,4 +71,79 @@ func NewImgJSON(src []byte) (*Image, error) {
 		return nil, err
 	}
 	return ret, nil
+}
+
+// ValidateID checks whether an ID string is a valid image ID.
+func ValidateID(id string) error {
+	if ok := validHex.MatchString(id); !ok {
+		return derr.ErrorCodeInvalidImageID.WithArgs(id)
+	}
+	return nil
+}
+
+// MakeImageConfig returns immutable configuration JSON for image based on the
+// v1Compatibility object, layer digest and parent StrongID. SHA256() of this
+// config is the new image ID (strongID).
+func MakeImageConfig(v1Compatibility []byte, layerID, parentID digest.Digest) ([]byte, error) {
+
+	// Detect images created after 1.8.3
+	img, err := NewImgJSON(v1Compatibility)
+	if err != nil {
+		return nil, err
+	}
+	useFallback := version.Version(img.DockerVersion).LessThan(noFallbackMinVersion)
+
+	if useFallback {
+		// Fallback for pre-1.8.3. Calculate base config based on Image struct
+		// so that fields with default values added by Docker will use same ID
+		logrus.Debugf("Using fallback hash for %v", layerID)
+
+		v1Compatibility, err = json.Marshal(img)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var c map[string]*json.RawMessage
+	if err := json.Unmarshal(v1Compatibility, &c); err != nil {
+		return nil, err
+	}
+
+	if err := layerID.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid layerID: %v", err)
+	}
+
+	c["layer_id"] = rawJSON(layerID)
+
+	if parentID != "" {
+		if err := parentID.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid parentID %v", err)
+		}
+		c["parent_id"] = rawJSON(parentID)
+	}
+
+	delete(c, "id")
+	delete(c, "parent")
+	delete(c, "Size") // Size is calculated from data on disk and is inconsitent
+
+	return json.Marshal(c)
+}
+
+// StrongID returns image ID for the config JSON.
+func StrongID(configJSON []byte) (digest.Digest, error) {
+	digester := digest.Canonical.New()
+	if _, err := digester.Hash().Write(configJSON); err != nil {
+		return "", err
+	}
+	dgst := digester.Digest()
+	logrus.Debugf("H(%v) = %v", string(configJSON), dgst)
+	return dgst, nil
+}
+
+func rawJSON(value interface{}) *json.RawMessage {
+	jsonval, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	return (*json.RawMessage)(&jsonval)
 }

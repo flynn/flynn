@@ -1,3 +1,5 @@
+// +build linux
+
 package aufs
 
 import (
@@ -6,6 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/idtools"
 )
 
 type metadata struct {
@@ -36,7 +40,7 @@ func pathExists(pth string) bool {
 // For the migration we try to move the folder containing the layer files, if that
 // fails because the data is currently mounted we will fallback to creating a
 // symlink.
-func (a *Driver) Migrate(pth string, setupInit func(p string) error) error {
+func (a *Driver) Migrate(pth string, setupInit func(p string, rootUID, rootGID int) error) error {
 	if pathExists(path.Join(pth, "graph")) {
 		if err := a.migrateRepositories(pth); err != nil {
 			return err
@@ -57,8 +61,13 @@ func (a *Driver) migrateRepositories(pth string) error {
 	return nil
 }
 
-func (a *Driver) migrateContainers(pth string, setupInit func(p string) error) error {
+func (a *Driver) migrateContainers(pth string, setupInit func(p string, rootUID, rootGID int) error) error {
 	fis, err := ioutil.ReadDir(pth)
+	if err != nil {
+		return err
+	}
+
+	rootUID, rootGID, err := idtools.GetRootUIDGID(a.uidMaps, a.gidMaps)
 	if err != nil {
 		return err
 	}
@@ -86,7 +95,7 @@ func (a *Driver) migrateContainers(pth string, setupInit func(p string) error) e
 					return err
 				}
 				// setup init layer
-				if err := setupInit(initPath); err != nil {
+				if err := setupInit(initPath, rootUID, rootGID); err != nil {
 					return err
 				}
 
@@ -162,7 +171,7 @@ func tryRelocate(oldPath, newPath string) error {
 	}
 	// If the destination is a symlink then we already tried to relocate once before
 	// and it failed so we delete it and try to remove
-	if s != nil && s.Mode()&os.ModeSymlink == os.ModeSymlink {
+	if s != nil && s.Mode()&os.ModeSymlink != 0 {
 		if err := os.RemoveAll(newPath); err != nil {
 			return err
 		}

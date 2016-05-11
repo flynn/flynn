@@ -1,15 +1,18 @@
+// +build linux
+
 package aufs
 
 import (
 	"os/exec"
 	"syscall"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 )
 
+// Unmount the target specified.
 func Unmount(target string) error {
 	if err := exec.Command("auplink", target, "flush").Run(); err != nil {
-		log.Errorf("Couldn't run auplink before unmount: %s", err)
+		logrus.Errorf("Couldn't run auplink before unmount: %s", err)
 	}
 	if err := syscall.Unmount(target, 0); err != nil {
 		return err

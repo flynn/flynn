@@ -6,24 +6,22 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
+	"time"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/digest"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/archive"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/parsers"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/registry"
 )
 
-// CmdImageExport exports all images with the given tag. All versions
-// containing the same tag are exported. The resulting output is an
-// uncompressed tar ball.
-// name is the set of tags to export.
-// out is the writer where the images are written to.
-func (s *TagStore) CmdImageExport(job *engine.Job) error {
-	if len(job.Args) < 1 {
-		return fmt.Errorf("Usage: %s IMAGE [IMAGE...]\n", job.Name)
-	}
+// ImageExport exports list of images to a output stream specified in the
+// config. The exported images are archived into a tar when written to the
+// output stream. All images with the given tag and all versions containing the
+// same tag are exported. names is the set of tags to export, and outStream
+// is the writer which the images are written to.
+func (s *TagStore) ImageExport(names []string, outStream io.Writer) error {
 	// get image json
 	tempdir, err := ioutil.TempDir("", "docker-export-")
 	if err != nil {
@@ -33,22 +31,22 @@ func (s *TagStore) CmdImageExport(job *engine.Job) error {
 
 	rootRepoMap := map[string]Repository{}
 	addKey := func(name string, tag string, id string) {
-		log.Debugf("add key [%s:%s]", name, tag)
+		logrus.Debugf("add key [%s:%s]", name, tag)
 		if repo, ok := rootRepoMap[name]; !ok {
 			rootRepoMap[name] = Repository{tag: id}
 		} else {
 			repo[tag] = id
 		}
 	}
-	for _, name := range job.Args {
+	for _, name := range names {
 		name = registry.NormalizeLocalName(name)
-		log.Debugf("Serializing %s", name)
+		logrus.Debugf("Serializing %s", name)
 		rootRepo := s.Repositories[name]
 		if rootRepo != nil {
 			// this is a base repo name, like 'busybox'
 			for tag, id := range rootRepo {
 				addKey(name, tag, id)
-				if err := s.exportImage(job.Eng, id, tempdir); err != nil {
+				if err := s.exportImage(id, tempdir); err != nil {
 					return err
 				}
 			}
@@ -62,32 +60,47 @@ func (s *TagStore) CmdImageExport(job *engine.Job) error {
 				// This is a named image like 'busybox:latest'
 				repoName, repoTag := parsers.ParseRepositoryTag(name)
 
+				// Skip digests on save
+				if _, err := digest.ParseDigest(repoTag); err == nil {
+					repoTag = ""
+				}
+
 				// check this length, because a lookup of a truncated has will not have a tag
 				// and will not need to be added to this map
 				if len(repoTag) > 0 {
 					addKey(repoName, repoTag, img.ID)
 				}
-				if err := s.exportImage(job.Eng, img.ID, tempdir); err != nil {
+				if err := s.exportImage(img.ID, tempdir); err != nil {
 					return err
 				}
 
 			} else {
 				// this must be an ID that didn't get looked up just right?
-				if err := s.exportImage(job.Eng, name, tempdir); err != nil {
+				if err := s.exportImage(name, tempdir); err != nil {
 					return err
 				}
 			}
 		}
-		log.Debugf("End Serializing %s", name)
+		logrus.Debugf("End Serializing %s", name)
 	}
 	// write repositories, if there is something to write
 	if len(rootRepoMap) > 0 {
-		rootRepoJson, _ := json.Marshal(rootRepoMap)
-		if err := ioutil.WriteFile(path.Join(tempdir, "repositories"), rootRepoJson, os.FileMode(0644)); err != nil {
+		f, err := os.OpenFile(filepath.Join(tempdir, "repositories"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			f.Close()
+			return err
+		}
+		if err := json.NewEncoder(f).Encode(rootRepoMap); err != nil {
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		if err := os.Chtimes(filepath.Join(tempdir, "repositories"), time.Unix(0, 0), time.Unix(0, 0)); err != nil {
 			return err
 		}
 	} else {
-		log.Debugf("There were no repositories to write")
+		logrus.Debugf("There were no repositories to write")
 	}
 
 	fs, err := archive.Tar(tempdir, archive.Uncompressed)
@@ -96,18 +109,22 @@ func (s *TagStore) CmdImageExport(job *engine.Job) error {
 	}
 	defer fs.Close()
 
-	if _, err := io.Copy(job.Stdout, fs); err != nil {
+	if _, err := io.Copy(outStream, fs); err != nil {
 		return err
 	}
-	log.Debugf("End export job: %s", job.Name)
+	logrus.Debugf("End export image")
 	return nil
 }
 
-// FIXME: this should be a top-level function, not a class method
-func (s *TagStore) exportImage(eng *engine.Engine, name, tempdir string) error {
+func (s *TagStore) exportImage(name, tempdir string) error {
 	for n := name; n != ""; {
+		img, err := s.LookupImage(n)
+		if err != nil || img == nil {
+			return fmt.Errorf("No such image %s", n)
+		}
+
 		// temporary directory
-		tmpImageDir := path.Join(tempdir, n)
+		tmpImageDir := filepath.Join(tempdir, n)
 		if err := os.Mkdir(tmpImageDir, os.FileMode(0755)); err != nil {
 			if os.IsExist(err) {
 				return nil
@@ -118,40 +135,46 @@ func (s *TagStore) exportImage(eng *engine.Engine, name, tempdir string) error {
 		var version = "1.0"
 		var versionBuf = []byte(version)
 
-		if err := ioutil.WriteFile(path.Join(tmpImageDir, "VERSION"), versionBuf, os.FileMode(0644)); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(tmpImageDir, "VERSION"), versionBuf, os.FileMode(0644)); err != nil {
+			return err
+		}
+
+		imageInspectRaw, err := json.Marshal(img)
+		if err != nil {
 			return err
 		}
 
 		// serialize json
-		json, err := os.Create(path.Join(tmpImageDir, "json"))
+		json, err := os.Create(filepath.Join(tmpImageDir, "json"))
 		if err != nil {
 			return err
 		}
-		job := eng.Job("image_inspect", n)
-		job.SetenvBool("raw", true)
-		job.Stdout.Add(json)
-		if err := job.Run(); err != nil {
+
+		written, err := json.Write(imageInspectRaw)
+		if err != nil {
 			return err
+		}
+		if written != len(imageInspectRaw) {
+			logrus.Warnf("%d byes should have been written instead %d have been written", written, len(imageInspectRaw))
 		}
 
 		// serialize filesystem
-		fsTar, err := os.Create(path.Join(tmpImageDir, "layer.tar"))
+		fsTar, err := os.Create(filepath.Join(tmpImageDir, "layer.tar"))
 		if err != nil {
 			return err
 		}
-		job = eng.Job("image_tarlayer", n)
-		job.Stdout.Add(fsTar)
-		if err := job.Run(); err != nil {
+		if err := s.ImageTarLayer(n, fsTar); err != nil {
 			return err
 		}
 
-		// find parent
-		job = eng.Job("image_get", n)
-		info, _ := job.Stdout.AddEnv()
-		if err := job.Run(); err != nil {
-			return err
+		for _, fname := range []string{"", "VERSION", "json", "layer.tar"} {
+			if err := os.Chtimes(filepath.Join(tmpImageDir, fname), img.Created, img.Created); err != nil {
+				return err
+			}
 		}
-		n = info.Get("Parent")
+
+		// try again with parent
+		n = img.Parent
 	}
 	return nil
 }

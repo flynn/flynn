@@ -1,77 +1,63 @@
 package runconfig
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/nat"
+	"encoding/json"
+	"io"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/nat"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/stringutils"
 )
 
-// Note: the Config structure should hold only portable information about the container.
+// Config contains the configuration data about a container.
+// It should hold only portable information about the container.
 // Here, "portable" means "independent from the host we are running on".
 // Non-portable information *should* appear in HostConfig.
+// All fields added to this struct must be marked `omitempty` to keep getting
+// predictable hashes from the old `v1Compatibility` configuration.
 type Config struct {
-	Hostname        string
-	Domainname      string
-	User            string
-	Memory          int64  // FIXME: we keep it for backward compatibility, it has been moved to hostConfig.
-	MemorySwap      int64  // FIXME: it has been moved to hostConfig.
-	CpuShares       int64  // FIXME: it has been moved to hostConfig.
-	Cpuset          string // FIXME: it has been moved to hostConfig and renamed to CpusetCpus.
-	AttachStdin     bool
-	AttachStdout    bool
-	AttachStderr    bool
-	PortSpecs       []string // Deprecated - Can be in the format of 8080/tcp
-	ExposedPorts    map[nat.Port]struct{}
-	Tty             bool // Attach standard streams to a tty, including stdin if it is not closed.
-	OpenStdin       bool // Open stdin
-	StdinOnce       bool // If true, close stdin after the 1 attached client disconnects.
-	Env             []string
-	Cmd             []string
-	Image           string // Name of the image as it was passed by the operator (eg. could be symbolic)
-	Volumes         map[string]struct{}
-	WorkingDir      string
-	Entrypoint      []string
-	NetworkDisabled bool
-	MacAddress      string
-	OnBuild         []string
-	Labels          map[string]string
+	Hostname        string                // Hostname
+	Domainname      string                // Domainname
+	User            string                // User that will run the command(s) inside the container
+	AttachStdin     bool                  // Attach the standard input, makes possible user interaction
+	AttachStdout    bool                  // Attach the standard output
+	AttachStderr    bool                  // Attach the standard error
+	ExposedPorts    map[nat.Port]struct{} `json:",omitempty"` // List of exposed ports
+	PublishService  string                `json:",omitempty"` // Name of the network service exposed by the container
+	Tty             bool                  // Attach standard streams to a tty, including stdin if it is not closed.
+	OpenStdin       bool                  // Open stdin
+	StdinOnce       bool                  // If true, close stdin after the 1 attached client disconnects.
+	Env             []string              // List of environment variable to set in the container
+	Cmd             *stringutils.StrSlice // Command to run when starting the container
+	Image           string                // Name of the image as it was passed by the operator (eg. could be symbolic)
+	Volumes         map[string]struct{}   // List of volumes (mounts) used for the container
+	WorkingDir      string                // Current directory (PWD) in the command will be launched
+	Entrypoint      *stringutils.StrSlice // Entrypoint to run when starting the container
+	NetworkDisabled bool                  `json:",omitempty"` // Is network disabled
+	MacAddress      string                `json:",omitempty"` // Mac Address of the container
+	OnBuild         []string              // ONBUILD metadata that were defined on the image Dockerfile
+	Labels          map[string]string     // List of labels set to this container
+	StopSignal      string                `json:",omitempty"` // Signal to stop a container
 }
 
-func ContainerConfigFromJob(job *engine.Job) *Config {
-	config := &Config{
-		Hostname:        job.Getenv("Hostname"),
-		Domainname:      job.Getenv("Domainname"),
-		User:            job.Getenv("User"),
-		Memory:          job.GetenvInt64("Memory"),
-		MemorySwap:      job.GetenvInt64("MemorySwap"),
-		CpuShares:       job.GetenvInt64("CpuShares"),
-		Cpuset:          job.Getenv("Cpuset"),
-		AttachStdin:     job.GetenvBool("AttachStdin"),
-		AttachStdout:    job.GetenvBool("AttachStdout"),
-		AttachStderr:    job.GetenvBool("AttachStderr"),
-		Tty:             job.GetenvBool("Tty"),
-		OpenStdin:       job.GetenvBool("OpenStdin"),
-		StdinOnce:       job.GetenvBool("StdinOnce"),
-		Image:           job.Getenv("Image"),
-		WorkingDir:      job.Getenv("WorkingDir"),
-		NetworkDisabled: job.GetenvBool("NetworkDisabled"),
-		MacAddress:      job.Getenv("MacAddress"),
-	}
-	job.GetenvJson("ExposedPorts", &config.ExposedPorts)
-	job.GetenvJson("Volumes", &config.Volumes)
-	if PortSpecs := job.GetenvList("PortSpecs"); PortSpecs != nil {
-		config.PortSpecs = PortSpecs
-	}
-	if Env := job.GetenvList("Env"); Env != nil {
-		config.Env = Env
-	}
-	if Cmd := job.GetenvList("Cmd"); Cmd != nil {
-		config.Cmd = Cmd
+// DecodeContainerConfig decodes a json encoded config into a ContainerConfigWrapper
+// struct and returns both a Config and an HostConfig struct
+// Be aware this function is not checking whether the resulted structs are nil,
+// it's your business to do so
+func DecodeContainerConfig(src io.Reader) (*Config, *HostConfig, error) {
+	decoder := json.NewDecoder(src)
+
+	var w ContainerConfigWrapper
+	if err := decoder.Decode(&w); err != nil {
+		return nil, nil, err
 	}
 
-	job.GetenvJson("Labels", &config.Labels)
+	hc := w.getHostConfig()
 
-	if Entrypoint := job.GetenvList("Entrypoint"); Entrypoint != nil {
-		config.Entrypoint = Entrypoint
+	// Certain parameters need daemon-side validation that cannot be done
+	// on the client, as only the daemon knows what is valid for the platform.
+	if err := ValidateNetMode(w.Config, hc); err != nil {
+		return nil, nil, err
 	}
-	return config
+
+	return w.Config, hc, nil
 }

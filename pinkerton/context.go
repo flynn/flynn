@@ -33,7 +33,7 @@ type Context struct {
 }
 
 func BuildContext(driver, root string) (*Context, error) {
-	d, err := graphdriver.GetDriver(driver, root, nil)
+	d, err := graphdriver.GetDriver(driver, root, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}

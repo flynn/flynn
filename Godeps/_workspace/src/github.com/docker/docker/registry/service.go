@@ -1,227 +1,162 @@
 package registry
 
 import (
-	"fmt"
+	"crypto/tls"
+	"net/http"
+	"net/url"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/client/auth"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/cliconfig"
 )
 
-// Service exposes registry capabilities in the standard Engine
-// interface. Once installed, it extends the engine with the
-// following calls:
-//
-//  'auth': Authenticate against the public registry
-//  'search': Search for images on the public registry
-//  'pull': Download images from any registry (TODO)
-//  'push': Upload images to any registry (TODO)
+// Service is a registry service. It tracks configuration data such as a list
+// of mirrors.
 type Service struct {
 	Config *ServiceConfig
 }
 
 // NewService returns a new instance of Service ready to be
-// installed no an engine.
+// installed into an engine.
 func NewService(options *Options) *Service {
 	return &Service{
 		Config: NewServiceConfig(options),
 	}
 }
 
-// Install installs registry capabilities to eng.
-func (s *Service) Install(eng *engine.Engine) error {
-	eng.Register("auth", s.Auth)
-	eng.Register("search", s.Search)
-	eng.Register("resolve_repository", s.ResolveRepository)
-	eng.Register("resolve_index", s.ResolveIndex)
-	eng.Register("registry_config", s.GetRegistryConfig)
-	return nil
-}
-
 // Auth contacts the public registry with the provided credentials,
-// and returns OK if authentication was sucessful.
+// and returns OK if authentication was successful.
 // It can be used to verify the validity of a client's credentials.
-func (s *Service) Auth(job *engine.Job) error {
-	var (
-		authConfig = new(AuthConfig)
-		endpoint   *Endpoint
-		index      *IndexInfo
-		status     string
-		err        error
-	)
-
-	job.GetenvJson("authConfig", authConfig)
-
+func (s *Service) Auth(authConfig *cliconfig.AuthConfig) (string, error) {
 	addr := authConfig.ServerAddress
 	if addr == "" {
 		// Use the official registry address if not specified.
-		addr = IndexServerAddress()
+		addr = IndexServer
+	}
+	index, err := s.ResolveIndex(addr)
+	if err != nil {
+		return "", err
 	}
 
-	if index, err = ResolveIndexInfo(job, addr); err != nil {
-		return err
+	endpointVersion := APIVersion(APIVersionUnknown)
+	if V2Only {
+		// Override the endpoint to only attempt a v2 ping
+		endpointVersion = APIVersion2
 	}
 
-	if endpoint, err = NewEndpoint(index); err != nil {
-		log.Errorf("unable to get new registry endpoint: %s", err)
-		return err
+	endpoint, err := NewEndpoint(index, nil, endpointVersion)
+	if err != nil {
+		return "", err
 	}
-
 	authConfig.ServerAddress = endpoint.String()
-
-	if status, err = Login(authConfig, endpoint, HTTPRequestFactory(nil)); err != nil {
-		log.Errorf("unable to login against registry endpoint %s: %s", endpoint, err)
-		return err
-	}
-
-	log.Infof("successful registry login for endpoint %s: %s", endpoint, status)
-	job.Printf("%s\n", status)
-
-	return nil
+	return Login(authConfig, endpoint)
 }
 
 // Search queries the public registry for images matching the specified
 // search terms, and returns the results.
-//
-// Argument syntax: search TERM
-//
-// Option environment:
-//	'authConfig': json-encoded credentials to authenticate against the registry.
-//		The search extends to images only accessible via the credentials.
-//
-//	'metaHeaders': extra HTTP headers to include in the request to the registry.
-//		The headers should be passed as a json-encoded dictionary.
-//
-// Output:
-//	Results are sent as a collection of structured messages (using engine.Table).
-//	Each result is sent as a separate message.
-//	Results are ordered by number of stars on the public registry.
-func (s *Service) Search(job *engine.Job) error {
-	if n := len(job.Args); n != 1 {
-		return fmt.Errorf("Usage: %s TERM", job.Name)
-	}
-	var (
-		term        = job.Args[0]
-		metaHeaders = map[string][]string{}
-		authConfig  = &AuthConfig{}
-	)
-	job.GetenvJson("authConfig", authConfig)
-	job.GetenvJson("metaHeaders", metaHeaders)
+func (s *Service) Search(term string, authConfig *cliconfig.AuthConfig, headers map[string][]string) (*SearchResults, error) {
 
-	repoInfo, err := ResolveRepositoryInfo(job, term)
+	repoInfo, err := s.ResolveRepositoryBySearch(term)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	// *TODO: Search multiple indexes.
-	endpoint, err := repoInfo.GetEndpoint()
+	endpoint, err := NewEndpoint(repoInfo.Index, http.Header(headers), APIVersionUnknown)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	r, err := NewSession(authConfig, HTTPRequestFactory(metaHeaders), endpoint, true)
+
+	r, err := NewSession(endpoint.client, authConfig, endpoint)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	results, err := r.SearchRepositories(repoInfo.GetSearchTerm())
-	if err != nil {
-		return err
-	}
-	outs := engine.NewTable("star_count", 0)
-	for _, result := range results.Results {
-		out := &engine.Env{}
-		out.Import(result)
-		outs.Add(out)
-	}
-	outs.ReverseSort()
-	if _, err := outs.WriteListTo(job.Stdout); err != nil {
-		return err
-	}
-	return nil
+	return r.SearchRepositories(repoInfo.GetSearchTerm())
 }
 
 // ResolveRepository splits a repository name into its components
 // and configuration of the associated registry.
-func (s *Service) ResolveRepository(job *engine.Job) error {
-	var (
-		reposName = job.Args[0]
-	)
-
-	repoInfo, err := s.Config.NewRepositoryInfo(reposName)
-	if err != nil {
-		return err
-	}
-
-	out := engine.Env{}
-	err = out.SetJson("repository", repoInfo)
-	if err != nil {
-		return err
-	}
-	out.WriteTo(job.Stdout)
-
-	return nil
+func (s *Service) ResolveRepository(name string) (*RepositoryInfo, error) {
+	return s.Config.NewRepositoryInfo(name, false)
 }
 
-// Convenience wrapper for calling resolve_repository Job from a running job.
-func ResolveRepositoryInfo(jobContext *engine.Job, reposName string) (*RepositoryInfo, error) {
-	job := jobContext.Eng.Job("resolve_repository", reposName)
-	env, err := job.Stdout.AddEnv()
-	if err != nil {
-		return nil, err
-	}
-	if err := job.Run(); err != nil {
-		return nil, err
-	}
-	info := RepositoryInfo{}
-	if err := env.GetJson("repository", &info); err != nil {
-		return nil, err
-	}
-	return &info, nil
+// ResolveRepositoryBySearch splits a repository name into its components
+// and configuration of the associated registry.
+func (s *Service) ResolveRepositoryBySearch(name string) (*RepositoryInfo, error) {
+	return s.Config.NewRepositoryInfo(name, true)
 }
 
 // ResolveIndex takes indexName and returns index info
-func (s *Service) ResolveIndex(job *engine.Job) error {
-	var (
-		indexName = job.Args[0]
-	)
-
-	index, err := s.Config.NewIndexInfo(indexName)
-	if err != nil {
-		return err
-	}
-
-	out := engine.Env{}
-	err = out.SetJson("index", index)
-	if err != nil {
-		return err
-	}
-	out.WriteTo(job.Stdout)
-
-	return nil
+func (s *Service) ResolveIndex(name string) (*IndexInfo, error) {
+	return s.Config.NewIndexInfo(name)
 }
 
-// Convenience wrapper for calling resolve_index Job from a running job.
-func ResolveIndexInfo(jobContext *engine.Job, indexName string) (*IndexInfo, error) {
-	job := jobContext.Eng.Job("resolve_index", indexName)
-	env, err := job.Stdout.AddEnv()
-	if err != nil {
-		return nil, err
-	}
-	if err := job.Run(); err != nil {
-		return nil, err
-	}
-	info := IndexInfo{}
-	if err := env.GetJson("index", &info); err != nil {
-		return nil, err
-	}
-	return &info, nil
+// APIEndpoint represents a remote API endpoint
+type APIEndpoint struct {
+	Mirror        bool
+	URL           string
+	Version       APIVersion
+	Official      bool
+	TrimHostname  bool
+	TLSConfig     *tls.Config
+	VersionHeader string
+	Versions      []auth.APIVersion
 }
 
-// GetRegistryConfig returns current registry configuration.
-func (s *Service) GetRegistryConfig(job *engine.Job) error {
-	out := engine.Env{}
-	err := out.SetJson("config", s.Config)
-	if err != nil {
-		return err
-	}
-	out.WriteTo(job.Stdout)
+// ToV1Endpoint returns a V1 API endpoint based on the APIEndpoint
+func (e APIEndpoint) ToV1Endpoint(metaHeaders http.Header) (*Endpoint, error) {
+	return newEndpoint(e.URL, e.TLSConfig, metaHeaders)
+}
 
-	return nil
+// TLSConfig constructs a client TLS configuration based on server defaults
+func (s *Service) TLSConfig(hostname string) (*tls.Config, error) {
+	return newTLSConfig(hostname, s.Config.isSecureIndex(hostname))
+}
+
+func (s *Service) tlsConfigForMirror(mirror string) (*tls.Config, error) {
+	mirrorURL, err := url.Parse(mirror)
+	if err != nil {
+		return nil, err
+	}
+	return s.TLSConfig(mirrorURL.Host)
+}
+
+// LookupPullEndpoints creates an list of endpoints to try to pull from, in order of preference.
+// It gives preference to v2 endpoints over v1, mirrors over the actual
+// registry, and HTTPS over plain HTTP.
+func (s *Service) LookupPullEndpoints(repoName string) (endpoints []APIEndpoint, err error) {
+	return s.lookupEndpoints(repoName)
+}
+
+// LookupPushEndpoints creates an list of endpoints to try to push to, in order of preference.
+// It gives preference to v2 endpoints over v1, and HTTPS over plain HTTP.
+// Mirrors are not included.
+func (s *Service) LookupPushEndpoints(repoName string) (endpoints []APIEndpoint, err error) {
+	allEndpoints, err := s.lookupEndpoints(repoName)
+	if err == nil {
+		for _, endpoint := range allEndpoints {
+			if !endpoint.Mirror {
+				endpoints = append(endpoints, endpoint)
+			}
+		}
+	}
+	return endpoints, err
+}
+
+func (s *Service) lookupEndpoints(repoName string) (endpoints []APIEndpoint, err error) {
+	endpoints, err = s.lookupV2Endpoints(repoName)
+	if err != nil {
+		return nil, err
+	}
+
+	if V2Only {
+		return endpoints, nil
+	}
+
+	legacyEndpoints, err := s.lookupV1Endpoints(repoName)
+	if err != nil {
+		return nil, err
+	}
+	endpoints = append(endpoints, legacyEndpoints...)
+
+	return endpoints, nil
 }
