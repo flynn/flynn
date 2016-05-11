@@ -141,45 +141,50 @@ func (a *API) ping(ctx context.Context, w http.ResponseWriter, req *http.Request
 	app := os.Getenv("FLYNN_APP_ID")
 	logger := a.logger().New("fn", "ping")
 
-	// Connect to controller.
-	logger.Info("connecting to controller")
-	client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
-	if err != nil {
-		logger.Error("controller client error", "err", err)
-		httphelper.Error(w, err)
-		return
-	}
+	logger.Info("checking status", "host", serviceHost)
+	if status, err := sirenia.NewClient(serviceHost + ":3306").Status(); err == nil && status.Database != nil && status.Database.ReadWrite {
+		logger.Info("database is up, skipping scale check")
+	} else {
+		// Connect to controller.
+		logger.Info("connecting to controller")
+		client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
+		if err != nil {
+			logger.Error("controller client error", "err", err)
+			httphelper.Error(w, err)
+			return
+		}
 
-	// Retrieve mariadb release.
-	logger.Info("retrieving app release", "app", app)
-	release, err := client.GetAppRelease(app)
-	if err == controller.ErrNotFound {
-		logger.Error("release not found", "app", app)
-		httphelper.Error(w, err)
-		return
-	} else if err != nil {
-		logger.Error("get release error", "app", app, "err", err)
-		httphelper.Error(w, err)
-		return
-	}
+		// Retrieve mariadb release.
+		logger.Info("retrieving app release", "app", app)
+		release, err := client.GetAppRelease(app)
+		if err == controller.ErrNotFound {
+			logger.Error("release not found", "app", app)
+			httphelper.Error(w, err)
+			return
+		} else if err != nil {
+			logger.Error("get release error", "app", app, "err", err)
+			httphelper.Error(w, err)
+			return
+		}
 
-	// Retrieve current formation.
-	logger.Info("retrieving formation", "app", app, "release_id", release.ID)
-	formation, err := client.GetFormation(app, release.ID)
-	if err == controller.ErrNotFound {
-		logger.Error("formation not found", "app", app, "release_id", release.ID)
-		httphelper.Error(w, err)
-		return
-	} else if err != nil {
-		logger.Error("formation error", "app", app, "release_id", release.ID, "err", err)
-		httphelper.Error(w, err)
-		return
-	}
+		// Retrieve current formation.
+		logger.Info("retrieving formation", "app", app, "release_id", release.ID)
+		formation, err := client.GetFormation(app, release.ID)
+		if err == controller.ErrNotFound {
+			logger.Error("formation not found", "app", app, "release_id", release.ID)
+			httphelper.Error(w, err)
+			return
+		} else if err != nil {
+			logger.Error("formation error", "app", app, "release_id", release.ID, "err", err)
+			httphelper.Error(w, err)
+			return
+		}
 
-	// MariaDB isn't running, just return healthy
-	if formation.Processes["mariadb"] == 0 {
-		w.WriteHeader(200)
-		return
+		// MariaDB isn't running, just return healthy
+		if formation.Processes["mariadb"] == 0 {
+			w.WriteHeader(200)
+			return
+		}
 	}
 
 	db, err := a.connect()
@@ -217,6 +222,19 @@ func (a *API) scaleUp() error {
 
 	app := os.Getenv("FLYNN_APP_ID")
 	logger := a.logger().New("fn", "scaleUp")
+	sc := sirenia.NewClient(serviceHost + ":3306")
+
+	logger.Info("checking status", "host", serviceHost)
+	if status, err := sc.Status(); err == nil && status.Database != nil && status.Database.ReadWrite {
+		logger.Info("database is up, skipping scale")
+		// Skip the rest, the database is already available
+		a.scaledUp = true
+		return nil
+	} else if err != nil {
+		logger.Info("error checking status", "err", err)
+	} else {
+		logger.Info("got status, but database is not read-write")
+	}
 
 	// Connect to controller.
 	logger.Info("connecting to controller")
@@ -274,7 +292,7 @@ func (a *API) scaleUp() error {
 		return err
 	}
 
-	if err := sirenia.NewClient(serviceHost + ":3306").WaitForReadWrite(5 * time.Minute); err != nil {
+	if err := sc.WaitForReadWrite(5 * time.Minute); err != nil {
 		logger.Error("wait for read write", "err", err)
 		return errors.New("timed out while starting mariadb cluster")
 	}
