@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/alexzorin/libvirt-go"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/networkdriver/ipallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libnetwork/ipallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/containerinit"

@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
 	"GoVersion": "go1.4",
-	"GodepVersion": "v60",
+	"GodepVersion": "v63",
 	"Packages": [
 		"./..."
 	],
@@ -155,16 +155,6 @@
 		},
 		{
 			"ImportPath": "github.com/docker/docker/daemon/graphdriver/aufs",
-			"Comment": "v1.4.1-2039-ge589dc7",
-			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/daemon/networkdriver",
-			"Comment": "v1.4.1-2039-ge589dc7",
-			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/daemon/networkdriver/ipallocator",
 			"Comment": "v1.4.1-2039-ge589dc7",
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
 		},
@@ -387,6 +377,21 @@
 			"ImportPath": "github.com/docker/libcontainer/user",
 			"Comment": "v1.4.0-20-g4940cee",
 			"Rev": "4940cee052ece5a8b2ea477699e7bb232de1e1f8"
+		},
+		{
+			"ImportPath": "github.com/docker/libnetwork/ipallocator",
+			"Comment": "v0.2-551-ge57c67d",
+			"Rev": "e57c67d6bf5709b38ddb9cf9e10d1d1417e94712"
+		},
+		{
+			"ImportPath": "github.com/docker/libnetwork/netutils",
+			"Comment": "v0.2-551-ge57c67d",
+			"Rev": "e57c67d6bf5709b38ddb9cf9e10d1d1417e94712"
+		},
+		{
+			"ImportPath": "github.com/docker/libnetwork/types",
+			"Comment": "v0.2-551-ge57c67d",
+			"Rev": "e57c67d6bf5709b38ddb9cf9e10d1d1417e94712"
 		},
 		{
 			"ImportPath": "github.com/docker/libtrust",

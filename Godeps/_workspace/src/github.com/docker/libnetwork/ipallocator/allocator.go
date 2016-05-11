@@ -1,3 +1,5 @@
+// Package ipallocator defines the default IP allocator. It will move out of libnetwork as an external IPAM plugin.
+// This has been imported unchanged from Docker, besides additon of registration logic
 package ipallocator
 
 import (
@@ -6,8 +8,8 @@ import (
 	"net"
 	"sync"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/networkdriver"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libnetwork/netutils"
 )
 
 // allocatedMap is thread-unsafe set of allocated IP
@@ -19,7 +21,7 @@ type allocatedMap struct {
 }
 
 func newAllocatedMap(network *net.IPNet) *allocatedMap {
-	firstIP, lastIP := networkdriver.NetworkRange(network)
+	firstIP, lastIP := netutils.NetworkRange(network)
 	begin := big.NewInt(0).Add(ipToBigInt(firstIP), big.NewInt(1))
 	end := big.NewInt(0).Sub(ipToBigInt(lastIP), big.NewInt(1))
 
@@ -34,18 +36,25 @@ func newAllocatedMap(network *net.IPNet) *allocatedMap {
 type networkSet map[string]*allocatedMap
 
 var (
-	ErrNoAvailableIPs           = errors.New("no available ip addresses on network")
-	ErrIPAlreadyAllocated       = errors.New("ip already allocated")
-	ErrIPOutOfRange             = errors.New("requested ip is out of range")
+	// ErrNoAvailableIPs preformatted error
+	ErrNoAvailableIPs = errors.New("no available ip addresses on network")
+	// ErrIPAlreadyAllocated preformatted error
+	ErrIPAlreadyAllocated = errors.New("ip already allocated")
+	// ErrIPOutOfRange preformatted error
+	ErrIPOutOfRange = errors.New("requested ip is out of range")
+	// ErrNetworkAlreadyRegistered preformatted error
 	ErrNetworkAlreadyRegistered = errors.New("network already registered")
-	ErrBadSubnet                = errors.New("network does not contain specified subnet")
+	// ErrBadSubnet preformatted error
+	ErrBadSubnet = errors.New("network does not contain specified subnet")
 )
 
+// IPAllocator manages the ipam
 type IPAllocator struct {
 	allocatedIPs networkSet
 	mutex        sync.Mutex
 }
 
+// New returns a new instance of IPAllocator
 func New() *IPAllocator {
 	return &IPAllocator{networkSet{}, sync.Mutex{}}
 }
@@ -57,22 +66,19 @@ func (a *IPAllocator) RegisterSubnet(network *net.IPNet, subnet *net.IPNet) erro
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	key := network.String()
+	nw := &net.IPNet{IP: network.IP.Mask(network.Mask), Mask: network.Mask}
+	key := nw.String()
 	if _, ok := a.allocatedIPs[key]; ok {
 		return ErrNetworkAlreadyRegistered
 	}
-	n := newAllocatedMap(network)
-	beginIP, endIP := networkdriver.NetworkRange(subnet)
-	begin := big.NewInt(0).Add(ipToBigInt(beginIP), big.NewInt(1))
-	end := big.NewInt(0).Sub(ipToBigInt(endIP), big.NewInt(1))
 
 	// Check that subnet is within network
-	if !(begin.Cmp(n.begin) >= 0 && end.Cmp(n.end) <= 0 && begin.Cmp(end) == -1) {
+	beginIP, endIP := netutils.NetworkRange(subnet)
+	if !(network.Contains(beginIP) && network.Contains(endIP)) {
 		return ErrBadSubnet
 	}
-	n.begin.Set(begin)
-	n.end.Set(end)
-	n.last.Sub(begin, big.NewInt(1))
+
+	n := newAllocatedMap(subnet)
 	a.allocatedIPs[key] = n
 	return nil
 }
@@ -85,10 +91,11 @@ func (a *IPAllocator) RequestIP(network *net.IPNet, ip net.IP) (net.IP, error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	key := network.String()
+	nw := &net.IPNet{IP: network.IP.Mask(network.Mask), Mask: network.Mask}
+	key := nw.String()
 	allocated, ok := a.allocatedIPs[key]
 	if !ok {
-		allocated = newAllocatedMap(network)
+		allocated = newAllocatedMap(nw)
 		a.allocatedIPs[key] = allocated
 	}
 
@@ -104,7 +111,8 @@ func (a *IPAllocator) ReleaseIP(network *net.IPNet, ip net.IP) error {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	if allocated, exists := a.allocatedIPs[network.String()]; exists {
+	nw := &net.IPNet{IP: network.IP.Mask(network.Mask), Mask: network.Mask}
+	if allocated, exists := a.allocatedIPs[nw.String()]; exists {
 		delete(allocated.p, ip.String())
 	}
 	return nil
@@ -128,7 +136,7 @@ func (allocated *allocatedMap) checkIP(ip net.IP) (net.IP, error) {
 }
 
 // return an available ip if one is currently available.  If not,
-// return the next available ip for the nextwork
+// return the next available ip for the network
 func (allocated *allocatedMap) getNextIP() (net.IP, error) {
 	pos := big.NewInt(0).Set(allocated.last)
 	allRange := big.NewInt(0).Sub(allocated.end, allocated.begin)
@@ -157,7 +165,7 @@ func ipToBigInt(ip net.IP) *big.Int {
 		return x.SetBytes(ip6)
 	}
 
-	log.Errorf("ipToBigInt: Wrong IP length! %s", ip)
+	logrus.Errorf("ipToBigInt: Wrong IP length! %s", ip)
 	return nil
 }
 

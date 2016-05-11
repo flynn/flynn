@@ -24,12 +24,12 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/user"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/mux"
 
+	"github.com/docker/docker/daemon/networkdriver/portallocator"
 	"github.com/docker/docker/pkg/listenbuffer"
 	"github.com/docker/docker/pkg/stdcopy"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/api"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/api/types"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/networkdriver/portallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/parsers"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/version"
