@@ -138,8 +138,7 @@ func configMysqlDump(config *runConfig) {
 	config.Args = []string{
 		"-h", config.Env["MYSQL_HOST"],
 		"-u", config.Env["MYSQL_USER"],
-		"--databases", config.Env["MYSQL_DATABASE"],
-		"--no-create-db",
+		config.Env["MYSQL_DATABASE"],
 	}
 }
 
