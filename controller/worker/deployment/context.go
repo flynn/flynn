@@ -79,7 +79,12 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 		// rollback failed deploy
 		if e != nil {
 			errMsg := e.Error()
-			if !IsSkipRollback(e) {
+			if IsSkipRollback(e) {
+				// ErrSkipRollback indicates the deploy failed in some way
+				// but no further action should be taken, so set the error
+				// to nil to avoid retrying the deploy
+				e = nil
+			} else {
 				log.Warn("rolling back deployment due to error", "err", e)
 				e = c.rollback(log, deployment, f)
 			}
