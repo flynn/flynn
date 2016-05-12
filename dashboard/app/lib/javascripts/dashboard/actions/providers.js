@@ -16,7 +16,14 @@ var provisionResource = function (providerID, createRoute) {
 var copyResourceEnvToApp = function (appID, resourceEnv) {
 	var client = Config.client;
 	resourceEnv = resourceEnv || {};
-	client.getAppRelease(appID).then(function (args) {
+	client.getAppRelease(appID).catch(function (args) {
+		var xhr = (args || [])[1];
+		if (xhr && xhr.status === 404) {
+			// app doesn't have a release yet
+			return [{}, null];
+		}
+		return Promise.reject(args);
+	}).then(function (args) {
 		var release = extend({}, args[0]);
 		release.env = release.env || {};
 		Object.keys(resourceEnv).forEach(function (k) {
