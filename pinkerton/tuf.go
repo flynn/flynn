@@ -1,4 +1,4 @@
-package registry
+package pinkerton
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"github.com/flynn/flynn/pkg/tufutil"
 )
 
-func NewTUFSession(client *tuf.Client, ref *Ref) Session {
+func NewTUFSession(client *tuf.Client, ref *Ref) *tufSession {
 	return &tufSession{client, ref}
 }
 
@@ -20,36 +20,14 @@ type tufSession struct {
 	ref    *Ref
 }
 
-func (s *tufSession) ImageID() string {
-	return s.ref.imageID
-}
-
-func (s *tufSession) Repo() string {
-	return s.ref.repo
-}
-
 func (s *tufSession) GetImage() (*Image, error) {
-	id := s.ref.imageID
-	if s.ref.tag != "" {
-		tags, err := s.tags()
-		if err != nil {
-			return nil, err
-		}
-		if id = tags[s.ref.tag]; id == "" {
-			return nil, fmt.Errorf("registry: tag %q not found", s.ref.tag)
-		}
-	}
-	img := &Image{session: s}
-	_, err := s.get(fmt.Sprintf("/images/%s/json", id), img)
+	img := &Image{config: &ImageConfig{}, session: s}
+	_, err := s.get(fmt.Sprintf("/images/%s/json", s.ref.imageID), img.config)
 	return img, err
 }
 
 func (s *tufSession) GetLayer(id string) (io.ReadCloser, error) {
-	layer, err := s.get(fmt.Sprintf("/images/%s/layer", id), nil)
-	if err != nil {
-		return nil, err
-	}
-	return layer, nil
+	return s.get(fmt.Sprintf("/images/%s/layer", id), nil)
 }
 
 func (s *tufSession) GetAncestors(id string) ([]*Image, error) {
@@ -59,19 +37,13 @@ func (s *tufSession) GetAncestors(id string) ([]*Image, error) {
 	}
 	images := make([]*Image, len(ids))
 	for i, id := range ids {
-		img := &Image{session: s}
-		if _, err := s.get(fmt.Sprintf("/images/%s/json", id), img); err != nil {
+		img := &Image{config: &ImageConfig{}, session: s}
+		if _, err := s.get(fmt.Sprintf("/images/%s/json", id), img.config); err != nil {
 			return nil, err
 		}
 		images[i] = img
 	}
 	return images, nil
-}
-
-func (s *tufSession) tags() (map[string]string, error) {
-	var tags map[string]string
-	_, err := s.get(fmt.Sprintf("/repositories/%s/tags", s.ref.repo), &tags)
-	return tags, err
 }
 
 func (s *tufSession) get(name string, out interface{}) (io.ReadCloser, error) {

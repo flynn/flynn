@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
@@ -49,7 +50,7 @@ Options:
 	switch {
 	case args.Bool["pull"]:
 		if args.String["--tuf-db"] == "" {
-			if err := ctx.PullDocker(args.String["<image-url>"], pinkerton.InfoPrinter(args.Bool["--json"])); err != nil {
+			if _, err := ctx.PullDocker(args.String["<image-url>"], pinkerton.DockerPullPrinter(os.Stdout)); err != nil {
 				log.Fatal(err)
 			}
 			return

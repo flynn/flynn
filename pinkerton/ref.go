@@ -1,19 +1,10 @@
-package registry
+package pinkerton
 
 import (
 	"fmt"
-	"io"
 	"net/url"
 	"strings"
 )
-
-type Session interface {
-	Repo() string
-	ImageID() string
-	GetImage() (*Image, error)
-	GetLayer(string) (io.ReadCloser, error)
-	GetAncestors(string) ([]*Image, error)
-}
 
 func NewRef(s string) (*Ref, error) {
 	if !strings.Contains(s, "://") {
@@ -46,10 +37,6 @@ func NewRef(s string) (*Ref, error) {
 	if ref.tag == "" && ref.imageID == "" {
 		ref.tag = "latest"
 	}
-	if !strings.Contains(ref.repo, "/") {
-		// silly docker hack: https://github.com/dotcloud/docker/blob/1310243d488cfede2f5765e79b01ab20efd46cc0/registry/registry.go#L278-L282
-		ref.repo = "library/" + ref.repo
-	}
 
 	return ref, nil
 }
@@ -62,4 +49,27 @@ type Ref struct {
 	imageID  string
 	username string
 	password string
+}
+
+func (r *Ref) ID() string {
+	return r.imageID
+}
+
+func (r *Ref) DockerRepo() string {
+	return r.host + "/" + r.repo
+}
+
+func (r *Ref) Tag() string {
+	if r.imageID != "" {
+		return r.imageID
+	}
+	return r.tag
+}
+
+func (r *Ref) DockerRef() string {
+	delim := ":"
+	if strings.Contains(r.Tag(), ":") {
+		delim = "@"
+	}
+	return r.DockerRepo() + delim + r.Tag()
 }

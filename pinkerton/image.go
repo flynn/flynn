@@ -1,4 +1,4 @@
-package registry
+package pinkerton
 
 import (
 	"encoding/json"
@@ -8,6 +8,12 @@ import (
 )
 
 type Image struct {
+	config  *ImageConfig
+	session *tufSession
+	layer   io.ReadCloser
+}
+
+type ImageConfig struct {
 	ID              string           `json:"id"`
 	ParentID        string           `json:"parent,omitempty"`
 	Comment         string           `json:"comment,omitempty"`
@@ -20,9 +26,18 @@ type Image struct {
 	Architecture    string           `json:"architecture,omitempty"`
 	OS              string           `json:"os,omitempty"`
 	Size            int64            `json:"size,omitempty"`
+}
 
-	session Session
-	layer   io.ReadCloser
+func (i *Image) ID() string {
+	return i.config.ID
+}
+
+func (i *Image) Parent() string {
+	return i.config.ParentID
+}
+
+func (i *Image) MarshalConfig() ([]byte, error) {
+	return json.Marshal(i.config)
 }
 
 func (i *Image) Read(p []byte) (int, error) {
@@ -31,7 +46,7 @@ func (i *Image) Read(p []byte) (int, error) {
 	}
 	if i.layer == nil {
 		var err error
-		i.layer, err = i.session.GetLayer(i.ID)
+		i.layer, err = i.session.GetLayer(i.ID())
 		if err != nil {
 			return 0, err
 		}
@@ -44,13 +59,4 @@ func (i *Image) Close() error {
 		return nil
 	}
 	return i.layer.Close()
-}
-
-var ErrNoParent = errors.New("registry: image has no parent")
-
-func (i *Image) Ancestors() ([]*Image, error) {
-	if i.ParentID == "" {
-		return nil, ErrNoParent
-	}
-	return i.session.GetAncestors(i.ID)
 }
