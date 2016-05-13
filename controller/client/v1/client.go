@@ -519,7 +519,7 @@ outer:
 		select {
 		case e, ok := <-events:
 			if !ok {
-				return errors.New("unexpected close of deployment event stream")
+				return fmt.Errorf("unexpected close of deployment event stream: %s", stream.Err())
 			}
 			switch e.Status {
 			case "complete":
