@@ -957,20 +957,24 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	srcApp := "app-export" + random.String(8)
 	dstApp := "app-import" + random.String(8)
 
-	// create and push app+db
+	// create and push app + dbs
 	r := s.newGitRepo(t, "http")
 	t.Assert(r.flynn("create", srcApp), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 	t.Assert(r.flynn("resource", "add", "postgres"), Succeeds)
 	t.Assert(r.flynn("pg", "psql", "--", "-c",
 		"CREATE table foos (data text); INSERT INTO foos (data) VALUES ('foobar')"), Succeeds)
+	t.Assert(r.flynn("resource", "add", "mysql"), Succeeds)
+	t.Assert(r.flynn("mysql", "console", "--", "-e",
+		"CREATE TABLE foos (data TEXT); INSERT INTO foos (data) VALUES ('foobar')"), Succeeds)
 
 	// export app
 	file := filepath.Join(t.MkDir(), "export.tar")
 	t.Assert(r.flynn("export", "-f", file), Succeeds)
 
-	// remove db table from source app
+	// remove db tables from source app
 	t.Assert(r.flynn("pg", "psql", "--", "-c", "DROP TABLE foos"), Succeeds)
+	t.Assert(r.flynn("mysql", "console", "--", "-e", "DROP TABLE foos"), Succeeds)
 
 	// remove the git remote
 	t.Assert(r.git("remote", "remove", "flynn"), Succeeds)
@@ -978,8 +982,10 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	// import app
 	t.Assert(r.flynn("import", "--name", dstApp, "--file", file), Succeeds)
 
-	// test db was imported
+	// test dbs were imported
 	query := r.flynn("-a", dstApp, "pg", "psql", "--", "-c", "SELECT * FROM foos")
+	t.Assert(query, SuccessfulOutputContains, "foobar")
+	query = r.flynn("-a", dstApp, "mysql", "console", "--", "-e", "SELECT * FROM foos")
 	t.Assert(query, SuccessfulOutputContains, "foobar")
 
 	// wait for it to start
