@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -21,8 +24,11 @@ func TestOSFilesystem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testFilesystem(NewOSFilesystem(dir), false, t)
-	os.RemoveAll(dir)
+	defer os.RemoveAll(dir)
+	fs := NewOSFilesystem(dir)
+	testList(fs, t)
+	testDelete(fs, t)
+	testFilesystem(fs, false, t)
 }
 
 func TestPostgresFilesystem(t *testing.T) {
@@ -46,7 +52,130 @@ func TestPostgresFilesystem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	testList(fs, t)
+	testDelete(fs, t)
 	testFilesystem(fs, true, t)
+}
+
+func testList(fs Filesystem, t *testing.T) {
+	srv := httptest.NewServer(handler(fs))
+	defer srv.Close()
+
+	assertList := func(dir string, expected []string) {
+		res, err := http.Get(srv.URL + "?dir=" + dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var actual []string
+		if err := json.NewDecoder(res.Body).Decode(&actual); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(actual, expected) {
+			t.Fatalf("expected list to be %v, got %v", expected, actual)
+		}
+	}
+	put := func(path string) {
+		req, err := http.NewRequest("PUT", srv.URL+path, bytes.NewReader([]byte("data")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 for PUT %s, got %d", path, res.StatusCode)
+		}
+	}
+	del := func(path string) {
+		req, err := http.NewRequest("DELETE", srv.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 for DELETE %s, got %d", path, res.StatusCode)
+		}
+	}
+
+	assertList("/", []string{})
+
+	put("/foo.txt")
+	assertList("/", []string{"/foo.txt"})
+	assertList("/foo.txt", []string{})
+
+	put("/bar.txt")
+	put("/baz.txt")
+	assertList("/", []string{"/bar.txt", "/baz.txt", "/foo.txt"})
+
+	del("/foo.txt")
+	assertList("/", []string{"/bar.txt", "/baz.txt"})
+
+	put("/dir1/foo.txt")
+	put("/dir1/bar.txt")
+	put("/dir1/baz.txt")
+	put("/dir2/foo.txt")
+	assertList("/", []string{"/bar.txt", "/baz.txt", "/dir1/", "/dir2/"})
+	assertList("/dir1", []string{"/dir1/bar.txt", "/dir1/baz.txt", "/dir1/foo.txt"})
+	assertList("/dir2", []string{"/dir2/foo.txt"})
+
+	del("/dir1/foo.txt")
+	assertList("/", []string{"/bar.txt", "/baz.txt", "/dir1/", "/dir2/"})
+	assertList("/dir1", []string{"/dir1/bar.txt", "/dir1/baz.txt"})
+	assertList("/dir2", []string{"/dir2/foo.txt"})
+
+	del("/dir1")
+	assertList("/", []string{"/bar.txt", "/baz.txt", "/dir2/"})
+	assertList("/dir1", []string{})
+	assertList("/dir2", []string{"/dir2/foo.txt"})
+}
+
+func testDelete(fs Filesystem, t *testing.T) {
+	put := func(path string) {
+		if err := fs.Put(path, bytes.NewReader([]byte("data")), "text/plain"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	del := func(path string) {
+		if err := fs.Delete(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertExists := func(path string) {
+		f, err := fs.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+	}
+	assertNotExists := func(path string) {
+		f, err := fs.Open(path)
+		if err == nil {
+			f.Close()
+		}
+		if err != ErrNotFound {
+			t.Fatalf("expected path %q to not exist, got err=%v", path, err)
+		}
+	}
+
+	put("/dir/foo")
+	put("/dir/foo.txt")
+	put("/dir/bar.txt")
+	del("/dir/foo")
+	assertNotExists("/dir/foo")
+	assertExists("/dir/foo.txt")
+	assertExists("/dir/bar.txt")
+
+	del("/dir")
+	assertNotExists("/dir/foo")
+	assertNotExists("/dir/foo.txt")
+	assertNotExists("/dir/bar.txt")
 }
 
 const concurrency = 5
@@ -143,6 +272,36 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 				if res.StatusCode != http.StatusNotModified {
 					t.Errorf("Expected ETag GET status to be 304, got %d", res.StatusCode)
 				}
+			}
+
+			newPath := srv.URL + "/foo/bar/" + random.Hex(16)
+			req, err = http.NewRequest("PUT", newPath, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Blobstore-Copy-From", strings.TrimPrefix(path, srv.URL))
+			res, err = http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.StatusCode != 200 {
+				t.Errorf("Expected 200 for copy PUT, got %d", res.StatusCode)
+			}
+			res, err = http.Get(newPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resData, err = ioutil.ReadAll(res.Body)
+			res.Body.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.StatusCode != 200 {
+				t.Errorf("Expected 200 for copy GET, got %d", res.StatusCode)
+			}
+			if string(resData) != data {
+				t.Errorf("Expected copied data to be %q, got %q", data, string(resData))
 			}
 
 			newData := random.Hex(32)

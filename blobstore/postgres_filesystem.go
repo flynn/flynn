@@ -4,6 +4,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
@@ -46,6 +47,25 @@ func (p *PostgresFilesystem) Status() status.Status {
 		return status.Unhealthy
 	}
 	return status.Healthy
+}
+
+func (p *PostgresFilesystem) List(dir string) ([]string, error) {
+	rows, err := p.db.Query("SELECT substring(name FROM '^' || $1 || '/[^/]+/?') AS path FROM files WHERE name LIKE $1 || '%' GROUP BY path", strings.TrimSuffix(dir, "/"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var paths []string
+	for rows.Next() {
+		var path *string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		if path != nil {
+			paths = append(paths, *path)
+		}
+	}
+	return paths, rows.Err()
 }
 
 func (p *PostgresFilesystem) Put(name string, r io.Reader, typ string) error {
@@ -105,9 +125,21 @@ create:
 	return tx.Commit()
 }
 
+func (p *PostgresFilesystem) Copy(dstPath, srcPath string) error {
+	src, err := p.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	return p.Put(dstPath, src, "")
+}
+
 func (p *PostgresFilesystem) Delete(name string) error {
-	err := p.db.Exec("DELETE FROM files WHERE name = $1", name)
-	return err
+	// use a regular expression so that either a file with the name is
+	// deleted, or any file prefixed with "{name}/" is deleted (so in other
+	// words, mimic either deleting a file or recursively deleting a
+	// directory)
+	return p.db.Exec("DELETE FROM files WHERE name ~ ('^' || $1 || '(/.*)?$')", name)
 }
 
 func (p *PostgresFilesystem) Open(name string) (File, error) {

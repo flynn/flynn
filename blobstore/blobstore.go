@@ -1,16 +1,20 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path"
+	"sort"
 	"strconv"
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
@@ -41,8 +45,10 @@ type File interface {
 }
 
 type Filesystem interface {
+	List(dir string) ([]string, error)
 	Open(name string) (File, error)
 	Put(name string, r io.Reader, typ string) error
+	Copy(dst, src string) error
 	Delete(name string) error
 	Status() status.Status
 }
@@ -51,33 +57,54 @@ var ErrNotFound = errors.New("file not found")
 
 func handler(fs Filesystem) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		path := path.Clean(req.URL.Path)
+
+		if req.Method == "GET" && path == "/" {
+			paths, err := fs.List(req.URL.Query().Get("dir"))
+			if err != nil && err != ErrNotFound {
+				errorResponse(w, err)
+				return
+			}
+			if paths == nil {
+				paths = []string{}
+			}
+			sort.Strings(paths)
+			w.WriteHeader(200)
+			json.NewEncoder(w).Encode(paths)
+			return
+		}
+
 		switch req.Method {
 		case "HEAD", "GET":
-			file, err := fs.Open(req.URL.Path)
+			file, err := fs.Open(path)
 			if err != nil {
 				errorResponse(w, err)
 				return
 			}
 			defer file.Close()
-			log.Println("GET", req.RequestURI)
 			w.Header().Set("Content-Length", strconv.FormatInt(file.Size(), 10))
 			w.Header().Set("Content-Type", file.Type())
 			w.Header().Set("Etag", file.ETag())
-			http.ServeContent(w, req, req.URL.Path, file.ModTime(), file)
+			http.ServeContent(w, req, path, file.ModTime(), file)
 		case "PUT":
-			err := fs.Put(req.URL.Path, req.Body, req.Header.Get("Content-Type"))
+			var err error
+			if src := req.Header.Get("Blobstore-Copy-From"); src != "" {
+				err = fs.Copy(path, src)
+			} else {
+				err = fs.Put(path, req.Body, req.Header.Get("Content-Type"))
+			}
 			if err != nil {
 				errorResponse(w, err)
 				return
 			}
-			log.Println("PUT", req.RequestURI)
+			w.WriteHeader(200)
 		case "DELETE":
-			err := fs.Delete(req.URL.Path)
+			err := fs.Delete(path)
 			if err != nil {
 				errorResponse(w, err)
 				return
 			}
-			log.Println("DELETE", req.RequestURI)
+			w.WriteHeader(200)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -121,8 +148,10 @@ func main() {
 
 	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
 
-	http.Handle("/", handler(fs))
-	status.AddHandler(fs.Status)
+	mux := http.NewServeMux()
+	mux.Handle("/", handler(fs))
+	mux.Handle(status.Path, status.Handler(fs.Status))
 
-	shutdown.Fatal(http.ListenAndServe(addr, nil))
+	h := httphelper.ContextInjector("blobstore", httphelper.NewRequestLogger(mux))
+	shutdown.Fatal(http.ListenAndServe(addr, h))
 }

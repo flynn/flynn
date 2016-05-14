@@ -24,6 +24,30 @@ type OSFilesystem struct {
 	root string
 }
 
+func (s *OSFilesystem) List(dir string) ([]string, error) {
+	f, err := s.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if !f.(*osFile).IsDir() {
+		return nil, ErrNotFound
+	}
+	entries, err := f.(*osFile).Readdir(0)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, len(entries))
+	for i, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		if entry.IsDir() {
+			path = path + "/"
+		}
+		paths[i] = path
+	}
+	return paths, nil
+}
+
 func (s *OSFilesystem) Open(name string) (File, error) {
 	f, err := os.Open(s.path(name))
 	if err != nil {
@@ -49,6 +73,17 @@ func (s *OSFilesystem) Put(name string, r io.Reader, typ string) error {
 	defer f.Close()
 	_, err = io.Copy(f, r)
 	return err
+}
+
+func (s *OSFilesystem) Copy(dstPath, srcPath string) error {
+	src, err := s.Open(srcPath)
+	if err != nil {
+		return err
+	} else if src.(*osFile).IsDir() {
+		return ErrNotFound
+	}
+	defer src.Close()
+	return s.Put(dstPath, src, "")
 }
 
 func (s *OSFilesystem) Delete(name string) error {

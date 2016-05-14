@@ -647,7 +647,7 @@
     "id": "blobstore-wait",
     "action": "wait",
     "url": "http://blobstore.discoverd",
-    "status": 404
+    "status": 200
   },
   {
     "id": "gitreceive-wait",
