@@ -22,7 +22,7 @@ import (
 )
 
 var DisallowedEC2InstanceTypes = []string{"t1.micro", "t2.micro", "t2.small", "m1.small"}
-var DefaultInstanceType = "m3.medium"
+var DefaultInstanceType = "m4.large"
 var StackNotFoundError = errors.New("Stack does not exist")
 
 func (c *AWSCluster) Type() string {
