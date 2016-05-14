@@ -336,25 +336,26 @@ type LogOpts struct {
 type EventType string
 
 const (
-	EventTypeApp                 EventType = "app"
-	EventTypeAppDeletion         EventType = "app_deletion"
-	EventTypeAppRelease          EventType = "app_release"
-	EventTypeDeployment          EventType = "deployment"
-	EventTypeJob                 EventType = "job"
-	EventTypeScale               EventType = "scale"
-	EventTypeRelease             EventType = "release"
-	EventTypeReleaseDeletion     EventType = "release_deletion"
-	EventTypeArtifact            EventType = "artifact"
-	EventTypeProvider            EventType = "provider"
-	EventTypeResource            EventType = "resource"
-	EventTypeResourceDeletion    EventType = "resource_deletion"
-	EventTypeResourceAppDeletion EventType = "resource_app_deletion"
-	EventTypeKey                 EventType = "key"
-	EventTypeKeyDeletion         EventType = "key_deletion"
-	EventTypeRoute               EventType = "route"
-	EventTypeRouteDeletion       EventType = "route_deletion"
-	EventTypeDomainMigration     EventType = "domain_migration"
-	EventTypeClusterBackup       EventType = "cluster_backup"
+	EventTypeApp                  EventType = "app"
+	EventTypeAppDeletion          EventType = "app_deletion"
+	EventTypeAppRelease           EventType = "app_release"
+	EventTypeDeployment           EventType = "deployment"
+	EventTypeJob                  EventType = "job"
+	EventTypeScale                EventType = "scale"
+	EventTypeRelease              EventType = "release"
+	EventTypeReleaseDeletion      EventType = "release_deletion"
+	EventTypeArtifact             EventType = "artifact"
+	EventTypeProvider             EventType = "provider"
+	EventTypeResource             EventType = "resource"
+	EventTypeResourceDeletion     EventType = "resource_deletion"
+	EventTypeResourceAppDeletion  EventType = "resource_app_deletion"
+	EventTypeKey                  EventType = "key"
+	EventTypeKeyDeletion          EventType = "key_deletion"
+	EventTypeRoute                EventType = "route"
+	EventTypeRouteDeletion        EventType = "route_deletion"
+	EventTypeDomainMigration      EventType = "domain_migration"
+	EventTypeClusterBackup        EventType = "cluster_backup"
+	EventTypeAppGarbageCollection EventType = "app_garbage_collection"
 )
 
 type Event struct {
@@ -412,8 +413,10 @@ type ClusterBackup struct {
 }
 
 type ReleaseDeletion struct {
-	ReleaseID    string   `json:"release"`
-	DeletedFiles []string `json:"deleted_files"`
+	AppID         string   `json:"app"`
+	ReleaseID     string   `json:"release"`
+	RemainingApps []string `json:"remaining_apps"`
+	DeletedFiles  []string `json:"deleted_files"`
 }
 
 type ReleaseDeletionEvent struct {
@@ -441,4 +444,14 @@ type StreamEventsOptions struct {
 	ObjectID    string
 	Past        bool
 	Count       int
+}
+
+type AppGarbageCollection struct {
+	AppID           string   `json:"app_id"`
+	DeletedReleases []string `json:"deleted_releases"`
+}
+
+type AppGarbageCollectionEvent struct {
+	AppGarbageCollection *AppGarbageCollection `json:"app_garbage_collection"`
+	Error                string                `json:"error"`
 }

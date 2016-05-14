@@ -303,6 +303,23 @@ func (c *controllerAPI) DeleteApp(ctx context.Context, w http.ResponseWriter, re
 	}
 }
 
+func (c *controllerAPI) ScheduleAppGarbageCollection(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	gc := &ct.AppGarbageCollection{AppID: c.getApp(ctx).ID}
+	args, err := json.Marshal(gc)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	job := &que.Job{Type: "app_garbage_collection", Args: args}
+	if err := c.que.Enqueue(job); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	w.WriteHeader(200)
+}
+
 func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(ctx)
 

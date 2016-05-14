@@ -17,13 +17,18 @@ import (
 )
 
 type ReleaseRepo struct {
-	db        *postgres.DB
-	artifacts *ArtifactRepo
-	que       *que.Client
+	db         *postgres.DB
+	artifacts  *ArtifactRepo
+	formations *FormationRepo
+	que        *que.Client
 }
 
 func NewReleaseRepo(db *postgres.DB, artifacts *ArtifactRepo, que *que.Client) *ReleaseRepo {
-	return &ReleaseRepo{db, artifacts, que}
+	return &ReleaseRepo{
+		db:        db,
+		artifacts: artifacts,
+		que:       que,
+	}
 }
 
 func scanRelease(s postgres.Scanner) (*ct.Release, error) {
@@ -127,15 +132,56 @@ func (r *ReleaseRepo) AppList(appID string) ([]*ct.Release, error) {
 	return releaseList(rows)
 }
 
-// Delete deletes the release and any associated formations and file artifacts,
-// and enqueues a worker job to delete any files stored in the blobstore
-func (r *ReleaseRepo) Delete(release *ct.Release) error {
-	fileArtifacts, err := r.artifacts.ListIDs(release.FileArtifactIDs()...)
+// Delete deletes any formations for the given app and release, then deletes
+// the release and any associated file artifacts if there are no remaining
+// formations for the release, enqueueing a worker job to delete any files
+// stored in the blobstore
+func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
+	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
 
-	tx, err := r.db.Begin()
+	if err := tx.Exec("formation_delete", app.ID, release.ID); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// if the release still has formations, don't remove it entirely, just
+	// save a release deletion event and return
+	rows, err := tx.Query("formation_list_by_release", release.ID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	formations, err := scanFormations(rows)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if len(formations) > 0 {
+		apps := make([]string, len(formations))
+		for i, f := range formations {
+			apps[i] = f.AppID
+		}
+		event := ct.ReleaseDeletionEvent{
+			ReleaseDeletion: &ct.ReleaseDeletion{
+				RemainingApps: apps,
+				ReleaseID:     release.ID,
+			},
+		}
+		if err := createEvent(tx.Exec, &ct.Event{
+			AppID:      app.ID,
+			ObjectID:   release.ID,
+			ObjectType: ct.EventTypeReleaseDeletion,
+		}, event); err != nil {
+			tx.Rollback()
+			return err
+		}
+		return tx.Commit()
+	}
+
+	fileArtifacts, err := r.artifacts.ListIDs(release.FileArtifactIDs()...)
 	if err != nil {
 		return err
 	}
@@ -145,13 +191,23 @@ func (r *ReleaseRepo) Delete(release *ct.Release) error {
 		return err
 	}
 
-	if err := tx.Exec("formation_delete_by_release", release.ID); err != nil {
-		tx.Rollback()
-		return err
-	}
-
 	blobstoreFiles := make([]string, 0, len(fileArtifacts))
 	for _, artifact := range fileArtifacts {
+		if err := tx.Exec("release_artifacts_delete", release.ID, artifact.ID); err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		// only delete artifacts which aren't still referenced by other releases
+		var count int64
+		if err := tx.QueryRow("artifact_release_count", artifact.ID).Scan(&count); err != nil {
+			tx.Rollback()
+			return err
+		}
+		if count > 0 {
+			continue
+		}
+
 		if artifact.Blobstore() {
 			blobstoreFiles = append(blobstoreFiles, artifact.URI)
 		}
@@ -170,6 +226,7 @@ func (r *ReleaseRepo) Delete(release *ct.Release) error {
 			},
 		}
 		if err := createEvent(tx.Exec, &ct.Event{
+			AppID:      app.ID,
 			ObjectID:   release.ID,
 			ObjectType: ct.EventTypeReleaseDeletion,
 		}, event); err != nil {
@@ -181,9 +238,11 @@ func (r *ReleaseRepo) Delete(release *ct.Release) error {
 
 	// enqueue a job to delete the blobstore files
 	args, err := json.Marshal(struct {
+		AppID     string
 		ReleaseID string
 		FileURIs  []string
 	}{
+		app.ID,
 		release.ID,
 		blobstoreFiles,
 	})
@@ -255,12 +314,13 @@ func (c *controllerAPI) GetAppRelease(ctx context.Context, w http.ResponseWriter
 }
 
 func (c *controllerAPI) DeleteRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app := c.getApp(ctx)
 	release, err := c.getRelease(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
-	if err := c.releaseRepo.Delete(release); err != nil {
+	if err := c.releaseRepo.Delete(app, release); err != nil {
 		if postgres.IsPostgresCode(err, postgres.CheckViolation) {
 			err = ct.ValidationError{
 				Message: "cannot delete current app release",

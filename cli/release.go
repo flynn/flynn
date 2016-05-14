@@ -318,10 +318,14 @@ func runReleaseDelete(args *docopt.Args, client controller.Client) error {
 			return nil
 		}
 	}
-	res, err := client.DeleteRelease(releaseID)
+	res, err := client.DeleteRelease(mustApp(), releaseID)
 	if err != nil {
 		return err
 	}
-	log.Printf("Deleted release %s (deleted %d files)", releaseID, len(res.DeletedFiles))
+	if len(res.RemainingApps) > 0 {
+		log.Printf("Release scaled down for app but not fully deleted (still associated with %d other apps)", len(res.RemainingApps))
+	} else {
+		log.Printf("Deleted release %s (deleted %d files)", releaseID, len(res.DeletedFiles))
+	}
 	return nil
 }

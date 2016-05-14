@@ -127,6 +127,13 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 		Status:    "complete",
 	}
 	log.Info("deployment complete")
+
+	log.Info("scheduling app garbage collection")
+	if err := c.client.ScheduleAppGarbageCollection(deployment.AppID); err != nil {
+		// just log the error, no need to rollback the deploy
+		log.Error("error scheduling app garbage collection", "err", err)
+	}
+
 	return nil
 }
 

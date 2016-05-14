@@ -145,6 +145,19 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	return tx.Commit()
 }
 
+func scanFormations(rows *pgx.Rows) ([]*ct.Formation, error) {
+	var formations []*ct.Formation
+	for rows.Next() {
+		formation, err := scanFormation(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		formations = append(formations, formation)
+	}
+	return formations, rows.Err()
+}
+
 func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 	f := &ct.Formation{}
 	err := s.Scan(&f.AppID, &f.ReleaseID, &f.Processes, &f.Tags, &f.CreatedAt, &f.UpdatedAt)
@@ -221,16 +234,7 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 	if err != nil {
 		return nil, err
 	}
-	formations := []*ct.Formation{}
-	for rows.Next() {
-		formation, err := scanFormation(rows)
-		if err != nil {
-			rows.Close()
-			return nil, err
-		}
-		formations = append(formations, formation)
-	}
-	return formations, rows.Err()
+	return scanFormations(rows)
 }
 
 func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {

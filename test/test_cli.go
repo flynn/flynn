@@ -1,8 +1,10 @@
 package main
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +24,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
@@ -1049,30 +1052,186 @@ func (s *CLISuite) TestReleaseDelete(t *c.C) {
 	t.Assert(res, c.Not(Succeeds))
 	t.Assert(res.Output, c.Equals, "validation_error: cannot delete current app release\n")
 
-	// get the slug artifact URI so we can check it gets removed later
-	assertURI := func(uri string, status int) {
-		req, err := http.NewRequest("HEAD", uri, nil)
-		t.Assert(err, c.IsNil)
-		res, err := http.DefaultClient.Do(req)
-		t.Assert(err, c.IsNil)
-		res.Body.Close()
-		t.Assert(res.StatusCode, c.Equals, status)
-	}
+	// associate the initial release with another app
+	otherApp := &ct.App{Name: "release-delete-" + random.String(8)}
+	t.Assert(client.CreateApp(otherApp), c.IsNil)
+	t.Assert(client.PutFormation(&ct.Formation{AppID: otherApp.ID, ReleaseID: releases[1].ID}), c.IsNil)
+
+	// check deleting the initial release just deletes the formation
+	res = r.flynn("release", "delete", "--yes", releases[1].ID)
+	t.Assert(res, Succeeds)
+	t.Assert(res.Output, c.Equals, "Release scaled down for app but not fully deleted (still associated with 1 other apps)\n")
+
+	// check the slug artifact still exists
 	slugArtifact, err := client.GetArtifact(releases[1].FileArtifactIDs()[0])
 	t.Assert(err, c.IsNil)
-	assertURI(slugArtifact.URI, http.StatusOK)
+	s.assertURI(t, slugArtifact.URI, http.StatusOK)
 
-	// check the old release can be deleted
-	res = r.flynn("release", "delete", "--yes", releases[1].ID)
+	// check the inital release can now be deleted
+	res = r.flynn("-a", otherApp.ID, "release", "delete", "--yes", releases[1].ID)
 	t.Assert(res, Succeeds)
 	t.Assert(res.Output, c.Equals, fmt.Sprintf("Deleted release %s (deleted 1 files)\n", releases[1].ID))
 
 	// check the slug artifact was deleted
 	_, err = client.GetArtifact(slugArtifact.ID)
 	t.Assert(err, c.Equals, controller.ErrNotFound)
-	assertURI(slugArtifact.URI, http.StatusNotFound)
+	s.assertURI(t, slugArtifact.URI, http.StatusNotFound)
 
 	// check the image artifact was not deleted (since it is shared between both releases)
 	_, err = client.GetArtifact(releases[1].ImageArtifactID())
 	t.Assert(err, c.IsNil)
+}
+
+func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
+	client := s.controllerClient(t)
+
+	// create app with gc.max_inactive_slug_releases=3
+	maxInactiveSlugReleases := 3
+	app := &ct.App{Meta: map[string]string{"gc.max_inactive_slug_releases": strconv.Itoa(maxInactiveSlugReleases)}}
+	t.Assert(client.CreateApp(app), c.IsNil)
+
+	// create an image artifact
+	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: imageURIs["test-apps"]}
+	t.Assert(client.CreateArtifact(imageArtifact), c.IsNil)
+
+	// create 5 slug artifacts
+	var slug bytes.Buffer
+	gz := gzip.NewWriter(&slug)
+	t.Assert(tar.NewWriter(gz).Close(), c.IsNil)
+	t.Assert(gz.Close(), c.IsNil)
+	slugs := []string{
+		"http://blobstore.discoverd/1/slug.tgz",
+		"http://blobstore.discoverd/2/slug.tgz",
+		"http://blobstore.discoverd/3/slug.tgz",
+		"http://blobstore.discoverd/4/slug.tgz",
+		"http://blobstore.discoverd/5/slug.tgz",
+	}
+	slugArtifacts := make([]*ct.Artifact, len(slugs))
+	for i, uri := range slugs {
+		req, err := http.NewRequest("PUT", uri, bytes.NewReader(slug.Bytes()))
+		t.Assert(err, c.IsNil)
+		res, err := http.DefaultClient.Do(req)
+		t.Assert(err, c.IsNil)
+		res.Body.Close()
+		t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+		artifact := &ct.Artifact{
+			Type: host.ArtifactTypeFile,
+			URI:  uri,
+			Meta: map[string]string{"blobstore": "true"},
+		}
+		t.Assert(client.CreateArtifact(artifact), c.IsNil)
+		slugArtifacts[i] = artifact
+	}
+
+	// create 6 releases, the second being scaled up and having the
+	// same slug as the third (so prevents the slug being deleted)
+	releases := make([]*ct.Release, 6)
+	for i, r := range []struct {
+		slug   *ct.Artifact
+		active bool
+	}{
+		{slugArtifacts[0], false},
+		{slugArtifacts[1], true},
+		{slugArtifacts[1], false},
+		{slugArtifacts[2], false},
+		{slugArtifacts[3], false},
+		{slugArtifacts[4], false},
+	} {
+		release := &ct.Release{
+			ArtifactIDs: []string{imageArtifact.ID, r.slug.ID},
+			Processes: map[string]ct.ProcessType{
+				"app": {Cmd: []string{"/bin/pingserv"}, Ports: []ct.Port{{Proto: "tcp"}}},
+			},
+		}
+		t.Assert(client.CreateRelease(release), c.IsNil)
+		procs := map[string]int{"app": 0}
+		if r.active {
+			procs["app"] = 1
+		}
+		t.Assert(client.PutFormation(&ct.Formation{
+			AppID:     app.ID,
+			ReleaseID: release.ID,
+			Processes: procs,
+		}), c.IsNil)
+		releases[i] = release
+	}
+
+	// scale the last release so we can deploy it
+	lastRelease := releases[len(releases)-1]
+	watcher, err := client.WatchJobEvents(app.ID, lastRelease.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+	t.Assert(client.PutFormation(&ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: lastRelease.ID,
+		Processes: map[string]int{"app": 1},
+	}), c.IsNil)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"app": ct.JobUpEvents(1)}, scaleTimeout, nil), c.IsNil)
+	t.Assert(client.SetAppRelease(app.ID, lastRelease.ID), c.IsNil)
+
+	// subscribe to garbage collection events
+	gcEvents := make(chan *ct.Event)
+	stream, err := client.StreamEvents(ct.StreamEventsOptions{
+		AppID:       app.ID,
+		ObjectTypes: []ct.EventType{ct.EventTypeAppGarbageCollection},
+	}, gcEvents)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	// deploy a new release with the same slug as the last release
+	newRelease := *lastRelease
+	newRelease.ID = ""
+	t.Assert(client.CreateRelease(&newRelease), c.IsNil)
+	t.Assert(client.DeployAppRelease(app.ID, newRelease.ID), c.IsNil)
+
+	// wait for garbage collection
+	select {
+	case event, ok := <-gcEvents:
+		if !ok {
+			t.Fatalf("event stream closed unexpectedly: %s", stream.Err())
+		}
+		var e ct.AppGarbageCollectionEvent
+		t.Assert(json.Unmarshal(event.Data, &e), c.IsNil)
+		if e.Error != "" {
+			t.Fatalf("garbage collection failed: %s", e.Error)
+		}
+	case <-time.After(60 * time.Second):
+		t.Fatal("timed out waiting for garbage collection")
+	}
+
+	// check we have 4 distinct slug releases (so 5 in total, only 3 are
+	// inactive)
+	list, err := client.AppReleaseList(app.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(list, c.HasLen, maxInactiveSlugReleases+2)
+	distinctSlugs := make(map[string]struct{}, len(list))
+	for _, release := range list {
+		files := release.FileArtifactIDs()
+		t.Assert(files, c.HasLen, 1)
+		distinctSlugs[files[0]] = struct{}{}
+	}
+	t.Assert(distinctSlugs, c.HasLen, maxInactiveSlugReleases+1)
+
+	// check the first and third releases got deleted, but the rest remain
+	assertDeleted := func(release *ct.Release, deleted bool) {
+		_, err := client.GetRelease(release.ID)
+		if deleted {
+			t.Assert(err, c.Equals, controller.ErrNotFound)
+		} else {
+			t.Assert(err, c.IsNil)
+		}
+	}
+	assertDeleted(releases[0], true)
+	assertDeleted(releases[1], false)
+	assertDeleted(releases[2], true)
+	assertDeleted(releases[3], false)
+	assertDeleted(releases[4], false)
+	assertDeleted(releases[5], false)
+	assertDeleted(&newRelease, false)
+
+	// check the first slug got deleted, but the rest remain
+	s.assertURI(t, slugs[0], http.StatusNotFound)
+	for i := 1; i < len(slugs); i++ {
+		s.assertURI(t, slugs[i], http.StatusOK)
+	}
 }

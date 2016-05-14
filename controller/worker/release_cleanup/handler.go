@@ -27,6 +27,7 @@ func (c *context) HandleReleaseCleanup(job *que.Job) (err error) {
 	log.Info("handling release cleanup", "job_id", job.ID, "error_count", job.ErrorCount)
 
 	var data struct {
+		AppID     string
 		ReleaseID string
 		FileURIs  []string
 	}
@@ -36,7 +37,7 @@ func (c *context) HandleReleaseCleanup(job *que.Job) (err error) {
 	}
 	log = log.New("release_id", data.ReleaseID)
 
-	r := ct.ReleaseDeletion{ReleaseID: data.ReleaseID}
+	r := ct.ReleaseDeletion{AppID: data.AppID, ReleaseID: data.ReleaseID}
 	defer func() { c.createEvent(&r, err) }()
 
 	for _, uri := range data.FileURIs {
@@ -73,5 +74,5 @@ func (c *context) createEvent(r *ct.ReleaseDeletion, err error) error {
 	if err != nil {
 		e.Error = err.Error()
 	}
-	return c.db.Exec("event_insert", nil, r.ReleaseID, string(ct.EventTypeReleaseDeletion), e)
+	return c.db.Exec("event_insert", r.AppID, r.ReleaseID, string(ct.EventTypeReleaseDeletion), e)
 }

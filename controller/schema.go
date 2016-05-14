@@ -381,6 +381,9 @@ $$ LANGUAGE plpgsql`,
 		END $$`,
 		`ALTER TABLE release_artifacts ALTER COLUMN index SET NOT NULL`,
 	)
+	migrations.Add(18,
+		`INSERT INTO event_types (name) VALUES ('app_garbage_collection')`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
