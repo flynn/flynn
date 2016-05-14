@@ -8,6 +8,11 @@ var AWSInstanceTypePicker = React.createClass({
 				<PrettySelect onChange={this.__handleChange} value={this.props.value}>
 					<optgroup label="General purpose">
 						<option value="t2.medium">t2.medium</option>
+						<option value="m4.large">m4.large</option>
+						<option value="m4.xlarge">m4.xlarge</option>
+						<option value="m4.2xlarge">m4.2xlarge</option>
+						<option value="m4.4xlarge">m4.4xlarge</option>
+						<option value="m4.10xlarge">m4.10xlarge</option>
 						<option value="m3.medium">m3.medium</option>
 						<option value="m3.large">m3.large</option>
 						<option value="m3.xlarge">m3.xlarge</option>
@@ -40,11 +45,15 @@ var AWSInstanceTypePicker = React.createClass({
 						<option value="i2.2xlarge">i2.2xlarge</option>
 						<option value="i2.4xlarge">i2.4xlarge</option>
 						<option value="i2.8xlarge">i2.8xlarge</option>
-						<option value="hs1.8xlarge">hs1.8xlarge</option>
+						<option value="d2.xlarge">d2.xlarge</option>
+						<option value="d2.2xlarge">d2.2xlarge</option>
+						<option value="d2.4xlarge">d2.4xlarge</option>
+						<option value="d2.8xlarge">d2.8xlarge</option>
 					</optgroup>
 
 					<optgroup label="GPU instances">
 						<option value="g2.2xlarge">g2.2xlarge</option>
+						<option value="g2.8xlarge">g2.8xlarge</option>
 					</optgroup>
 				</PrettySelect>
 			</label>

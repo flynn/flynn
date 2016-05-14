@@ -12,7 +12,7 @@ var AWSCluster = BaseCluster.createClass('aws', {
 	getInitialState: function () {
 		var state = this.constructor.__super__.getInitialState.call(this);
 		return extend({}, state, {
-			selectedInstanceType: 'm3.medium',
+			selectedInstanceType: 'm4.large',
 			vpcCidr: null,
 			subnetCidr: null
 		});
