@@ -212,6 +212,7 @@ type ActiveJob struct {
 	InternalIP  string    `json:"internal_ip,omitempty"`
 	ForceStop   bool      `json:"force_stop,omitempty"`
 	Status      JobStatus `json:"status,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
 	StartedAt   time.Time `json:"started_at,omitempty"`
 	EndedAt     time.Time `json:"ended_at,omitempty"`
 	ExitStatus  *int      `json:"exit_status,omitempty"`
