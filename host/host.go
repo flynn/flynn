@@ -31,10 +31,6 @@ const configFile = "/etc/flynn/host.json"
 var logger = log15.New("app", "host", "pid", os.Getpid())
 
 func init() {
-	// always use logfmt output, even when attached to a TTY (e.g.
-	// when run as an Upstart job)
-	logger.SetHandler(log15.StreamHandler(os.Stdout, log15.LogfmtFormat()))
-
 	cli.Register("daemon", runDaemon, `
 usage: flynn-host daemon [options]
 
@@ -160,6 +156,10 @@ func runDaemon(args *docopt.Args) {
 	logDir := args.String["--log-dir"]
 	discoveryToken := args.String["--discovery"]
 	bridgeName := args.String["--bridge-name"]
+
+	if err := setupLogger(logDir); err != nil {
+		shutdown.Fatalf("error setting up logger: %s", err)
+	}
 
 	var peerIPs []string
 	if args.String["--peer-ips"] != "" {
@@ -499,4 +499,17 @@ func parseTagArgs(args string) map[string]string {
 		}
 	}
 	return tags
+}
+
+func setupLogger(logDir string) error {
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return err
+	}
+	path := filepath.Join(logDir, "flynn-host.log")
+	handler, err := log15.FileHandler(path, log15.LogfmtFormat())
+	if err != nil {
+		return err
+	}
+	logger.SetHandler(handler)
+	return nil
 }

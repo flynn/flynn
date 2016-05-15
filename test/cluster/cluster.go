@@ -597,7 +597,7 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 			fmt.Sprintf("host-logs-%s.log", inst.ID),
 			inst,
 			"ps faux",
-			"cat /tmp/flynn-host.log",
+			"cat /var/log/flynn/flynn-host.log",
 			"cat /tmp/debug-info.log",
 			"sudo cat /var/log/libvirt/libvirtd.log",
 		)

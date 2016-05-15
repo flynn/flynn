@@ -387,6 +387,7 @@ func (s *HostSuite) TestUpdate(t *c.C) {
 		"--backend", "mock",
 		"--vol-provider", "mock",
 		"--volpath", filepath.Join(dir, "volumes"),
+		"--log-dir", filepath.Join(dir, "logs"),
 	)
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -427,6 +428,7 @@ func (s *HostSuite) TestUpdate(t *c.C) {
 		"--backend", "mock",
 		"--vol-provider", "mock",
 		"--volpath", filepath.Join(dir, "volumes"),
+		"--log-dir", filepath.Join(dir, "logs"),
 	)
 	t.Assert(err, c.IsNil)
 	defer syscall.Kill(pid, syscall.SIGKILL)
