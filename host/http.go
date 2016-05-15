@@ -74,6 +74,13 @@ func (h *Host) StopJob(id string) error {
 	case host.StatusStarting:
 		log.Info("job status is starting, marking it as stopped")
 		h.state.SetForceStop(id)
+
+		// if the job doesn't exist in the backend, mark it as done
+		// to avoid it remaining in the starting state indefinitely
+		if !h.backend.JobExists(id) {
+			h.state.SetStatusDone(id, 0)
+		}
+
 		return nil
 	case host.StatusRunning:
 		log.Info("stopping job")

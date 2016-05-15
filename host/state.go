@@ -79,6 +79,9 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 			if err := json.Unmarshal(v, job); err != nil {
 				return err
 			}
+			if job.CreatedAt.IsZero() {
+				job.CreatedAt = time.Now()
+			}
 			if job.ContainerID != "" {
 				s.containers[job.ContainerID] = job
 			}
@@ -284,7 +287,11 @@ func (s *State) AddJob(j *host.Job) error {
 	if _, ok := s.jobs[j.ID]; ok {
 		return ErrJobExists
 	}
-	job := &host.ActiveJob{Job: j, HostID: s.id}
+	job := &host.ActiveJob{
+		Job:       j,
+		HostID:    s.id,
+		CreatedAt: time.Now(),
+	}
 	s.jobs[j.ID] = job
 	s.sendEvent(job, host.JobEventCreate)
 	s.persist(j.ID)

@@ -25,6 +25,7 @@ type AttachRequest struct {
 type Backend interface {
 	Run(*host.Job, *RunConfig) error
 	Stop(string) error
+	JobExists(id string) bool
 	Signal(string, int) error
 	ResizeTTY(id string, height, width uint16) error
 	Attach(*AttachRequest) error
@@ -53,6 +54,7 @@ type MockBackend struct{}
 
 func (MockBackend) Run(*host.Job, *RunConfig) error                 { return nil }
 func (MockBackend) Stop(string) error                               { return nil }
+func (MockBackend) JobExists(string) bool                           { return false }
 func (MockBackend) Signal(string, int) error                        { return nil }
 func (MockBackend) ResizeTTY(id string, height, width uint16) error { return nil }
 func (MockBackend) Attach(*AttachRequest) error                     { return nil }

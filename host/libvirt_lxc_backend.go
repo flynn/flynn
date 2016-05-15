@@ -357,6 +357,13 @@ func (l *LibvirtLXCBackend) SetDefaultEnv(k, v string) {
 
 func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
 	log := l.logger.New("fn", "run", "job.id", job.ID)
+
+	// if the job has been stopped, just return
+	if l.state.GetJob(job.ID).ForceStop {
+		log.Info("skipping start of stopped job")
+		return nil
+	}
+
 	log.Info("starting job", "job.artifact.uri", job.ImageArtifact.URI, "job.cmd", job.Config.Cmd)
 
 	defer func() {
@@ -984,6 +991,13 @@ func (l *LibvirtLXCBackend) Stop(id string) error {
 		return err
 	}
 	return c.Stop()
+}
+
+func (l *LibvirtLXCBackend) JobExists(id string) bool {
+	l.containersMtx.RLock()
+	defer l.containersMtx.RUnlock()
+	_, ok := l.containers[id]
+	return ok
 }
 
 func (l *LibvirtLXCBackend) getContainer(id string) (*libvirtContainer, error) {

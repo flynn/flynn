@@ -26,7 +26,7 @@ List jobs`)
 type sortJobs []host.ActiveJob
 
 func (s sortJobs) Len() int           { return len(s) }
-func (s sortJobs) Less(i, j int) bool { return s[i].StartedAt.Sub(s[j].StartedAt) < 0 }
+func (s sortJobs) Less(i, j int) bool { return s[i].CreatedAt.Sub(s[j].CreatedAt) < 0 }
 func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func runPs(args *docopt.Args, client *cluster.Client) error {
@@ -93,23 +93,29 @@ func printJobs(jobs sortJobs, out io.Writer) {
 	listRec(w,
 		"ID",
 		"STATE",
-		"STARTED",
+		"CREATED",
 		"CONTROLLER APP",
 		"CONTROLLER TYPE",
+		"ERROR",
 	)
 
 	for _, job := range jobs {
-		var started string
-		if !job.StartedAt.IsZero() {
-			started = units.HumanDuration(time.Now().UTC().Sub(job.StartedAt)) + " ago"
+		var created string
+		if !job.CreatedAt.IsZero() {
+			created = units.HumanDuration(time.Now().UTC().Sub(job.CreatedAt)) + " ago"
+		}
+		var jobError string
+		if job.Error != nil {
+			jobError = *job.Error
 		}
 
 		listRec(w,
 			job.Job.ID,
 			job.Status,
-			started,
+			created,
 			job.Job.Metadata["flynn-controller.app_name"],
 			job.Job.Metadata["flynn-controller.type"],
+			jobError,
 		)
 	}
 }
