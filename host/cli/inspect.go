@@ -59,6 +59,10 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	if job.ExitStatus != nil {
 		exitStatus = strconv.Itoa(*job.ExitStatus)
 	}
+	var jobError string
+	if job.Error != nil {
+		jobError = *job.Error
+	}
 
 	listRec(w, "ID", job.Job.ID)
 	listRec(w, "Entrypoint", strings.Join(job.Job.Config.Entrypoint, " "))
@@ -68,6 +72,7 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	listRec(w, "StartedAt", job.StartedAt)
 	listRec(w, "EndedAt", displayTime(job.EndedAt))
 	listRec(w, "ExitStatus", exitStatus)
+	listRec(w, "Error", jobError)
 	listRec(w, "IP Address", job.InternalIP)
 	listRec(w, "ImageArtifact", job.Job.ImageArtifact.URI)
 	for i, artifact := range job.Job.FileArtifacts {

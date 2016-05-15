@@ -96,12 +96,17 @@ func printJobs(jobs sortJobs, out io.Writer) {
 		"CREATED",
 		"CONTROLLER APP",
 		"CONTROLLER TYPE",
+		"ERROR",
 	)
 
 	for _, job := range jobs {
 		var created string
 		if !job.CreatedAt.IsZero() {
 			created = units.HumanDuration(time.Now().UTC().Sub(job.CreatedAt)) + " ago"
+		}
+		var jobError string
+		if job.Error != nil {
+			jobError = *job.Error
 		}
 
 		listRec(w,
@@ -110,6 +115,7 @@ func printJobs(jobs sortJobs, out io.Writer) {
 			created,
 			job.Job.Metadata["flynn-controller.app_name"],
 			job.Job.Metadata["flynn-controller.type"],
+			jobError,
 		)
 	}
 }
