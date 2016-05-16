@@ -128,7 +128,7 @@ SELECT r.release_id,
 	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
 	ORDER BY a.index
   ), r.env, r.processes, r.meta, r.created_at
-FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1`
+FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1 AND r.deleted_at IS NULL`
 
 	releaseListQuery = `
 SELECT r.release_id,
@@ -177,7 +177,7 @@ WHERE deleted_at IS NULL AND artifact_id = ANY($1)`
 SELECT artifact_id, type, uri, meta, created_at FROM artifacts
 WHERE artifact_id = $1 AND deleted_at IS NULL`
 	artifactSelectByTypeAndURIQuery = `
-SELECT artifact_id, meta, created_at FROM artifacts WHERE type = $1 AND uri = $2`
+SELECT artifact_id, meta, created_at FROM artifacts WHERE type = $1 AND uri = $2 AND deleted_at IS NULL`
 	artifactInsertQuery = `
 INSERT INTO artifacts (artifact_id, type, uri, meta) VALUES ($1, $2, $3, $4) RETURNING created_at`
 	artifactDeleteQuery = `
@@ -284,7 +284,7 @@ UPDATE formations SET processes = $3, tags = $4, updated_at = now(), deleted_at 
 WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at`
 	formationDeleteQuery = `
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
-WHERE app_id = $1 AND release_id = $2`
+WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 	formationDeleteByAppQuery = `
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
 WHERE app_id = $1 AND deleted_at IS NULL`
@@ -383,5 +383,5 @@ INSERT INTO backups (status, sha512, size, error, completed_at) VALUES ($1, $2, 
 	backupUpdate = `
 UPDATE backups SET status = $2, sha512 = $3, size = $4, error = $5, completed_at = $6, updated_at = now() WHERE backup_id = $1 RETURNING updated_at`
 	backupSelectLatest = `
-SELECT backup_id, status, sha512, size, error, created_at, updated_at, completed_at FROM backups ORDER BY updated_at DESC LIMIT 1`
+SELECT backup_id, status, sha512, size, error, created_at, updated_at, completed_at FROM backups WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1`
 )
