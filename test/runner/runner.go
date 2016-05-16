@@ -147,7 +147,7 @@ func main() {
 		networks: make(map[string]struct{}),
 		buildCh:  make(chan struct{}, args.ConcurrentBuilds),
 		clusters: make(map[string]*cluster.Cluster),
-		ircMsgs:  make(chan string),
+		ircMsgs:  make(chan string, 100),
 	}
 	if err := runner.start(); err != nil {
 		shutdown.Fatal(err)
@@ -270,6 +270,17 @@ func (r *Runner) connectIRC() {
 	}
 }
 
+func (r *Runner) postIRC(format string, v ...interface{}) {
+	go func() {
+		// drop the message if the buffer is full because we are
+		// reconnecting
+		select {
+		case r.ircMsgs <- fmt.Sprintf(format, v...):
+		default:
+		}
+	}()
+}
+
 func (r *Runner) watchEvents() {
 	for event := range r.events {
 		if !needsBuild(event) {
@@ -387,11 +398,11 @@ func (r *Runner) build(b *Build) (err error) {
 		if err == nil {
 			log.Printf("build %s passed!\n", b.ID)
 			r.updateStatus(b, "success")
-			r.ircMsgs <- fmt.Sprintf("PASS: %s %s", b.Description, b.URL())
+			r.postIRC("PASS: %s %s", b.Description, b.URL())
 		} else {
 			log.Printf("build %s failed: %s\n", b.ID, err)
 			r.updateStatus(b, "failure")
-			r.ircMsgs <- fmt.Sprintf("FAIL: [%d failure(s)] %s %s", len(b.Failures), b.Description, b.URL())
+			r.postIRC("FAIL: [%d failure(s)] %s %s", len(b.Failures), b.Description, b.URL())
 		}
 	}()
 
