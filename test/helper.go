@@ -304,6 +304,12 @@ func (r *gitRepo) git(args ...string) *CmdResult {
 	return run(r.t, cmd)
 }
 
+func (r *gitRepo) sh(command string) *CmdResult {
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Dir = r.dir
+	return run(r.t, cmd)
+}
+
 func (h *Helper) newCliTestApp(t *c.C) *cliTestApp {
 	app, release := h.createApp(t)
 	watcher, err := h.controllerClient(t).WatchJobEvents(app.Name, release.ID)

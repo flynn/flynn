@@ -100,7 +100,10 @@ func runExport(args *docopt.Args, client controller.Client) error {
 	}
 
 	release, err := client.GetAppRelease(mustApp())
-	if err != nil && err != controller.ErrNotFound {
+	if err == controller.ErrNotFound {
+		// if the app has no release then there is nothing more to export
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("error retrieving app: %s", err)
 	} else if err == nil {
 		// Do not allow the exporting of passwords.
@@ -111,12 +114,14 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	artifact, err := client.GetArtifact(release.ImageArtifactID())
-	if err != nil && err != controller.ErrNotFound {
-		return fmt.Errorf("error retrieving artifact: %s", err)
-	} else if err == nil {
-		if err := tw.WriteJSON("artifact.json", artifact); err != nil {
-			return fmt.Errorf("error exporting artifact: %s", err)
+	if artifactID := release.ImageArtifactID(); artifactID != "" {
+		artifact, err := client.GetArtifact(artifactID)
+		if err != nil && err != controller.ErrNotFound {
+			return fmt.Errorf("error retrieving artifact: %s", err)
+		} else if err == nil {
+			if err := tw.WriteJSON("artifact.json", artifact); err != nil {
+				return fmt.Errorf("error exporting artifact: %s", err)
+			}
 		}
 	}
 

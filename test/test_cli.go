@@ -960,9 +960,25 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	srcApp := "app-export" + random.String(8)
 	dstApp := "app-import" + random.String(8)
 
-	// create and push app + dbs
+	// create app
 	r := s.newGitRepo(t, "http")
 	t.Assert(r.flynn("create", srcApp), Succeeds)
+
+	// exporting the app without a release should work
+	file := filepath.Join(t.MkDir(), "export.tar")
+	t.Assert(r.flynn("export", "-f", file), Succeeds)
+	assertExportContains := func(paths ...string) {
+		cmd := r.sh(fmt.Sprintf("tar --list --file=%s --strip=1 --show-transformed", file))
+		t.Assert(cmd, Outputs, strings.Join(paths, "\n")+"\n")
+	}
+	assertExportContains("app.json", "routes.json")
+
+	// exporting the app with an artifact-less release should work
+	t.Assert(r.flynn("env", "set", "FOO=BAR"), Succeeds)
+	t.Assert(r.flynn("export", "-f", file), Succeeds)
+	assertExportContains("app.json", "routes.json", "release.json")
+
+	// release the app and provision some dbs
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 	t.Assert(r.flynn("resource", "add", "postgres"), Succeeds)
 	t.Assert(r.flynn("pg", "psql", "--", "-c",
@@ -972,8 +988,11 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 		"CREATE TABLE foos (data TEXT); INSERT INTO foos (data) VALUES ('foobar')"), Succeeds)
 
 	// export app
-	file := filepath.Join(t.MkDir(), "export.tar")
 	t.Assert(r.flynn("export", "-f", file), Succeeds)
+	assertExportContains(
+		"app.json", "routes.json", "release.json", "artifact.json",
+		"formation.json", "slug.tar.gz", "postgres.dump", "mysql.dump",
+	)
 
 	// remove db tables from source app
 	t.Assert(r.flynn("pg", "psql", "--", "-c", "DROP TABLE foos"), Succeeds)
