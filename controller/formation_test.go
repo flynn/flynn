@@ -71,6 +71,55 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(out.Processes, IsNil)
 }
 
+func (s *S) TestFormationStreamDeleted(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "formation-stream-deleted"})
+
+	// create 3 releases with formations
+	releases := make([]*ct.Release, 3)
+	for i := 0; i < 3; i++ {
+		releases[i] = s.createTestRelease(c, &ct.Release{})
+		s.createTestFormation(c, &ct.Formation{ReleaseID: releases[i].ID, AppID: app.ID})
+	}
+
+	// delete the first release (which also deletes the first formation)
+	_, err := s.c.DeleteRelease(app.ID, releases[0].ID)
+	c.Assert(err, IsNil)
+	deletedRelease := releases[0]
+
+	// check streaming formations does not include the deleted release
+	updates := make(chan *ct.ExpandedFormation)
+	stream, err := s.c.StreamFormations(nil, updates)
+	c.Assert(err, IsNil)
+	defer stream.Close()
+
+	actual := 0
+outer:
+	for {
+		select {
+		case update, ok := <-updates:
+			if !ok {
+				c.Fatalf("stream closed unexpectedly: %s", stream.Err())
+			}
+			if update.App == nil {
+				break outer
+			}
+			if update.App.ID != app.ID {
+				continue
+			}
+			if update.Release != nil && update.Release.ID == deletedRelease.ID {
+				c.Fatal("expected stream to not include deleted release but it did")
+			}
+			actual++
+		case <-time.After(10 * time.Second):
+			c.Fatal("timed out waiting for formation updates")
+		}
+	}
+	expected := len(releases) - 1
+	if actual != expected {
+		c.Fatal("expected %d updates, got %d", expected, actual)
+	}
+}
+
 func (s *S) TestFormationListActive(c *C) {
 	app1 := s.createTestApp(c, &ct.App{})
 	app2 := s.createTestApp(c, &ct.App{})

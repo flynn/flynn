@@ -256,7 +256,7 @@ AND formations.deleted_at IS NULL
 ORDER BY updated_at DESC`
 	formationListSinceQuery = `
 SELECT app_id, release_id, processes, tags, created_at, updated_at
-FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC`
+FROM formations WHERE updated_at >= $1 AND deleted_at IS NULL ORDER BY updated_at DESC`
 	formationSelectQuery = `
 SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
