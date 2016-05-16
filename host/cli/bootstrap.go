@@ -434,7 +434,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 		}),
 		step("blobstore-wait", "wait", &bootstrap.WaitAction{
 			URL:    "http://blobstore.discoverd",
-			Status: 404,
+			Status: 200,
 		}),
 		step("controller-scheduler", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: data.Controller,
