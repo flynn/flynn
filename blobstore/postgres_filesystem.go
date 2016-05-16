@@ -131,7 +131,7 @@ func (p *PostgresFilesystem) Copy(dstPath, srcPath string) error {
 		return err
 	}
 	defer src.Close()
-	return p.Put(dstPath, src, "")
+	return p.Put(dstPath, src, src.(*pgFile).typ)
 }
 
 func (p *PostgresFilesystem) Delete(name string) error {
