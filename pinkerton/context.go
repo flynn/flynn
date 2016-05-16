@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/aufs"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/graph"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/opts"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/jsonmessage"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/reexec"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
@@ -26,6 +27,8 @@ import (
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 )
+
+const dockerReceiveEndpoint = "docker-receive.discoverd"
 
 func init() {
 	// This will run docker-untar and docker-applyLayer in a chroot
@@ -50,9 +53,12 @@ func BuildContext(driver, root string) (*Context, error) {
 	}
 
 	config := &graph.TagStoreConfig{
-		Graph:    g,
-		Events:   events.New(),
-		Registry: registry.NewService(nil),
+		Graph:  g,
+		Events: events.New(),
+		Registry: registry.NewService(&registry.Options{
+			Mirrors:            opts.NewListOpts(nil),
+			InsecureRegistries: *opts.NewListOptsRef(&[]string{dockerReceiveEndpoint}, nil),
+		}),
 	}
 	store, err := graph.NewTagStore(filepath.Join(root, "repositories-"+d.String()), config)
 	if err != nil {
