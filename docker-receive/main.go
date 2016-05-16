@@ -17,6 +17,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/docker-receive/blobstore"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
 )
 
@@ -49,12 +50,14 @@ func main() {
 	}
 	config.HTTP.Secret = os.Getenv("REGISTRY_HTTP_SECRET")
 
+	status.AddHandler(status.HealthyHandler)
+
 	app := handlers.NewApp(ctx, config)
-	// TODO: add status handler
+	http.Handle("/", app)
 
 	addr := ":" + os.Getenv("PORT")
 	context.GetLogger(app).Infof("listening on %s", addr)
-	if err := http.ListenAndServe(addr, app); err != nil {
+	if err := http.ListenAndServe(addr, nil); err != nil {
 		context.GetLogger(app).Fatalln(err)
 	}
 }
