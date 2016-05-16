@@ -463,6 +463,10 @@
     }
   },
   {
+    "id": "docker-receive-secret",
+    "action": "gen-random"
+  },
+  {
     "id": "docker-receive",
     "action": "deploy-app",
     "app": {
@@ -475,7 +479,8 @@
     },
     "release": {
       "env": {
-        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}"
+        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "REGISTRY_HTTP_SECRET": "{{ (index .StepData \"docker-receive-secret\").Data }}"
       },
       "processes": {
         "app": {

@@ -47,6 +47,7 @@ func main() {
 			},
 		},
 	}
+	config.HTTP.Secret = os.Getenv("REGISTRY_HTTP_SECRET")
 
 	app := handlers.NewApp(ctx, config)
 	// TODO: add status handler
