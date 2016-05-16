@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +29,7 @@ func TestOSFilesystem(t *testing.T) {
 	fs := NewOSFilesystem(dir)
 	testList(fs, t)
 	testDelete(fs, t)
+	testOffset(fs, t)
 	testFilesystem(fs, false, t)
 }
 
@@ -54,6 +56,7 @@ func TestPostgresFilesystem(t *testing.T) {
 	}
 	testList(fs, t)
 	testDelete(fs, t)
+	testOffset(fs, t)
 	testFilesystem(fs, true, t)
 }
 
@@ -138,7 +141,7 @@ func testList(fs Filesystem, t *testing.T) {
 
 func testDelete(fs Filesystem, t *testing.T) {
 	put := func(path string) {
-		if err := fs.Put(path, bytes.NewReader([]byte("data")), "text/plain"); err != nil {
+		if err := fs.Put(path, bytes.NewReader([]byte("data")), 0, "text/plain"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -176,6 +179,50 @@ func testDelete(fs Filesystem, t *testing.T) {
 	assertNotExists("/dir/foo")
 	assertNotExists("/dir/foo.txt")
 	assertNotExists("/dir/bar.txt")
+}
+
+func testOffset(fs Filesystem, t *testing.T) {
+	srv := httptest.NewServer(handler(fs))
+	defer srv.Close()
+
+	put := func(path, data string, offset int) {
+		req, err := http.NewRequest("PUT", srv.URL+path, bytes.NewReader([]byte(data)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if offset > 0 {
+			req.Header.Set("Blobstore-Offset", strconv.Itoa(offset))
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("expected PUT %s to return %d, got %d", http.StatusOK, res.StatusCode)
+		}
+	}
+	assert := func(path, expected string) {
+		res, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		data, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != expected {
+			t.Fatalf("expected GET %q to return %s, got %s", path, expected, string(data))
+		}
+	}
+
+	put("/foo.txt", "foo", 0)
+	assert("/foo.txt", "foo")
+	put("/foo.txt", "bar", 3)
+	assert("/foo.txt", "foobar")
+	put("/foo.txt", "baz", 2)
+	assert("/foo.txt", "fobazr")
 }
 
 const concurrency = 5

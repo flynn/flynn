@@ -63,14 +63,17 @@ func (s *OSFilesystem) Open(name string) (File, error) {
 	return &osFile{File: f, FileInfo: fi}, nil
 }
 
-func (s *OSFilesystem) Put(name string, r io.Reader, typ string) error {
+func (s *OSFilesystem) Put(name string, r io.Reader, offset int64, typ string) error {
 	path := s.path(name)
 	os.MkdirAll(filepath.Dir(path), 0755)
-	f, err := os.Create(path)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	if _, err := f.Seek(offset, os.SEEK_SET); err != nil {
+		return err
+	}
 	_, err = io.Copy(f, r)
 	return err
 }
@@ -83,7 +86,7 @@ func (s *OSFilesystem) Copy(dstPath, srcPath string) error {
 		return ErrNotFound
 	}
 	defer src.Close()
-	return s.Put(dstPath, src, "")
+	return s.Put(dstPath, src, 0, "")
 }
 
 func (s *OSFilesystem) Delete(name string) error {
