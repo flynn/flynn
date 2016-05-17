@@ -225,3 +225,6 @@ the process type is defined in the `Procfile` as:
 ```
 web: java $JAVA_OPTS -jar target/dependency/jetty-runner.jar --port $PORT target/*.war
 ```
+
+The default value of `$JAVA_OPTS` is "-Xmx350m -Xss512k -Dfile.encoding=UTF-8".
+This can be overridden by specifying the environment variable `JAVA_OPTS`.
