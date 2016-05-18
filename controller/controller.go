@@ -318,7 +318,7 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 			w.WriteHeader(200)
 			return
 		}
-		_, password, _ := utils.ParseBasicAuth(r.Header)
+		_, password, _ := r.BasicAuth()
 		if password == "" && r.URL.Path == "/ca-cert" {
 			main.ServeHTTP(w, r)
 			return
