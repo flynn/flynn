@@ -35,7 +35,9 @@ func main() {
 		context.GetLogger(ctx).Fatalln(err)
 	}
 
-	middleware.Register("flynn", repositoryMiddleware(client))
+	authKey := os.Getenv("AUTH_KEY")
+
+	middleware.Register("flynn", repositoryMiddleware(client, authKey))
 
 	config := configuration.Configuration{
 		Version: configuration.CurrentVersion,
@@ -45,6 +47,11 @@ func main() {
 		Middleware: map[string][]configuration.Middleware{
 			"repository": {
 				{Name: "flynn"},
+			},
+		},
+		Auth: configuration.Auth{
+			"flynn": configuration.Parameters{
+				"auth_key": authKey,
 			},
 		},
 	}
@@ -62,11 +69,12 @@ func main() {
 	}
 }
 
-func repositoryMiddleware(client controller.Client) middleware.InitFunc {
+func repositoryMiddleware(client controller.Client, authKey string) middleware.InitFunc {
 	return func(ctx context.Context, r distribution.Repository, _ map[string]interface{}) (distribution.Repository, error) {
 		return &repository{
 			Repository: r,
 			client:     client,
+			authKey:    authKey,
 		}, nil
 	}
 }
@@ -76,7 +84,8 @@ func repositoryMiddleware(client controller.Client) middleware.InitFunc {
 type repository struct {
 	distribution.Repository
 
-	client controller.Client
+	client  controller.Client
+	authKey string
 }
 
 func (r *repository) Manifests(ctx context.Context, options ...distribution.ManifestServiceOption) (distribution.ManifestService, error) {
@@ -88,6 +97,7 @@ func (r *repository) Manifests(ctx context.Context, options ...distribution.Mani
 		ManifestService: m,
 		repository:      r,
 		client:          r.client,
+		authKey:         r.authKey,
 	}, nil
 }
 
@@ -96,6 +106,7 @@ type manifestService struct {
 
 	repository distribution.Repository
 	client     controller.Client
+	authKey    string
 }
 
 func (m *manifestService) Put(manifest *manifest.SignedManifest) error {
@@ -114,7 +125,7 @@ func (m *manifestService) Put(manifest *manifest.SignedManifest) error {
 func (m *manifestService) createArtifact(dgst digest.Digest) error {
 	return m.client.CreateArtifact(&ct.Artifact{
 		Type: host.ArtifactTypeDocker,
-		URI:  fmt.Sprintf("http://docker-receive.discoverd?name=%s&id=%s", m.repository.Name(), dgst),
+		URI:  fmt.Sprintf("http://flynn:%s@docker-receive.discoverd?name=%s&id=%s", m.authKey, m.repository.Name(), dgst),
 		Meta: map[string]string{
 			"docker-receive.repository": m.repository.Name(),
 		},

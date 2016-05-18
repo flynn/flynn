@@ -479,6 +479,7 @@
     },
     "release": {
       "env": {
+        "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "REGISTRY_HTTP_SECRET": "{{ (index .StepData \"docker-receive-secret\").Data }}"
       },
@@ -491,7 +492,7 @@
               "service": {
                 "name": "docker-receive",
                 "create": true,
-                "check": {"type": "http", "path": "/v2/"}
+                "check": {"type": "http", "path": "/v2/", "status": 401}
               }
             }
           ]
@@ -706,7 +707,8 @@
   {
     "id": "docker-receive-wait",
     "action": "wait",
-    "url": "http://docker-receive.discoverd/v2/"
+    "url": "http://docker-receive.discoverd/v2/",
+    "status": 401
   },
   {
     "id": "status-check",
