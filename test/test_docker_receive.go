@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -20,15 +19,8 @@ var _ = c.Suite(&DockerReceiveSuite{})
 
 func (s *DockerReceiveSuite) TestPushImage(t *c.C) {
 	// build a Docker image
-	u, err := url.Parse(s.clusterConf(t).DockerURL)
-	t.Assert(err, c.IsNil)
-	name := fmt.Sprintf("%s/test:latest", u.Host)
-	cmd := exec.Command("docker", "build", "--tag", name, "-")
-	cmd.Stdin = bytes.NewReader([]byte(`
-	FROM flynn/test-apps
-	RUN echo foo > /foo.txt
-	`))
-	t.Assert(run(t, cmd), Succeeds)
+	repo := "docker-receive-test-push"
+	s.buildDockerImage(t, repo, "RUN echo foo > /foo.txt")
 
 	// subscribe to artifact events
 	client := s.controllerClient(t)
@@ -40,7 +32,11 @@ func (s *DockerReceiveSuite) TestPushImage(t *c.C) {
 	defer stream.Close()
 
 	// push the Docker image to docker-receive
-	t.Assert(run(t, exec.Command("docker", "push", name)), Succeeds)
+	u, err := url.Parse(s.clusterConf(t).DockerURL)
+	t.Assert(err, c.IsNil)
+	tag := fmt.Sprintf("%s/%s:latest", u.Host, repo)
+	t.Assert(run(t, exec.Command("docker", "tag", "--force", repo, tag)), Succeeds)
+	t.Assert(run(t, exec.Command("docker", "push", tag)), Succeeds)
 
 	// wait for an artifact to be created
 	var artifact ct.Artifact
@@ -52,7 +48,7 @@ loop:
 				t.Fatalf("event stream closed unexpectedly: %s", stream.Err())
 			}
 			t.Assert(json.Unmarshal(event.Data, &artifact), c.IsNil)
-			if artifact.Meta["docker-receive.repository"] == "test" {
+			if artifact.Meta["docker-receive.repository"] == repo {
 				break loop
 			}
 		case <-time.After(30 * time.Second):

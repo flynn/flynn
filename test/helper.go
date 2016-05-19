@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -267,6 +268,12 @@ func (h *Helper) assertURI(t *c.C, uri string, status int) {
 	t.Assert(err, c.IsNil)
 	res.Body.Close()
 	t.Assert(res.StatusCode, c.Equals, status)
+}
+
+func (h *Helper) buildDockerImage(t *c.C, repo string, lines ...string) {
+	cmd := exec.Command("docker", "build", "--tag", repo, "-")
+	cmd.Stdin = bytes.NewReader([]byte(fmt.Sprintf("FROM flynn/test-apps\n%s\n", strings.Join(lines, "\n"))))
+	t.Assert(run(t, cmd), Succeeds)
 }
 
 type gitRepo struct {
