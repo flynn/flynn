@@ -48,7 +48,8 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 			tx.Rollback()
 			return err
 		}
-	} else if err == nil {
+	}
+	if err == nil {
 		if err := createEvent(tx.Exec, &ct.Event{
 			ObjectID:   a.ID,
 			ObjectType: ct.EventTypeArtifact,
@@ -56,8 +57,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 			tx.Rollback()
 			return err
 		}
-	}
-	if err != nil {
+	} else {
 		tx.Rollback()
 		return err
 	}
