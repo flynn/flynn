@@ -105,7 +105,6 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 	assertAppEvent := func(e *ct.Event) *ct.App {
 		var eventApp *ct.App
 		c.Assert(json.Unmarshal(e.Data, &eventApp), IsNil)
-		c.Assert(e.AppID, Equals, app.ID)
 		c.Assert(e.ObjectType, Equals, ct.EventTypeApp)
 		c.Assert(e.ObjectID, Equals, app.ID)
 		c.Assert(eventApp, NotNil)
@@ -123,7 +122,6 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 		func(e *ct.Event) {
 			var eventRelease *ct.AppRelease
 			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
-			c.Assert(e.AppID, Equals, app.ID)
 			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
 			c.Assert(e.ObjectID, Equals, release.ID)
 			c.Assert(eventRelease, NotNil)
@@ -143,7 +141,6 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 		func(e *ct.Event) {
 			var eventRelease *ct.AppRelease
 			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
-			c.Assert(e.AppID, Equals, app.ID)
 			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
 			c.Assert(e.ObjectID, Equals, nextRelease.ID)
 			c.Assert(eventRelease, NotNil)
@@ -154,15 +151,24 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 		},
 	}
 
+outer:
 	for i, fn := range eventAssertions {
-		select {
-		case e, ok := <-events:
-			if !ok {
-				c.Fatal("unexpected close of event stream")
+	inner:
+		for {
+			select {
+			case e, ok := <-events:
+				if !ok {
+					c.Fatal("unexpected close of event stream")
+				}
+				// ignore events for other apps
+				if e.AppID != app.ID {
+					continue inner
+				}
+				fn(e)
+				continue outer
+			case <-time.After(10 * time.Second):
+				c.Fatalf("Timed out waiting for event %d", i)
 			}
-			fn(e)
-		case <-time.After(10 * time.Second):
-			c.Fatalf("Timed out waiting for event %d", i)
 		}
 	}
 }
