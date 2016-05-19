@@ -28,7 +28,10 @@ import (
 	"github.com/flynn/flynn/pkg/version"
 )
 
-const dockerReceiveEndpoint = "docker-receive.discoverd"
+var internalDockerEndpoints = []string{
+	"docker-receive.discoverd",
+	"100.100.0.0/16",
+}
 
 func init() {
 	// This will run docker-untar and docker-applyLayer in a chroot
@@ -57,7 +60,7 @@ func BuildContext(driver, root string) (*Context, error) {
 		Events: events.New(),
 		Registry: registry.NewService(&registry.Options{
 			Mirrors:            opts.NewListOpts(nil),
-			InsecureRegistries: *opts.NewListOptsRef(&[]string{dockerReceiveEndpoint}, nil),
+			InsecureRegistries: *opts.NewListOptsRef(&internalDockerEndpoints, nil),
 		}),
 	}
 	store, err := graph.NewTagStore(filepath.Join(root, "repositories-"+d.String()), config)

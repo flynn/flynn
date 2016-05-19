@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -26,6 +27,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libnetwork/ipallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logmux"
@@ -409,8 +411,13 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}()
 
 	log.Info("pulling image")
+	artifactURI, err := l.resolveDiscoverdURI(job.ImageArtifact.URI)
+	if err != nil {
+		log.Error("error resolving artifact URI", "err", err)
+		return err
+	}
 	// TODO(lmars): stream pull progress (maybe to the app log?)
-	imageID, err := l.pinkerton.PullDocker(job.ImageArtifact.URI, ioutil.Discard)
+	imageID, err := l.pinkerton.PullDocker(artifactURI, ioutil.Discard)
 	if err != nil {
 		log.Error("error pulling image", "err", err)
 		return err
@@ -666,6 +673,36 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 
 	log.Info("job started")
 	return nil
+}
+
+// resolveDiscoverdURI resolves a discoverd host in the given URI to an address
+// using the configured discoverd URL as the host is likely not using discoverd
+// to resolve DNS queries
+func (l *LibvirtLXCBackend) resolveDiscoverdURI(uri string) (string, error) {
+	u, err := url.Parse(uri)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasSuffix(u.Host, ".discoverd") {
+		return uri, nil
+	}
+
+	// ensure discoverd is configured
+	<-l.discoverdConfigured
+	l.envMtx.Lock()
+	discURL := l.defaultEnv["DISCOVERD"]
+	l.envMtx.Unlock()
+
+	// lookup the service and pick a random address
+	service := strings.TrimSuffix(u.Host, ".discoverd")
+	addrs, err := discoverd.NewClientWithURL(discURL).Service(service).Addrs()
+	if err != nil {
+		return "", err
+	} else if len(addrs) == 0 {
+		return "", fmt.Errorf("lookup %s: no such host", u.Host)
+	}
+	u.Host = addrs[random.Math.Intn(len(addrs))]
+	return u.String(), nil
 }
 
 func (c *libvirtContainer) cleanupMounts(pid int) error {
