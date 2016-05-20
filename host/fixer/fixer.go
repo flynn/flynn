@@ -17,7 +17,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
-	pgstate "github.com/flynn/flynn/pkg/sirenia/state"
+	state "github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 type ClusterFixer struct {
@@ -114,8 +114,20 @@ func (f *ClusterFixer) Run(args *docopt.Args, c *cluster.Client) error {
 		}
 	}
 
-	if err := f.FixPostgres(); err != nil {
-		return err
+	f.l.Info("checking status of sirenia databases")
+	for _, db := range []string{"postgres", "mariadb"} {
+		f.l.Info("checking for database state", "db", db)
+		if _, err := discoverd.NewService(db).GetMeta(); err != nil {
+			if discoverd.IsNotFound(err) {
+				f.l.Info("skipping recovery of db, no state in discoverd", "db", db)
+				continue
+			}
+			f.l.Error("error checking database state", "db", db)
+			return err
+		}
+		if err := f.FixSirenia(db); err != nil {
+			return err
+		}
 	}
 
 	f.l.Info("checking for running controller API")
@@ -368,65 +380,66 @@ func (f *ClusterFixer) KillSchedulers() error {
 	return nil
 }
 
-func (f *ClusterFixer) FixPostgres() error {
-	f.l.Info("checking postgres")
-	service := discoverd.NewService("postgres")
+func (f *ClusterFixer) FixSirenia(svc string) error {
+	log := f.l.New("fn", "FixSirenia", "service", svc)
+	log.Info("checking sirenia cluster status")
+	service := discoverd.NewService(svc)
 	leader, _ := service.Leader()
 	if leader == nil || leader.Addr == "" {
-		f.l.Info("no running postgres leader")
+		log.Info("no running leader")
 		leader = nil
 	} else {
-		f.l.Info("found running postgres leader")
+		log.Info("found running leader")
 	}
 	instances, _ := service.Instances()
-	f.l.Info(fmt.Sprintf("found %d running postgres instances", len(instances)))
+	log.Info("found running instances", "count", len(instances))
 
-	f.l.Info("getting postgres status")
+	log.Info("getting sirenia status")
 	var status *sirenia.Status
 	if leader != nil && leader.Addr != "" {
 		client := sirenia.NewClient(leader.Addr)
 		var err error
 		status, err = client.Status()
 		if err != nil {
-			f.l.Error("error getting status from postgres leader", "error", err)
+			log.Error("error getting status from leader", "error", err)
 		}
 	}
 	if status != nil && status.Database != nil && status.Database.ReadWrite {
-		f.l.Info("postgres claims to be read-write")
+		log.Info("cluster claims to be read-write")
 		return nil
 	}
 
-	f.l.Info("getting postgres service metadata")
-	meta, err := discoverd.NewService("postgres").GetMeta()
+	log.Info("getting service metadata")
+	meta, err := discoverd.NewService(svc).GetMeta()
 	if err != nil {
-		return fmt.Errorf("error getting postgres state from discoverd: %s", err)
+		return fmt.Errorf("error getting sirenia state from discoverd: %s", err)
 	}
 
-	var state pgstate.State
+	var state state.State
 	if err := json.Unmarshal(meta.Data, &state); err != nil {
-		return fmt.Errorf("error decoding postgres state: %s", err)
+		return fmt.Errorf("error decoding state: %s", err)
 	}
 	if state.Primary == nil {
-		return fmt.Errorf("no primary in postgres state")
+		return fmt.Errorf("no primary in sirenia state")
 	}
 
-	f.l.Info("getting postgres primary job info", "job.id", state.Primary.Meta["FLYNN_JOB_ID"])
+	log.Info("getting primary job info", "job.id", state.Primary.Meta["FLYNN_JOB_ID"])
 	job, host, err := f.GetJob(state.Primary.Meta["FLYNN_JOB_ID"])
 	if err != nil {
 		if state.Sync != nil {
 			f.l.Error("unable to get primary job info", "error", err)
-			f.l.Info("getting postgres sync job info", "job.id", state.Sync.Meta["FLYNN_JOB_ID"])
+			f.l.Info("getting sync job info", "job.id", state.Sync.Meta["FLYNN_JOB_ID"])
 			job, host, err = f.GetJob(state.Sync.Meta["FLYNN_JOB_ID"])
 			if err != nil {
-				return fmt.Errorf("unable to get postgres primary or sync job details: %s", err)
+				return fmt.Errorf("unable to get primary or sync job details: %s", err)
 			}
 		} else {
-			return fmt.Errorf("unable to get postgres primary job details: %s", err)
+			return fmt.Errorf("unable to get primary job details: %s", err)
 		}
 	}
 
 	if leader != nil && state.Singleton {
-		return fmt.Errorf("postgres leader is running in singleton mode, unable to fix")
+		return fmt.Errorf("sirenia leader is running in singleton mode, unable to fix")
 	}
 
 	waitForInstance := func(jobID string) (func() (string, error), error) {
@@ -452,13 +465,13 @@ func (f *ClusterFixer) FixPostgres() error {
 			}
 		}()
 		return func() (string, error) {
-			f.l.Info("waiting for postgres instance to start", "job.id", jobID)
+			log.Info("waiting for instance to start", "job.id", jobID)
 			defer stream.Close()
 			select {
 			case addr := <-upCh:
 				return addr, nil
 			case <-time.After(time.Minute):
-				return "", fmt.Errorf("timed out waiting for postgres instance to come up")
+				return "", fmt.Errorf("timed out waiting for sirenia instance to come up")
 			}
 		}, nil
 	}
@@ -470,20 +483,19 @@ func (f *ClusterFixer) FixPostgres() error {
 		want = 1
 	}
 	if have >= want {
-		return fmt.Errorf("already have enough postgres instances, unable to fix")
+		return fmt.Errorf("already have enough instances, unable to fix")
 	}
-	f.l.Info("attempting to start missing postgres jobs", "want", want, "have", have)
+	log.Info("attempting to start missing jobs", "want", want, "have", have)
 	if leader == nil {
-		// if no postgres, attempt to start
 		job.ID = cluster.GenerateJobID(host.ID(), "")
 		f.FixJobEnv(job)
-		f.l.Info("starting postgres primary job", "job.id", job.ID)
+		log.Info("starting primary job", "job.id", job.ID)
 		wait, err = waitForInstance(job.ID)
 		if err != nil {
 			return err
 		}
 		if err := host.AddJob(job); err != nil {
-			return fmt.Errorf("error starting postgres primary job on %s: %s", host.ID(), err)
+			return fmt.Errorf("error starting primary job on %s: %s", host.ID(), err)
 		}
 		have++
 	}
@@ -502,7 +514,7 @@ func (f *ClusterFixer) FixPostgres() error {
 		}
 		job.ID = cluster.GenerateJobID(secondHost.ID(), "")
 		f.FixJobEnv(job)
-		f.l.Info("starting second postgres job", "job.id", job.ID)
+		log.Info("starting second job", "job.id", job.ID)
 		if wait == nil {
 			wait, err = waitForInstance(job.ID)
 			if err != nil {
@@ -510,10 +522,10 @@ func (f *ClusterFixer) FixPostgres() error {
 			}
 		}
 		if err := utils.ProvisionVolume(secondHost, job); err != nil {
-			return fmt.Errorf("error creating postgres volume on %s: %s", secondHost.ID(), err)
+			return fmt.Errorf("error creating volume on %s: %s", secondHost.ID(), err)
 		}
 		if err := secondHost.AddJob(job); err != nil {
-			return fmt.Errorf("error starting additional postgres job on %s: %s", secondHost.ID(), err)
+			return fmt.Errorf("error starting additional job on %s: %s", secondHost.ID(), err)
 		}
 	}
 
@@ -525,7 +537,7 @@ func (f *ClusterFixer) FixPostgres() error {
 		if leader != nil {
 			addr = leader.Addr
 		}
-		f.l.Info("waiting for postgres to come up read-write")
+		log.Info("waiting for cluster to come up read-write")
 		return sirenia.NewClient(addr).WaitForReadWrite(5 * time.Minute)
 	}
 	return nil

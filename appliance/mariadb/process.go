@@ -215,7 +215,7 @@ func (p *Process) reconfigure(config *state.Config) error {
 		// If we're already running and this is only a downstream change, just wait for the new downstream to catch up
 		if p.running() && p.config().IsNewDownstream(config) {
 			logger.Info("downstream changed", "to", config.Downstream.Addr)
-			p.waitForSync(config.Downstream, false)
+			p.waitForSync(config.Downstream, config.Role == state.RolePrimary)
 			return nil
 		}
 

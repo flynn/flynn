@@ -194,10 +194,27 @@ func (m *Monitor) repairCluster() error {
 	f := fixer.NewClusterFixer(hosts, m.c, log)
 	// killing the schedulers to prevent interference
 	f.KillSchedulers()
-	// ensure postgres is working
-	if err := f.FixPostgres(); err != nil {
-		return err
+
+	log.Info("checking status of sirenia databases")
+	for _, db := range []string{"postgres", "mariadb"} {
+		log.Info("checking for database state", "db", db)
+		if _, err := discoverd.NewService(db).GetMeta(); err != nil {
+			if discoverd.IsNotFound(err) {
+				log.Info("skipping recovery of db, no state in discoverd", "db", db)
+				continue
+			}
+			log.Error("error checking database state", "db", db)
+			return err
+		}
+		if err := f.FixSirenia(db); err != nil {
+			if db == "postgres" {
+				return err
+			} else {
+				log.Error("failed database recovery", "db", db)
+			}
+		}
 	}
+
 	// ensure controller api is working
 	controllerService := discoverd.NewService("controller")
 	controllerInstances, _ := controllerService.Instances()
