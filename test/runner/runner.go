@@ -317,7 +317,7 @@ echo "nameserver ${ip}" | sudo tee /etc/resolv.conf
 
 cd ~/go/src/github.com/flynn/flynn
 
-script/configure-docker "{{ .Cluster.ClusterDomain }}
+script/configure-docker "{{ .Cluster.ClusterDomain }}"
 
 cli/bin/flynn cluster add \
   --tls-pin "{{ .Config.TLSPin }}" \
