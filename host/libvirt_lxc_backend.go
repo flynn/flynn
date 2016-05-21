@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/alexzorin/libvirt-go"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/networkdriver/ipallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libnetwork/ipallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/containerinit"
@@ -33,7 +33,6 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pinkerton"
-	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/mounts"
@@ -410,16 +409,10 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}()
 
 	log.Info("pulling image")
-	layers, err := l.pinkertonPull(job.ImageArtifact.URI)
+	// TODO(lmars): stream pull progress (maybe to the app log?)
+	imageID, err := l.pinkerton.PullDocker(job.ImageArtifact.URI, ioutil.Discard)
 	if err != nil {
 		log.Error("error pulling image", "err", err)
-		return err
-	}
-	imageID, err := pinkerton.ImageID(job.ImageArtifact.URI)
-	if err == pinkerton.ErrNoImageID && len(layers) > 0 {
-		imageID = layers[len(layers)-1].ID
-	} else if err != nil {
-		log.Error("error getting image id", "err", err)
 		return err
 	}
 
@@ -1273,23 +1266,6 @@ func (l *LibvirtLXCBackend) CloseLogs() (host.LogBuffers, error) {
 		delete(l.logStreams, id)
 	}
 	return buffers, nil
-}
-
-func (l *LibvirtLXCBackend) pinkertonPull(url string) ([]layer.PullInfo, error) {
-	var layers []layer.PullInfo
-	info := make(chan layer.PullInfo)
-	done := make(chan struct{})
-	go func() {
-		for l := range info {
-			layers = append(layers, l)
-		}
-		close(done)
-	}()
-	if err := l.pinkerton.PullDocker(url, info); err != nil {
-		return nil, err
-	}
-	<-done
-	return layers, nil
 }
 
 func bindMount(src, dest string, writeable, private bool) error {

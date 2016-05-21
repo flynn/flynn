@@ -1,11 +1,16 @@
 // +build windows
+
 package term
 
 import (
+	"fmt"
 	"io"
 	"os"
+	"os/signal"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term/winconsole"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Azure/go-ansiterm/winterm"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term/windows"
 )
 
 // State holds the console mode for the terminal.
@@ -21,117 +26,180 @@ type Winsize struct {
 	y      uint16
 }
 
-// GetWinsize gets the window size of the given terminal
+// StdStreams returns the standard streams (stdin, stdout, stedrr).
+func StdStreams() (stdIn io.ReadCloser, stdOut, stdErr io.Writer) {
+	switch {
+	case os.Getenv("ConEmuANSI") == "ON":
+		// The ConEmu shell emulates ANSI well by default.
+		return os.Stdin, os.Stdout, os.Stderr
+	case os.Getenv("MSYSTEM") != "":
+		// MSYS (mingw) does not emulate ANSI well.
+		return windows.ConsoleStreams()
+	default:
+		return windows.ConsoleStreams()
+	}
+}
+
+// GetFdInfo returns the file descriptor for an os.File and indicates whether the file represents a terminal.
+func GetFdInfo(in interface{}) (uintptr, bool) {
+	return windows.GetHandleInfo(in)
+}
+
+// GetWinsize returns the window size based on the specified file descriptor.
 func GetWinsize(fd uintptr) (*Winsize, error) {
-	ws := &Winsize{}
-	var info *winconsole.CONSOLE_SCREEN_BUFFER_INFO
-	info, err := winconsole.GetConsoleScreenBufferInfo(fd)
+
+	info, err := winterm.GetConsoleScreenBufferInfo(fd)
 	if err != nil {
 		return nil, err
 	}
 
-	ws.Width = uint16(info.Window.Right - info.Window.Left + 1)
-	ws.Height = uint16(info.Window.Bottom - info.Window.Top + 1)
+	winsize := &Winsize{
+		Width:  uint16(info.Window.Right - info.Window.Left + 1),
+		Height: uint16(info.Window.Bottom - info.Window.Top + 1),
+		x:      0,
+		y:      0}
 
-	ws.x = 0 // todo azlinux -- this is the pixel size of the Window, and not currently used by any caller
-	ws.y = 0
-
-	return ws, nil
+	// Note: GetWinsize is called frequently -- uncomment only for excessive details
+	// logrus.Debugf("[windows] GetWinsize: Console(%v)", info.String())
+	// logrus.Debugf("[windows] GetWinsize: Width(%v), Height(%v), x(%v), y(%v)", winsize.Width, winsize.Height, winsize.x, winsize.y)
+	return winsize, nil
 }
 
-// SetWinsize sets the terminal connected to the given file descriptor to a
-// given size.
+// SetWinsize tries to set the specified window size for the specified file descriptor.
 func SetWinsize(fd uintptr, ws *Winsize) error {
-	return nil
+
+	// Ensure the requested dimensions are no larger than the maximum window size
+	info, err := winterm.GetConsoleScreenBufferInfo(fd)
+	if err != nil {
+		return err
+	}
+
+	if ws.Width == 0 || ws.Height == 0 || ws.Width > uint16(info.MaximumWindowSize.X) || ws.Height > uint16(info.MaximumWindowSize.Y) {
+		return fmt.Errorf("Illegal window size: (%v,%v) -- Maximum allow: (%v,%v)",
+			ws.Width, ws.Height, info.MaximumWindowSize.X, info.MaximumWindowSize.Y)
+	}
+
+	// Narrow the sizes to that used by Windows
+	width := winterm.SHORT(ws.Width)
+	height := winterm.SHORT(ws.Height)
+
+	// Set the dimensions while ensuring they remain within the bounds of the backing console buffer
+	// -- Shrinking will always succeed. Growing may push the edges past the buffer boundary. When that occurs,
+	//    shift the upper left just enough to keep the new window within the buffer.
+	rect := info.Window
+	if width < rect.Right-rect.Left+1 {
+		rect.Right = rect.Left + width - 1
+	} else if width > rect.Right-rect.Left+1 {
+		rect.Right = rect.Left + width - 1
+		if rect.Right >= info.Size.X {
+			rect.Left = info.Size.X - width
+			rect.Right = info.Size.X - 1
+		}
+	}
+
+	if height < rect.Bottom-rect.Top+1 {
+		rect.Bottom = rect.Top + height - 1
+	} else if height > rect.Bottom-rect.Top+1 {
+		rect.Bottom = rect.Top + height - 1
+		if rect.Bottom >= info.Size.Y {
+			rect.Top = info.Size.Y - height
+			rect.Bottom = info.Size.Y - 1
+		}
+	}
+	logrus.Debugf("[windows] SetWinsize: Requested((%v,%v)) Actual(%v)", ws.Width, ws.Height, rect)
+
+	return winterm.SetConsoleWindowInfo(fd, true, rect)
 }
 
 // IsTerminal returns true if the given file descriptor is a terminal.
 func IsTerminal(fd uintptr) bool {
-	_, e := winconsole.GetConsoleMode(fd)
-	return e == nil
+	return windows.IsConsole(fd)
 }
 
-// RestoreTerminal restores the terminal connected to the given file descriptor to a
-// previous state.
+// RestoreTerminal restores the terminal connected to the given file descriptor
+// to a previous state.
 func RestoreTerminal(fd uintptr, state *State) error {
-	return winconsole.SetConsoleMode(fd, state.mode)
+	return winterm.SetConsoleMode(fd, state.mode)
 }
 
-// SaveState saves the state of the given console
+// SaveState saves the state of the terminal connected to the given file descriptor.
 func SaveState(fd uintptr) (*State, error) {
-	mode, e := winconsole.GetConsoleMode(fd)
+	mode, e := winterm.GetConsoleMode(fd)
 	if e != nil {
 		return nil, e
 	}
 	return &State{mode}, nil
 }
 
-// DisableEcho disbales the echo for given file descriptor and returns previous state
-// see http://msdn.microsoft.com/en-us/library/windows/desktop/ms683462(v=vs.85).aspx for these flag settings
+// DisableEcho disables echo for the terminal connected to the given file descriptor.
+// -- See https://msdn.microsoft.com/en-us/library/windows/desktop/ms683462(v=vs.85).aspx
 func DisableEcho(fd uintptr, state *State) error {
-	state.mode &^= (winconsole.ENABLE_ECHO_INPUT)
-	state.mode |= (winconsole.ENABLE_PROCESSED_INPUT | winconsole.ENABLE_LINE_INPUT)
-	return winconsole.SetConsoleMode(fd, state.mode)
+	mode := state.mode
+	mode &^= winterm.ENABLE_ECHO_INPUT
+	mode |= winterm.ENABLE_PROCESSED_INPUT | winterm.ENABLE_LINE_INPUT
+
+	err := winterm.SetConsoleMode(fd, mode)
+	if err != nil {
+		return err
+	}
+
+	// Register an interrupt handler to catch and restore prior state
+	restoreAtInterrupt(fd, state)
+	return nil
 }
 
 // SetRawTerminal puts the terminal connected to the given file descriptor into raw
-// mode and returns the previous state of the terminal so that it can be
-// restored.
+// mode and returns the previous state.
 func SetRawTerminal(fd uintptr) (*State, error) {
-	oldState, err := MakeRaw(fd)
+	state, err := MakeRaw(fd)
 	if err != nil {
 		return nil, err
 	}
-	// TODO (azlinux): implement handling interrupt and restore state of terminal
-	return oldState, err
+
+	// Register an interrupt handler to catch and restore prior state
+	restoreAtInterrupt(fd, state)
+	return state, err
 }
 
-// MakeRaw puts the terminal connected to the given file descriptor into raw
-// mode and returns the previous state of the terminal so that it can be
-// restored.
+// MakeRaw puts the terminal (Windows Console) connected to the given file descriptor into raw
+// mode and returns the previous state of the terminal so that it can be restored.
 func MakeRaw(fd uintptr) (*State, error) {
-	var state *State
 	state, err := SaveState(fd)
 	if err != nil {
 		return nil, err
 	}
 
-	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms683462(v=vs.85).aspx
-	// All three input modes, along with processed output mode, are designed to work together.
-	// It is best to either enable or disable all of these modes as a group.
-	// When all are enabled, the application is said to be in "cooked" mode, which means that most of the processing is handled for the application.
-	// When all are disabled, the application is in "raw" mode, which means that input is unfiltered and any processing is left to the application.
-	state.mode = 0
-	err = winconsole.SetConsoleMode(fd, state.mode)
+	// See
+	// -- https://msdn.microsoft.com/en-us/library/windows/desktop/ms686033(v=vs.85).aspx
+	// -- https://msdn.microsoft.com/en-us/library/windows/desktop/ms683462(v=vs.85).aspx
+	mode := state.mode
+
+	// Disable these modes
+	mode &^= winterm.ENABLE_ECHO_INPUT
+	mode &^= winterm.ENABLE_LINE_INPUT
+	mode &^= winterm.ENABLE_MOUSE_INPUT
+	mode &^= winterm.ENABLE_WINDOW_INPUT
+	mode &^= winterm.ENABLE_PROCESSED_INPUT
+
+	// Enable these modes
+	mode |= winterm.ENABLE_EXTENDED_FLAGS
+	mode |= winterm.ENABLE_INSERT_MODE
+	mode |= winterm.ENABLE_QUICK_EDIT_MODE
+
+	err = winterm.SetConsoleMode(fd, mode)
 	if err != nil {
 		return nil, err
 	}
 	return state, nil
 }
 
-// GetFdInfo returns file descriptor and bool indicating whether the file is a terminal
-func GetFdInfo(in interface{}) (uintptr, bool) {
-	return winconsole.GetHandleInfo(in)
-}
+func restoreAtInterrupt(fd uintptr, state *State) {
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, os.Interrupt)
 
-func StdStreams() (stdIn io.ReadCloser, stdOut, stdErr io.Writer) {
-	var shouldEmulateANSI bool
-	switch {
-	case os.Getenv("ConEmuANSI") == "ON":
-		// ConEmu shell, ansi emulated by default and ConEmu does an extensively
-		// good emulation.
-		shouldEmulateANSI = false
-	case os.Getenv("MSYSTEM") != "":
-		// MSYS (mingw) cannot fully emulate well and still shows escape characters
-		// mostly because it's still running on cmd.exe window.
-		shouldEmulateANSI = true
-	default:
-		shouldEmulateANSI = true
-	}
-
-	if shouldEmulateANSI {
-		return winconsole.StdStreams()
-	}
-
-	return os.Stdin, os.Stdout, os.Stderr
+	go func() {
+		_ = <-sigchan
+		RestoreTerminal(fd, state)
+		os.Exit(0)
+	}()
 }

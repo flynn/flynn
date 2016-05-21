@@ -1,56 +1,39 @@
 package runconfig
 
 import (
-	"fmt"
-
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
 	flag "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/mflag"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
 
+// ExecConfig is a small subset of the Config struct that hold the configuration
+// for the exec feature of docker.
 type ExecConfig struct {
-	User         string
-	Privileged   bool
-	Tty          bool
-	Container    string
-	AttachStdin  bool
-	AttachStderr bool
-	AttachStdout bool
-	Detach       bool
-	Cmd          []string
+	User         string   // User that will run the command
+	Privileged   bool     // Is the container in privileged mode
+	Tty          bool     // Attach standard streams to a tty.
+	Container    string   // Name of the container (to execute in)
+	AttachStdin  bool     // Attach the standard input, makes possible user interaction
+	AttachStderr bool     // Attach the standard output
+	AttachStdout bool     // Attach the standard error
+	Detach       bool     // Execute in detach mode
+	Cmd          []string // Execution commands and args
 }
 
-func ExecConfigFromJob(job *engine.Job) (*ExecConfig, error) {
-	execConfig := &ExecConfig{
-		// TODO(vishh): Expose 'User' once it is supported.
-		//User:         job.Getenv("User"),
-		// TODO(vishh): Expose 'Privileged' once it is supported.
-		//Privileged:   job.GetenvBool("Privileged"),
-		Tty:          job.GetenvBool("Tty"),
-		AttachStdin:  job.GetenvBool("AttachStdin"),
-		AttachStderr: job.GetenvBool("AttachStderr"),
-		AttachStdout: job.GetenvBool("AttachStdout"),
-	}
-	cmd := job.GetenvList("Cmd")
-	if len(cmd) == 0 {
-		return nil, fmt.Errorf("No exec command specified")
-	}
-
-	execConfig.Cmd = cmd
-
-	return execConfig, nil
-}
-
+// ParseExec parses the specified args for the specified command and generates
+// an ExecConfig from it.
+// If the minimal number of specified args is not right or if specified args are
+// not valid, it will return an error.
 func ParseExec(cmd *flag.FlagSet, args []string) (*ExecConfig, error) {
 	var (
-		flStdin   = cmd.Bool([]string{"i", "-interactive"}, false, "Keep STDIN open even if not attached")
-		flTty     = cmd.Bool([]string{"t", "-tty"}, false, "Allocate a pseudo-TTY")
-		flDetach  = cmd.Bool([]string{"d", "-detach"}, false, "Detached mode: run command in the background")
-		execCmd   []string
-		container string
+		flStdin      = cmd.Bool([]string{"i", "-interactive"}, false, "Keep STDIN open even if not attached")
+		flTty        = cmd.Bool([]string{"t", "-tty"}, false, "Allocate a pseudo-TTY")
+		flDetach     = cmd.Bool([]string{"d", "-detach"}, false, "Detached mode: run command in the background")
+		flUser       = cmd.String([]string{"u", "-user"}, "", "Username or UID (format: <name|uid>[:<group|gid>])")
+		flPrivileged = cmd.Bool([]string{"-privileged"}, false, "Give extended privileges to the command")
+		execCmd      []string
+		container    string
 	)
 	cmd.Require(flag.Min, 2)
-	if err := utils.ParseFlags(cmd, args, true); err != nil {
+	if err := cmd.ParseFlags(args, true); err != nil {
 		return nil, err
 	}
 	container = cmd.Arg(0)
@@ -58,10 +41,8 @@ func ParseExec(cmd *flag.FlagSet, args []string) (*ExecConfig, error) {
 	execCmd = parsedArgs[1:]
 
 	execConfig := &ExecConfig{
-		// TODO(vishh): Expose '-u' flag once it is supported.
-		User: "",
-		// TODO(vishh): Expose '-p' flag once it is supported.
-		Privileged: false,
+		User:       *flUser,
+		Privileged: *flPrivileged,
 		Tty:        *flTty,
 		Cmd:        execCmd,
 		Container:  container,

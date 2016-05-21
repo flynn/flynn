@@ -3,22 +3,17 @@ package runconfig
 import (
 	"strings"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/nat"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/nat"
 )
 
+// Merge merges two Config, the image container configuration (defaults values),
+// and the user container configuration, either passed by the API or generated
+// by the cli.
+// It will mutate the specified user configuration (userConf) with the image
+// configuration where the user configuration is incomplete.
 func Merge(userConf, imageConf *Config) error {
 	if userConf.User == "" {
 		userConf.User = imageConf.User
-	}
-	if userConf.Memory == 0 {
-		userConf.Memory = imageConf.Memory
-	}
-	if userConf.MemorySwap == 0 {
-		userConf.MemorySwap = imageConf.MemorySwap
-	}
-	if userConf.CpuShares == 0 {
-		userConf.CpuShares = imageConf.CpuShares
 	}
 	if len(userConf.ExposedPorts) == 0 {
 		userConf.ExposedPorts = imageConf.ExposedPorts
@@ -27,39 +22,6 @@ func Merge(userConf, imageConf *Config) error {
 			userConf.ExposedPorts = make(nat.PortSet)
 		}
 		for port := range imageConf.ExposedPorts {
-			if _, exists := userConf.ExposedPorts[port]; !exists {
-				userConf.ExposedPorts[port] = struct{}{}
-			}
-		}
-	}
-
-	if len(userConf.PortSpecs) > 0 {
-		if userConf.ExposedPorts == nil {
-			userConf.ExposedPorts = make(nat.PortSet)
-		}
-		ports, _, err := nat.ParsePortSpecs(userConf.PortSpecs)
-		if err != nil {
-			return err
-		}
-		for port := range ports {
-			if _, exists := userConf.ExposedPorts[port]; !exists {
-				userConf.ExposedPorts[port] = struct{}{}
-			}
-		}
-		userConf.PortSpecs = nil
-	}
-	if len(imageConf.PortSpecs) > 0 {
-		// FIXME: I think we can safely remove this. Leaving it for now for the sake of reverse-compat paranoia.
-		log.Debugf("Migrating image port specs to containter: %s", strings.Join(imageConf.PortSpecs, ", "))
-		if userConf.ExposedPorts == nil {
-			userConf.ExposedPorts = make(nat.PortSet)
-		}
-
-		ports, _, err := nat.ParsePortSpecs(imageConf.PortSpecs)
-		if err != nil {
-			return err
-		}
-		for port := range ports {
 			if _, exists := userConf.ExposedPorts[port]; !exists {
 				userConf.ExposedPorts[port] = struct{}{}
 			}
@@ -76,6 +38,7 @@ func Merge(userConf, imageConf *Config) error {
 				userEnvKey := strings.Split(userEnv, "=")[0]
 				if imageEnvKey == userEnvKey {
 					found = true
+					break
 				}
 			}
 			if !found {
@@ -94,8 +57,8 @@ func Merge(userConf, imageConf *Config) error {
 		userConf.Labels = imageConf.Labels
 	}
 
-	if len(userConf.Entrypoint) == 0 {
-		if len(userConf.Cmd) == 0 {
+	if userConf.Entrypoint.Len() == 0 {
+		if userConf.Cmd.Len() == 0 {
 			userConf.Cmd = imageConf.Cmd
 		}
 

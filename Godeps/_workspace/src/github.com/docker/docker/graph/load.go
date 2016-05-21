@@ -1,24 +1,23 @@
-// +build linux
+// +build linux windows
 
 package graph
 
 import (
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/image"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/archive"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/chrootarchive"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
 
-// Loads a set of images into the repository. This is the complementary of ImageExport.
+// Load uploads a set of images into the repository. This is the complementary of ImageExport.
 // The input stream is an uncompressed tar ball containing images and metadata.
-func (s *TagStore) CmdLoad(job *engine.Job) error {
+func (s *TagStore) Load(inTar io.ReadCloser, outStream io.Writer) error {
 	tmpImageDir, err := ioutil.TempDir("", "docker-import-")
 	if err != nil {
 		return err
@@ -26,23 +25,20 @@ func (s *TagStore) CmdLoad(job *engine.Job) error {
 	defer os.RemoveAll(tmpImageDir)
 
 	var (
-		repoDir = path.Join(tmpImageDir, "repo")
+		repoDir = filepath.Join(tmpImageDir, "repo")
 	)
 
 	if err := os.Mkdir(repoDir, os.ModeDir); err != nil {
 		return err
 	}
-	images, err := s.graph.Map()
-	if err != nil {
-		return err
-	}
+	images := s.graph.Map()
 	excludes := make([]string, len(images))
 	i := 0
 	for k := range images {
 		excludes[i] = k
 		i++
 	}
-	if err := chrootarchive.Untar(job.Stdin, repoDir, &archive.TarOptions{ExcludePatterns: excludes}); err != nil {
+	if err := chrootarchive.Untar(inTar, repoDir, &archive.TarOptions{ExcludePatterns: excludes}); err != nil {
 		return err
 	}
 
@@ -53,83 +49,84 @@ func (s *TagStore) CmdLoad(job *engine.Job) error {
 
 	for _, d := range dirs {
 		if d.IsDir() {
-			if err := s.recursiveLoad(job.Eng, d.Name(), tmpImageDir); err != nil {
+			if err := s.recursiveLoad(d.Name(), tmpImageDir); err != nil {
 				return err
 			}
 		}
 	}
 
-	repositoriesJson, err := ioutil.ReadFile(path.Join(tmpImageDir, "repo", "repositories"))
-	if err == nil {
-		repositories := map[string]Repository{}
-		if err := json.Unmarshal(repositoriesJson, &repositories); err != nil {
+	reposJSONFile, err := os.Open(filepath.Join(tmpImageDir, "repo", "repositories"))
+	if err != nil {
+		if !os.IsNotExist(err) {
 			return err
 		}
+		return nil
+	}
+	defer reposJSONFile.Close()
 
-		for imageName, tagMap := range repositories {
-			for tag, address := range tagMap {
-				if err := s.Set(imageName, tag, address, true); err != nil {
-					return err
-				}
+	repositories := map[string]Repository{}
+	if err := json.NewDecoder(reposJSONFile).Decode(&repositories); err != nil {
+		return err
+	}
+
+	for imageName, tagMap := range repositories {
+		for tag, address := range tagMap {
+			if err := s.setLoad(imageName, tag, address, true, outStream); err != nil {
+				return err
 			}
 		}
-	} else if !os.IsNotExist(err) {
-		return err
 	}
 
 	return nil
 }
 
-func (s *TagStore) recursiveLoad(eng *engine.Engine, address, tmpImageDir string) error {
-	if err := eng.Job("image_get", address).Run(); err != nil {
-		log.Debugf("Loading %s", address)
+func (s *TagStore) recursiveLoad(address, tmpImageDir string) error {
+	if _, err := s.LookupImage(address); err != nil {
+		logrus.Debugf("Loading %s", address)
 
-		imageJson, err := ioutil.ReadFile(path.Join(tmpImageDir, "repo", address, "json"))
+		imageJSON, err := ioutil.ReadFile(filepath.Join(tmpImageDir, "repo", address, "json"))
 		if err != nil {
-			log.Debugf("Error reading json", err)
+			logrus.Debugf("Error reading json: %v", err)
 			return err
 		}
 
-		layer, err := os.Open(path.Join(tmpImageDir, "repo", address, "layer.tar"))
+		layer, err := os.Open(filepath.Join(tmpImageDir, "repo", address, "layer.tar"))
 		if err != nil {
-			log.Debugf("Error reading embedded tar", err)
+			logrus.Debugf("Error reading embedded tar: %v", err)
 			return err
 		}
-		img, err := image.NewImgJSON(imageJson)
+		img, err := image.NewImgJSON(imageJSON)
 		if err != nil {
-			log.Debugf("Error unmarshalling json", err)
+			logrus.Debugf("Error unmarshalling json: %v", err)
 			return err
 		}
-		if err := utils.ValidateID(img.ID); err != nil {
-			log.Debugf("Error validating ID: %s", err)
+		if err := image.ValidateID(img.ID); err != nil {
+			logrus.Debugf("Error validating ID: %v", err)
 			return err
 		}
 
 		// ensure no two downloads of the same layer happen at the same time
-		if c, err := s.poolAdd("pull", "layer:"+img.ID); err != nil {
-			if c != nil {
-				log.Debugf("Image (id: %s) load is already running, waiting: %v", img.ID, err)
-				<-c
-				return nil
-			}
-
-			return err
+		poolKey := "layer:" + img.ID
+		broadcaster, found := s.poolAdd("pull", poolKey)
+		if found {
+			logrus.Debugf("Image (id: %s) load is already running, waiting", img.ID)
+			return broadcaster.Wait()
 		}
 
-		defer s.poolRemove("pull", "layer:"+img.ID)
+		defer s.poolRemove("pull", poolKey)
 
 		if img.Parent != "" {
 			if !s.graph.Exists(img.Parent) {
-				if err := s.recursiveLoad(eng, img.Parent, tmpImageDir); err != nil {
+				if err := s.recursiveLoad(img.Parent, tmpImageDir); err != nil {
 					return err
 				}
 			}
 		}
-		if err := s.graph.Register(img, layer); err != nil {
+		if err := s.graph.Register(v1Descriptor{img}, layer); err != nil {
 			return err
 		}
 	}
-	log.Debugf("Completed processing %s", address)
+	logrus.Debugf("Completed processing %s", address)
 
 	return nil
 }

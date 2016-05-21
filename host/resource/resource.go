@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/go-units"
 	"github.com/flynn/flynn/pkg/typeconv"
 )
 

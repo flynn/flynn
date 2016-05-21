@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,9 +10,9 @@ import (
 	"net/url"
 	"strings"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/registry/v2"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/api/v2"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/client/transport"
 )
 
 // for mocking in unit tests
@@ -41,12 +42,19 @@ func scanForAPIVersion(address string) (string, APIVersion) {
 	return address, APIVersionUnknown
 }
 
-// NewEndpoint parses the given address to return a registry endpoint.
-func NewEndpoint(index *IndexInfo) (*Endpoint, error) {
-	// *TODO: Allow per-registry configuration of endpoints.
-	endpoint, err := newEndpoint(index.GetAuthConfigKey(), index.Secure)
+// NewEndpoint parses the given address to return a registry endpoint.  v can be used to
+// specify a specific endpoint version
+func NewEndpoint(index *IndexInfo, metaHeaders http.Header, v APIVersion) (*Endpoint, error) {
+	tlsConfig, err := newTLSConfig(index.Name, index.Secure)
 	if err != nil {
 		return nil, err
+	}
+	endpoint, err := newEndpoint(index.GetAuthConfigKey(), tlsConfig, metaHeaders)
+	if err != nil {
+		return nil, err
+	}
+	if v != APIVersionUnknown {
+		endpoint.Version = v
 	}
 	if err := validateEndpoint(endpoint); err != nil {
 		return nil, err
@@ -56,7 +64,7 @@ func NewEndpoint(index *IndexInfo) (*Endpoint, error) {
 }
 
 func validateEndpoint(endpoint *Endpoint) error {
-	log.Debugf("pinging registry endpoint %s", endpoint)
+	logrus.Debugf("pinging registry endpoint %s", endpoint)
 
 	// Try HTTPS ping to registry
 	endpoint.URL.Scheme = "https"
@@ -68,7 +76,7 @@ func validateEndpoint(endpoint *Endpoint) error {
 		}
 
 		// If registry is insecure and HTTPS failed, fallback to HTTP.
-		log.Debugf("Error from registry %q marked as insecure: %v. Insecurely falling back to HTTP", endpoint, err)
+		logrus.Debugf("Error from registry %q marked as insecure: %v. Insecurely falling back to HTTP", endpoint, err)
 		endpoint.URL.Scheme = "http"
 
 		var err2 error
@@ -82,7 +90,7 @@ func validateEndpoint(endpoint *Endpoint) error {
 	return nil
 }
 
-func newEndpoint(address string, secure bool) (*Endpoint, error) {
+func newEndpoint(address string, tlsConfig *tls.Config, metaHeaders http.Header) (*Endpoint, error) {
 	var (
 		endpoint       = new(Endpoint)
 		trimmedAddress string
@@ -93,21 +101,23 @@ func newEndpoint(address string, secure bool) (*Endpoint, error) {
 		address = "https://" + address
 	}
 
+	endpoint.IsSecure = (tlsConfig == nil || !tlsConfig.InsecureSkipVerify)
+
 	trimmedAddress, endpoint.Version = scanForAPIVersion(address)
 
 	if endpoint.URL, err = url.Parse(trimmedAddress); err != nil {
 		return nil, err
 	}
-	endpoint.IsSecure = secure
-	return endpoint, nil
-}
 
-func (repoInfo *RepositoryInfo) GetEndpoint() (*Endpoint, error) {
-	return NewEndpoint(repoInfo.Index)
+	// TODO(tiborvass): make sure a ConnectTimeout transport is used
+	tr := NewTransport(tlsConfig)
+	endpoint.client = HTTPClient(transport.NewTransport(tr, DockerHeaders(metaHeaders)...))
+	return endpoint, nil
 }
 
 // Endpoint stores basic information about a registry endpoint.
 type Endpoint struct {
+	client         *http.Client
 	URL            *url.URL
 	Version        APIVersion
 	IsSecure       bool
@@ -132,78 +142,80 @@ func (e *Endpoint) Path(path string) string {
 	return fmt.Sprintf("%s/v%d/%s", e.URL, e.Version, path)
 }
 
-func (e *Endpoint) Ping() (RegistryInfo, error) {
+// Ping pings the remote endpoint with v2 and v1 pings to determine the API
+// version. It returns a PingResult containing the discovered version. The
+// PingResult also indicates whether the registry is standalone or not.
+func (e *Endpoint) Ping() (PingResult, error) {
 	// The ping logic to use is determined by the registry endpoint version.
-	factory := HTTPRequestFactory(nil)
 	switch e.Version {
 	case APIVersion1:
-		return e.pingV1(factory)
+		return e.pingV1()
 	case APIVersion2:
-		return e.pingV2(factory)
+		return e.pingV2()
 	}
 
 	// APIVersionUnknown
 	// We should try v2 first...
 	e.Version = APIVersion2
-	regInfo, errV2 := e.pingV2(factory)
+	regInfo, errV2 := e.pingV2()
 	if errV2 == nil {
 		return regInfo, nil
 	}
 
 	// ... then fallback to v1.
 	e.Version = APIVersion1
-	regInfo, errV1 := e.pingV1(factory)
+	regInfo, errV1 := e.pingV1()
 	if errV1 == nil {
 		return regInfo, nil
 	}
 
 	e.Version = APIVersionUnknown
-	return RegistryInfo{}, fmt.Errorf("unable to ping registry endpoint %s\nv2 ping attempt failed with error: %s\n v1 ping attempt failed with error: %s", e, errV2, errV1)
+	return PingResult{}, fmt.Errorf("unable to ping registry endpoint %s\nv2 ping attempt failed with error: %s\n v1 ping attempt failed with error: %s", e, errV2, errV1)
 }
 
-func (e *Endpoint) pingV1(factory *utils.HTTPRequestFactory) (RegistryInfo, error) {
-	log.Debugf("attempting v1 ping for registry endpoint %s", e)
+func (e *Endpoint) pingV1() (PingResult, error) {
+	logrus.Debugf("attempting v1 ping for registry endpoint %s", e)
 
-	if e.String() == IndexServerAddress() {
+	if e.String() == IndexServer {
 		// Skip the check, we know this one is valid
 		// (and we never want to fallback to http in case of error)
-		return RegistryInfo{Standalone: false}, nil
+		return PingResult{Standalone: false}, nil
 	}
 
-	req, err := factory.NewRequest("GET", e.Path("_ping"), nil)
+	req, err := http.NewRequest("GET", e.Path("_ping"), nil)
 	if err != nil {
-		return RegistryInfo{Standalone: false}, err
+		return PingResult{Standalone: false}, err
 	}
 
-	resp, _, err := doRequest(req, nil, ConnectTimeout, e.IsSecure)
+	resp, err := e.client.Do(req)
 	if err != nil {
-		return RegistryInfo{Standalone: false}, err
+		return PingResult{Standalone: false}, err
 	}
 
 	defer resp.Body.Close()
 
 	jsonString, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return RegistryInfo{Standalone: false}, fmt.Errorf("error while reading the http response: %s", err)
+		return PingResult{Standalone: false}, fmt.Errorf("error while reading the http response: %s", err)
 	}
 
 	// If the header is absent, we assume true for compatibility with earlier
 	// versions of the registry. default to true
-	info := RegistryInfo{
+	info := PingResult{
 		Standalone: true,
 	}
 	if err := json.Unmarshal(jsonString, &info); err != nil {
-		log.Debugf("Error unmarshalling the _ping RegistryInfo: %s", err)
+		logrus.Debugf("Error unmarshalling the _ping PingResult: %s", err)
 		// don't stop here. Just assume sane defaults
 	}
 	if hdr := resp.Header.Get("X-Docker-Registry-Version"); hdr != "" {
-		log.Debugf("Registry version header: '%s'", hdr)
+		logrus.Debugf("Registry version header: '%s'", hdr)
 		info.Version = hdr
 	}
-	log.Debugf("RegistryInfo.Version: %q", info.Version)
+	logrus.Debugf("PingResult.Version: %q", info.Version)
 
 	standalone := resp.Header.Get("X-Docker-Registry-Standalone")
-	log.Debugf("Registry standalone header: '%s'", standalone)
+	logrus.Debugf("Registry standalone header: '%s'", standalone)
 	// Accepted values are "true" (case-insensitive) and "1".
 	if strings.EqualFold(standalone, "true") || standalone == "1" {
 		info.Standalone = true
@@ -211,21 +223,21 @@ func (e *Endpoint) pingV1(factory *utils.HTTPRequestFactory) (RegistryInfo, erro
 		// there is a header set, and it is not "true" or "1", so assume fails
 		info.Standalone = false
 	}
-	log.Debugf("RegistryInfo.Standalone: %t", info.Standalone)
+	logrus.Debugf("PingResult.Standalone: %t", info.Standalone)
 	return info, nil
 }
 
-func (e *Endpoint) pingV2(factory *utils.HTTPRequestFactory) (RegistryInfo, error) {
-	log.Debugf("attempting v2 ping for registry endpoint %s", e)
+func (e *Endpoint) pingV2() (PingResult, error) {
+	logrus.Debugf("attempting v2 ping for registry endpoint %s", e)
 
-	req, err := factory.NewRequest("GET", e.Path(""), nil)
+	req, err := http.NewRequest("GET", e.Path(""), nil)
 	if err != nil {
-		return RegistryInfo{}, err
+		return PingResult{}, err
 	}
 
-	resp, _, err := doRequest(req, nil, ConnectTimeout, e.IsSecure)
+	resp, err := e.client.Do(req)
 	if err != nil {
-		return RegistryInfo{}, err
+		return PingResult{}, err
 	}
 	defer resp.Body.Close()
 
@@ -244,21 +256,21 @@ HeaderLoop:
 	}
 
 	if !supportsV2 {
-		return RegistryInfo{}, fmt.Errorf("%s does not appear to be a v2 registry endpoint", e)
+		return PingResult{}, fmt.Errorf("%s does not appear to be a v2 registry endpoint", e)
 	}
 
 	if resp.StatusCode == http.StatusOK {
 		// It would seem that no authentication/authorization is required.
 		// So we don't need to parse/add any authorization schemes.
-		return RegistryInfo{Standalone: true}, nil
+		return PingResult{Standalone: true}, nil
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		// Parse the WWW-Authenticate Header and store the challenges
 		// on this endpoint object.
 		e.AuthChallenges = parseAuthHeader(resp.Header)
-		return RegistryInfo{}, nil
+		return PingResult{}, nil
 	}
 
-	return RegistryInfo{}, fmt.Errorf("v2 registry endpoint returned status %d: %q", resp.StatusCode, http.StatusText(resp.StatusCode))
+	return PingResult{}, fmt.Errorf("v2 registry endpoint returned status %d: %q", resp.StatusCode, http.StatusText(resp.StatusCode))
 }

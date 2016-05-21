@@ -37,27 +37,31 @@ var (
 var decimapAbbrs = []string{"B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
 var binaryAbbrs = []string{"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"}
 
-// HumanSize returns a human-readable approximation of a size
-// using SI standard (eg. "44kB", "17MB")
-func HumanSize(size float64) string {
-	return intToString(float64(size), 1000.0, decimapAbbrs)
-}
-
-func BytesSize(size float64) string {
-	return intToString(size, 1024.0, binaryAbbrs)
-}
-
-func intToString(size, unit float64, _map []string) string {
+// CustomSize returns a human-readable approximation of a size
+// using custom format.
+func CustomSize(format string, size float64, base float64, _map []string) string {
 	i := 0
-	for size >= unit {
-		size = size / unit
+	for size >= base {
+		size = size / base
 		i++
 	}
-	return fmt.Sprintf("%.4g %s", size, _map[i])
+	return fmt.Sprintf(format, size, _map[i])
+}
+
+// HumanSize returns a human-readable approximation of a size
+// capped at 4 valid numbers (eg. "2.746 MB", "796 KB").
+func HumanSize(size float64) string {
+	return CustomSize("%.4g %s", size, 1000.0, decimapAbbrs)
+}
+
+// BytesSize returns a human-readable size in bytes, kibibytes,
+// mebibytes, gibibytes, or tebibytes (eg. "44kiB", "17MiB").
+func BytesSize(size float64) string {
+	return CustomSize("%.4g %s", size, 1024.0, binaryAbbrs)
 }
 
 // FromHumanSize returns an integer from a human-readable specification of a
-// size using SI standard (eg. "44kB", "17MB")
+// size using SI standard (eg. "44kB", "17MB").
 func FromHumanSize(size string) (int64, error) {
 	return parseSize(size, decimalMap)
 }
@@ -70,7 +74,7 @@ func RAMInBytes(size string) (int64, error) {
 	return parseSize(size, binaryMap)
 }
 
-// Parses the human-readable size string into the amount it represents
+// Parses the human-readable size string into the amount it represents.
 func parseSize(sizeStr string, uMap unitMap) (int64, error) {
 	matches := sizeRegex.FindStringSubmatch(sizeStr)
 	if len(matches) != 3 {

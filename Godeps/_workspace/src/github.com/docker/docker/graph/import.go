@@ -1,41 +1,32 @@
 package graph
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/archive"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/httputils"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/progressreader"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/streamformatter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/runconfig"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
 
-func (s *TagStore) CmdImport(job *engine.Job) error {
-	if n := len(job.Args); n != 2 && n != 3 {
-		return fmt.Errorf("Usage: %s SRC REPO [TAG]", job.Name)
-	}
+// Import imports an image, getting the archived layer data either from
+// inConfig (if src is "-"), or from a URI specified in src. Progress output is
+// written to outStream. Repository and tag names can optionally be given in
+// the repo and tag arguments, respectively.
+func (s *TagStore) Import(src string, repo string, tag string, msg string, inConfig io.ReadCloser, outStream io.Writer, containerConfig *runconfig.Config) error {
 	var (
-		src          = job.Args[0]
-		repo         = job.Args[1]
-		tag          string
-		sf           = utils.NewStreamFormatter(job.GetenvBool("json"))
-		archive      archive.ArchiveReader
-		resp         *http.Response
-		stdoutBuffer = bytes.NewBuffer(nil)
-		newConfig    runconfig.Config
+		sf      = streamformatter.NewJSONStreamFormatter()
+		archive io.ReadCloser
+		resp    *http.Response
 	)
-	if len(job.Args) > 2 {
-		tag = job.Args[2]
-	}
 
 	if src == "-" {
-		archive = job.Stdin
+		archive = inConfig
 	} else {
+		inConfig.Close()
 		u, err := url.Parse(src)
 		if err != nil {
 			return err
@@ -45,54 +36,44 @@ func (s *TagStore) CmdImport(job *engine.Job) error {
 			u.Host = src
 			u.Path = ""
 		}
-		job.Stdout.Write(sf.FormatStatus("", "Downloading from %s", u))
-		resp, err = utils.Download(u.String())
+		outStream.Write(sf.FormatStatus("", "Downloading from %s", u))
+		resp, err = httputils.Download(u.String())
 		if err != nil {
 			return err
 		}
 		progressReader := progressreader.New(progressreader.Config{
 			In:        resp.Body,
-			Out:       job.Stdout,
+			Out:       outStream,
 			Formatter: sf,
-			Size:      int(resp.ContentLength),
+			Size:      resp.ContentLength,
 			NewLines:  true,
 			ID:        "",
 			Action:    "Importing",
 		})
-		defer progressReader.Close()
 		archive = progressReader
 	}
 
-	buildConfigJob := job.Eng.Job("build_config")
-	buildConfigJob.Stdout.Add(stdoutBuffer)
-	buildConfigJob.Setenv("changes", job.Getenv("changes"))
-	// FIXME this should be remove when we remove deprecated config param
-	buildConfigJob.Setenv("config", job.Getenv("config"))
-
-	if err := buildConfigJob.Run(); err != nil {
-		return err
-	}
-	if err := json.NewDecoder(stdoutBuffer).Decode(&newConfig); err != nil {
-		return err
+	defer archive.Close()
+	if len(msg) == 0 {
+		msg = "Imported from " + src
 	}
 
-	img, err := s.graph.Create(archive, "", "", "Imported from "+src, "", nil, &newConfig)
+	img, err := s.graph.Create(archive, "", "", msg, "", nil, containerConfig)
 	if err != nil {
 		return err
 	}
 	// Optionally register the image at REPO/TAG
 	if repo != "" {
-		if err := s.Set(repo, tag, img.ID, true); err != nil {
+		if err := s.Tag(repo, tag, img.ID, true); err != nil {
 			return err
 		}
 	}
-	job.Stdout.Write(sf.FormatStatus("", img.ID))
+	outStream.Write(sf.FormatStatus("", img.ID))
 	logID := img.ID
 	if tag != "" {
 		logID = utils.ImageReference(logID, tag)
 	}
-	if err = job.Eng.Job("log", "import", logID, "").Run(); err != nil {
-		log.Errorf("Error logging event 'import' for %s: %s", logID, err)
-	}
+
+	s.eventsService.Log("import", logID, "")
 	return nil
 }
