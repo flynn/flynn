@@ -217,6 +217,7 @@ func appHandler(c handlerConfig) http.Handler {
 	deploymentRepo := NewDeploymentRepo(c.db)
 	eventRepo := NewEventRepo(c.db)
 	backupRepo := NewBackupRepo(c.db)
+	volumeRepo := NewVolumeRepo(c.db)
 
 	api := controllerAPI{
 		domainMigrationRepo: domainMigrationRepo,
@@ -230,6 +231,7 @@ func appHandler(c handlerConfig) http.Handler {
 		deploymentRepo:      deploymentRepo,
 		eventRepo:           eventRepo,
 		backupRepo:          backupRepo,
+		volumeRepo:          volumeRepo,
 		clusterClient:       c.cc,
 		logaggc:             c.lc,
 		routerc:             c.rc,
@@ -278,6 +280,10 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/apps/:apps_id/jobs", httphelper.WrapHandler(api.appLookup(api.ListJobs)))
 	httpRouter.DELETE("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.KillJob)))
 	httpRouter.GET("/active-jobs", httphelper.WrapHandler(api.ListActiveJobs))
+
+	httpRouter.GET("/volumes", httphelper.WrapHandler(api.ListVolumes))
+	httpRouter.GET("/volumes/:volume_id", httphelper.WrapHandler(api.GetVolume))
+	httpRouter.PUT("/volumes/:volume_id", httphelper.WrapHandler(api.PutVolume))
 
 	httpRouter.POST("/apps/:apps_id/deploy", httphelper.WrapHandler(api.appLookup(api.CreateDeployment)))
 	httpRouter.GET("/apps/:apps_id/deployments", httphelper.WrapHandler(api.appLookup(api.ListDeployments)))
@@ -358,6 +364,7 @@ type controllerAPI struct {
 	deploymentRepo      *DeploymentRepo
 	eventRepo           *EventRepo
 	backupRepo          *BackupRepo
+	volumeRepo          *VolumeRepo
 	clusterClient       utils.ClusterClient
 	logaggc             logClient
 	routerc             routerc.Client

@@ -172,6 +172,7 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		&f.App.ID,
 		&f.App.Name,
 		&f.App.Meta,
+		&f.App.PersistencePolicy,
 		&f.Release.ID,
 		&artifactIDs,
 		&f.Release.Meta,

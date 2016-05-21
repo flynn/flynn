@@ -40,6 +40,7 @@ type FakeHostClient struct {
 	eventChannelsMtx sync.Mutex
 	eventChannels    map[chan<- *host.Event]struct{}
 	jobsMtx          sync.RWMutex
+	volumesMtx       sync.RWMutex
 	Healthy          bool
 	TestEventHook    chan struct{}
 }
@@ -173,10 +174,24 @@ func (c *FakeHostClient) SetAttachFunc(id string, f attachFunc) {
 }
 
 func (c *FakeHostClient) CreateVolume(providerID string) (*volume.Info, error) {
+	c.volumesMtx.Lock()
+	defer c.volumesMtx.Unlock()
+
 	id := random.UUID()
 	volume := &volume.Info{ID: id}
 	c.volumes[id] = volume
 	return volume, nil
+}
+
+func (c *FakeHostClient) ListVolumes() ([]*volume.Info, error) {
+	c.volumesMtx.RLock()
+	defer c.volumesMtx.RUnlock()
+
+	volumes := make([]*volume.Info, 0, len(c.volumes))
+	for _, v := range c.volumes {
+		volumes = append(volumes, v)
+	}
+	return volumes, nil
 }
 
 func (c *FakeHostClient) StreamEvents(id string, ch chan *host.Event) (stream.Stream, error) {

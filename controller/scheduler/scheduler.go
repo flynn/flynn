@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	host "github.com/flynn/flynn/host/types"
+	hv "github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -50,6 +51,7 @@ type Scheduler struct {
 	maxHostChecks int
 
 	formations Formations
+	volumes    map[string]*ct.Volume
 	hosts      map[string]*Host
 	jobs       Jobs
 
@@ -66,6 +68,7 @@ type Scheduler struct {
 	hostEvents            chan *discoverd.Event
 	formationEvents       chan *ct.ExpandedFormation
 	putJobs               chan *ct.Job
+	putVolumes            chan *ct.Volume
 	placementRequests     chan *PlacementRequest
 	internalStateRequests chan *InternalStateRequest
 
@@ -94,13 +97,18 @@ type Scheduler struct {
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc Discoverd, l log15.Logger) *Scheduler {
 	return &Scheduler{
-		ControllerClient:      cc,
-		ClusterClient:         cluster,
-		discoverd:             disc,
-		logger:                l,
-		maxHostChecks:         defaultMaxHostChecks,
-		hosts:                 make(map[string]*Host),
-		jobs:                  make(map[string]*Job),
+		ControllerClient: cc,
+		ClusterClient:    cluster,
+		discoverd:        disc,
+		logger:           l,
+		maxHostChecks:    defaultMaxHostChecks,
+		hosts:            make(map[string]*Host),
+		jobs:             make(map[string]*Job),
+		// TODO(jpg): Better datastructure. Probably map[appId,processType] -> []*ct.Volume
+		// This would enable fast access for the main thing we want to compute which
+		// is what volumes do we already have for this app + processType combination
+		// and if we need to create new ones, or reuse existing ones.
+		volumes:               make(map[string]*ct.Volume),
 		formations:            make(Formations),
 		jobEvents:             make(chan *host.Event, eventBufferSize),
 		stop:                  make(chan struct{}),
@@ -113,6 +121,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		formationEvents:       make(chan *ct.ExpandedFormation, eventBufferSize),
 		hostEvents:            make(chan *discoverd.Event, eventBufferSize),
 		putJobs:               make(chan *ct.Job, eventBufferSize),
+		putVolumes:            make(chan *ct.Volume, eventBufferSize),
 		placementRequests:     make(chan *PlacementRequest, eventBufferSize),
 		internalStateRequests: make(chan *InternalStateRequest, eventBufferSize),
 		formationlessJobs:     make(map[utils.FormationKey]map[string]*Job),
@@ -281,7 +290,7 @@ func (s *Scheduler) Run() error {
 	log.Info("starting scheduler loop")
 	defer log.Info("scheduler loop exited")
 
-	go s.RunPutJobs()
+	go s.RunPersist()
 
 	// stream host events (which will start watching job events on
 	// all current hosts before returning) *before* registering in
@@ -691,6 +700,11 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	// start
 	req.Job.HostID = ""
 
+	//TODO(jpg): Need to modify logic if we are searching for a volume.
+	// Not sure how we will handle priority of placing job on a host without an
+	// existing job of the same release/type running but I'm sure we will figure
+	// something out.
+
 	formation := req.Job.Formation
 	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
 	var minCount int = math.MaxInt32
@@ -837,19 +851,39 @@ func (s *Scheduler) ShuffledHosts() []*Host {
 	return hosts
 }
 
-func (s *Scheduler) RunPutJobs() {
-	log := s.logger.New("fn", "RunPutJobs")
-	log.Info("starting job persistence loop")
+func (s *Scheduler) RunPersist() {
+	log := s.logger.New("fn", "RunPersist")
+	log.Info("starting persistence loop")
 	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
-	for job := range s.putJobs {
-		err := strategy.RunWithValidator(func() error {
-			return s.PutJob(job)
-		}, httphelper.IsRetryableError)
-		if err != nil {
-			log.Error("error persisting job", "job.id", job.ID, "job.state", job.State, "err", err)
+	for {
+		select {
+		case job, ok := <-s.putJobs:
+			if !ok {
+				break // scheduler is shutting down
+			}
+			err := strategy.RunWithValidator(func() error {
+				return s.PutJob(job)
+			}, httphelper.IsRetryableError)
+			if err != nil {
+				log.Error("error persisting job", "job.id", job.ID, "job.state", job.State, "err", err)
+			}
+		default:
+		}
+		select {
+		case vol, ok := <-s.putVolumes:
+			if !ok {
+				break // scheduler is shutting down
+			}
+			err := strategy.RunWithValidator(func() error {
+				return s.PutVolume(vol)
+			}, httphelper.IsRetryableError)
+			if err != nil {
+				log.Error("error persisting volume", "volume.id", vol.ID, "err", err)
+			}
+		default:
 		}
 	}
-	log.Info("stopping job persistence loop")
+	log.Info("stopping persistence loop")
 }
 
 func (s *Scheduler) HandleLeaderChange(isLeader bool) {
@@ -927,6 +961,12 @@ func (s *Scheduler) StartJob(job *Job) {
 			time.Sleep(delay)
 		}
 
+		// TODO(jpg): PlaceJob will already know if a volume needs a data volume provisioned.
+		// what we need to do however is be able to map jobs to volumes in memory in the scheduler
+		// and update said mapping here if we find a volume along with placing the job on the same
+		// host as that volume.
+		// If we track it in memory in s.jobs then we will need to adjust job.needsVolume to be aware
+		// of this state and only create a volume on the target host if there is no mapping available.
 		log.Info("placing job in the cluster")
 		config, host, err := s.PlaceJob(job)
 		if err == ErrNotLeader {
@@ -943,13 +983,21 @@ func (s *Scheduler) StartJob(job *Job) {
 			continue
 		}
 
+		// TODO(jpg): needsVolume will need to be modified in some way to determine whether we actually need to provision
+		// a new volume or if during PlaceJob we chose a host that already has a volume ready for us.
 		if job.needsVolume() {
 			log.Info("provisioning data volume", "host.id", host.ID)
-			if err := utils.ProvisionVolume(host.client, config); err != nil {
+			vol, err := utils.ProvisionVolume(host.client, config)
+			if err != nil {
 				log.Error("error provisioning volume", "err", err)
 				continue
 			}
+			v := &ct.Volume{ID: vol.ID, HostID: host.ID}
+			s.volumes[vol.ID] = v
+			s.persistVolume(v)
 		}
+
+		// TODO(jpg): Persist new volume to controller here.
 
 		log.Info("adding job to the cluster", "host.id", host.ID, "job.id", config.ID)
 		if err := host.client.AddJob(config); err != nil {
@@ -994,6 +1042,18 @@ func (s *Scheduler) followHost(h utils.HostClient) (*Host, error) {
 		return nil, err
 	}
 	s.hosts[host.ID] = host
+
+	// TODO(jpg): We should grab all the volumes here
+	// Once again need to think about how/where we persist this back to controller
+	// We also need to think about adding streaming support etc to have better
+	// parity to what we have for jobs.
+	volumes, err := host.client.ListVolumes()
+	if err != nil {
+		return nil, err
+	}
+	for _, volume := range volumes {
+		s.handleVolume(host, volume)
+	}
 
 	for _, job := range jobs {
 		s.handleActiveJob(&job)
@@ -1181,6 +1241,20 @@ func (s *Scheduler) HandleJobEvent(e *host.Event) {
 	}
 }
 
+func (s *Scheduler) handleVolume(host *Host, volInfo *hv.Info) {
+	// TODO(jpg): I guess we need to handle updates to host ID too as we don't
+	// have stable host IDs right now unless people are good citizens
+	vol, ok := s.volumes[volInfo.ID]
+	if !ok {
+		vol = &ct.Volume{ID: volInfo.ID, HostID: host.ID}
+		s.volumes[volInfo.ID] = vol
+	}
+	// TODO(jpg): Detect if state has actually been updated, if so then we should persist
+	// otherwise don't. For now, always persist!
+	s.persistVolume(vol)
+	return
+}
+
 func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 	hostJob := activeJob.Job
 	appID := hostJob.Metadata["flynn-controller.app"]
@@ -1192,6 +1266,10 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 	}
 
 	jobType := hostJob.Metadata["flynn-controller.type"]
+
+	// TODO(jpg): We need to extract volume attachment information here
+	// Also need to think about how we trigger persistence of that back
+	// to the controller.
 
 	// lookup the job using the UUID part of the job ID (see the
 	// description of Job.ID)
@@ -1221,12 +1299,41 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 	job.hostError = activeJob.Error
 
 	s.handleJobStatus(job, activeJob.Status)
+	s.handleVolumeAttachments(job, activeJob.Job.Config.Volumes)
 
 	return job
 }
 
 func (s *Scheduler) markAsStopped(job *Job) {
 	s.handleJobStatus(job, host.StatusDone)
+}
+
+func (s *Scheduler) handleVolumeAttachments(job *Job, volBindings []host.VolumeBinding) {
+	// TODO(jpg) What we need to do here is compare our current in memory state to what we get back
+	// in the container configuration. If it differs, persist back what we got from the host.
+	// Currently this will only ever matter the first time we see a job as there isn't currently
+	// a mount/unmount API for host but this code written probably should handle it if it's ever added.
+
+	// For now because I'm lazy and I want to get stuff working we are just going to always persist.
+	for _, binding := range volBindings {
+		vol, ok := s.volumes[binding.VolumeID]
+		// Add volume to in-memory state if we don't have it.
+		if !ok {
+			vol = &ct.Volume{ID: binding.VolumeID, HostID: job.HostID}
+			s.volumes[binding.VolumeID] = vol
+		}
+		present := false
+		for _, attach := range vol.Attachments {
+			if attach.JobID == job.ID && attach.Target == binding.Target {
+				present = true
+				break
+			}
+		}
+		if !present {
+			vol.Attachments = append(vol.Attachments, ct.VolumeAttachment{JobID: job.ID, Writeable: binding.Writeable, Target: binding.Target})
+		}
+		s.persistVolume(vol)
+	}
 }
 
 func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
@@ -1303,6 +1410,12 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 
 func (s *Scheduler) persistJob(job *Job) {
 	s.persistControllerJob(job.ControllerJob())
+}
+
+func (s *Scheduler) persistVolume(vol *ct.Volume) {
+	if s.isLeader == nil || *s.isLeader {
+		s.putVolumes <- vol
+	}
 }
 
 // persistControllerJob triggers the RunPutJobs goroutine to persist the job to

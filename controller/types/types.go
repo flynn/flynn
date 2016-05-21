@@ -26,14 +26,15 @@ type ExpandedFormation struct {
 }
 
 type App struct {
-	ID            string            `json:"id,omitempty"`
-	Name          string            `json:"name,omitempty"`
-	Meta          map[string]string `json:"meta"`
-	Strategy      string            `json:"strategy,omitempty"`
-	ReleaseID     string            `json:"release,omitempty"`
-	DeployTimeout int32             `json:"deploy_timeout,omitempty"`
-	CreatedAt     *time.Time        `json:"created_at,omitempty"`
-	UpdatedAt     *time.Time        `json:"updated_at,omitempty"`
+	ID                string            `json:"id,omitempty"`
+	Name              string            `json:"name,omitempty"`
+	Meta              map[string]string `json:"meta"`
+	Strategy          string            `json:"strategy,omitempty"`
+	PersistencePolicy string            `json:"persistence_policy,omitempty"`
+	ReleaseID         string            `json:"release,omitempty"`
+	DeployTimeout     int32             `json:"deploy_timeout,omitempty"`
+	CreatedAt         *time.Time        `json:"created_at,omitempty"`
+	UpdatedAt         *time.Time        `json:"updated_at,omitempty"`
 }
 
 func (a *App) System() bool {
@@ -470,4 +471,18 @@ type AppGarbageCollection struct {
 type AppGarbageCollectionEvent struct {
 	AppGarbageCollection *AppGarbageCollection `json:"app_garbage_collection"`
 	Error                string                `json:"error"`
+}
+
+type Volume struct {
+	ID          string             `json:"id"`
+	HostID      string             `json:"host_id"`
+	Attachments []VolumeAttachment `json:"attachments,omitempty"`
+	CreatedAt   *time.Time         `json:"created_at,omitempty"`
+	UpdatedAt   *time.Time         `json:"updated_at,omitempty"`
+}
+
+type VolumeAttachment struct {
+	JobID     string `json:"job_id"`
+	Writeable bool   `json:"writeable"`
+	Target    string `json:"target"`
 }

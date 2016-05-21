@@ -723,6 +723,20 @@ func (c *Client) ProviderList() ([]*ct.Provider, error) {
 	return providers, c.Get("/providers", &providers)
 }
 
+// PutVolume updates an existing volume.
+func (c *Client) PutVolume(vol *ct.Volume) error {
+	if vol.ID == "" {
+		return errors.New("controller: missing id")
+	}
+	return c.Put(fmt.Sprintf("/volumes/%s", vol.ID), vol, vol)
+}
+
+// VolumeList returns a list of all volumes.
+func (c *Client) VolumeList() ([]*ct.Volume, error) {
+	var volumes []*ct.Volume
+	return volumes, c.Get("/volumes", &volumes)
+}
+
 // Backup takes a backup of the cluster
 func (c *Client) Backup() (io.ReadCloser, error) {
 	res, err := c.RawReq("GET", "/backup", nil, nil, nil)

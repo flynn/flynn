@@ -127,18 +127,28 @@ func (c *Host) StreamEvents(id string, ch chan *host.Event) (stream.Stream, erro
 	return c.c.ResumingStream("GET", r, ch)
 }
 
-// CreateVolume a new volume, returning its ID.
+// Storage provider API
 // When in doubt, use a providerId of "default".
+
+// ListVolumes lists the volumes on a host
+func (c *Host) ListVolumes() ([]*volume.Info, error) {
+	var volumes []*volume.Info
+	return volumes, c.c.Get("/storage/volumes", &volumes)
+}
+
+// CreateVolume a new volume on a host
 func (c *Host) CreateVolume(providerId string) (*volume.Info, error) {
 	var res volume.Info
 	err := c.c.Post(fmt.Sprintf("/storage/providers/%s/volumes", providerId), nil, &res)
 	return &res, err
 }
 
+// DestroyVolume deletes a volume
 func (c *Host) DestroyVolume(volumeID string) error {
 	return c.c.Delete(fmt.Sprintf("/storage/volumes/%s", volumeID))
 }
 
+// CreateSnapshot creates a snapshot of a volume on a host
 func (c *Host) CreateSnapshot(volumeID string) (*volume.Info, error) {
 	var res volume.Info
 	err := c.c.Put(fmt.Sprintf("/storage/volumes/%s/snapshot", volumeID), nil, &res)

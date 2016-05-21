@@ -77,17 +77,17 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	return job
 }
 
-func ProvisionVolume(h VolumeCreator, job *host.Job) error {
+func ProvisionVolume(h VolumeCreator, job *host.Job) (*volume.Info, error) {
 	vol, err := h.CreateVolume("default")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	job.Config.Volumes = []host.VolumeBinding{{
 		Target:    "/data",
 		VolumeID:  vol.ID,
 		Writeable: true,
 	}}
-	return nil
+	return vol, nil
 }
 
 func JobMetaFromMetadata(metadata map[string]string) map[string]string {
@@ -171,6 +171,7 @@ type HostClient interface {
 	Attach(*host.AttachReq, bool) (cluster.AttachClient, error)
 	StopJob(string) error
 	ListJobs() (map[string]host.ActiveJob, error)
+	ListVolumes() ([]*volume.Info, error)
 	StreamEvents(id string, ch chan *host.Event) (stream.Stream, error)
 	GetStatus() (*host.HostStatus, error)
 }
@@ -195,6 +196,8 @@ type ControllerClient interface {
 	FormationListActive() ([]*ct.ExpandedFormation, error)
 	PutJob(*ct.Job) error
 	JobListActive() ([]*ct.Job, error)
+	PutVolume(vol *ct.Volume) error
+	VolumeList() ([]*ct.Volume, error)
 }
 
 func ClusterClientWrapper(c *cluster.Client) clusterClientWrapper {

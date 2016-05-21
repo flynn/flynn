@@ -64,10 +64,13 @@ func (r *AppRepo) Add(data interface{}) error {
 	if app.Strategy == "" {
 		app.Strategy = "all-at-once"
 	}
+	if app.PersistencePolicy == "" {
+		app.PersistencePolicy = "none"
+	}
 	if app.DeployTimeout == 0 {
 		app.DeployTimeout = ct.DefaultDeployTimeout
 	}
-	if err := tx.QueryRow("app_insert", app.ID, app.Name, app.Meta, app.Strategy, app.DeployTimeout).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+	if err := tx.QueryRow("app_insert", app.ID, app.Name, app.Meta, app.Strategy, app.PersistencePolicy, app.DeployTimeout).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
 		tx.Rollback()
 		if postgres.IsUniquenessError(err, "apps_name_idx") {
 			return httphelper.ObjectExistsErr(fmt.Sprintf("application %q already exists", app.Name))
@@ -107,7 +110,7 @@ func (r *AppRepo) Add(data interface{}) error {
 func scanApp(s postgres.Scanner) (*ct.App, error) {
 	app := &ct.App{}
 	var releaseID *string
-	err := s.Scan(&app.ID, &app.Name, &app.Meta, &app.Strategy, &releaseID, &app.DeployTimeout, &app.CreatedAt, &app.UpdatedAt)
+	err := s.Scan(&app.ID, &app.Name, &app.Meta, &app.Strategy, &app.PersistencePolicy, &releaseID, &app.DeployTimeout, &app.CreatedAt, &app.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	} else if err != nil {
@@ -168,6 +171,17 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 			}
 			app.Strategy = strategy
 			if err := tx.Exec("app_update_strategy", app.ID, app.Strategy); err != nil {
+				tx.Rollback()
+				return nil, err
+			}
+		case "persistence_policy":
+			policy, ok := v.(string)
+			if !ok {
+				tx.Rollback()
+				return nil, fmt.Errorf("controller: expected string, got %T", v)
+			}
+			app.PersistencePolicy = policy
+			if err := tx.Exec("app_update_persistence_policy", app.ID, app.PersistencePolicy); err != nil {
 				tx.Rollback()
 				return nil, err
 			}

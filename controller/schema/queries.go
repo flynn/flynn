@@ -70,10 +70,16 @@ var preparedStatements = map[string]string{
 	"app_resource_insert_app_by_name_or_id": appResourceInsertAppByNameOrIDQuery,
 	"app_resource_delete_by_app":            appResourceDeleteByAppQuery,
 	"app_resource_delete_by_resource":       appResourceDeleteByResourceQuery,
-	"domain_migration_insert":               domainMigrationInsert,
-	"backup_insert":                         backupInsert,
-	"backup_update":                         backupUpdate,
-	"backup_select_latest":                  backupSelectLatest,
+	"domain_migration_insert":               domainMigrationInsertQuery,
+	"backup_insert":                         backupInsertQuery,
+	"backup_update":                         backupUpdateQuery,
+	"backup_select_latest":                  backupSelectLatestQuery,
+	"volume_list":                           volumeListQuery,
+	"volume_select":                         volumeSelectQuery,
+	"volume_insert":                         volumeInsertQuery,
+	"volume_update":                         volumeUpdateQuery,
+	"volume_attachment_insert":              volumeAttachmentInsertQuery,
+	"volume_attachment_update":              volumeAttachmentUpdateQuery,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
@@ -93,24 +99,26 @@ const (
 	pingQuery = `SELECT 1`
 	// apps
 	appListQuery = `
-SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
+SELECT app_id, name, meta, strategy, persistence_policy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC`
 	appSelectByNameQuery = `
-SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
+SELECT app_id, name, meta, strategy, persistence_policy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND name = $1`
 	appSelectByNameForUpdateQuery = `
-SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
+SELECT app_id, name, meta, strategy, persistence_policy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND name = $1 FOR UPDATE`
 	appSelectByNameOrIDQuery = `
-SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
+SELECT app_id, name, meta, strategy, persistence_policy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND (app_id = $1 OR name = $2) LIMIT 1`
 	appSelectByNameOrIDForUpdateQuery = `
-SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
+SELECT app_id, name, meta, strategy, persistence_policy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND (app_id = $1 OR name = $2) LIMIT 1 FOR UPDATE`
 	appInsertQuery = `
-INSERT INTO apps (app_id, name, meta, strategy, deploy_timeout) VALUES ($1, $2, $3, $4, $5) RETURNING created_at, updated_at`
+INSERT INTO apps (app_id, name, meta, strategy, persistence_policy, deploy_timeout) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at`
 	appUpdateStrategyQuery = `
 UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1`
+	appUpdatePersistencePolicyQuery = `
+UPDATE apps SET persistence_policy = $2, updated_at = now() WHERE app_id = $1`
 	appUpdateMetaQuery = `
 UPDATE apps SET meta = $2, updated_at = now() WHERE app_id = $1`
 	appUpdateReleaseQuery = `
@@ -233,7 +241,7 @@ SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE release_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`
 	formationListActiveQuery = `
 SELECT
-  apps.app_id, apps.name, apps.meta,
+  apps.app_id, apps.name, apps.meta, apps.persistence_policy,
   releases.release_id,
   ARRAY(
 	SELECT r.artifact_id
@@ -263,7 +271,7 @@ SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 	formationSelectExpandedQuery = `
 SELECT
-  apps.app_id, apps.name, apps.meta,
+  apps.app_id, apps.name, apps.meta, apps.persistence_policy,
   releases.release_id,
   ARRAY(
 	SELECT a.artifact_id
@@ -376,12 +384,26 @@ RETURNING app_id`
 DELETE FROM app_resources WHERE app_id = $1`
 	appResourceDeleteByResourceQuery = `
 DELETE FROM app_resources WHERE resource_id = $1`
-	domainMigrationInsert = `
+	domainMigrationInsertQuery = `
 INSERT INTO domain_migrations (old_domain, domain, old_tls_cert, tls_cert) VALUES ($1, $2, $3, $4) RETURNING migration_id, created_at`
-	backupInsert = `
+	backupInsertQuery = `
 INSERT INTO backups (status, sha512, size, error, completed_at) VALUES ($1, $2, $3, $4, $5) RETURNING backup_id, created_at, updated_at`
-	backupUpdate = `
+	backupUpdateQuery = `
 UPDATE backups SET status = $2, sha512 = $3, size = $4, error = $5, completed_at = $6, updated_at = now() WHERE backup_id = $1 RETURNING updated_at`
-	backupSelectLatest = `
+	backupSelectLatestQuery = `
 SELECT backup_id, status, sha512, size, error, created_at, updated_at, completed_at FROM backups WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1`
+	volumeListQuery = `
+SELECT v.volume_id, v.host_id, v.created_at, v.updated_at, (SELECT json_agg(va) FROM volume_attachments va WHERE va.volume_id = v.volume_id) AS attachments FROM volume_cache v ORDER BY v.updated_at`
+	volumeInsertQuery = `
+INSERT INTO volume_cache (volume_id, host_id) VALUES ($1, $2) RETURNING created_at, updated_at`
+	volumeUpdateQuery = `
+UPDATE volume_cache SET host_id = $2, updated_at = now()
+WHERE volume_id = $1 RETURNING updated_at`
+	volumeSelectQuery = `
+SELECT v.volume_id, v.host_id, v.created_at, v.updated_at, (SELECT json_agg(va) FROM volume_attachments va WHERE va.volume_id = v.volume_id) AS attachments FROM volume_cache v WHERE volume_id = $1`
+	volumeAttachmentInsertQuery = `
+INSERT INTO volume_attachments (volume_id, job_id, target, writeable) VALUES ($1, $2, $3, $4)`
+	volumeAttachmentUpdateQuery = `
+UPDATE volume_attachments SET writeable = $4
+WHERE volume_id = $1 AND job_id = $2 AND target = $3`
 )

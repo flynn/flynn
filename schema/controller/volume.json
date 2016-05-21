@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/volume#",
+  "title": "Volume",
+  "description": "A volume is a durable filesystem that can be attached to jobs.",
+  "sortIndex": 20,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/volume_list#",
+    "schema/examples/controller/volume_update#",
+    "schema/examples/controller/volume_get#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "host_id": {
+      "type": "string",
+      "description": "the ID of the host the volume is running on"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "$ref": "/schema/controller/volume_attachment"
+      }
+    },
+   "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    }
+  }
+}

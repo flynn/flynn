@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/volume_attachment#",
+  "title": "Volume Attachment",
+  "description": "",
+  "sortIndex": 8,
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "job_id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "writeable": {
+      "type": "boolean"
+    },
+    "target": {
+      "type": "string"
+    }
+  }
+}

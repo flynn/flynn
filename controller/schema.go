@@ -402,6 +402,33 @@ $$ LANGUAGE plpgsql`,
 		) r
 		WHERE release_id = r.id`,
 	)
+	migrations.Add(21,
+		`
+		CREATE TABLE host_cache (
+			host_id text PRIMARY KEY
+		)
+		`,
+		`CREATE TABLE volume_cache (
+			volume_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+			host_id text,
+			created_at timestamptz NOT NULL DEFAULT now(),
+			updated_at timestamptz NOT NULL DEFAULT now()
+		)`,
+		// XXX(jpg): Need to modify the way scheduler persists jobs and volumes to we can
+		// enforce referential integrity with foriegn key on job_id
+		// Same goes for host_id
+		`CREATE TABLE volume_attachments (
+			volume_id uuid REFERENCES volume_cache (volume_id),
+			job_id uuid,
+			target text,
+			writeable boolean,
+			PRIMARY KEY (volume_id, job_id, target)
+		)`,
+		`CREATE TABLE persistence_policies (name text PRIMARY KEY)`,
+		`INSERT INTO persistence_policies (name) VALUES ('none')`,
+		`ALTER TABLE apps ADD COLUMN persistence_policy text DEFAULT 'none'`,
+		`ALTER TABLE apps ADD CONSTRAINT apps_persistence_policy_fkey FOREIGN KEY (persistence_policy) REFERENCES persistence_policies (name)`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

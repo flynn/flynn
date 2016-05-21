@@ -18,6 +18,7 @@ type FakeControllerClient struct {
 	formationStreams map[chan<- *ct.ExpandedFormation]struct{}
 	jobs             map[string]*ct.Job
 	apps             map[string]*ct.App
+	volumes          map[string]*ct.Volume
 	mtx              sync.Mutex
 }
 
@@ -29,6 +30,7 @@ func NewFakeControllerClient() *FakeControllerClient {
 		formationStreams: make(map[chan<- *ct.ExpandedFormation]struct{}),
 		apps:             make(map[string]*ct.App),
 		jobs:             make(map[string]*ct.Job),
+		volumes:          make(map[string]*ct.Volume),
 	}
 }
 
@@ -229,6 +231,25 @@ func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.
 		cc: c,
 		ch: ch,
 	}, nil
+}
+
+func (c *FakeControllerClient) VolumeList() ([]*ct.Volume, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	volumes := make([]*ct.Volume, 0, len(c.volumes))
+	for _, v := range c.volumes {
+		volumes = append(volumes, v)
+	}
+	return volumes, nil
+}
+
+func (c *FakeControllerClient) PutVolume(volume *ct.Volume) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	c.volumes[volume.ID] = volume
+	return nil
 }
 
 func (c *FakeControllerClient) PutJob(job *ct.Job) error {
