@@ -68,33 +68,43 @@ func (p *PostgresFilesystem) List(dir string) ([]string, error) {
 	return paths, rows.Err()
 }
 
-func (p *PostgresFilesystem) Put(name string, r io.Reader, typ string) error {
+func (p *PostgresFilesystem) Put(name string, r io.Reader, offset int64, typ string) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
 	}
 
 	var id pgx.Oid
-create:
-	err = tx.QueryRow("INSERT INTO files (name, type) VALUES ($1, $2) RETURNING file_id", name, typ).Scan(&id)
-	if e, ok := err.(pgx.PgError); ok && e.Code == UniqueViolation {
-		tx.Rollback()
-		tx, err = p.db.Begin()
-		if err != nil {
+	if offset > 0 {
+		if err := tx.QueryRow("SELECT file_id FROM files WHERE name = $1", name).Scan(&id); err != nil {
+			tx.Rollback()
+			if err == pgx.ErrNoRows {
+				err = ErrNotFound
+			}
 			return err
 		}
+	} else {
+	create:
+		err = tx.QueryRow("INSERT INTO files (name, type) VALUES ($1, $2) RETURNING file_id", name, typ).Scan(&id)
+		if e, ok := err.(pgx.PgError); ok && e.Code == UniqueViolation {
+			tx.Rollback()
+			tx, err = p.db.Begin()
+			if err != nil {
+				return err
+			}
 
-		// file exists, delete it first
-		err = tx.Exec("DELETE FROM files WHERE name = $1", name)
+			// file exists, delete it first
+			err = tx.Exec("DELETE FROM files WHERE name = $1", name)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+			goto create
+		}
 		if err != nil {
 			tx.Rollback()
 			return err
 		}
-		goto create
-	}
-	if err != nil {
-		tx.Rollback()
-		return err
 	}
 
 	lo, err := tx.LargeObjects()
@@ -109,14 +119,20 @@ create:
 	}
 
 	h := sha512.New()
-	size, err := io.Copy(obj, io.TeeReader(r, h))
+	if offset > 0 {
+		if _, err := io.CopyN(h, obj, offset); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	written, err := io.Copy(obj, io.TeeReader(r, h))
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
 	digest := hex.EncodeToString(h.Sum(nil))
-	err = tx.Exec("UPDATE files SET size = $2, digest = $3 WHERE file_id = $1", id, size, digest)
+	err = tx.Exec("UPDATE files SET size = $2, digest = $3 WHERE file_id = $1", id, offset+written, digest)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -131,7 +147,7 @@ func (p *PostgresFilesystem) Copy(dstPath, srcPath string) error {
 		return err
 	}
 	defer src.Close()
-	return p.Put(dstPath, src, "")
+	return p.Put(dstPath, src, 0, src.(*pgFile).typ)
 }
 
 func (p *PostgresFilesystem) Delete(name string) error {

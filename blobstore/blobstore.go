@@ -47,7 +47,7 @@ type File interface {
 type Filesystem interface {
 	List(dir string) ([]string, error)
 	Open(name string) (File, error)
-	Put(name string, r io.Reader, typ string) error
+	Put(name string, r io.Reader, offset int64, typ string) error
 	Copy(dst, src string) error
 	Delete(name string) error
 	Status() status.Status
@@ -91,7 +91,15 @@ func handler(fs Filesystem) http.Handler {
 			if src := req.Header.Get("Blobstore-Copy-From"); src != "" {
 				err = fs.Copy(path, src)
 			} else {
-				err = fs.Put(path, req.Body, req.Header.Get("Content-Type"))
+				var offset int64
+				if s := req.Header.Get("Blobstore-Offset"); s != "" {
+					offset, err = strconv.ParseInt(s, 10, 64)
+					if err != nil {
+						errorResponse(w, err)
+						return
+					}
+				}
+				err = fs.Put(path, req.Body, offset, req.Header.Get("Content-Type"))
 			}
 			if err != nil {
 				errorResponse(w, err)
