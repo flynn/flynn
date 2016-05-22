@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -179,15 +177,15 @@ func runClusterAdd(args *docopt.Args) error {
 	}
 
 	if s.DockerURL != "" {
-		u, err := url.Parse(s.DockerURL)
+		host, err := s.DockerHost()
 		if err != nil {
 			return err
 		}
-		if err := runDockerLogin(u.Host, s.Key); err != nil {
+		if err := dockerLogin(host, s.Key); err != nil {
 			if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
 				err = errors.New("Executable 'docker' was not found.")
 			} else if err == ErrDockerTLSError {
-				printDockerTLSWarning(u.Host, caPath)
+				printDockerTLSWarning(host, caPath)
 				err = errors.New("Error configuring docker, follow the instructions above then try again")
 			}
 			return err
@@ -204,35 +202,6 @@ func runClusterAdd(args *docopt.Args) error {
 		log.Printf("Cluster %q added.", s.Name)
 	}
 	return nil
-}
-
-var ErrDockerTLSError = errors.New("docker TLS error")
-
-func runDockerLogin(host, key string) error {
-	var out bytes.Buffer
-	cmd := exec.Command("docker", "login", "--email=user@"+host, "--username=user", "--password="+key, host)
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	err := cmd.Run()
-	if strings.Contains(out.String(), "certificate signed by unknown authority") {
-		err = ErrDockerTLSError
-	}
-	return err
-}
-
-func runDockerLogout(host string) error {
-	return exec.Command("docker", "logout", host).Run()
-}
-
-func printDockerTLSWarning(host, caPath string) {
-	fmt.Printf(`
-WARN: docker configuration failed with a TLS error.
-WARN:
-WARN: Copy the TLS CA certificate %s
-WARN: to /etc/docker/certs.d/%s/ca.crt
-WARN: on the docker daemon's host and restart docker.
-
-`[1:], caPath, host)
 }
 
 func writeCACert(c controller.Client, name string) (string, error) {
@@ -267,10 +236,8 @@ func runClusterRemove(args *docopt.Args) error {
 
 		cfg.RemoveGlobalGitConfig(c.GitURL)
 
-		if c.DockerURL != "" {
-			if u, err := url.Parse(c.DockerURL); err == nil {
-				runDockerLogout(u.Host)
-			}
+		if host, err := c.DockerHost(); err == nil {
+			dockerLogout(host)
 		}
 
 		log.Print(msg)
@@ -390,11 +357,12 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 
 				// try to run "docker login" for the new domain, but just print a warning
 				// if it fails so the user can fix it later
-				u, _ := url.Parse(cluster.DockerURL)
-				if err := runDockerLogin(u.Host, cluster.Key); err == ErrDockerTLSError {
-					printDockerTLSWarning(u.Host, caFile.Name())
+				if host, err := cluster.DockerHost(); err == nil {
+					if err := dockerLogin(host, cluster.Key); err == ErrDockerTLSError {
+						printDockerTLSWarning(host, caFile.Name())
+					}
 				}
-				runDockerLogout(dm.OldDomain)
+				dockerLogout(dm.OldDomain)
 
 				fmt.Println("Updated local CLI configuration")
 				return nil

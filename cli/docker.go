@@ -1,26 +1,37 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 )
 
 func init() {
-	register("docker", runDockerPush, `
-usage: flynn docker push <image>
+	register("docker", runDocker, `
+usage: flynn docker login
+       flynn docker logout
+       flynn docker push <image>
 
 Deploy Docker images to a Flynn cluster.
+
+Commands:
+	login    run "docker login" against the cluster's docker-receive app
+
+	logout   run "docker logout" against the cluster's docker-receive app
+
+	push     push and release a Docker image to the cluster
 
 Example:
 
@@ -39,6 +50,84 @@ Example:
 	flynn: deploying release using artifact URI http://docker-receive.discoverd?name=my-app&id=sha256:1752ca12bbedb99734ca1ba3ec35720768a95ad83b7b6c371fc37a28b98ea351
 	flynn: image deployed, scale it with 'flynn scale app=N'
 `)
+}
+
+func runDocker(args *docopt.Args, client controller.Client) error {
+	if args.Bool["login"] {
+		return runDockerLogin()
+	} else if args.Bool["logout"] {
+		return runDockerLogout()
+	} else if args.Bool["push"] {
+		return runDockerPush(args, client)
+	}
+	return errors.New("unknown docker subcommand")
+}
+
+func runDockerLogin() error {
+	cluster, err := getCluster()
+	if err != nil {
+		return err
+	}
+	host, err := cluster.DockerHost()
+	if err != nil {
+		return err
+	}
+	err = dockerLogin(host, cluster.Key)
+	if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
+		err = errors.New("Executable 'docker' was not found.")
+	} else if err == ErrDockerTLSError {
+		printDockerTLSWarning(host, cfg.CACertPath(cluster.Name))
+		err = errors.New("Error configuring docker, follow the above instructions and try again.")
+	}
+	return err
+}
+
+func runDockerLogout() error {
+	cluster, err := getCluster()
+	if err != nil {
+		return err
+	}
+	host, err := cluster.DockerHost()
+	if err != nil {
+		return err
+	}
+	cmd := dockerLogoutCmd(host)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+var ErrDockerTLSError = errors.New("docker TLS error")
+
+func dockerLogin(host, key string) error {
+	var out bytes.Buffer
+	cmd := exec.Command("docker", "login", "--email=user@"+host, "--username=user", "--password="+key, host)
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	if strings.Contains(out.String(), "certificate signed by unknown authority") {
+		err = ErrDockerTLSError
+	}
+	return err
+}
+
+func dockerLogout(host string) error {
+	return dockerLogoutCmd(host).Run()
+}
+
+func dockerLogoutCmd(host string) *exec.Cmd {
+	return exec.Command("docker", "logout", host)
+}
+
+func printDockerTLSWarning(host, caPath string) {
+	fmt.Printf(`
+WARN: docker configuration failed with a TLS error.
+WARN:
+WARN: Copy the TLS CA certificate %s
+WARN: to /etc/docker/certs.d/%s/ca.crt
+WARN: on the docker daemon's host and restart docker.
+
+`[1:], caPath, host)
 }
 
 func runDockerPush(args *docopt.Args, client controller.Client) error {
@@ -89,11 +178,11 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	if err != nil {
 		return err
 	}
-	u, err := url.Parse(cluster.DockerURL)
+	dockerHost, err := cluster.DockerHost()
 	if err != nil {
 		return err
 	}
-	tag := fmt.Sprintf("%s/%s:latest", u.Host, mustApp())
+	tag := fmt.Sprintf("%s/%s:latest", dockerHost, mustApp())
 	cmd = exec.Command("docker", "tag", "--force", image, tag)
 	log.Printf("flynn: tagging Docker image with %q", strings.Join(cmd.Args, " "))
 	cmd.Stdout = os.Stdout

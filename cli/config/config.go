@@ -3,7 +3,9 @@ package config
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -32,6 +34,17 @@ func (c *Cluster) Client() (controller.Client, error) {
 		}
 	}
 	return controller.NewClientWithConfig(c.ControllerURL, c.Key, controller.Config{Pin: pin})
+}
+
+func (c *Cluster) DockerHost() (string, error) {
+	if c.DockerURL == "" {
+		return "", errors.New("cluster: DockerURL not configured")
+	}
+	u, err := url.Parse(c.DockerURL)
+	if err != nil {
+		return "", fmt.Errorf("cluster: could not parse DockerURL: %s", err)
+	}
+	return u.Host, nil
 }
 
 type Config struct {
