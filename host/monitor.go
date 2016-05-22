@@ -34,14 +34,16 @@ type Monitor struct {
 	hostCount  int
 	deadline   time.Time
 	shutdownCh chan struct{}
+	logger     log15.Logger
 }
 
-func NewMonitor(dm *DiscoverdManager, addr string) *Monitor {
+func NewMonitor(dm *DiscoverdManager, addr string, logger log15.Logger) *Monitor {
 	return &Monitor{
 		dm:         dm,
 		discoverd:  nil,
 		addr:       addr,
 		shutdownCh: make(chan struct{}),
+		logger:     logger,
 	}
 }
 
@@ -66,7 +68,7 @@ func (m *Monitor) waitRaftLeader() {
 }
 
 func (m *Monitor) waitEnabled() {
-	log := logger.New("fn", "waitEnabled")
+	log := m.logger.New("fn", "waitEnabled")
 	for {
 		monitorMeta, err := m.monitorSvc.GetMeta()
 		if err != nil {
@@ -108,7 +110,7 @@ func (m *Monitor) Run() {
 	m.waitRaftLeader()
 
 	// we can connect the leader election wrapper now
-	m.discoverd = newDiscoverdWrapper(m.addr + ":1113")
+	m.discoverd = newDiscoverdWrapper(m.addr+":1113", m.logger)
 	// connect cluster client now that discoverd is up.
 	m.c = cluster.NewClient()
 

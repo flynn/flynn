@@ -28,8 +28,6 @@ import (
 
 const configFile = "/etc/flynn/host.json"
 
-var logger = log15.New("app", "host", "pid", os.Getpid())
-
 func init() {
 	cli.Register("daemon", runDaemon, `
 usage: flynn-host daemon [options]
@@ -157,7 +155,8 @@ func runDaemon(args *docopt.Args) {
 	discoveryToken := args.String["--discovery"]
 	bridgeName := args.String["--bridge-name"]
 
-	if err := setupLogger(logDir); err != nil {
+	logger, err := setupLogger(logDir)
+	if err != nil {
 		shutdown.Fatalf("error setting up logger: %s", err)
 	}
 
@@ -271,7 +270,6 @@ func runDaemon(args *docopt.Args) {
 
 	log.Info("initializing job backend", "type", backendName)
 	var backend Backend
-	var err error
 	switch backendName {
 	case "libvirt-lxc":
 		backend, err = NewLibvirtLXCBackend(state, vman, bridgeName, flynnInit, nsumount, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libvirt-lxc"))
@@ -480,7 +478,7 @@ func runDaemon(args *docopt.Args) {
 	log.Info("resurrecting jobs")
 	resurrect()
 
-	monitor := NewMonitor(host.discMan, externalIP)
+	monitor := NewMonitor(host.discMan, externalIP, logger)
 	shutdown.BeforeExit(func() { monitor.Shutdown() })
 	go monitor.Run()
 
@@ -501,15 +499,15 @@ func parseTagArgs(args string) map[string]string {
 	return tags
 }
 
-func setupLogger(logDir string) error {
+func setupLogger(logDir string) (log15.Logger, error) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return err
+		return nil, err
 	}
 	path := filepath.Join(logDir, "flynn-host.log")
 	handler, err := log15.FileHandler(path, log15.LogfmtFormat())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	logger.SetHandler(handler)
-	return nil
+	log15.Root().SetHandler(handler)
+	return log15.New("app", "host", "pid", os.Getpid()), nil
 }
