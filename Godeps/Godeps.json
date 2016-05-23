@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
 	"GoVersion": "go1.4",
-	"GodepVersion": "v63",
+	"GodepVersion": "v70",
 	"Packages": [
 		"./..."
 	],
@@ -611,6 +611,16 @@
 			"Rev": "c54fbb67c1f1e68d7d6f8d2ad7c9360404616a41"
 		},
 		{
+			"ImportPath": "github.com/flynn/docker-utils/registry",
+			"Comment": "1.1.1-42-gec23876",
+			"Rev": "ec238766da469b44c72464c11df02258375e9809"
+		},
+		{
+			"ImportPath": "github.com/flynn/docker-utils/version",
+			"Comment": "1.1.1-42-gec23876",
+			"Rev": "ec238766da469b44c72464c11df02258375e9809"
+		},
+		{
 			"ImportPath": "github.com/flynn/go-check",
 			"Rev": "5921220213810f304c0c78585f88f59287e58492"
 		},
@@ -878,17 +888,7 @@
 			"Rev": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1"
 		},
 		{
-			"ImportPath": "github.com/vbatts/docker-utils/registry",
-			"Comment": "1.2.1-8-gb851c03",
-			"Rev": "b851c03ddae1db30a4acf5e4cc5e31b6a671af35"
-		},
-		{
 			"ImportPath": "github.com/vbatts/docker-utils/sum",
-			"Comment": "1.2.1-8-gb851c03",
-			"Rev": "b851c03ddae1db30a4acf5e4cc5e31b6a671af35"
-		},
-		{
-			"ImportPath": "github.com/vbatts/docker-utils/version",
 			"Comment": "1.2.1-8-gb851c03",
 			"Rev": "b851c03ddae1db30a4acf5e4cc5e31b6a671af35"
 		},

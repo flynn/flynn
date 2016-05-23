@@ -65,7 +65,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   util/release/flynn-release manifest util/release/version_template.json > version.json
   popd >/dev/null
 
-  "${src}/script/export-components" "${src}/test/release"
+  "${src}/script/export-components" --no-compress "${src}/test/release"
   "${src}/script/release-channel" --tuf-dir "${src}/test/release" --no-sync "stable" "v20150131.0-test"
 
   dir=$(mktemp --directory)

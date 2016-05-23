@@ -17,14 +17,14 @@ import (
 From a tar input, push it to the registry.Registry r
 */
 func ExtractTar(r *Registry, in io.Reader) error {
-	return extractTar(r, in, true)
+	return extractTar(r, in, true, true)
 }
 
-func ExtractTarWithoutTarsums(r *Registry, in io.Reader) error {
-	return extractTar(r, in, false)
+func ExtractTarWithoutTarsums(r *Registry, in io.Reader, compress bool) error {
+	return extractTar(r, in, false, compress)
 }
 
-func extractTar(r *Registry, in io.Reader, tarsums bool) error {
+func extractTar(r *Registry, in io.Reader, tarsums, compress bool) error {
 	t := tar.NewReader(in)
 
 	for {
@@ -70,20 +70,21 @@ func extractTar(r *Registry, in io.Reader, tarsums bool) error {
 				return err
 			}
 			if !tarsums {
-				// generating tarsums also gzip compresses the archive, so we need
-				// to do that manually if not using tarsums
-				layer_gz, err := gzip.NewWriterLevel(layer_fh, gzip.BestCompression)
-				if err != nil {
-					return err
-				}
-				if _, err = io.Copy(layer_gz, t); err != nil {
-					return err
-				}
-				if err = layer_gz.Close(); err != nil {
-					return err
-				}
-				if err = layer_fh.Close(); err != nil {
-					return err
+				if compress {
+					layer_gz, err := gzip.NewWriterLevel(layer_fh, gzip.BestCompression)
+					if err != nil {
+						return err
+					}
+					if _, err = io.Copy(layer_gz, t); err != nil {
+						return err
+					}
+					if err = layer_gz.Close(); err != nil {
+						return err
+					}
+				} else {
+					if _, err = io.Copy(layer_fh, t); err != nil {
+						return err
+					}
 				}
 				fmt.Printf("Extracted Layer: %s\n", hashid)
 				continue
