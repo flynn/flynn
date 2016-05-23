@@ -322,6 +322,7 @@ script/configure-docker "{{ .Cluster.ClusterDomain }}"
 cli/bin/flynn cluster add \
   --tls-pin "{{ .Config.TLSPin }}" \
   --git-url "{{ .Config.GitURL }}" \
+  --docker-url "{{ .Config.DockerURL }}" \
   default \
   {{ .Config.ControllerURL }} \
   {{ .Config.Key }}
