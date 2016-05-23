@@ -204,14 +204,14 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 					{Port: 6379, Proto: "tcp"},
 					{Port: 6380, Proto: "tcp"},
 				},
-				Data: true,
-				Cmd:  []string{"redis"},
-				Env: map[string]string{
-					"FLYNN_REDIS":    serviceName,
-					"REDIS_PASSWORD": password,
-				},
+				Data:    true,
+				Cmd:     []string{"redis"},
 				Service: "redis",
 			},
+		},
+		Env: map[string]string{
+			"FLYNN_REDIS":    serviceName,
+			"REDIS_PASSWORD": password,
 		},
 	}
 
@@ -292,7 +292,7 @@ func (h *Handler) serveDeleteCluster(w http.ResponseWriter, req *http.Request, _
 	}
 
 	// Retrieve app name from env variable.
-	appName := release.Processes["redis"].Env["FLYNN_REDIS"]
+	appName := release.Env["FLYNN_REDIS"]
 	if appName == "" {
 		h.Logger.Error("unable to find app name", "release.id", releaseID)
 		httphelper.Error(w, err)
