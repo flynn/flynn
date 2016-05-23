@@ -19,6 +19,7 @@ type Cluster struct {
 	TLSPin        string `json:"tls_pin" toml:"TLSPin,omitempty"`
 	ControllerURL string `json:"controller_url"`
 	GitURL        string `json:"git_url"`
+	DockerURL     string `json:"docker_url"`
 }
 
 func (c *Cluster) Client() (controller.Client, error) {
