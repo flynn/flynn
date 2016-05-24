@@ -32,7 +32,7 @@ func (s *DockerReceiveSuite) TestPushImage(t *c.C) {
 	defer stream.Close()
 
 	// push the Docker image to docker-receive
-	u, err := url.Parse(s.clusterConf(t).DockerURL)
+	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
 	t.Assert(err, c.IsNil)
 	tag := fmt.Sprintf("%s/%s:latest", u.Host, repo)
 	t.Assert(run(t, exec.Command("docker", "tag", "--force", repo, tag)), Succeeds)

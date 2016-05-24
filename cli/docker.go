@@ -68,7 +68,7 @@ func runDockerLogin() error {
 	if err != nil {
 		return err
 	}
-	host, err := cluster.DockerHost()
+	host, err := cluster.DockerPushHost()
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func runDockerLogout() error {
 	if err != nil {
 		return err
 	}
-	host, err := cluster.DockerHost()
+	host, err := cluster.DockerPushHost()
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	if err != nil {
 		return err
 	}
-	dockerHost, err := cluster.DockerHost()
+	dockerHost, err := cluster.DockerPushHost()
 	if err != nil {
 		return err
 	}

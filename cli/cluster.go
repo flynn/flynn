@@ -24,7 +24,7 @@ import (
 func init() {
 	register("cluster", runCluster, `
 usage: flynn cluster
-       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [--docker-url <dockerurl>] [--docker] [-p <tlspin>] <cluster-name> <domain> <key>
+       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [--docker-push-url <url>] [--docker] [-p <tlspin>] <cluster-name> <domain> <key>
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
@@ -44,7 +44,7 @@ Commands:
             -d, --default             set as default cluster
             --git-url=<giturl>        git URL
             --no-git                  skip git configuration
-            --docker-url=<dockerurl>  Docker URL
+            --docker-push-url=<url>   Docker push URL
             --docker                  configure Docker to push to the cluster
             -p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert
 
@@ -108,7 +108,7 @@ func runCluster(args *docopt.Args) error {
 		if gitURL == "" {
 			gitURL = "(none)"
 		}
-		dockerURL := s.DockerURL
+		dockerURL := s.DockerPushURL
 		if dockerURL == "" {
 			dockerURL = "(none)"
 		}
@@ -123,11 +123,11 @@ func runCluster(args *docopt.Args) error {
 
 func runClusterAdd(args *docopt.Args) error {
 	s := &cfg.Cluster{
-		Name:      args.String["<cluster-name>"],
-		Key:       args.String["<key>"],
-		GitURL:    args.String["--git-url"],
-		DockerURL: args.String["--docker-url"],
-		TLSPin:    args.String["--tls-pin"],
+		Name:          args.String["<cluster-name>"],
+		Key:           args.String["<key>"],
+		GitURL:        args.String["--git-url"],
+		DockerPushURL: args.String["--docker-push-url"],
+		TLSPin:        args.String["--tls-pin"],
 	}
 	domain := args.String["<domain>"]
 	if strings.HasPrefix(domain, "https://") {
@@ -138,8 +138,8 @@ func runClusterAdd(args *docopt.Args) error {
 	if s.GitURL == "" && !args.Bool["--no-git"] {
 		s.GitURL = "https://git." + domain
 	}
-	if s.DockerURL == "" && args.Bool["--docker"] {
-		s.DockerURL = "https://docker." + domain
+	if s.DockerPushURL == "" && args.Bool["--docker"] {
+		s.DockerPushURL = "https://docker." + domain
 	}
 
 	if err := config.Add(s, args.Bool["--force"]); err != nil {
@@ -153,7 +153,7 @@ func runClusterAdd(args *docopt.Args) error {
 	}
 
 	var caPath string
-	if s.GitURL != "" || s.DockerURL != "" {
+	if s.GitURL != "" || s.DockerPushURL != "" {
 		client, err := s.Client()
 		if err != nil {
 			return err
@@ -176,8 +176,8 @@ func runClusterAdd(args *docopt.Args) error {
 		}
 	}
 
-	if s.DockerURL != "" {
-		host, err := s.DockerHost()
+	if s.DockerPushURL != "" {
+		host, err := s.DockerPushHost()
 		if err != nil {
 			return err
 		}
@@ -236,7 +236,7 @@ func runClusterRemove(args *docopt.Args) error {
 
 		cfg.RemoveGlobalGitConfig(c.GitURL)
 
-		if host, err := c.DockerHost(); err == nil {
+		if host, err := c.DockerPushHost(); err == nil {
 			dockerLogout(host)
 		}
 
@@ -336,7 +336,7 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 				cluster.TLSPin = dm.TLSCert.Pin
 				cluster.ControllerURL = fmt.Sprintf("https://controller.%s", dm.Domain)
 				cluster.GitURL = fmt.Sprintf("https://git.%s", dm.Domain)
-				cluster.DockerURL = fmt.Sprintf("https://docker.%s", dm.Domain)
+				cluster.DockerPushURL = fmt.Sprintf("https://docker.%s", dm.Domain)
 				if err := config.SaveTo(configPath()); err != nil {
 					return fmt.Errorf("Error saving config: %s", err)
 				}
@@ -357,7 +357,7 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 
 				// try to run "docker login" for the new domain, but just print a warning
 				// if it fails so the user can fix it later
-				if host, err := cluster.DockerHost(); err == nil {
+				if host, err := cluster.DockerPushHost(); err == nil {
 					if err := dockerLogin(host, cluster.Key); err == ErrDockerTLSError {
 						printDockerTLSWarning(host, caFile.Name())
 					}

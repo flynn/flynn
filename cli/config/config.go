@@ -21,7 +21,7 @@ type Cluster struct {
 	TLSPin        string `json:"tls_pin" toml:"TLSPin,omitempty"`
 	ControllerURL string `json:"controller_url"`
 	GitURL        string `json:"git_url"`
-	DockerURL     string `json:"docker_url"`
+	DockerPushURL string `json:"docker_push_url"`
 }
 
 func (c *Cluster) Client() (controller.Client, error) {
@@ -36,13 +36,13 @@ func (c *Cluster) Client() (controller.Client, error) {
 	return controller.NewClientWithConfig(c.ControllerURL, c.Key, controller.Config{Pin: pin})
 }
 
-func (c *Cluster) DockerHost() (string, error) {
-	if c.DockerURL == "" {
-		return "", errors.New("cluster: DockerURL not configured")
+func (c *Cluster) DockerPushHost() (string, error) {
+	if c.DockerPushURL == "" {
+		return "", errors.New("cluster: DockerPushURL not configured")
 	}
-	u, err := url.Parse(c.DockerURL)
+	u, err := url.Parse(c.DockerPushURL)
 	if err != nil {
-		return "", fmt.Errorf("cluster: could not parse DockerURL: %s", err)
+		return "", fmt.Errorf("cluster: could not parse DockerPushURL: %s", err)
 	}
 	return u.Host, nil
 }
@@ -106,8 +106,8 @@ func (c *Config) Add(s *Cluster, force bool) error {
 			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.GitURL)
 		case existing.ControllerURL == s.ControllerURL:
 			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.ControllerURL)
-		case existing.DockerURL != "" && existing.DockerURL == s.DockerURL:
-			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.DockerURL)
+		case existing.DockerPushURL != "" && existing.DockerPushURL == s.DockerPushURL:
+			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.DockerPushURL)
 		}
 		if m != "" {
 			if conflictIdx != -1 && conflictIdx != i {
