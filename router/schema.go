@@ -4,9 +4,11 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 )
 
-func migrateDB(db *postgres.DB) error {
-	m := postgres.NewMigrations()
-	m.Add(1,
+var migrations *postgres.Migrations
+
+func init() {
+	migrations = postgres.NewMigrations()
+	migrations.Add(1,
 		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
 		`CREATE FUNCTION set_updated_at_column() RETURNS TRIGGER AS $$
 	BEGIN
@@ -80,7 +82,7 @@ CREATE TRIGGER notify_http_route_update
 	AFTER INSERT OR UPDATE OR DELETE ON http_routes
 	FOR EACH ROW EXECUTE PROCEDURE notify_http_route_update()`,
 	)
-	m.Add(2,
+	migrations.Add(2,
 		`ALTER TABLE http_routes ADD COLUMN path text NOT NULL DEFAULT '/'`,
 		`DROP INDEX http_routes_domain_key`,
 		`CREATE UNIQUE INDEX http_routes_domain_path_key ON http_routes
@@ -137,7 +139,7 @@ CREATE TRIGGER check_http_route_update
 	FOR EACH ROW
 	EXECUTE PROCEDURE check_http_route_update()`,
 	)
-	m.Add(3,
+	migrations.Add(3,
 		// Ensure the default is set on the path column. We set this above, but
 		// releases v20151214.1, v20151214.0, v20151213.1, and v20151213.0
 		// didn't have the default specified, so this will fix any databases
@@ -145,9 +147,71 @@ CREATE TRIGGER check_http_route_update
 		// migration 2.
 		`ALTER TABLE http_routes ALTER COLUMN path SET DEFAULT '/'`,
 	)
-	m.Add(4,
+	migrations.Add(4,
 		`ALTER TABLE tcp_routes ADD COLUMN leader boolean NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE http_routes ADD COLUMN leader boolean NOT NULL DEFAULT FALSE`,
 	)
-	return m.Migrate(db)
+	migrations.Add(5,
+		`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`,
+		`CREATE TABLE certificates (
+			id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+			cert text NOT NULL,
+			key text NOT NULL,
+			cert_sha256 text NOT NULL,
+			created_at timestamptz NOT NULL DEFAULT now(),
+			updated_at timestamptz NOT NULL DEFAULT now(),
+			deleted_at timestamptz
+		)`,
+		`CREATE UNIQUE INDEX ON certificates (cert_sha256) WHERE deleted_at IS NULL`,
+		`CREATE TABLE route_certificates (
+			http_route_id uuid NOT NULL REFERENCES http_routes (id) ON DELETE CASCADE,
+			certificate_id uuid NOT NULL REFERENCES certificates (id) ON DELETE RESTRICT,
+			PRIMARY KEY (http_route_id, certificate_id)
+		)`,
+		// Create certificate for http_routes with tls_key set,
+		// taking care not to create duplicates
+		`DO $$
+		DECLARE
+			http_route RECORD;
+			certificate_id uuid;
+			certsha256 text;
+		BEGIN
+			FOR http_route IN SELECT * FROM http_routes WHERE tls_key IS NOT NULL LOOP
+				SELECT INTO certsha256 trim(leading '\\x' from digest(ltrim(' \n', rtrim(' \n', http_route.tls_cert)), 'sha256')::varchar);
+				SELECT INTO certificate_id id FROM certificates WHERE cert_sha256 = certsha256;
+
+				IF NOT FOUND THEN
+					INSERT INTO certificates (cert, key, cert_sha256)
+					VALUES (http_route.tls_cert, http_route.tls_key, certsha256)
+					RETURNING id INTO certificate_id;
+				END IF;
+
+				INSERT INTO route_certificates (http_route_id, certificate_id) VALUES(http_route.id, certificate_id);
+			END LOOP;
+		END $$`,
+		`ALTER TABLE http_routes DROP COLUMN tls_cert`,
+		`ALTER TABLE http_routes DROP COLUMN tls_key`,
+		`
+CREATE OR REPLACE FUNCTION notify_route_certificates_update() RETURNS TRIGGER AS $$
+BEGIN
+	IF (TG_OP = 'DELETE') THEN
+		PERFORM pg_notify('http_routes', OLD.http_route_id::varchar);
+	ELSIF (TG_OP = 'UPDATE') THEN
+		PERFORM pg_notify('http_routes', OLD.http_route_id::varchar);
+		PERFORM pg_notify('http_routes', NEW.http_route_id::varchar);
+	ELSIF (TG_OP = 'INSERT') THEN
+		PERFORM pg_notify('http_routes', NEW.http_route_id::varchar);
+	END IF;
+	RETURN NULL;
+END;
+$$ LANGUAGE plpgsql`,
+		`
+CREATE TRIGGER notify_route_certificates_update
+	AFTER INSERT OR UPDATE OR DELETE ON route_certificates
+	FOR EACH ROW EXECUTE PROCEDURE notify_route_certificates_update()`,
+	)
+}
+
+func migrateDB(db *postgres.DB) error {
+	return migrations.Migrate(db)
 }

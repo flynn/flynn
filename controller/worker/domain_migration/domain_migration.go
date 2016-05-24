@@ -369,12 +369,13 @@ func (m *migration) appMaybeCreateRoute(appID string, oldRoute *router.Route, ro
 		Sticky:  oldRoute.Sticky,
 		Service: oldRoute.Service,
 	}
-	if oldRoute.TLSCert == m.dm.OldTLSCert.Cert {
-		route.TLSCert = m.dm.TLSCert.Cert
-		route.TLSKey = m.dm.TLSCert.PrivateKey
+	if oldRoute.Certificate != nil && oldRoute.Certificate.Cert == m.dm.OldTLSCert.Cert {
+		route.Certificate = &router.Certificate{
+			Cert: m.dm.TLSCert.Cert,
+			Key:  m.dm.TLSCert.PrivateKey,
+		}
 	} else {
-		route.TLSCert = oldRoute.TLSCert
-		route.TLSKey = oldRoute.TLSKey
+		route.Certificate = oldRoute.Certificate
 	}
 	err := m.client.CreateRoute(appID, route)
 	if err != nil && err.Error() == "conflict: Duplicate route" {

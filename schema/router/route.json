@@ -33,11 +33,14 @@
     },
     "tls_cert": {
       "type": "string",
-      "description": "Optional TLS public certificate of this Route. It is only used for HTTP routes."
+      "description": "Deprecated in favor of certificate."
     },
     "tls_key": {
       "type": "string",
-      "description": "Optional TLS private key of this Route. It is only used for HTTP routes."
+      "description": "Deprecated in favor of certificate."
+    },
+    "certificate": {
+      "$ref": "/schema/router/certificate#"
     },
     "path": {
       "type": "string",

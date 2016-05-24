@@ -65,6 +65,17 @@ type Client interface {
 	// are filtered by the reference (ex: "controller/apps/myapp").
 	ListRoutes(parentRef string) ([]*router.Route, error)
 	StreamEvents(output chan *router.StreamEvent) (stream.Stream, error)
+
+	// CreateCert creates a new route certificate.
+	CreateCert(*router.Certificate) error
+	// GetCert returns a route cert with specified id.
+	GetCert(id string) (*router.Certificate, error)
+	// DeleteCert deletes the route certificate with the specified id.
+	DeleteCert(id string) error
+	// ListCerts returns a list of certificates.
+	ListCerts() ([]*router.Certificate, error)
+	// ListCertRoutes returns a list of routes assigned to the specified certificate.
+	ListCertRoutes(id string) ([]*router.Route, error)
 }
 
 func (c *client) CreateRoute(r *router.Route) error {
@@ -99,4 +110,30 @@ func (c *client) ListRoutes(parentRef string) ([]*router.Route, error) {
 
 func (c *client) StreamEvents(output chan *router.StreamEvent) (stream.Stream, error) {
 	return c.ResumingStream("GET", "/events", output)
+}
+
+func (c *client) CreateCert(cert *router.Certificate) error {
+	return c.Post("/certificates", cert, cert)
+}
+
+func (c *client) GetCert(id string) (*router.Certificate, error) {
+	res := &router.Certificate{}
+	err := c.Get(fmt.Sprintf("/certificates/%s", id), res)
+	return res, err
+}
+
+func (c *client) DeleteCert(id string) error {
+	return c.Delete("/certificates/" + id)
+}
+
+func (c *client) ListCerts() ([]*router.Certificate, error) {
+	var res []*router.Certificate
+	err := c.Get("/certificates", &res)
+	return res, err
+}
+
+func (c *client) ListCertRoutes(id string) ([]*router.Route, error) {
+	var res []*router.Route
+	err := c.Get(fmt.Sprintf("/certificates/%s/routes", id), &res)
+	return res, err
 }

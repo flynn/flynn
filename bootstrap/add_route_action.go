@@ -44,8 +44,10 @@ func (a *AddRouteAction) Run(s *State) error {
 			if err != nil {
 				return err
 			}
-			route.TLSCert = cert.Cert
-			route.TLSKey = cert.PrivateKey
+			route.Certificate = &router.Certificate{
+				Cert: cert.Cert,
+				Key:  cert.PrivateKey,
+			}
 		}
 		a.Route = route.ToRoute()
 	}
