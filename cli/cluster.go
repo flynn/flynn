@@ -24,7 +24,7 @@ import (
 func init() {
 	register("cluster", runCluster, `
 usage: flynn cluster
-       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [-p <tlspin>] <cluster-name> <domain> <key>
+       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [-p <tlspin>] [--docker-url <dockerurl>] <cluster-name> <domain> <key>
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
@@ -113,10 +113,11 @@ func runCluster(args *docopt.Args) error {
 
 func runClusterAdd(args *docopt.Args) error {
 	s := &cfg.Cluster{
-		Name:   args.String["<cluster-name>"],
-		Key:    args.String["<key>"],
-		GitURL: args.String["--git-url"],
-		TLSPin: args.String["--tls-pin"],
+		Name:      args.String["<cluster-name>"],
+		Key:       args.String["<key>"],
+		GitURL:    args.String["--git-url"],
+		DockerURL: args.String["--docker-url"],
+		TLSPin:    args.String["--tls-pin"],
 	}
 	domain := args.String["<domain>"]
 	if strings.HasPrefix(domain, "https://") {
