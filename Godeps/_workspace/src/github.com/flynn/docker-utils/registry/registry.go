@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/vbatts/docker-utils/version"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker-utils/version"
 )
 
 type Registry struct {

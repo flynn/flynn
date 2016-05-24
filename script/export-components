@@ -22,15 +22,29 @@ usage() {
 usage: $0 [options] TUF_DIR
 
 OPTIONS:
-  -h, --help    Show this message
+  -h, --help      Show this message
+  --no-compress   Don't compress exported images
 USAGE
 }
 
 main() {
-  if [[ $1 = "-h" ]] || [[ $1 = "--help" ]]; then
-    usage
-    exit 0
-  fi
+  local compress=true
+
+  while true; do
+    case "$1" in
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --no-compress)
+        compress=false
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
 
   if [[ $# -ne 1 ]]; then
     usage
@@ -71,7 +85,11 @@ main() {
   done
   tuf add --custom="{\"version\": \"${version}\"}"
 
-  "${ROOT}/util/release/flynn-release" export "${ROOT}/version.json" "staged/targets"
+  local export_args=()
+  if ! compress; then
+    export_args+=("--no-compress")
+  fi
+  "${ROOT}/util/release/flynn-release" export ${export_args[@]} "${ROOT}/version.json" "staged/targets"
   tuf add
 
   tuf snapshot

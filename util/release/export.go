@@ -5,8 +5,8 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker-utils/registry"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/vbatts/docker-utils/registry"
 	"github.com/flynn/flynn/pkg/cliutil"
 )
 
@@ -45,7 +45,11 @@ func export(args *docopt.Args) {
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
-	if err := registry.ExtractTarWithoutTarsums(&reg, out); err != nil {
+	compress := true
+	if args.Bool["--no-compress"] {
+		compress = false
+	}
+	if err := registry.ExtractTarWithoutTarsums(&reg, out, compress); err != nil {
 		log.Fatal(err)
 	}
 	if err := cmd.Wait(); err != nil {
