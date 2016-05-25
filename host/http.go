@@ -64,7 +64,6 @@ func (h *Host) StopJob(id string) error {
 	}
 	defer h.state.Release()
 
-	log.Info("getting job")
 	job := h.state.GetJob(id)
 	if job == nil {
 		log.Warn("job not found")
@@ -94,7 +93,6 @@ func (h *Host) StopJob(id string) error {
 func (h *Host) SignalJob(id string, sig int) error {
 	log := h.log.New("fn", "SignalJob", "job.id", id, "sig", sig)
 
-	log.Info("getting job")
 	job := h.state.GetJob(id)
 	if job == nil {
 		log.Warn("job not found")
@@ -141,7 +139,6 @@ func (h *jobAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		return
 	}
 
-	log.Info("getting job")
 	job := h.host.state.GetJob(id)
 	if job == nil {
 		log.Warn("job not found")
