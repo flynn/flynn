@@ -20,19 +20,6 @@ import (
 	"github.com/jackc/pgx"
 )
 
-func TestOSFilesystem(t *testing.T) {
-	dir, err := ioutil.TempDir("", "blobstore")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	fs := NewOSFilesystem(dir)
-	testList(fs, t)
-	testDelete(fs, t)
-	testOffset(fs, t)
-	testFilesystem(fs, false, t)
-}
-
 func TestPostgresFilesystem(t *testing.T) {
 	dbname := "blobstoretest"
 	if err := pgtestutils.SetupPostgres(dbname); err != nil {

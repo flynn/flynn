@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"io"
 	"log"
 	"net/http"
@@ -18,12 +17,6 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
-)
-
-var (
-	storageDir       = flag.String("s", "", "Path to store files, instead of Postgres")
-	listenPort       = flag.String("p", "3001", "Port to listen on")
-	serviceDiscovery = flag.Bool("d", true, "Register with service discovery")
 )
 
 func errorResponse(w http.ResponseWriter, err error) {
@@ -122,37 +115,21 @@ func handler(fs Filesystem) http.Handler {
 func main() {
 	defer shutdown.Exit()
 
-	flag.Parse()
+	addr := ":" + os.Getenv("PORT")
 
-	addr := os.Getenv("PORT")
-	if addr == "" {
-		addr = *listenPort
+	var err error
+	db := postgres.Wait(nil, nil)
+	fs, err := NewPostgresFilesystem(db)
+	if err != nil {
+		shutdown.Fatal(err)
 	}
-	addr = ":" + addr
+	storageDesc := "Postgres"
 
-	var fs Filesystem
-	var storageDesc string
-
-	if *storageDir != "" {
-		fs = NewOSFilesystem(*storageDir)
-		storageDesc = *storageDir
-	} else {
-		var err error
-		db := postgres.Wait(nil, nil)
-		fs, err = NewPostgresFilesystem(db)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		storageDesc = "Postgres"
+	hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
+	if err != nil {
+		shutdown.Fatal(err)
 	}
-
-	if *serviceDiscovery {
-		hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		shutdown.BeforeExit(func() { hb.Close() })
-	}
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
 
