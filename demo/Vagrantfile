@@ -27,6 +27,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
+  if Vagrant.has_plugin?("vagrant-vbguest")
+    # vagrant-vbguest can cause the VM to not start: https://github.com/flynn/flynn/issues/2874
+    config.vbguest.auto_update = false
+  end
+
   config.vm.provider "virtualbox" do |v|
     v.memory = ENV["VAGRANT_MEMORY"] || 2048
     v.cpus = ENV["VAGRANT_CPUS"] || 2

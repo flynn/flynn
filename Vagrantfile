@@ -29,6 +29,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box_url = "https://dl.flynn.io/vagrant/flynn-base.json"
   config.vm.box_version = "> 0"
 
+  if Vagrant.has_plugin?("vagrant-vbguest")
+    # vagrant-vbguest can cause the VM to not start: https://github.com/flynn/flynn/issues/2874
+    config.vbguest.auto_update = false
+  end
+
   # VAGRANT_MEMORY          - instance memory, in MB
   # VAGRANT_CPUS            - instance virtual CPUs
   config.vm.provider "virtualbox" do |v, override|
