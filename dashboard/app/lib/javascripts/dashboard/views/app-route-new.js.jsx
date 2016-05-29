@@ -80,11 +80,14 @@ var NewAppRoute = React.createClass({
 
 	__handleFormSubmit: function (e) {
 		e.preventDefault();
+		var uri = document.createElement('a');
+		uri.href = 'http://'+ this.state.domain;
 		Dispatcher.dispatch({
 			name: 'CREATE_APP_ROUTE',
 			appID: this.props.appId,
 			data: {
-				domain: this.state.domain
+				domain: uri.hostname,
+				path: uri.pathname
 			}
 		});
 	}
