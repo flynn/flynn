@@ -308,8 +308,8 @@ func (s *Store) LeaderCh() <-chan bool {
 	return s.leaderCh
 }
 
-// isLeader returns true if the store is currently the leader.
-func (s *Store) isLeader() bool { return s.raft.Leader() == s.Advertise.String() }
+// IsLeader returns true if the store is currently the leader.
+func (s *Store) IsLeader() bool { return s.raft.Leader() == s.Advertise.String() }
 
 // AddPeer adds a peer to the raft cluster. Panic if store is not open yet.
 func (s *Store) AddPeer(peer string) error {
@@ -460,7 +460,7 @@ func (s *Store) AddInstance(service string, inst *discoverd.Instance) error {
 	// Check if it's the leader.
 	// This check is needed because the heartbeats don't go through raft so
 	// it is not verified here like it normally would be when calling raftApply().
-	if !s.isLeader() {
+	if !s.IsLeader() {
 		return ErrNotLeader
 	}
 
@@ -798,7 +798,7 @@ func (s *Store) EnforceExpiry() error {
 		defer s.mu.Unlock()
 
 		// Ignore if this store is not the leader and hasn't been for at least 2 TTLs intervals.
-		if !s.isLeader() {
+		if !s.IsLeader() {
 			return raft.ErrNotLeader
 		} else if s.leaderTime.IsZero() || time.Since(s.leaderTime) < (2*s.InstanceTTL) {
 			return ErrLeaderWait

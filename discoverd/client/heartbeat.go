@@ -118,7 +118,7 @@ func (h *heartbeater) SetMeta(meta map[string]string) error {
 	h.Lock()
 	defer h.Unlock()
 	h.inst.Meta = meta
-	return h.client().c.Put(fmt.Sprintf("/services/%s/instances/%s", h.service, h.inst.ID), h.inst, nil)
+	return h.client().Put(fmt.Sprintf("/services/%s/instances/%s", h.service, h.inst.ID), h.inst, nil)
 }
 
 func (h *heartbeater) Addr() string {
@@ -144,7 +144,7 @@ func (h *heartbeater) run(firstErr chan<- error) {
 	register := func() error {
 		h.Lock()
 		defer h.Unlock()
-		return h.client().c.Put(path, h.inst, nil)
+		return h.client().Put(path, h.inst, nil)
 	}
 
 	err := register()
@@ -163,7 +163,7 @@ func (h *heartbeater) run(firstErr chan<- error) {
 			}
 			timer.Reset(nextHeartbeat())
 		case <-h.stop:
-			h.client().c.Delete(path)
+			h.client().Delete(path)
 			close(h.done)
 			return
 		}
