@@ -163,7 +163,7 @@ type HealthCheck struct {
 	Path   string `json:"path,omitempty"`
 	Host   string `json:"host,omitempty"`
 	Match  string `json:"match,omitempty"`
-	Status int    `json:"status.omitempty"`
+	Status int    `json:"status,omitempty"`
 }
 
 type Mount struct {

@@ -77,14 +77,14 @@ Examples:
 		}
 	}
 	$ flynn release add -f config.json https://registry.hub.docker.com?name=flynn/slugbuilder&id=15d72b7f573b
-	Created release 427537e78be4417fae2e24d11bc993eb.
+	Created release 989ce4a8-0088-444c-8379-caddded4b957.
 
 	$ flynn release
 	ID                                Created
-	427537e78be4417fae2e24d11bc993eb  11 seconds ago
+	989ce4a8-0088-444c-8379-caddded4b957  11 seconds ago
 
 	$ flynn release show
-	ID:             427537e78be4417fae2e24d11bc993eb
+	ID:             989ce4a8-0088-444c-8379-caddded4b957
 	Artifact:       docker+https://registry.hub.docker.com?name=flynn/slugbuilder&id=15d72b7f573b
 	Process Types:  echo
 	Created At:     2015-05-06 21:58:12.751741 +0000 UTC
@@ -98,8 +98,8 @@ Examples:
 			}
 		}
 	}
-	$ flynn release update 427537e78be4417fae2e24d11bc993eb update.json
-	Created release 0101020305080d1522375990e9000000.
+	$ flynn release update update.json
+	Created release 1a270395-8d31-4ec1-953a-0683b4f12635.
 
 	$ flynn release delete --yes c6b7f512-ef49-46f7-bb57-dd39e97bfb09
 	Deleted release c6b7f512-ef49-46f7-bb57-dd39e97bfb09 (deleted 1 files)
