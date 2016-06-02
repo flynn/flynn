@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
+	"github.com/jackc/pgx"
 )
 
 func errorResponse(w http.ResponseWriter, err error) {
@@ -28,32 +29,43 @@ func errorResponse(w http.ResponseWriter, err error) {
 	http.Error(w, "Internal Server Error", 500)
 }
 
-type File interface {
-	io.ReadSeeker
-	io.Closer
-	Size() int64
-	ModTime() time.Time
-	Type() string
-	ETag() string
+type File struct {
+	FileStream
+	FileInfo
 }
 
-type Filesystem interface {
-	List(dir string) ([]string, error)
-	Open(name string) (File, error)
-	Put(name string, r io.Reader, offset int64, typ string) error
-	Copy(dst, src string) error
-	Delete(name string) error
-	Status() status.Status
+type FileStream interface {
+	io.ReadSeeker
+	io.Closer
+}
+
+type FileInfo struct {
+	ID         string
+	Name       string
+	Size       int64
+	ETag       string
+	Type       string
+	Oid        *pgx.Oid
+	ExternalID string
+	ModTime    time.Time
+}
+
+type Backend interface {
+	Name() string
+	Open(tx *postgres.DBTx, info FileInfo, txControl bool) (FileStream, error)
+	Put(tx *postgres.DBTx, info FileInfo, r io.Reader, append bool) error
+	Copy(tx *postgres.DBTx, dst, src FileInfo) error
+	Delete(info FileInfo) error
 }
 
 var ErrNotFound = errors.New("file not found")
 
-func handler(fs Filesystem) http.Handler {
+func handler(r *FileRepo) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		path := path.Clean(req.URL.Path)
 
 		if req.Method == "GET" && path == "/" {
-			paths, err := fs.List(req.URL.Query().Get("dir"))
+			paths, err := r.List(req.URL.Query().Get("dir"))
 			if err != nil && err != ErrNotFound {
 				errorResponse(w, err)
 				return
@@ -69,20 +81,22 @@ func handler(fs Filesystem) http.Handler {
 
 		switch req.Method {
 		case "HEAD", "GET":
-			file, err := fs.Open(path)
+			file, err := r.Get(path, req.Method == "GET")
 			if err != nil {
 				errorResponse(w, err)
 				return
 			}
-			defer file.Close()
-			w.Header().Set("Content-Length", strconv.FormatInt(file.Size(), 10))
-			w.Header().Set("Content-Type", file.Type())
-			w.Header().Set("Etag", file.ETag())
-			http.ServeContent(w, req, path, file.ModTime(), file)
+			if file.FileStream != nil {
+				defer file.Close()
+			}
+			w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
+			w.Header().Set("Content-Type", file.Type)
+			w.Header().Set("Etag", file.ETag)
+			http.ServeContent(w, req, path, file.ModTime, file)
 		case "PUT":
 			var err error
 			if src := req.Header.Get("Blobstore-Copy-From"); src != "" {
-				err = fs.Copy(path, src)
+				err = r.Copy(path, src)
 			} else {
 				var offset int64
 				if s := req.Header.Get("Blobstore-Offset"); s != "" {
@@ -92,7 +106,7 @@ func handler(fs Filesystem) http.Handler {
 						return
 					}
 				}
-				err = fs.Put(path, req.Body, offset, req.Header.Get("Content-Type"))
+				err = r.Put(path, req.Body, offset, req.Header.Get("Content-Type"))
 			}
 			if err != nil {
 				errorResponse(w, err)
@@ -100,7 +114,7 @@ func handler(fs Filesystem) http.Handler {
 			}
 			w.WriteHeader(200)
 		case "DELETE":
-			err := fs.Delete(path)
+			err := r.Delete(path)
 			if err != nil {
 				errorResponse(w, err)
 				return
@@ -117,13 +131,10 @@ func main() {
 
 	addr := ":" + os.Getenv("PORT")
 
-	var err error
 	db := postgres.Wait(nil, nil)
-	fs, err := NewPostgresFilesystem(db)
-	if err != nil {
-		shutdown.Fatal(err)
+	if err := migrateDB(db); err != nil {
+		shutdown.Fatalf("error running DB migrations: %s", err)
 	}
-	storageDesc := "Postgres"
 
 	hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
 	if err != nil {
@@ -131,12 +142,77 @@ func main() {
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
-	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
+	log.Println("Blobstore serving files on " + addr)
 
 	mux := http.NewServeMux()
-	mux.Handle("/", handler(fs))
-	mux.Handle(status.Path, status.Handler(fs.Status))
+	pgBackend := PostgresBackend{}
+	mux.Handle("/", handler(NewFileRepo(db, []Backend{pgBackend}, "postgres")))
+	mux.Handle(status.Path, status.Handler(func() status.Status {
+		if err := db.Exec("SELECT 1"); err != nil {
+			return status.Unhealthy
+		}
+		return status.Healthy
+	}))
 
 	h := httphelper.ContextInjector("blobstore", httphelper.NewRequestLogger(mux))
 	shutdown.Fatal(http.ListenAndServe(addr, h))
+}
+
+func migrateDB(db *postgres.DB) error {
+	m := postgres.NewMigrations()
+	m.Add(1,
+		`CREATE TABLE files (
+	file_id oid PRIMARY KEY DEFAULT lo_create(0),
+	name text UNIQUE NOT NULL,
+	size bigint,
+	type text,
+	digest text,
+	created_at timestamp with time zone NOT NULL DEFAULT current_timestamp
+)`,
+		`CREATE FUNCTION delete_file() RETURNS TRIGGER AS $$
+    BEGIN
+        PERFORM lo_unlink(OLD.file_id);
+        RETURN NULL;
+    END;
+$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER delete_file
+    AFTER DELETE ON files
+    FOR EACH ROW EXECUTE PROCEDURE delete_file()`,
+	)
+	m.Add(2,
+		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
+		`CREATE TABLE new_files (
+  file_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  file_oid oid,
+  external_id uuid,
+  backend text NOT NULL,
+  name text NOT NULL,
+  type text NOT NULL,
+  size bigint,
+  sha512 bytea,
+  sha512_state bytea,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+)`,
+		`INSERT INTO new_files (file_oid, backend, name, size, type, sha512, created_at, updated_at)
+			SELECT file_id, 'postgres', name, size, type, decode(digest, 'hex'), created_at, created_at FROM files`,
+		`DROP TABLE files`,
+		`DROP FUNCTION delete_file()`,
+		`ALTER TABLE new_files RENAME TO files`,
+		`CREATE UNIQUE INDEX ON files (name) WHERE deleted_at IS NULL`,
+		`CREATE INDEX ON files (file_oid)`,
+		`CREATE FUNCTION delete_file() RETURNS TRIGGER AS $$
+			BEGIN
+				IF NEW.deleted_at IS NOT NULL AND NEW.file_oid IS NOT NULL THEN
+					PERFORM lo_unlink(OLD.file_oid);
+					NEW.file_oid := NULL;
+				END IF;
+				RETURN NEW;
+			END;
+		$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER delete_file BEFORE UPDATE OF deleted_at ON files FOR EACH ROW EXECUTE PROCEDURE delete_file()`,
+	)
+
+	return m.Migrate(db)
 }
