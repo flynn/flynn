@@ -31,7 +31,6 @@ func init() {
 var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 
 const blobstoreURL = "http://blobstore.discoverd"
-const scaleTimeout = 20 * time.Second
 
 func parsePairs(args *docopt.Args, str string) (map[string]string, error) {
 	pairs := args.All[str].([]string)
@@ -224,7 +223,7 @@ Options:
 		}
 		fmt.Println("=====> Waiting for web job to start...")
 
-		err = watcher.WaitFor(ct.JobEvents{"web": ct.JobUpEvents(1)}, scaleTimeout, func(e *ct.Job) error {
+		err = watcher.WaitFor(ct.JobEvents{"web": ct.JobUpEvents(1)}, time.Duration(app.DeployTimeout)*time.Second, func(e *ct.Job) error {
 			switch e.State {
 			case ct.JobStateUp:
 				fmt.Println("=====> Default web formation scaled to 1")
