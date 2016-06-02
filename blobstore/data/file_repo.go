@@ -1,4 +1,4 @@
-package main
+package data
 
 import (
 	"encoding/base64"
@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/flynn/flynn/blobstore/backend"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/jackc/pgx"
 	"github.com/stevvooe/resumable"
@@ -15,14 +16,14 @@ import (
 
 type FileRepo struct {
 	db             *postgres.DB
-	backends       map[string]Backend
-	defaultBackend Backend
+	backends       map[string]backend.Backend
+	defaultBackend backend.Backend
 }
 
-func NewFileRepo(db *postgres.DB, backends []Backend, defaultBackend string) *FileRepo {
+func NewFileRepo(db *postgres.DB, backends []backend.Backend, defaultBackend string) *FileRepo {
 	r := &FileRepo{
 		db:       db,
-		backends: make(map[string]Backend, len(backends)),
+		backends: make(map[string]backend.Backend, len(backends)),
 	}
 	for _, b := range backends {
 		r.backends[b.Name()] = b
@@ -31,7 +32,7 @@ func NewFileRepo(db *postgres.DB, backends []Backend, defaultBackend string) *Fi
 	return r
 }
 
-func (r *FileRepo) getBackend(name string) (Backend, error) {
+func (r *FileRepo) getBackend(name string) (backend.Backend, error) {
 	if b, ok := r.backends[name]; ok {
 		return b, nil
 	}
@@ -58,13 +59,13 @@ func (r *FileRepo) List(dir string) ([]string, error) {
 }
 
 // Get is like Open, except the FileStream is not populated (useful for HEAD requests)
-func (r *FileRepo) Get(name string, body bool) (*File, error) {
+func (r *FileRepo) Get(name string, body bool) (*backend.File, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
 	}
 
-	var info FileInfo
+	var info backend.FileInfo
 	var backendName string
 	var externalID *string
 	var sha512 []byte
@@ -73,7 +74,7 @@ func (r *FileRepo) Get(name string, body bool) (*File, error) {
 		name,
 	).Scan(&info.ID, &info.Oid, &externalID, &backendName, &info.Name, &info.Type, &info.Size, &sha512, &info.ModTime); err != nil {
 		if err == pgx.ErrNoRows {
-			err = ErrNotFound
+			err = backend.ErrNotFound
 		}
 		tx.Rollback()
 		return nil, err
@@ -84,20 +85,20 @@ func (r *FileRepo) Get(name string, body bool) (*File, error) {
 	info.ETag = base64.StdEncoding.EncodeToString(sha512)
 	if !body {
 		tx.Rollback()
-		return &File{FileInfo: info, FileStream: fakeSizeSeekerFileStream{info.Size}}, nil
+		return &backend.File{FileInfo: info, FileStream: fakeSizeSeekerFileStream{info.Size}}, nil
 	}
 
-	backend, err := r.getBackend(backendName)
+	b, err := r.getBackend(backendName)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
 	}
-	stream, err := backend.Open(tx, info, true)
+	stream, err := b.Open(tx, info, true)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
 	}
-	return &File{FileInfo: info, FileStream: stream}, nil
+	return &backend.File{FileInfo: info, FileStream: stream}, nil
 }
 
 func (r *FileRepo) Copy(to, from string) error {
@@ -106,7 +107,7 @@ func (r *FileRepo) Copy(to, from string) error {
 		return err
 	}
 
-	info := FileInfo{
+	info := backend.FileInfo{
 		Name: from,
 	}
 	var backendName string
@@ -116,7 +117,7 @@ func (r *FileRepo) Copy(to, from string) error {
 		"SELECT file_id, file_oid, external_id, backend, type, size, sha512, sha512_state, updated_at FROM files WHERE name = $1 AND deleted_at IS NULL", from,
 	).Scan(&info.ID, &info.Oid, &externalID, &backendName, &info.Type, &info.Size, &sha512, &sha512State, &info.ModTime); err != nil {
 		if err == pgx.ErrNoRows {
-			return ErrNotFound
+			return backend.ErrNotFound
 		}
 		tx.Rollback()
 		return err
@@ -124,13 +125,13 @@ func (r *FileRepo) Copy(to, from string) error {
 	if externalID != nil {
 		info.ExternalID = *externalID
 	}
-	backend, err := r.getBackend(backendName)
+	b, err := r.getBackend(backendName)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	toInfo := FileInfo{
+	toInfo := backend.FileInfo{
 		Name: to,
 		Type: info.Type,
 	}
@@ -142,7 +143,7 @@ func (r *FileRepo) Copy(to, from string) error {
 		return err
 	}
 
-	if err := backend.Copy(tx, toInfo, info); err != nil {
+	if err := b.Copy(tx, toInfo, info); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -156,15 +157,15 @@ func (r *FileRepo) Put(name string, data io.Reader, offset int64, typ string) er
 		return err
 	}
 
-	info := FileInfo{
+	info := backend.FileInfo{
 		Name: name,
 		Type: typ,
 	}
 	h := sha512.New().(resumable.Hash)
-	backend := r.defaultBackend
+	b := r.defaultBackend
 
 create:
-	err = tx.QueryRow("INSERT INTO files (name, backend, type) VALUES ($1, $2, $3) RETURNING file_id", name, backend.Name(), typ).Scan(&info.ID)
+	err = tx.QueryRow("INSERT INTO files (name, backend, type) VALUES ($1, $2, $3) RETURNING file_id", name, b.Name(), typ).Scan(&info.ID)
 	if postgres.IsUniquenessError(err, "") {
 		tx.Rollback()
 		tx, err = r.db.Begin()
@@ -186,7 +187,7 @@ create:
 			if externalID != nil {
 				info.ExternalID = *externalID
 			}
-			backend, err = r.getBackend(backendName)
+			b, err = r.getBackend(backendName)
 			if err != nil {
 				tx.Rollback()
 				return err
@@ -201,7 +202,7 @@ create:
 			}
 			if (len(sha512State) == 0 || err != nil || h.Len() != info.Size) && info.Size > 0 {
 				// hash state is not resumable, read current data into hash
-				f, err := backend.Open(tx, info, false)
+				f, err := b.Open(tx, info, false)
 				if err != nil {
 					tx.Rollback()
 					return err
@@ -230,7 +231,7 @@ create:
 
 	sr := newSizeReader(data)
 	sr.size = info.Size
-	if err := backend.Put(tx, info, io.TeeReader(sr, h), offset > 0); err != nil {
+	if err := b.Put(tx, info, io.TeeReader(sr, h), offset > 0); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -263,12 +264,13 @@ func (r *FileRepo) Delete(name string) error {
 		tx.Rollback()
 		return err
 	}
-	backendFiles := make(map[string][]FileInfo)
+	backendFiles := make(map[string][]backend.FileInfo)
 	for rows.Next() {
-		var info FileInfo
+		var info backend.FileInfo
 		var backendName string
 		var externalID *string
 		if err := rows.Scan(&info.ID, &externalID, &backendName, &info.Name); err != nil {
+			rows.Close()
 			tx.Rollback()
 			return err
 		}
@@ -277,6 +279,7 @@ func (r *FileRepo) Delete(name string) error {
 		}
 		backendFiles[backendName] = append(backendFiles[backendName], info)
 	}
+	rows.Close()
 	if err := rows.Err(); err != nil {
 		tx.Rollback()
 		return err
@@ -286,13 +289,13 @@ func (r *FileRepo) Delete(name string) error {
 	}
 
 	var errors []error
-	for b, files := range backendFiles {
-		backend, err := r.getBackend(b)
+	for name, files := range backendFiles {
+		b, err := r.getBackend(name)
 		if err != nil {
 			errors = append(errors, err)
 		}
 		for _, f := range files {
-			if err := backend.Delete(f); err != nil {
+			if err := b.Delete(f); err != nil {
 				errors = append(errors, err)
 			}
 		}

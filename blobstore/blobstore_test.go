@@ -15,6 +15,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/flynn/flynn/blobstore/backend"
+	"github.com/flynn/flynn/blobstore/data"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -22,7 +24,7 @@ import (
 	"github.com/jackc/pgx"
 )
 
-func TestPostgresFilesystem(t *testing.T) {
+func initDB(t *testing.T) *postgres.DB {
 	dbname := "blobstoretest"
 	if err := pgtestutils.SetupPostgres(dbname); err != nil {
 		t.Fatal(err)
@@ -37,20 +39,50 @@ func TestPostgresFilesystem(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := postgres.New(pgxpool, nil)
-	defer db.Close()
 	if err := migrateDB(db); err != nil {
 		t.Fatal(err)
 	}
+	return db
+}
 
-	backend := PostgresBackend{}
-	r := NewFileRepo(db, []Backend{backend}, "postgres")
+func TestPostgresFilesystem(t *testing.T) {
+	db := initDB(t)
+	defer db.Close()
+	r := data.NewFileRepo(db, []backend.Backend{backend.Postgres}, "postgres")
 	testList(r, t)
 	testDelete(r, t)
-	testOffset(r, t)
+	testOffset(r, t, true)
 	testFilesystem(r, true, t)
 }
 
-func testList(r *FileRepo, t *testing.T) {
+func parseBackendEnv(s string) map[string]string {
+	info := make(map[string]string)
+	for _, token := range strings.Split(s, " ") {
+		kv := strings.SplitN(token, "=", 2)
+		info[kv[0]] = kv[1]
+	}
+	return info
+}
+
+func TestS3Filesystem(t *testing.T) {
+	cfg := os.Getenv("BLOBSTORE_S3_CONFIG")
+	if cfg == "" {
+		t.Skip("S3 not configured")
+	}
+	db := initDB(t)
+	defer db.Close()
+	b, err := backend.NewS3("s3-test", parseBackendEnv(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := data.NewFileRepo(db, []backend.Backend{b}, "s3-test")
+	testList(r, t)
+	testDelete(r, t)
+	testOffset(r, t, false)
+	testFilesystem(r, false, t)
+}
+
+func testList(r *data.FileRepo, t *testing.T) {
 	srv := httptest.NewServer(handler(r))
 	defer srv.Close()
 
@@ -129,7 +161,7 @@ func testList(r *FileRepo, t *testing.T) {
 	assertList("/dir2", []string{"/dir2/foo.txt"})
 }
 
-func testDelete(r *FileRepo, t *testing.T) {
+func testDelete(r *data.FileRepo, t *testing.T) {
 	put := func(path string) {
 		if err := r.Put(path, bytes.NewReader([]byte("data")), 0, "text/plain"); err != nil {
 			t.Fatal(err)
@@ -146,7 +178,7 @@ func testDelete(r *FileRepo, t *testing.T) {
 		}
 	}
 	assertNotExists := func(path string) {
-		if _, err := r.Get(path, false); err != ErrNotFound {
+		if _, err := r.Get(path, false); err != backend.ErrNotFound {
 			t.Fatalf("expected path %q to not exist, got err=%v", path, err)
 		}
 	}
@@ -165,7 +197,7 @@ func testDelete(r *FileRepo, t *testing.T) {
 	assertNotExists("/dir/bar.txt")
 }
 
-func testOffset(r *FileRepo, t *testing.T) {
+func testOffset(r *data.FileRepo, t *testing.T, checkEtags bool) {
 	srv := httptest.NewServer(handler(r))
 	defer srv.Close()
 
@@ -199,10 +231,12 @@ func testOffset(r *FileRepo, t *testing.T) {
 		if string(data) != expected {
 			t.Fatalf("expected GET %q to return %s, got %s", path, expected, string(data))
 		}
-		hash := sha512.Sum512([]byte(expected))
-		h := base64.StdEncoding.EncodeToString(hash[:])
-		if res.Header.Get("Etag") != h {
-			t.Fatalf("unexpected etag %q, want %q", res.Header.Get("Etag"), h)
+		if checkEtags {
+			hash := sha512.Sum512([]byte(expected))
+			h := base64.StdEncoding.EncodeToString(hash[:])
+			if res.Header.Get("Etag") != h {
+				t.Fatalf("unexpected etag %q, want %q", res.Header.Get("Etag"), h)
+			}
 		}
 	}
 
@@ -216,7 +250,7 @@ func testOffset(r *FileRepo, t *testing.T) {
 
 const concurrency = 5
 
-func testFilesystem(r *FileRepo, testMeta bool, t *testing.T) {
+func testFilesystem(r *data.FileRepo, testMeta bool, t *testing.T) {
 	srv := httptest.NewServer(handler(r))
 	defer srv.Close()
 

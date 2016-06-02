@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"io"
@@ -8,11 +8,13 @@ import (
 	"github.com/jackc/pgx"
 )
 
-type PostgresBackend struct{}
+var Postgres Backend = pg{}
 
-func (PostgresBackend) Name() string { return "postgres" }
+type pg struct{}
 
-func (p PostgresBackend) Put(tx *postgres.DBTx, info FileInfo, r io.Reader, append bool) error {
+func (pg) Name() string { return "postgres" }
+
+func (p pg) Put(tx *postgres.DBTx, info FileInfo, r io.Reader, append bool) error {
 	if !append {
 		if err := tx.QueryRow("UPDATE files SET file_oid = lo_create(0) WHERE file_id = $1 RETURNING file_oid", info.ID).Scan(&info.Oid); err != nil {
 			return err
@@ -37,7 +39,7 @@ func (p PostgresBackend) Put(tx *postgres.DBTx, info FileInfo, r io.Reader, appe
 	return nil
 }
 
-func (p PostgresBackend) Copy(tx *postgres.DBTx, dst, src FileInfo) error {
+func (p pg) Copy(tx *postgres.DBTx, dst, src FileInfo) error {
 	srcFile, err := p.Open(tx, src, false)
 	if err != nil {
 		return err
@@ -46,12 +48,12 @@ func (p PostgresBackend) Copy(tx *postgres.DBTx, dst, src FileInfo) error {
 	return p.Put(tx, dst, srcFile, false)
 }
 
-func (p PostgresBackend) Delete(info FileInfo) error {
+func (p pg) Delete(info FileInfo) error {
 	// Do nothing, file data is deleted automatically by trigger when deleted_at is set
 	return nil
 }
 
-func (p PostgresBackend) Open(tx *postgres.DBTx, info FileInfo, txControl bool) (FileStream, error) {
+func (p pg) Open(tx *postgres.DBTx, info FileInfo, txControl bool) (FileStream, error) {
 	if info.Oid == nil {
 		return nil, ErrNotFound
 	}
