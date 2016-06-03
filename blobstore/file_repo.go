@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -66,10 +67,11 @@ func (r *FileRepo) Get(name string, body bool) (*File, error) {
 	var info FileInfo
 	var backendName string
 	var externalID *string
+	var sha512 []byte
 	if err := tx.QueryRow(
-		"SELECT file_id, file_oid, external_id, backend, name, type, size, encode(sha512, 'hex'), updated_at FROM files WHERE name = $1 AND deleted_at IS NULL",
+		"SELECT file_id, file_oid, external_id, backend, name, type, size, sha512, updated_at FROM files WHERE name = $1 AND deleted_at IS NULL",
 		name,
-	).Scan(&info.ID, &info.Oid, &externalID, &backendName, &info.Name, &info.Type, &info.Size, &info.ETag, &info.ModTime); err != nil {
+	).Scan(&info.ID, &info.Oid, &externalID, &backendName, &info.Name, &info.Type, &info.Size, &sha512, &info.ModTime); err != nil {
 		if err == pgx.ErrNoRows {
 			err = ErrNotFound
 		}
@@ -79,6 +81,7 @@ func (r *FileRepo) Get(name string, body bool) (*File, error) {
 	if externalID != nil {
 		info.ExternalID = *externalID
 	}
+	info.ETag = base64.StdEncoding.EncodeToString(sha512)
 	if !body {
 		tx.Rollback()
 		return &File{FileInfo: info, FileStream: fakeSizeSeekerFileStream{info.Size}}, nil

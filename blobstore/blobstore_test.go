@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -199,7 +199,8 @@ func testOffset(r *FileRepo, t *testing.T) {
 		if string(data) != expected {
 			t.Fatalf("expected GET %q to return %s, got %s", path, expected, string(data))
 		}
-		h := fmt.Sprintf("%x", sha512.Sum512([]byte(expected)))
+		hash := sha512.Sum512([]byte(expected))
+		h := base64.StdEncoding.EncodeToString(hash[:])
 		if res.Header.Get("Etag") != h {
 			t.Fatalf("unexpected etag %q, want %q", res.Header.Get("Etag"), h)
 		}
