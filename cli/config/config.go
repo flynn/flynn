@@ -15,6 +15,8 @@ import (
 	"github.com/flynn/flynn/controller/client"
 )
 
+var ErrNoDockerPushURL = errors.New("ERROR: Docker push URL not configured, set it with 'flynn docker set-push-url'")
+
 type Cluster struct {
 	Name          string `json:"name"`
 	Key           string `json:"key"`
@@ -38,7 +40,7 @@ func (c *Cluster) Client() (controller.Client, error) {
 
 func (c *Cluster) DockerPushHost() (string, error) {
 	if c.DockerPushURL == "" {
-		return "", errors.New("cluster: DockerPushURL not configured")
+		return "", ErrNoDockerPushURL
 	}
 	u, err := url.Parse(c.DockerPushURL)
 	if err != nil {

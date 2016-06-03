@@ -20,18 +20,21 @@ import (
 
 func init() {
 	register("docker", runDocker, `
-usage: flynn docker login
+usage: flynn docker set-push-url [<url>]
+       flynn docker login
        flynn docker logout
        flynn docker push <image>
 
 Deploy Docker images to a Flynn cluster.
 
 Commands:
-	login    run "docker login" against the cluster's docker-receive app
+	set-push-url  set the Docker push URL (defaults to https://docker.$CLUSTER_DOMAIN)
 
-	logout   run "docker logout" against the cluster's docker-receive app
+	login         run "docker login" against the cluster's docker-receive app
 
-	push     push and release a Docker image to the cluster
+	logout        run "docker logout" against the cluster's docker-receive app
+
+	push          push and release a Docker image to the cluster
 
 Example:
 
@@ -53,7 +56,9 @@ Example:
 }
 
 func runDocker(args *docopt.Args, client controller.Client) error {
-	if args.Bool["login"] {
+	if args.Bool["set-push-url"] {
+		return runDockerSetPushURL(args)
+	} else if args.Bool["login"] {
 		return runDockerLogin()
 	} else if args.Bool["logout"] {
 		return runDockerLogout()
@@ -61,6 +66,28 @@ func runDocker(args *docopt.Args, client controller.Client) error {
 		return runDockerPush(args, client)
 	}
 	return errors.New("unknown docker subcommand")
+}
+
+func runDockerSetPushURL(args *docopt.Args) error {
+	cluster, err := getCluster()
+	if err != nil {
+		return err
+	}
+	url := args.String["<url>"]
+	if url == "" {
+		if cluster.DockerPushURL != "" {
+			return fmt.Errorf("ERROR: refusing to overwrite current Docker push URL %q with a default one. To overwrite the existing URL, set one explicitly with 'flynn docker set-push-url URL'", cluster.DockerPushURL)
+		}
+		if !strings.Contains(cluster.ControllerURL, "controller") {
+			return errors.New("ERROR: unable to determine default Docker push URL, set one explicitly with 'flynn docker set-push-url URL'")
+		}
+		url = strings.Replace(cluster.ControllerURL, "controller", "docker", 1)
+	}
+	if !strings.HasPrefix(url, "https://") {
+		url = "https://" + url
+	}
+	cluster.DockerPushURL = url
+	return config.SaveTo(configPath())
 }
 
 func runDockerLogin() error {
@@ -131,6 +158,15 @@ WARN: on the docker daemon's host and restart docker.
 }
 
 func runDockerPush(args *docopt.Args, client controller.Client) error {
+	cluster, err := getCluster()
+	if err != nil {
+		return err
+	}
+	dockerHost, err := cluster.DockerPushHost()
+	if err != nil {
+		return err
+	}
+
 	image := args.String["<image>"]
 
 	prevRelease, err := client.GetAppRelease(mustApp())
@@ -174,14 +210,6 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	defer stream.Close()
 
 	// push the Docker image to docker-receive
-	cluster, err := getCluster()
-	if err != nil {
-		return err
-	}
-	dockerHost, err := cluster.DockerPushHost()
-	if err != nil {
-		return err
-	}
 	tag := fmt.Sprintf("%s/%s:latest", dockerHost, mustApp())
 	cmd = exec.Command("docker", "tag", "--force", image, tag)
 	log.Printf("flynn: tagging Docker image with %q", strings.Join(cmd.Args, " "))
