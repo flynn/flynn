@@ -693,7 +693,7 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	formation := req.Job.Formation
 	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
 	var minCount int = math.MaxInt32
-	for _, h := range s.SortedHosts() {
+	for _, h := range s.ShuffledHosts() {
 		if h.shutdown {
 			continue
 		}
@@ -732,12 +732,15 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	req.Error(nil)
 }
 
-func (s *Scheduler) SortedHosts() sortHosts {
-	hosts := make(sortHosts, 0, len(s.hosts))
+func (s *Scheduler) ShuffledHosts() []*Host {
+	hosts := make([]*Host, 0, len(s.hosts))
 	for _, host := range s.hosts {
 		hosts = append(hosts, host)
 	}
-	hosts.Sort()
+	for i := len(hosts) - 1; i > 0; i-- {
+		j := random.Math.Intn(i + 1)
+		hosts[i], hosts[j] = hosts[j], hosts[i]
+	}
 	return hosts
 }
 

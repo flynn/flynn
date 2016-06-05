@@ -363,12 +363,16 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitFormationChange()
-	s.waitJobStart()
-	s.waitJobStart()
+
+	// wait for two omni jobs to start, tracking what host they start on
+	job2Host := s.waitJobStart().HostID
+	job3Host := s.waitJobStart().HostID
+	omniJob := map[string]string{job2Host: "job2", job3Host: "job3"}
+
 	assertJobs(map[string]*Job{
 		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
-		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
-		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: job2Host},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: job3Host},
 	})
 
 	assertHostJobs := func(host *FakeHostClient, ids ...string) {
@@ -385,8 +389,8 @@ func (TestSuite) TestMultipleHosts(c *C) {
 		}
 	}
 	h1 := hosts[testHostID]
-	assertHostJobs(h1, "job1", "job2")
-	assertHostJobs(h2, "job3")
+	assertHostJobs(h1, "job1", omniJob["host1"])
+	assertHostJobs(h2, omniJob["host2"])
 
 	h3 := NewFakeHostClient("host3")
 	c.Log("Add a host, wait for omni job start on that host.")
@@ -394,8 +398,8 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 	assertJobs(map[string]*Job{
 		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
-		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
-		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: job2Host},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: job3Host},
 		"job4": {Type: "omni", state: JobStateStarting, HostID: "host3"},
 	})
 	assertHostJobs(h3, "job4")
@@ -407,8 +411,8 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitRectify()
 	assertJobs(map[string]*Job{
 		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
-		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
-		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: job2Host},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: job3Host},
 		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job5": {Type: "omni", state: JobStateStarting, HostID: "host3"},
 	})
@@ -436,8 +440,8 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 	assertJobs(map[string]*Job{
 		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
-		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
-		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: job2Host},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: job3Host},
 		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job5": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job6": {Type: "omni", state: JobStateStopped, HostID: "host2"},
@@ -451,15 +455,15 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitRectify()
 	assertJobs(map[string]*Job{
 		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
-		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
-		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: job2Host},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: job3Host},
 		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job5": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job6": {Type: "omni", state: JobStateStopped, HostID: "host2"},
 		"job7": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 	})
-	assertHostJobs(h1, "job1", "job2")
-	assertHostJobs(h2, "job3")
+	assertHostJobs(h1, "job1", omniJob["host1"])
+	assertHostJobs(h2, omniJob["host2"])
 
 	c.Logf("Remove another host. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	h1.Healthy = false
@@ -467,17 +471,24 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitFormationSync()
 	s.waitRectify()
 	s.waitJobStart()
+	omniJobState := func(host string) JobState {
+		if host == "host1" {
+			return JobStateStopped
+		} else {
+			return JobStateStarting
+		}
+	}
 	assertJobs(map[string]*Job{
 		"job1": {Type: "web", state: JobStateStopped, HostID: "host1"},
-		"job2": {Type: "omni", state: JobStateStopped, HostID: "host1"},
-		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job2": {Type: "omni", state: omniJobState(job2Host), HostID: job2Host},
+		"job3": {Type: "omni", state: omniJobState(job3Host), HostID: job3Host},
 		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job5": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job6": {Type: "omni", state: JobStateStopped, HostID: "host2"},
 		"job7": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job8": {Type: "web", state: JobStateStarting, HostID: "host2"},
 	})
-	assertHostJobs(h2, "job3", "job8")
+	assertHostJobs(h2, omniJob["host2"], "job8")
 }
 
 func (TestSuite) TestMultipleSchedulers(c *C) {
@@ -648,40 +659,60 @@ func (TestSuite) TestJobPlacementTags(c *C) {
 	// continually place jobs, and check they get placed in a round-robin
 	// fashion on the hosts matching the type's tags
 	type test struct {
-		typ  string
-		host string
+		typ   string
+		count int
+		hosts map[string]int
 	}
-	for i, t := range []*test{
+	for _, t := range []*test{
 		// web go on all hosts
-		{typ: "web", host: "host1"},
-		{typ: "web", host: "host2"},
-		{typ: "web", host: "host3"},
-		{typ: "web", host: "host1"},
-		{typ: "web", host: "host2"},
-		{typ: "web", host: "host3"},
+		{
+			typ:   "web",
+			count: 6,
+			hosts: map[string]int{
+				"host1": 2,
+				"host2": 2,
+				"host3": 2,
+			},
+		},
+
 		// db go on hosts 2 and 3
+		{
+			typ:   "db",
+			count: 4,
+			hosts: map[string]int{
+				"host2": 2,
+				"host3": 2,
+			},
+		},
 
-		{typ: "db", host: "host2"},
-		{typ: "db", host: "host3"},
-		{typ: "db", host: "host2"},
-		{typ: "db", host: "host3"},
 		// worker go on hosts 1 and 3
-
-		{typ: "worker", host: "host1"},
-		{typ: "worker", host: "host3"},
-		{typ: "worker", host: "host1"},
-		{typ: "worker", host: "host3"},
+		{
+			typ:   "worker",
+			count: 4,
+			hosts: map[string]int{
+				"host1": 2,
+				"host3": 2,
+			},
+		},
 
 		// clock go on host 2
-		{typ: "clock", host: "host2"},
-		{typ: "clock", host: "host2"},
-		{typ: "clock", host: "host2"},
+		{
+			typ:   "clock",
+			count: 4,
+			hosts: map[string]int{
+				"host2": 4,
+			},
+		},
 	} {
-		job := s.jobs.Add(&Job{ID: fmt.Sprintf("job%d", i), Formation: formation, Type: t.typ, state: JobStatePending})
-		req := &PlacementRequest{Job: job, Err: make(chan error, 1)}
-		s.HandlePlacementRequest(req)
-		c.Assert(<-req.Err, IsNil, Commentf("placing job %d", i))
-		c.Assert(req.Host.ID, Equals, t.host, Commentf("placing job %d", i))
+		hosts := make(map[string]int, 3)
+		for i := 0; i < t.count; i++ {
+			job := s.jobs.Add(&Job{ID: fmt.Sprintf("job-%s-%d", t.typ, i), Formation: formation, Type: t.typ, state: JobStatePending})
+			req := &PlacementRequest{Job: job, Err: make(chan error, 1)}
+			s.HandlePlacementRequest(req)
+			c.Assert(<-req.Err, IsNil, Commentf("placing %s job %d", t.typ, i))
+			hosts[req.Host.ID]++
+		}
+		c.Assert(hosts, DeepEquals, t.hosts, Commentf("placing %s jobs", t.typ))
 	}
 }
 
