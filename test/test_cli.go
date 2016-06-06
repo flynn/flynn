@@ -1296,3 +1296,28 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	t.Assert(err, c.IsNil)
 	t.Assert(string(body), c.Equals, "OK")
 }
+
+func (s *CLISuite) TestDockerExportImport(t *c.C) {
+	// release via docker-receive
+	client := s.controllerClient(t)
+	app := &ct.App{Name: "cli-test-docker-export"}
+	t.Assert(client.CreateApp(app), c.IsNil)
+	repo := "cli-test-export"
+	s.buildDockerImage(t, repo, `CMD ["/bin/pingserv"]`)
+	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
+	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "app=1"), Succeeds)
+	defer flynn(t, "/", "-a", app.Name, "scale", "app=0")
+
+	// export the app
+	file := filepath.Join(t.MkDir(), "export.tar")
+	t.Assert(flynn(t, "/", "-a", app.Name, "export", "-f", file), Succeeds)
+
+	// import to another app
+	importApp := "cli-test-docker-import"
+	t.Assert(flynn(t, "/", "import", "--name", importApp, "--file", file), Succeeds)
+	defer flynn(t, "/", "-a", importApp, "scale", "app=0")
+
+	// wait for it to start
+	_, err := s.discoverdClient(t).Instances(importApp, 10*time.Second)
+	t.Assert(err, c.IsNil)
+}

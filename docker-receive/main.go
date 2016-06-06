@@ -128,6 +128,7 @@ func (m *manifestService) createArtifact(dgst digest.Digest) error {
 		URI:  fmt.Sprintf("http://flynn:%s@docker-receive.discoverd?name=%s&id=%s", m.authKey, m.repository.Name(), dgst),
 		Meta: map[string]string{
 			"docker-receive.repository": m.repository.Name(),
+			"docker-receive.digest":     string(dgst),
 		},
 	})
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -16,6 +18,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/backup"
 )
 
 func init() {
@@ -199,17 +202,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 		return err
 	}
 
-	// subscribe to artifact events
-	events := make(chan *ct.Event)
-	stream, err := client.StreamEvents(ct.StreamEventsOptions{
-		ObjectTypes: []ct.EventType{ct.EventTypeArtifact},
-	}, events)
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
-
-	// push the Docker image to docker-receive
+	// tag the docker image ready to be pushed
 	tag := fmt.Sprintf("%s/%s:latest", dockerHost, mustApp())
 	cmd = exec.Command("docker", "tag", "--force", image, tag)
 	log.Printf("flynn: tagging Docker image with %q", strings.Join(cmd.Args, " "))
@@ -218,33 +211,10 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	if err := cmd.Run(); err != nil {
 		return err
 	}
-	cmd = exec.Command("docker", "push", tag)
-	log.Printf("flynn: pushing Docker image with %q", strings.Join(cmd.Args, " "))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
 
-	// wait for an artifact to be created
-	log.Printf("flynn: image pushed, waiting for artifact creation")
-	var artifact ct.Artifact
-loop:
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				return fmt.Errorf("event stream closed unexpectedly: %s", stream.Err())
-			}
-			if err := json.Unmarshal(event.Data, &artifact); err != nil {
-				return err
-			}
-			if artifact.Meta["docker-receive.repository"] == mustApp() {
-				break loop
-			}
-		case <-time.After(30 * time.Second):
-			return fmt.Errorf("timed out waiting for artifact creation")
-		}
+	artifact, err := dockerPush(client, mustApp(), tag)
+	if err != nil {
+		return err
 	}
 
 	// create and deploy a release with the image config and created artifact
@@ -301,4 +271,94 @@ loop:
 	}
 	log.Printf("flynn: image deployed, scale it with 'flynn scale app=N'")
 	return nil
+}
+
+func dockerPush(client controller.Client, repo, tag string) (*ct.Artifact, error) {
+	// subscribe to artifact events
+	events := make(chan *ct.Event)
+	stream, err := client.StreamEvents(ct.StreamEventsOptions{
+		ObjectTypes: []ct.EventType{ct.EventTypeArtifact},
+	}, events)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	// push the Docker image to docker-receive
+	cmd := exec.Command("docker", "push", tag)
+	log.Printf("flynn: pushing Docker image with %q", strings.Join(cmd.Args, " "))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+
+	// wait for an artifact to be created
+	log.Printf("flynn: image pushed, waiting for artifact creation")
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return nil, fmt.Errorf("event stream closed unexpectedly: %s", stream.Err())
+			}
+			var artifact ct.Artifact
+			if err := json.Unmarshal(event.Data, &artifact); err != nil {
+				return nil, err
+			}
+			if artifact.Meta["docker-receive.repository"] == repo {
+				return &artifact, nil
+			}
+		case <-time.After(30 * time.Second):
+			return nil, fmt.Errorf("timed out waiting for artifact creation")
+		}
+	}
+
+}
+
+func dockerPull(repo, digest string) error {
+	cluster, err := getCluster()
+	if err != nil {
+		return err
+	}
+	host, err := cluster.DockerPushHost()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command("docker", "pull", fmt.Sprintf("%s/%s@%s", host, repo, digest))
+	log.Printf("flynn: pulling Docker image with %q", strings.Join(cmd.Args, " "))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func dockerSave(tag string, tw *backup.TarWriter, progress backup.ProgressBar) error {
+	tmp, err := ioutil.TempFile("", "flynn-docker-save")
+	if err != nil {
+		return fmt.Errorf("error creating temp file: %s", err)
+	}
+	defer tmp.Close()
+	defer os.Remove(tmp.Name())
+
+	cmd := exec.Command("docker", "save", tag)
+	cmd.Stdout = tmp
+	if progress != nil {
+		cmd.Stdout = io.MultiWriter(tmp, progress)
+	}
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	length, err := tmp.Seek(0, os.SEEK_CUR)
+	if err != nil {
+		return err
+	}
+	if err := tw.WriteHeader("docker-image.tar", int(length)); err != nil {
+		return err
+	}
+	if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {
+		return err
+	}
+	_, err = io.Copy(tw, tmp)
+	return err
 }

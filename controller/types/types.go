@@ -84,6 +84,10 @@ func (r *Release) IsGitDeploy() bool {
 	return r.Meta["git"] == "true"
 }
 
+func (r *Release) IsDockerReceiveDeploy() bool {
+	return r.Meta["docker-receive"] == "true"
+}
+
 type ProcessType struct {
 	Cmd         []string           `json:"cmd,omitempty"`
 	Entrypoint  []string           `json:"entrypoint,omitempty"`

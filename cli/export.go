@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cheggaaa/pb"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
@@ -114,8 +117,9 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
+	var artifact *ct.Artifact
 	if artifactID := release.ImageArtifactID(); artifactID != "" {
-		artifact, err := client.GetArtifact(artifactID)
+		artifact, err = client.GetArtifact(artifactID)
 		if err != nil && err != controller.ErrNotFound {
 			return fmt.Errorf("error retrieving artifact: %s", err)
 		} else if err == nil {
@@ -131,6 +135,58 @@ func runExport(args *docopt.Args, client controller.Client) error {
 	} else if err == nil {
 		if err := tw.WriteJSON("formation.json", formation); err != nil {
 			return fmt.Errorf("error exporting formation: %s", err)
+		}
+	}
+
+	// if the release was deployed via docker-receive, pull the docker
+	// image and add it to the export using "docker save"
+	if release.IsDockerReceiveDeploy() && artifact != nil {
+		cluster, err := getCluster()
+		if err != nil {
+			return err
+		}
+		host, err := cluster.DockerPushHost()
+		if err != nil {
+			return err
+		}
+
+		// the artifact will have an internal discoverd URL which will
+		// not work if the Docker daemon is outside the cluster, so
+		// generate a reference using the configured DockerPushURL
+		repo := artifact.Meta["docker-receive.repository"]
+		digest := artifact.Meta["docker-receive.digest"]
+		ref := fmt.Sprintf("%s/%s@%s", host, repo, digest)
+
+		// pull the Docker image
+		cmd := exec.Command("docker", "pull", ref)
+		log.Printf("flynn: pulling Docker image with %q", strings.Join(cmd.Args, " "))
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+
+		// give the image an explicit, random tag so that "docker save"
+		// will export an image that we can reference on import (just
+		// using the digest is not enough as "docker inspect" only
+		// works with tags)
+		tag := fmt.Sprintf("%s:flynn-export-%s", repo, random.String(8))
+		if out, err := exec.Command("docker", "tag", "--force", ref, tag).CombinedOutput(); err != nil {
+			return fmt.Errorf("error tagging docker image: %s: %q", err, out)
+		}
+		defer exec.Command("docker", "rmi", tag).Run()
+
+		if err := dockerSave(tag, tw, bar); err != nil {
+			return fmt.Errorf("error exporting docker image: %s", err)
+		}
+
+		// add the tag to the backup so we know how to reference the
+		// image once it has been imported
+		config := struct {
+			Tag string `json:"tag"`
+		}{tag}
+		if err := tw.WriteJSON("docker-image.json", &config); err != nil {
+			return fmt.Errorf("error exporting docker image: %s", err)
 		}
 	}
 
@@ -235,9 +291,15 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		formation     *ct.Formation
 		routes        []router.Route
 		slug          io.Reader
-		pgDump        io.Reader
-		mysqlDump     io.Reader
-		uploadSize    int64
+		dockerImage   struct {
+			config struct {
+				tag string `json:"tag"`
+			}
+			archive io.Reader
+		}
+		pgDump     io.Reader
+		mysqlDump  io.Reader
+		uploadSize int64
 	)
 	numResources := 0
 	numRoutes := 1
@@ -299,6 +361,25 @@ func runImport(args *docopt.Args, client controller.Client) error {
 				return fmt.Errorf("error seeking slug tempfile: %s", err)
 			}
 			slug = f
+			uploadSize += header.Size
+		case "docker-image.json":
+			if err := json.NewDecoder(tr).Decode(&dockerImage.config); err != nil {
+				return fmt.Errorf("error decoding docker image json: %s", err)
+			}
+		case "docker-image.tar":
+			f, err := ioutil.TempFile("", "docker-image.tar")
+			if err != nil {
+				return fmt.Errorf("error creating docker image tempfile: %s", err)
+			}
+			defer f.Close()
+			defer os.Remove(f.Name())
+			if _, err := io.Copy(f, tr); err != nil {
+				return fmt.Errorf("error reading docker image: %s", err)
+			}
+			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+				return fmt.Errorf("error seeking docker image tempfile: %s", err)
+			}
+			dockerImage.archive = f
 			uploadSize += header.Size
 		case "postgres.dump":
 			f, err := ioutil.TempFile("", "postgres.dump")
@@ -452,7 +533,36 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	if imageArtifact != nil {
+	if dockerImage.config.tag != "" && dockerImage.archive != nil {
+		// load the docker image into the Docker daemon
+		cmd := exec.Command("docker", "load")
+		cmd.Stdin = dockerImage.archive
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("error running docker load: %s: %q", err, out)
+		}
+
+		// use the tag from the config (which will now be applied to
+		// the loaded image) to push the image to docker-receive
+		cluster, err := getCluster()
+		if err != nil {
+			return err
+		}
+		host, err := cluster.DockerPushHost()
+		if err != nil {
+			return err
+		}
+		tag := fmt.Sprintf("%s/%s:latest", host, app.Name)
+		if out, err := exec.Command("docker", "tag", "--force", dockerImage.config.tag, tag).CombinedOutput(); err != nil {
+			return fmt.Errorf("error tagging docker image: %s: %q", err, out)
+		}
+
+		artifact, err := dockerPush(client, app.Name, tag)
+		if err != nil {
+			return fmt.Errorf("error pushing docker image: %s", err)
+		}
+
+		release.ArtifactIDs = []string{artifact.ID}
+	} else if imageArtifact != nil {
 		if err := client.CreateArtifact(imageArtifact); err != nil {
 			return fmt.Errorf("error creating image artifact: %s", err)
 		}
@@ -462,8 +572,8 @@ func runImport(args *docopt.Args, client controller.Client) error {
 	if release != nil {
 		for t, proc := range release.Processes {
 			for i, port := range proc.Ports {
-				if port.Service != nil && port.Service.Name == oldName+"-web" {
-					proc.Ports[i].Service.Name = app.Name + "-web"
+				if port.Service != nil && strings.HasPrefix(port.Service.Name, oldName) {
+					proc.Ports[i].Service.Name = strings.Replace(port.Service.Name, oldName, app.Name, 1)
 				}
 			}
 			release.Processes[t] = proc
