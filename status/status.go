@@ -14,7 +14,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/status"
@@ -80,7 +79,7 @@ func (s *statusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !authed {
-			_, password, _ := utils.ParseBasicAuth(r.Header)
+			_, password, _ := r.BasicAuth()
 			if password == "" {
 				password = r.URL.Query().Get("key")
 			}
@@ -153,6 +152,7 @@ var services = []Service{
 	{Name: "discoverd"},
 	{Name: "flannel"},
 	{Name: "gitreceive", ReqFn: RandomReqFn("gitreceive")},
+	{Name: "docker-receive", ReqFn: RandomReqFn("docker-receive")},
 	{Name: "logaggregator", ReqFn: LeaderReqFn("logaggregator", "80")},
 	{Name: "postgres", ReqFn: LeaderReqFn("postgres", "5433")},
 	{Name: "mariadb", ReqFn: LeaderReqFn("mariadb", "3307"), Optional: true},

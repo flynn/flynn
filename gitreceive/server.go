@@ -95,7 +95,7 @@ func (h *gitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, password, _ := utils.ParseBasicAuth(r.Header)
+	_, password, _ := r.BasicAuth()
 	if !hmac.Equal([]byte(password), h.authKey) {
 		w.Header().Set("WWW-Authenticate", "Basic")
 		http.Error(w, "Authentication required", 401)

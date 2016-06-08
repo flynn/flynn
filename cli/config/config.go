@@ -3,7 +3,9 @@ package config
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,13 +15,15 @@ import (
 	"github.com/flynn/flynn/controller/client"
 )
 
+var ErrNoDockerPushURL = errors.New("ERROR: Docker push URL not configured, set it with 'flynn docker set-push-url'")
+
 type Cluster struct {
 	Name          string `json:"name"`
 	Key           string `json:"key"`
 	TLSPin        string `json:"tls_pin" toml:"TLSPin,omitempty"`
 	ControllerURL string `json:"controller_url"`
 	GitURL        string `json:"git_url"`
-	DockerURL     string `json:"docker_url"`
+	DockerPushURL string `json:"docker_push_url"`
 }
 
 func (c *Cluster) Client() (controller.Client, error) {
@@ -32,6 +36,17 @@ func (c *Cluster) Client() (controller.Client, error) {
 		}
 	}
 	return controller.NewClientWithConfig(c.ControllerURL, c.Key, controller.Config{Pin: pin})
+}
+
+func (c *Cluster) DockerPushHost() (string, error) {
+	if c.DockerPushURL == "" {
+		return "", ErrNoDockerPushURL
+	}
+	u, err := url.Parse(c.DockerPushURL)
+	if err != nil {
+		return "", fmt.Errorf("cluster: could not parse DockerPushURL: %s", err)
+	}
+	return u.Host, nil
 }
 
 type Config struct {
@@ -93,6 +108,8 @@ func (c *Config) Add(s *Cluster, force bool) error {
 			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.GitURL)
 		case existing.ControllerURL == s.ControllerURL:
 			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.ControllerURL)
+		case existing.DockerPushURL != "" && existing.DockerPushURL == s.DockerPushURL:
+			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.DockerPushURL)
 		}
 		if m != "" {
 			if conflictIdx != -1 && conflictIdx != i {

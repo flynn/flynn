@@ -14,5 +14,6 @@
   "flynn/logaggregator": "$image_id[logaggregator]",
   "flynn/status": "$image_id[status]",
   "flynn/redis": "$image_id[redis]",
-  "flynn/mariadb": "$image_id[mariadb]"
+  "flynn/mariadb": "$image_id[mariadb]",
+  "flynn/docker-receive": "$image_id[docker-receive]"
 }

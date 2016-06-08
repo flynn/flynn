@@ -1254,3 +1254,70 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 		s.assertURI(t, slugs[i], http.StatusOK)
 	}
 }
+
+func (s *CLISuite) TestDockerPush(t *c.C) {
+	// build image with ENV and CMD
+	repo := "cli-test-push"
+	s.buildDockerImage(t, repo,
+		`ENV FOO=BAR`,
+		`CMD ["/bin/pingserv"]`,
+	)
+
+	// create app
+	client := s.controllerClient(t)
+	app := &ct.App{Name: "cli-test-docker-push"}
+	t.Assert(client.CreateApp(app), c.IsNil)
+
+	// flynn docker push image
+	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
+
+	// check app was released with correct env, meta and process type
+	release, err := client.GetAppRelease(app.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(release.Env["FOO"], c.Equals, "BAR")
+	t.Assert(release.Meta["docker-receive"], c.Equals, "true")
+	t.Assert(release.Processes, c.HasLen, 1)
+	proc, ok := release.Processes["app"]
+	if !ok {
+		t.Fatal(`release missing "app" process type`)
+	}
+	t.Assert(proc.Cmd, c.DeepEquals, []string{"/bin/pingserv"})
+
+	// check the release can be scaled up
+	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "app=1"), Succeeds)
+
+	// check the job is reachable with the app's name in discoverd
+	instances, err := s.discoverdClient(t).Instances(app.Name, 10*time.Second)
+	t.Assert(err, c.IsNil)
+	res, err := http.Get("http://" + instances[0].Addr)
+	t.Assert(err, c.IsNil)
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	t.Assert(err, c.IsNil)
+	t.Assert(string(body), c.Equals, "OK")
+}
+
+func (s *CLISuite) TestDockerExportImport(t *c.C) {
+	// release via docker-receive
+	client := s.controllerClient(t)
+	app := &ct.App{Name: "cli-test-docker-export"}
+	t.Assert(client.CreateApp(app), c.IsNil)
+	repo := "cli-test-export"
+	s.buildDockerImage(t, repo, `CMD ["/bin/pingserv"]`)
+	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
+	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "app=1"), Succeeds)
+	defer flynn(t, "/", "-a", app.Name, "scale", "app=0")
+
+	// export the app
+	file := filepath.Join(t.MkDir(), "export.tar")
+	t.Assert(flynn(t, "/", "-a", app.Name, "export", "-f", file), Succeeds)
+
+	// import to another app
+	importApp := "cli-test-docker-import"
+	t.Assert(flynn(t, "/", "import", "--name", importApp, "--file", file), Succeeds)
+	defer flynn(t, "/", "-a", importApp, "scale", "app=0")
+
+	// wait for it to start
+	_, err := s.discoverdClient(t).Instances(importApp, 10*time.Second)
+	t.Assert(err, c.IsNil)
+}

@@ -10,12 +10,16 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kardianos/osext"
 )
 
+func CACertPath(name string) string {
+	return filepath.Join(Dir(), "ca-certs", name+".pem")
+}
+
 func CACertFile(name string) (*os.File, error) {
-	dir := filepath.Join(Dir(), "ca-certs")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	path := CACertPath(name)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, err
 	}
-	return os.Create(filepath.Join(dir, name+".pem"))
+	return os.Create(path)
 }
 
 func gitConfig(args ...string) error {

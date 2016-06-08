@@ -84,7 +84,7 @@ main() {
 
   export FLYNNRC=/tmp/flynnrc
   "${flynn}" cluster remove default
-  "${flynn}" ${cluster_add:6}
+  "${flynn}" cluster add --docker ${cluster_add:18}
 
   cd "${ROOT}/test"
 
