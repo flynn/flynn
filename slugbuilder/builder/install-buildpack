@@ -33,9 +33,10 @@ IFS='#' read url treeish <<< "${buildpack_url}"
 if [[ "${treeish}" == "" ]]; then
   git clone --recursive --depth=1 "${url}" "${buildpack_name}"
 else
-  git clone --recursive --no-checkout "${url}" "${buildpack_name}"
+  git clone --no-checkout "${url}" "${buildpack_name}"
   pushd ${buildpack_name} > /dev/null
   git checkout -q "${treeish}"
+  git submodule update --init --recursive
   rm -rf .git
   popd > /dev/null
 fi
