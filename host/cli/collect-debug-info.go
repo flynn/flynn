@@ -138,6 +138,9 @@ func captureJobs(gist *Gist, env bool, lines int) error {
 
 	for _, job := range jobs {
 		var name string
+		if system, ok := job.Job.Metadata["flynn-system-app"]; !ok || system != "true" {
+			continue // Skip non-system applications
+		}
 		if app, ok := job.Job.Metadata["flynn-controller.app_name"]; ok {
 			name += app + "-"
 		}
