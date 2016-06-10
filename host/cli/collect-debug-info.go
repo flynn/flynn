@@ -3,10 +3,8 @@ package cli
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -46,18 +44,12 @@ usage: flynn-host collect-debug-info [options]
 Options:
   --tarball          Create a tarball instead of uploading to a gist
   --include-env      Include sensitive environment variables
-  --job-lines=<num>  Maximum number of lines to fetch from each job [default: 1000]
 
 Collect debug information into an anonymous gist or tarball`)
 }
 
 func runCollectDebugInfo(args *docopt.Args) error {
 	log := log15.New()
-	lines, err := strconv.Atoi(args.String["--job-lines"])
-	if err != nil {
-		return err
-	}
-
 	if args.Bool["--tarball"] {
 		log.Info("creating a tarball containing logs and debug information")
 	} else {
@@ -79,9 +71,9 @@ func runCollectDebugInfo(args *docopt.Args) error {
 	}
 
 	log.Info("getting job logs")
-	if err := captureJobs(gist, args.Bool["--include-env"], lines); err != nil {
+	if err := captureJobs(gist, args.Bool["--include-env"]); err != nil {
 		log.Error("error getting job logs, falling back to on-disk logs", "err", err)
-		debugCmds = append(debugCmds, []string{"bash", "-c", fmt.Sprintf("tail -n %d /var/log/flynn/*.log", lines)})
+		debugCmds = append(debugCmds, []string{"bash", "-c", "tail -n+1 /var/log/flynn/*.log"})
 	}
 
 	log.Info("getting system information")
@@ -124,7 +116,7 @@ func captureCmd(name string, arg ...string) (string, error) {
 	return buf.String(), nil
 }
 
-func captureJobs(gist *Gist, env bool, lines int) error {
+func captureJobs(gist *Gist, env bool) error {
 	client := cluster.NewClient()
 
 	jobs, err := jobList(client, true)
@@ -152,15 +144,7 @@ func captureJobs(gist *Gist, env bool, lines int) error {
 		var content bytes.Buffer
 		printJobDesc(&job, &content, env)
 		fmt.Fprint(&content, "\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
-		stdoutR, stdoutW := io.Pipe()
-		stderrR, stderrW := io.Pipe()
-		go func() {
-			getLog(job.HostID, job.Job.ID, client, false, true, stdoutW, stderrW)
-			stdoutW.Close()
-			stderrW.Close()
-		}()
-		tailLogs(stdoutR, stderrR, lines, &content, &content)
-
+		getLog(job.HostID, job.Job.ID, client, false, true, &content, &content)
 		gist.AddFile(name, content.String())
 	}
 
