@@ -88,7 +88,11 @@ func runCollectDebugInfo(args *docopt.Args) error {
 	}
 	gist.AddFile("0-debug-output.log", debugOutput)
 
-	if args.Bool["--tarball"] {
+	if gist.Size > GistMaxSize {
+		log.Info(fmt.Sprintf("Total size of %d bytes exceeds gist limit, falling back to tarball.", gist.Size))
+	}
+
+	if args.Bool["--tarball"] || gist.Size > GistMaxSize {
 		path, err := gist.CreateTarball()
 		if err != nil {
 			log.Error("error creating tarball", "err", err)
