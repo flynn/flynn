@@ -55,8 +55,17 @@ func (a *StatusCheckAction) Run(s *State) error {
 		req.Header.Set("Accept", "application/json")
 		res, err := http.DefaultClient.Do(req)
 		if err == nil && res.StatusCode == 200 {
+			res.Body.Close()
 			s.StepData[a.ID] = &LogMessage{Msg: "all services healthy"}
 			return nil
+		}
+		var status StatusResponse
+		if err == nil {
+			err = json.NewDecoder(res.Body).Decode(&status)
+			res.Body.Close()
+			if err != nil {
+				return err
+			}
 		}
 
 		select {
@@ -69,12 +78,6 @@ func (a *StatusCheckAction) Run(s *State) error {
 			return fmt.Errorf("bootstrap: timed out waiting for %s, last response %s", a.URL, err)
 		}
 
-		var status StatusResponse
-		err = json.NewDecoder(res.Body).Decode(&status)
-		if err != nil {
-			return err
-		}
-		res.Body.Close()
 		msg := "unhealthy services detected!\n\nThe following services are reporting unhealthy, this likely indicates a problem with your deployment:\n"
 		for svc, s := range status.Data.Detail {
 			if s.Status != "healthy" {
