@@ -8,7 +8,6 @@ import (
 	"path"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/flynn/flynn/blobstore/backend"
 	"github.com/flynn/flynn/blobstore/data"
@@ -104,8 +103,6 @@ func handler(r *data.FileRepo) http.Handler {
 	})
 }
 
-const configEnvPrefix = "BACKEND_"
-
 func main() {
 	defer shutdown.Exit()
 
@@ -116,51 +113,22 @@ func main() {
 		shutdown.Fatalf("error running DB migrations: %s", err)
 	}
 
+	mux := http.NewServeMux()
+
+	repo, err := data.NewFileRepoFromEnv(db)
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
 	hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
-	mux := http.NewServeMux()
-	backends := []backend.Backend{backend.Postgres}
-
-	for _, env := range os.Environ() {
-		if !strings.HasPrefix(env, configEnvPrefix) {
-			continue
-		}
-		nameInfo := strings.SplitN(env, "=", 2)
-		name := strings.ToLower(strings.TrimPrefix(nameInfo[0], configEnvPrefix))
-		info := parseBackendInfo(nameInfo[1])
-		if info["backend"] != "s3" {
-			shutdown.Fatalf("error: unknown backend %q for %s", info["backend"], name)
-		}
-		b, err := backend.NewS3(name, info)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		log.Println("Configured additional backend: %s (%s)", name, info["backend"])
-		backends = append(backends, b)
-	}
-
-	defaultBackend := "postgres"
-	if d := os.Getenv("DEFAULT_BACKEND"); d != "" {
-		defaultBackend = d
-		var found bool
-		for _, b := range backends {
-			if b.Name() == d {
-				found = true
-				break
-			}
-		}
-		if !found {
-			shutdown.Fatalf("error: unknow default backend %q", d)
-		}
-	}
-
 	log.Println("Blobstore serving files on " + addr)
 
-	mux.Handle("/", handler(data.NewFileRepo(db, backends, defaultBackend)))
+	mux.Handle("/", handler(repo))
 	mux.Handle(status.Path, status.Handler(func() status.Status {
 		if err := db.Exec("SELECT 1"); err != nil {
 			return status.Unhealthy
@@ -170,15 +138,6 @@ func main() {
 
 	h := httphelper.ContextInjector("blobstore", httphelper.NewRequestLogger(mux))
 	shutdown.Fatal(http.ListenAndServe(addr, h))
-}
-
-func parseBackendInfo(s string) map[string]string {
-	info := make(map[string]string)
-	for _, token := range strings.Split(s, " ") {
-		kv := strings.SplitN(token, "=", 2)
-		info[kv[0]] = info[kv[1]]
-	}
-	return info
 }
 
 func migrateDB(db *postgres.DB) error {

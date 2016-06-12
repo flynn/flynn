@@ -41,5 +41,5 @@ type Backend interface {
 	Open(tx *postgres.DBTx, info FileInfo, txControl bool) (FileStream, error)
 	Put(tx *postgres.DBTx, info FileInfo, r io.Reader, append bool) error
 	Copy(tx *postgres.DBTx, dst, src FileInfo) error
-	Delete(info FileInfo) error
+	Delete(tx *postgres.DBTx, info FileInfo) error
 }

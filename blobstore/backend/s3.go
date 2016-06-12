@@ -112,7 +112,7 @@ func (b *s3Backend) Copy(tx *postgres.DBTx, dst, src FileInfo) error {
 	return err
 }
 
-func (b *s3Backend) Delete(info FileInfo) error {
+func (b *s3Backend) Delete(tx *postgres.DBTx, info FileInfo) error {
 	_, err := b.client.DeleteObject(&s3.DeleteObjectInput{
 		Bucket: &b.bucket,
 		Key:    &info.ExternalID,

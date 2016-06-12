@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -13,6 +14,60 @@ import (
 	"github.com/stevvooe/resumable"
 	"github.com/stevvooe/resumable/sha512"
 )
+
+const configEnvPrefix = "BACKEND_"
+
+func NewFileRepoFromEnv(db *postgres.DB) (*FileRepo, error) {
+	backends := []backend.Backend{backend.Postgres}
+	for _, env := range os.Environ() {
+		if !strings.HasPrefix(env, configEnvPrefix) {
+			continue
+		}
+		nameInfo := strings.SplitN(env, "=", 2)
+		name := strings.ToLower(strings.TrimPrefix(nameInfo[0], configEnvPrefix))
+		info, err := parseBackendInfo(nameInfo[1])
+		if err != nil {
+			return nil, err
+		}
+		if info["backend"] != "s3" {
+			return nil, fmt.Errorf("blobstore: unknown backend %q for %s", info["backend"], name)
+		}
+		b, err := backend.NewS3(name, info)
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("Configured additional backend: %s (%s)\n", name, info["backend"])
+		backends = append(backends, b)
+	}
+
+	defaultBackend := "postgres"
+	if d := os.Getenv("DEFAULT_BACKEND"); d != "" {
+		defaultBackend = d
+		var found bool
+		for _, b := range backends {
+			if b.Name() == d {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("error: unknown default backend %q", d)
+		}
+	}
+	return NewFileRepo(db, backends, defaultBackend), nil
+}
+
+func parseBackendInfo(s string) (map[string]string, error) {
+	info := make(map[string]string)
+	for _, token := range strings.Split(s, " ") {
+		kv := strings.SplitN(token, "=", 2)
+		if len(kv) < 2 {
+			return nil, fmt.Errorf("blobstore: error parsing backend kv pair %q", token)
+		}
+		info[kv[0]] = kv[1]
+	}
+	return info, nil
+}
 
 type FileRepo struct {
 	db             *postgres.DB
@@ -39,6 +94,10 @@ func (r *FileRepo) getBackend(name string) (backend.Backend, error) {
 	return nil, fmt.Errorf("blobstore: unknown backend %q", name)
 }
 
+func (r *FileRepo) DefaultBackend() backend.Backend {
+	return r.defaultBackend
+}
+
 func (r *FileRepo) List(dir string) ([]string, error) {
 	rows, err := r.db.Query("SELECT substring(name FROM '^' || $1 || '/[^/]+/?') AS path FROM files WHERE name LIKE $1 || '%' AND deleted_at IS NULL GROUP BY path", strings.TrimSuffix(dir, "/"))
 	if err != nil {
@@ -56,6 +115,42 @@ func (r *FileRepo) List(dir string) ([]string, error) {
 		}
 	}
 	return paths, rows.Err()
+}
+
+type BackendFile struct {
+	backend.Backend
+	backend.FileInfo
+}
+
+func (r *FileRepo) ListFilesExcludingDefaultBackend(prefix string) ([]BackendFile, error) {
+	rows, err := r.db.Query(
+		"SELECT file_id, file_oid, external_id, backend, name, type, size, sha512, updated_at FROM files WHERE backend != $1 AND NAME LIKE $2 || '%' AND deleted_at IS NULL",
+		r.defaultBackend.Name(), prefix,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []BackendFile
+	for rows.Next() {
+		var info backend.FileInfo
+		var backendName string
+		var externalID *string
+		var sha512 []byte
+		if rows.Scan(&info.ID, &info.Oid, &externalID, &backendName, &info.Name, &info.Type, &info.Size, &sha512, &info.ModTime); err != nil {
+			return nil, err
+		}
+		if externalID != nil {
+			info.ExternalID = *externalID
+		}
+		info.ETag = base64.StdEncoding.EncodeToString(sha512)
+		f := BackendFile{FileInfo: info}
+		f.Backend, _ = r.getBackend(backendName)
+		res = append(res, f)
+	}
+
+	return res, rows.Err()
 }
 
 // Get is like Open, except the FileStream is not populated (useful for HEAD requests)
@@ -290,12 +385,16 @@ func (r *FileRepo) Delete(name string) error {
 
 	var errors []error
 	for name, files := range backendFiles {
+		if name == "postgres" {
+			// no need to call delete, it is done automatically by a trigger
+			continue
+		}
 		b, err := r.getBackend(name)
 		if err != nil {
 			errors = append(errors, err)
 		}
 		for _, f := range files {
-			if err := b.Delete(f); err != nil {
+			if err := b.Delete(nil, f); err != nil {
 				errors = append(errors, err)
 			}
 		}
@@ -304,6 +403,10 @@ func (r *FileRepo) Delete(name string) error {
 		return errors[0]
 	}
 	return nil
+}
+
+func (f *FileRepo) SetBackend(tx *postgres.DBTx, id, name string) error {
+	return tx.Exec("UPDATE files SET backend = $2 WHERE file_id = $1", id, name)
 }
 
 type sizeReader struct {

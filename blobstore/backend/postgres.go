@@ -48,9 +48,11 @@ func (p pg) Copy(tx *postgres.DBTx, dst, src FileInfo) error {
 	return p.Put(tx, dst, srcFile, false)
 }
 
-func (p pg) Delete(info FileInfo) error {
-	// Do nothing, file data is deleted automatically by trigger when deleted_at is set
-	return nil
+func (p pg) Delete(tx *postgres.DBTx, info FileInfo) error {
+	if err := tx.Exec("SELECT lo_unlink($1)", info.Oid); err != nil {
+		return err
+	}
+	return tx.Exec("UPDATE files SET file_oid = NULL WHERE file_id = $1", info.ID)
 }
 
 func (p pg) Open(tx *postgres.DBTx, info FileInfo, txControl bool) (FileStream, error) {
