@@ -193,10 +193,6 @@ func (h *Handler) serveGetService(w http.ResponseWriter, r *http.Request, params
 	// maintaining headers through a redirect.
 	//
 	// See https://github.com/flynn/flynn/issues/1880
-	if !h.Store.IsLeader() {
-		h.redirectToLeader(w, r)
-		return
-	}
 	h.serveStream(w, params, discoverd.EventKindAll)
 }
 
@@ -295,10 +291,6 @@ func (h *Handler) serveDeleteInstance(w http.ResponseWriter, r *http.Request, pa
 func (h *Handler) serveGetInstances(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	// If the client is requesting a stream, then handle as a stream.
 	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
-		if !h.Store.IsLeader() {
-			h.redirectToLeader(w, r)
-			return
-		}
 		h.serveStream(w, params, discoverd.EventKindUp|discoverd.EventKindUpdate|discoverd.EventKindDown)
 		return
 	}
@@ -350,10 +342,6 @@ func (h *Handler) servePutLeader(w http.ResponseWriter, r *http.Request, params 
 func (h *Handler) serveGetLeader(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	// Process as a stream if that's what the client wants.
 	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
-		if !h.Store.IsLeader() {
-			h.redirectToLeader(w, r)
-			return
-		}
 		h.serveStream(w, params, discoverd.EventKindLeader)
 		return
 	}

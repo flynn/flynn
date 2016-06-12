@@ -57,7 +57,7 @@ func NewClientWithConfig(config Config) *Client {
 				}
 			}
 		}
-		client.updateLeader(req.Host)
+		client.updateLeader(req.URL.Host)
 		return nil
 	}
 	client.hc = &http.Client{
@@ -99,9 +99,14 @@ func formatURLs(urls []string) []string {
 func (c *Client) updateLeader(host string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	url := "http://" + host
+	if c.leader == url {
+		return
+	}
 	for addr, s := range c.servers {
-		if s.Host == host {
+		if s.URL == url {
 			c.leader = addr
+			break
 		}
 	}
 }
@@ -173,7 +178,7 @@ func (c *Client) Do(method string, path string, in, out interface{}, streamReq b
 	leader, pinned := c.currentPin()
 
 	// Attempt to direct writes and streaming requests to the last known leader
-	if leaderReq || streamReq {
+	if leaderReq {
 		pinned = leader
 	}
 
