@@ -287,7 +287,7 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 		case change := <-ch:
 			select {
 			case stream.Send <- change:
-				log.Info("sent state change", "state", change.State, "err", change.Error, "exitStatus", change.ExitStatus)
+				log.Info("sent state change", "state", change.State)
 			case <-stream.Error:
 				return nil
 			}
@@ -299,7 +299,13 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 
 // Caller must hold lock
 func (c *ContainerInit) changeState(state State, err string, exitStatus int) {
-	logger.Info("changing state", "fn", "changeState", "state", state, "err", err, "exitStatus", exitStatus)
+	if err != "" {
+		logger.Info("changing state", "fn", "changeState", "state", state, "err", err)
+	} else if exitStatus != -1 {
+		logger.Info("changing state", "fn", "changeState", "state", state, "exitStatus", exitStatus)
+	} else {
+		logger.Info("changing state", "fn", "changeState", "state", state)
+	}
 
 	c.state = state
 	c.error = err
