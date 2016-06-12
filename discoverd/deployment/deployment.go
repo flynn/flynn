@@ -36,7 +36,23 @@ func NewDeployment(service string) (*Deployment, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Deployment{s, events, stream}, nil
+	deployment := &Deployment{service: s, events: events, stream: stream}
+outer:
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return nil, fmt.Errorf("unexpected close of event stream")
+			}
+			switch event.Kind {
+			case discoverd.EventKindServiceMeta:
+				deployment.meta = event.ServiceMeta
+			case discoverd.EventKindCurrent:
+				break outer
+			}
+		}
+	}
+	return deployment, nil
 }
 
 // Deployment is a wrapper around service metadata for marking jobs as either
@@ -45,6 +61,21 @@ type Deployment struct {
 	service discoverd.Service
 	events  chan *discoverd.Event
 	stream  stream.Stream
+	meta    *discoverd.ServiceMeta
+}
+
+func (d *Deployment) update() error {
+	select {
+	case event, ok := <-d.events:
+		if !ok {
+			return fmt.Errorf("service stream closed unexpectedly: %s", d.stream.Err())
+		}
+		if event.Kind == discoverd.EventKindServiceMeta {
+			d.meta = event.ServiceMeta
+		}
+	default:
+	}
+	return nil
 }
 
 // MarkPerforming marks the given address as performing in the service metadata,
@@ -54,12 +85,10 @@ type Deployment struct {
 func (d *Deployment) MarkPerforming(addr string, timeout int) error {
 outer:
 	for {
-		meta, err := d.service.GetMeta()
-		if err != nil {
+		if err := d.update(); err != nil {
 			return err
 		}
-
-		deploymentMeta, err := d.decode(meta)
+		deploymentMeta, err := d.decode(d.meta)
 		if err != nil {
 			return err
 		}
@@ -87,6 +116,7 @@ outer:
 						return fmt.Errorf("service stream closed unexpectedly: %s", d.stream.Err())
 					}
 					if event.Kind == discoverd.EventKindServiceMeta {
+						d.meta = event.ServiceMeta
 						continue outer
 					}
 				case <-time.After(time.Duration(timeout) * time.Second):
@@ -102,9 +132,10 @@ outer:
 		if err != nil {
 			return err
 		}
-		meta.Data = data
+		meta := &discoverd.ServiceMeta{Data: data, Index: d.meta.Index}
 
-		if err := d.service.SetMeta(meta); err == nil {
+		err = d.service.SetMeta(meta)
+		if err == nil {
 			return nil
 		}
 	}
@@ -119,19 +150,18 @@ var attempts = attempt.Strategy{
 // MarkDone marks the addr as done in the service metadata
 func (d *Deployment) MarkDone(addr string) error {
 	return attempts.Run(func() error {
-		meta, err := d.service.GetMeta()
-		if err != nil {
+		if err := d.update(); err != nil {
 			return err
 		}
 
-		deploymentMeta, err := d.decode(meta)
+		deploymentMeta, err := d.decode(d.meta)
 		if err != nil {
 			return err
 		}
 
 		deploymentMeta.States[addr] = DeploymentStateDone
 
-		return d.set(meta, deploymentMeta)
+		return d.set(d.meta, deploymentMeta)
 	})
 }
 
@@ -177,11 +207,10 @@ func (d *Deployment) Create(id string) error {
 		if err := d.set(&discoverd.ServiceMeta{}, NewDeploymentMeta(id)); err == nil {
 			return nil
 		}
-		meta, err := d.service.GetMeta()
-		if err != nil {
+		if err := d.update(); err != nil {
 			return err
 		}
-		return d.set(meta, NewDeploymentMeta(id))
+		return d.set(d.meta, NewDeploymentMeta(id))
 	})
 }
 
