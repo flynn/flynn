@@ -19,11 +19,15 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
+// Actual limit is likely ~200mb.
+const GistMaxSize = 195 * 1024 * 1024
+
 type Gist struct {
 	URL         string          `json:"html_url,omitempty"`
 	Description string          `json:"description"`
 	Public      bool            `json:"public"`
 	Files       map[string]File `json:"files"`
+	Size        int
 }
 
 func (g *Gist) AddLocalFile(name, filepath string) error {
@@ -37,6 +41,7 @@ func (g *Gist) AddLocalFile(name, filepath string) error {
 
 func (g *Gist) AddFile(name, content string) {
 	g.Files[name] = File{Content: content}
+	g.Size = g.Size + len(content)
 }
 
 func (g *Gist) Upload(log log15.Logger) error {
