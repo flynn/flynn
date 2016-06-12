@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	dt "github.com/flynn/flynn/discoverd/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
@@ -21,6 +23,16 @@ import (
 
 // StreamBufferSize is the size of the channel buffer used for event subscription.
 const StreamBufferSize = 64 // TODO: Figure out how big this buffer should be.
+
+func loggerFn(handler http.Handler, logger log.Logger, clientIP string, rw *hh.ResponseWriter, req *http.Request) {
+	start := time.Now()
+	handler.ServeHTTP(rw, req)
+	switch rw.Status() {
+	case 200, 307, 0: // 0 == 200 OK
+	default:
+		logger.Info("request completed", "method", req.Method, "path", req.URL.Path, "client_ip", clientIP, "status", rw.Status(), "duration", time.Since(start))
+	}
+}
 
 // NewHandler returns a new instance of Handler.
 func NewHandler(proxy bool, peers []string) *Handler {
@@ -33,7 +45,7 @@ func NewHandler(proxy bool, peers []string) *Handler {
 	h.Proxy.Store(proxy)
 
 	if os.Getenv("DEBUG") != "" {
-		h.Handler = hh.ContextInjector("discoverd", hh.NewRequestLogger(h.Handler))
+		h.Handler = hh.ContextInjector("discoverd", hh.NewRequestLoggerCustom(h.Handler, loggerFn))
 	}
 
 	r.HandlerFunc("GET", status.Path, status.HealthyHandler.ServeHTTP)
