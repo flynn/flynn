@@ -19,6 +19,7 @@ import (
 )
 
 type Client interface {
+	GetVersion() (string, error)
 	GetCACert() ([]byte, error)
 	StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error)
 	PutDomain(dm *ct.DomainMigration) error

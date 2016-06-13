@@ -101,6 +101,20 @@ func jobEventsEqual(expected, actual ct.JobEvents) bool {
 	return true
 }
 
+// GetVersion returns the Flynn version running on the cluster
+func (c *Client) GetVersion() (string, error) {
+	var version bytes.Buffer
+	res, err := c.RawReq("GET", "/version", nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	if _, err := io.Copy(&version, res.Body); err != nil {
+		return "", err
+	}
+	return version.String(), nil
+}
+
 // GetCACert returns the CA cert for the controller
 func (c *Client) GetCACert() ([]byte, error) {
 	var cert bytes.Buffer

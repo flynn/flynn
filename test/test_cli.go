@@ -28,6 +28,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
+	"github.com/flynn/flynn/pkg/version"
 )
 
 type CLISuite struct {
@@ -1320,4 +1321,10 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	// wait for it to start
 	_, err := s.discoverdClient(t).Instances(importApp, 10*time.Second)
 	t.Assert(err, c.IsNil)
+}
+
+func (s *CLISuite) TestClusterVersion(t *c.C) {
+	out := flynn(t, "cluster", "version")
+	t.Assert(out, Succeeds)
+	t.Assert(out.Output, c.Equals, version.String()+"\n")
 }

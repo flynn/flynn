@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
+	"github.com/flynn/flynn/pkg/version"
 )
 
 func init() {
@@ -105,6 +106,12 @@ func (s *S) SetUpSuite(c *C) {
 
 func (s *S) SetUpTest(c *C) {
 	s.cc.SetHosts(make(map[string]*tu.FakeHostClient))
+}
+
+func (s *S) TestGetVersion(c *C) {
+	v, err := s.c.GetVersion()
+	c.Assert(err, IsNil)
+	c.Assert(v, Equals, version.String())
 }
 
 func (s *S) TestBadAuth(c *C) {
