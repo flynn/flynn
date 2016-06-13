@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,6 +101,10 @@ func (m *Main) Run(args ...string) error {
 	}
 	m.peers = httpPeers
 
+	// Initialise the default client using the peer list
+	os.Setenv("DISCOVERD", strings.Join(opt.Peers, ","))
+	discoverd.DefaultClient = discoverd.NewClient()
+
 	// if there is a discoverd process already running on this
 	// address perform a deployment by starting a proxy DNS server
 	// and shutting down the old discoverd job
@@ -112,9 +115,6 @@ func (m *Main) Run(args ...string) error {
 	m.logger.Println("checking for existing discoverd process at", target)
 	if err := discoverd.NewClientWithURL(target).Ping(target); err == nil {
 		m.logger.Println("discoverd responding at", target, "taking over")
-
-		os.Setenv("DISCOVERD", strings.Join(opt.Peers, ","))
-		discoverd.DefaultClient = discoverd.NewClient()
 
 		deploy, err = dd.NewDeployment("discoverd")
 		if err != nil {
@@ -251,10 +251,7 @@ func (m *Main) Run(args ...string) error {
 	m.Notify(opt.Notify, opt.DNSAddr)
 	go func() {
 		for {
-			hb, err := discoverd.NewClientWithURL("http://"+httpAddr).AddServiceAndRegisterInstance("discoverd", &discoverd.Instance{
-				Addr: httpAddr,
-				Meta: map[string]string{"proxy": strconv.FormatBool(proxying)},
-			})
+			hb, err := discoverd.AddServiceAndRegister("discoverd", httpAddr)
 			if err != nil {
 				m.logger.Println("failed to register service/instance, retrying in 5 seconds:", err)
 				time.Sleep(5 * time.Second)
@@ -357,13 +354,6 @@ func (m *Main) Promote() error {
 	m.handler.Store = m.store
 	m.handler.Proxy.Store(false)
 
-	// Set the instance metadata to indicate we are now a raft peer
-	err = m.hb.SetMeta(map[string]string{"proxy": "false"})
-	if err != nil {
-		m.logger.Println("error setting instance meta", err)
-		return err
-	}
-
 	m.logger.Println("promoted sucessfully")
 	return nil
 }
@@ -420,13 +410,6 @@ func (m *Main) Demote() error {
 	m.store.Close()
 	m.handler.Store = nil
 	m.store = nil
-
-	// Set the instance metadata to indicate we are no longer a raft peer
-	err := m.hb.SetMeta(map[string]string{"proxy": "true"})
-	if err != nil {
-		m.logger.Println("error setting instance meta", err)
-		return err
-	}
 
 	m.logger.Println("demoted sucessfully")
 	return nil
