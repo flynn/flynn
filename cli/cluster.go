@@ -29,6 +29,7 @@ usage: flynn cluster
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
        flynn cluster backup [--file <file>]
+       flynn cluster version
 
 Manage Flynn clusters.
 
@@ -70,6 +71,9 @@ Commands:
         options:
             --file=<backup-file>  file to write backup to (defaults to stdout)
 
+    version
+        Reports the Flynn version the cluster is running.
+
 Examples:
 
 	$ flynn cluster add -p KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs= default dev.localflynn.com e09dc5301d72be755a3d666f617c4600
@@ -79,6 +83,9 @@ Examples:
 	Migrate cluster domain from "example.com" to "new.example.com"? (yes/no): yes
 	Migrating cluster domain (this can take up to 2m0s)...
 	Changed cluster domain from "example.com" to "new.example.com"
+
+	$ flynn cluster version
+	v20160609.0
 `)
 }
 
@@ -97,6 +104,8 @@ func runCluster(args *docopt.Args) error {
 		return runClusterMigrateDomain(args)
 	} else if args.Bool["backup"] {
 		return runClusterBackup(args)
+	} else if args.Bool["version"] {
+		return runGetClusterVersion(args)
 	}
 
 	w := tabWriter()
@@ -411,5 +420,18 @@ func runClusterBackup(args *docopt.Args) error {
 	}
 	fmt.Fprintln(os.Stderr, "Backup complete.")
 
+	return nil
+}
+
+func runGetClusterVersion(args *docopt.Args) error {
+	client, err := getClusterClient()
+	if err != nil {
+		return err
+	}
+	v, err := client.GetVersion()
+	if err != nil {
+		return err
+	}
+	fmt.Println(v)
 	return nil
 }
