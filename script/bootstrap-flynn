@@ -4,6 +4,7 @@ set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
+source "${ROOT}/script/lib/util.sh"
 
 usage() {
   cat <<USAGE >&2
@@ -95,6 +96,7 @@ main() {
   # kill flynn first
   "${ROOT}/script/kill-flynn"
 
+  # populate IP list for bootstrap
   local ips=()
   info "starting ${size} node cluster"
 
@@ -105,10 +107,7 @@ main() {
     # An RFC 5737 TEST-NET IP
     local ip="192.0.2.20$(($index))"
     ips+=("${ip}")
-
-    info "starting flynn-host using IP ${ip}"
-    sudo ifconfig "eth0:${index}" "${ip}"
-    "${ROOT}/script/start-flynn-host" "${host_flags}" "${ip}" "${index}"
+    "${ROOT}/script/start-flynn-host" "${host_flags}" "${index}"
   done
 
   info "bootstrapping Flynn"
@@ -120,12 +119,6 @@ main() {
     --min-hosts="${size}" \
     --peer-ips="$(join "," ${ips[@]})" \
     "${manifest}"
-}
-
-join() {
-  local IFS="$1"
-  shift
-  echo "$*"
 }
 
 main $@
