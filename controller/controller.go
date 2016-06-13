@@ -30,6 +30,7 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
+	"github.com/flynn/flynn/pkg/version"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
@@ -241,6 +242,10 @@ func appHandler(c handlerConfig) http.Handler {
 	shutdown.BeforeExit(api.Shutdown)
 
 	httpRouter := httprouter.New()
+
+	httpRouter.Handler("GET", "/version", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte(version.String()))
+	}))
 
 	crud(httpRouter, "apps", ct.App{}, appRepo)
 	crud(httpRouter, "releases", ct.Release{}, releaseRepo)
