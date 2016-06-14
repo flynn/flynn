@@ -105,6 +105,22 @@ var Client = createClass({
 		});
 	},
 
+	getClusterStatus: function () {
+		var statusKey = (Config.user || {}).status_key;
+		var middleware = [];
+		if (statusKey && statusKey.length > 0) {
+			middleware.push(
+				BasicAuthMiddleware("", statusKey)
+			);
+		}
+		return this.performRequest("GET", {
+			middleware: middleware,
+			url: this.endpoints.cluster_status
+		}).then(function (args) {
+			return args[0];
+		});
+	},
+
 	ping: function (endpoint, protocol) {
 		endpoint = window.location.host.replace("dashboard", endpoint);
 		endpoint = protocol + "://" + endpoint + "/ping";

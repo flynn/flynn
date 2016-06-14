@@ -15,6 +15,7 @@ type Config struct {
 	DefaultRouteDomain      string
 	ControllerDomain        string
 	ControllerKey           string
+	StatusKey               string
 	URL                     string
 	InterfaceURL            string
 	PathPrefix              string
@@ -54,6 +55,8 @@ func LoadConfigFromEnv() *Config {
 	if conf.ControllerKey == "" {
 		log.Fatal("CONTROLLER_KEY is required!")
 	}
+
+	conf.StatusKey = os.Getenv("STATUS_KEY")
 
 	conf.URL = os.Getenv("URL")
 	if conf.URL == "" {
