@@ -1,60 +1,72 @@
 @import "./colors";
 
 .app-logs {
-  > .placeholder {
-    display: block;
-    text-align: center;
-    color: $darkerGrayBlueColor;
-    font-size: 1.5rem;
+  display: flex;
+
+  > section {
+    flex-grow: 1;
   }
 
-  > .processes {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-
-    > li {
-      cursor: pointer;
-      border: 1px solid $grayBlueColor;
-      border-bottom: 0;
-      &:last-of-type {
-        border-bottom: 1px solid $grayBlueColor;
-      }
-
-      padding: 0.5em 1.5em;
-
-      &.selected {
-        background-color: $grayBlueColor;
-      }
-    }
-
-    .state {
-      margin-left: 0.5rem;
-      border-radius: 2px;
-      padding: 2px 4px;
-      font-size: 0.75rem;
-
-      text-transform: uppercase;
-
-      background-color: $grayBlueColor;
-      color: $whiteColor;
-
-      &.down {
-        background-color: $orangeColor;
-      }
-
-      &.up {
-        background-color: $greenColor;
-      }
-    }
-  }
-
-  > .log-output {
+  > section > section {
     > .placeholder {
       display: block;
       text-align: center;
       color: $darkerGrayBlueColor;
       font-size: 1.5rem;
+    }
+
+    > .processes {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+
+      > li {
+        cursor: pointer;
+        padding: 0.5em 1.5em;
+
+        &.selected {
+          background-color: $grayBlueColor;
+        }
+      }
+
+      .state {
+        margin-left: 0.5rem;
+        border-radius: 2px;
+        padding: 2px 4px;
+        font-size: 0.75rem;
+
+        text-transform: uppercase;
+
+        background-color: $grayBlueColor;
+        color: $whiteColor;
+
+        &.down {
+          background-color: $orangeColor;
+        }
+
+        &.up {
+          background-color: $greenColor;
+        }
+      }
+    }
+  }
+
+  // second panel
+  > .log-output {
+    flex-grow: 2;
+    flex-basis: 70%;
+    background-color: $blackGrayColor;
+    > .placeholder {
+      display: block;
+      text-align: center;
+      color: $darkerGrayBlueColor;
+      font-size: 1.5rem;
+    }
+    > .command-output {
+      height: 100%;
+      max-height: 100%;
+      margin: 0;
+      border-radius: 0;
     }
   }
 }

@@ -56,7 +56,7 @@ var JobsStream = Store.createClass({
 			Dispatcher.handleAppEvent({
 				name: "JOB_STATE_CHANGE",
 				appId: this.props.appId,
-				jobId: evnt.job_id,
+				jobId: evnt.uuid,
 				state: evnt.state
 			});
 		}.bind(this), false);

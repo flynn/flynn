@@ -25,7 +25,7 @@ var AppsRouter = Router.createClass({
 		{ path: "apps", handler: "apps" },
 		{ path: "apps/:id", handler: "app", paramChangeScrollReset: false, app: true },
 		{ path: "apps/:id/env", handler: "appEnv", secondary: true, app: true },
-		{ path: "apps/:id/logs", handler: "appLogs", secondary: true, app: true },
+		{ path: "apps/:id/logs", handler: "appLogs", app: true },
 		{ path: "apps/:id/delete", handler: "appDelete", secondary: true, app: true },
 		{ path: "apps/:id/resources/new", handler: "newAppResource", secondary: true, app: true },
 		{ path: "apps/:id/providers/:providerID/resources/:resourceID/delete", handler: "appResourceDelete", secondary: true, app: true },
@@ -162,14 +162,11 @@ var AppsRouter = Router.createClass({
 	},
 
 	appLogs: function (params) {
-		this.context.secondaryView = React.render(React.createElement(
+		this.context.primaryView = React.render(React.createElement(
 			AppLogsComponent,
 			this.__getAppLogsProps(params)),
-			this.context.secondaryEl
+			this.context.el
 		);
-
-		// render app view in background
-		this.app.apply(this, arguments);
 	},
 
 	__getAppLogsProps: function (params) {
