@@ -589,6 +589,11 @@
     }
   },
   {
+    "id": "status-key",
+    "action": "gen-random",
+    "data": "{{ getenv \"STATUS_KEY\" }}"
+  },
+  {
     "id": "dashboard",
     "action": "deploy-app",
     "app": {
@@ -604,6 +609,7 @@
         "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
         "CONTROLLER_DOMAIN": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "STATUS_KEY": "{{ (index .StepData \"status-key\").Data }}",
         "URL": "https://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
         "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}",
@@ -637,11 +643,6 @@
     "type": "http",
     "service": "dashboard-web",
     "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
-  },
-  {
-    "id": "status-key",
-    "action": "gen-random",
-    "data": "{{ getenv \"STATUS_KEY\" }}"
   },
   {
     "id": "status",
