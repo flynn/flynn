@@ -16,12 +16,13 @@ import (
 
 	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
 )
 
 func main() {
 	handler := newStatusHandler(status.Handler(GetStatus), os.Getenv("AUTH_KEY"))
-	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), handler))
+	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), httphelper.CORSAllowAll.Handler(handler)))
 }
 
 type statusHandler struct {
