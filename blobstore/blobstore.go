@@ -109,7 +109,7 @@ func main() {
 	addr := ":" + os.Getenv("PORT")
 
 	db := postgres.Wait(nil, nil)
-	if err := migrateDB(db); err != nil {
+	if err := dbMigrations.Migrate(db); err != nil {
 		shutdown.Fatalf("error running DB migrations: %s", err)
 	}
 
@@ -140,9 +140,10 @@ func main() {
 	shutdown.Fatal(http.ListenAndServe(addr, h))
 }
 
-func migrateDB(db *postgres.DB) error {
-	m := postgres.NewMigrations()
-	m.Add(1,
+var dbMigrations = postgres.NewMigrations()
+
+func init() {
+	dbMigrations.Add(1,
 		`CREATE TABLE files (
 	file_id oid PRIMARY KEY DEFAULT lo_create(0),
 	name text UNIQUE NOT NULL,
@@ -161,7 +162,7 @@ $$ LANGUAGE plpgsql`,
     AFTER DELETE ON files
     FOR EACH ROW EXECUTE PROCEDURE delete_file()`,
 	)
-	m.Add(2,
+	dbMigrations.Add(2,
 		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
 		`CREATE TABLE new_files (
   file_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -195,6 +196,4 @@ $$ LANGUAGE plpgsql`,
 		$$ LANGUAGE plpgsql`,
 		`CREATE TRIGGER delete_file BEFORE UPDATE OF deleted_at ON files FOR EACH ROW EXECUTE PROCEDURE delete_file()`,
 	)
-
-	return m.Migrate(db)
 }

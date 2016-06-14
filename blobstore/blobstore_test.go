@@ -25,7 +25,15 @@ import (
 )
 
 func initDB(t *testing.T) *postgres.DB {
-	dbname := "blobstoretest"
+	db := createDB(t, "")
+	migrateDB(t, db)
+	return db
+}
+
+func createDB(t *testing.T, dbname string) *postgres.DB {
+	if dbname == "" {
+		dbname = "blobstoretest"
+	}
 	if err := pgtestutils.SetupPostgres(dbname); err != nil {
 		t.Fatal(err)
 	}
@@ -39,10 +47,13 @@ func initDB(t *testing.T) *postgres.DB {
 		t.Fatal(err)
 	}
 	db := postgres.New(pgxpool, nil)
-	if err := migrateDB(db); err != nil {
+	return db
+}
+
+func migrateDB(t *testing.T, db *postgres.DB) {
+	if err := dbMigrations.Migrate(db); err != nil {
 		t.Fatal(err)
 	}
-	return db
 }
 
 func TestPostgresFilesystem(t *testing.T) {
