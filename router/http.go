@@ -208,6 +208,51 @@ func (s *HTTPListener) RemoveRoute(id string) error {
 	return s.ds.Remove(id)
 }
 
+func (s *HTTPListener) AddCert(cert *router.Certificate) error {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	if s.closed {
+		return ErrClosed
+	}
+	return s.ds.AddCert(cert)
+}
+
+func (s *HTTPListener) GetCert(id string) (*router.Certificate, error) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	if s.closed {
+		return nil, ErrClosed
+	}
+	return s.ds.GetCert(id)
+}
+
+func (s *HTTPListener) GetCertRoutes(id string) ([]*router.Route, error) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	if s.closed {
+		return nil, ErrClosed
+	}
+	return s.ds.ListCertRoutes(id)
+}
+
+func (s *HTTPListener) GetCerts() ([]*router.Certificate, error) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	if s.closed {
+		return nil, ErrClosed
+	}
+	return s.ds.ListCerts()
+}
+
+func (s *HTTPListener) RemoveCert(id string) error {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	if s.closed {
+		return ErrClosed
+	}
+	return s.ds.RemoveCert(id)
+}
+
 type httpSyncHandler struct {
 	l *HTTPListener
 }
@@ -225,15 +270,15 @@ func (h *httpSyncHandler) Current() map[string]struct{} {
 func (h *httpSyncHandler) Set(data *router.Route) error {
 	route := data.HTTPRoute()
 	r := &httpRoute{HTTPRoute: route}
+	cert := r.Certificate
 
-	if r.TLSCert != "" && r.TLSKey != "" {
-		kp, err := tls.X509KeyPair([]byte(r.TLSCert), []byte(r.TLSKey))
+	if cert != nil && cert.Cert != "" && cert.Key != "" {
+		kp, err := tls.X509KeyPair([]byte(cert.Cert), []byte(cert.Key))
 		if err != nil {
 			return err
 		}
 		r.keypair = &kp
-		r.TLSCert = ""
-		r.TLSKey = ""
+		r.Certificate = nil
 	}
 
 	h.l.mtx.Lock()

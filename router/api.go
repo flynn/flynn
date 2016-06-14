@@ -30,6 +30,11 @@ func apiHandler(rtr *Router) http.Handler {
 	r.GET("/routes", httphelper.WrapHandler(api.GetRoutes))
 	r.GET("/routes/:route_type/:id", httphelper.WrapHandler(api.GetRoute))
 	r.DELETE("/routes/:route_type/:id", httphelper.WrapHandler(api.DeleteRoute))
+	r.POST("/certificates", httphelper.WrapHandler(api.CreateCert))
+	r.GET("/certificates/:id", httphelper.WrapHandler(api.GetCert))
+	r.GET("/certificates/:id/routes", httphelper.WrapHandler(api.GetCertRoutes))
+	r.DELETE("/certificates/:id", httphelper.WrapHandler(api.DeleteCert))
+	r.GET("/certificates", httphelper.WrapHandler(api.GetCerts))
 	r.GET("/events", httphelper.WrapHandler(api.StreamEvents))
 
 	r.HandlerFunc("GET", "/debug/*path", pprof.Handler.ServeHTTP)
@@ -197,6 +202,89 @@ func (api *API) DeleteRoute(ctx context.Context, w http.ResponseWriter, req *htt
 			return
 		default:
 			log.Error(err.Error())
+			httphelper.Error(w, err)
+			return
+		}
+	}
+	w.WriteHeader(200)
+}
+
+func (api *API) CreateCert(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	var cert *router.Certificate
+	if err := json.NewDecoder(req.Body).Decode(&cert); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	l := api.router.HTTP.(*HTTPListener)
+	err := l.AddCert(cert)
+	if err != nil {
+		jsonError := httphelper.JSONError{}
+		switch err {
+		case ErrConflict:
+			jsonError.Code = httphelper.ConflictErrorCode
+			jsonError.Message = "Duplicate cert"
+		case ErrInvalid:
+			jsonError.Code = httphelper.ValidationErrorCode
+			jsonError.Message = "Invalid cert"
+		default:
+			httphelper.Error(w, err)
+			return
+		}
+	}
+	httphelper.JSON(w, 200, cert)
+}
+
+func (api *API) GetCert(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	l := api.router.HTTP.(*HTTPListener)
+	cert, err := l.GetCert(params.ByName("id"))
+	if err == ErrNotFound {
+		httphelper.ObjectNotFoundError(w, "certificate not found")
+		return
+	}
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	httphelper.JSON(w, 200, cert)
+}
+
+func (api *API) GetCertRoutes(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	l := api.router.HTTP.(*HTTPListener)
+	routes, err := l.GetCertRoutes(params.ByName("id"))
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, routes)
+}
+
+func (api *API) GetCerts(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	l := api.router.HTTP.(*HTTPListener)
+	certs, err := l.GetCerts()
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, certs)
+}
+
+func (api *API) DeleteCert(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	l := api.router.HTTP.(*HTTPListener)
+	err := l.RemoveCert(params.ByName("id"))
+	if err != nil {
+		switch err {
+		case ErrNotFound:
+			httphelper.ObjectNotFoundError(w, "certificate not found")
+			return
+		default:
 			httphelper.Error(w, err)
 			return
 		}

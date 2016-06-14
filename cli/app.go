@@ -184,7 +184,7 @@ func runInfo(_ *docopt.Args, client controller.Client) error {
 			if k.Type == "http" {
 				route := k.HTTPRoute()
 				protocol := "https"
-				if route.TLSCert == "" {
+				if route.Certificate == nil && route.LegacyTLSCert == "" {
 					protocol = "http"
 				}
 				listRec(w, "Web URL:", protocol+"://"+route.Domain)

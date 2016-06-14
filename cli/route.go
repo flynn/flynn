@@ -97,7 +97,8 @@ func runRoute(args *docopt.Args, client controller.Client) error {
 		case "http":
 			route = k.HTTPRoute().Domain
 			service = k.TCPRoute().Service
-			if k.HTTPRoute().TLSCert == "" {
+			httpRoute := k.HTTPRoute()
+			if httpRoute.Certificate == nil && httpRoute.LegacyTLSCert == "" {
 				protocol = "http"
 			} else {
 				protocol = "https"
@@ -157,13 +158,13 @@ func runRouteAddHTTP(args *docopt.Args, client controller.Client) error {
 	}
 
 	hr := &router.HTTPRoute{
-		Service: service,
-		Domain:  u.Host,
-		TLSCert: tlsCert,
-		TLSKey:  tlsKey,
-		Sticky:  args.Bool["--sticky"],
-		Leader:  args.Bool["--leader"],
-		Path:    u.Path,
+		Service:       service,
+		Domain:        u.Host,
+		LegacyTLSCert: tlsCert,
+		LegacyTLSKey:  tlsKey,
+		Sticky:        args.Bool["--sticky"],
+		Leader:        args.Bool["--leader"],
+		Path:          u.Path,
 	}
 	route := hr.ToRoute()
 	if err := client.CreateRoute(mustApp(), route); err != nil {
@@ -215,7 +216,8 @@ func runRouteUpdateHTTP(args *docopt.Args, client controller.Client) error {
 		route.Service = service
 	}
 
-	route.TLSCert, route.TLSKey, err = parseTLSCert(args)
+	route.Certificate = nil
+	route.LegacyTLSCert, route.LegacyTLSKey, err = parseTLSCert(args)
 	if err != nil {
 		return err
 	}

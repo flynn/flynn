@@ -2,7 +2,7 @@
   "id": "https://flynn.io/schema/router/error#",
   "allOf": [
     {
-      "sortIndex": 1
+      "sortIndex": 2
     },
     { "$ref": "https://flynn.io/schema/error#" }
   ]

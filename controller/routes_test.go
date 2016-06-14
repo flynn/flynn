@@ -73,6 +73,26 @@ func (r *fakeRouter) StreamEvents(output chan *router.StreamEvent) (stream.Strea
 	return &fakeStream{}, nil
 }
 
+func (r *fakeRouter) CreateCert(cert *router.Certificate) error {
+	return nil
+}
+
+func (r *fakeRouter) GetCert(id string) (*router.Certificate, error) {
+	return nil, nil
+}
+
+func (r *fakeRouter) DeleteCert(id string) error {
+	return nil
+}
+
+func (r *fakeRouter) ListCerts() ([]*router.Certificate, error) {
+	return nil, nil
+}
+
+func (r *fakeRouter) ListCertRoutes(id string) ([]*router.Route, error) {
+	return nil, nil
+}
+
 type sortedRoutes []*router.Route
 
 func (p sortedRoutes) Len() int           { return len(p) }

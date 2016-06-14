@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/router/certificate#",
+  "title": "Route",
+  "description": "",
+  "type": "object",
+  "examples": [],
+  "sortIndex": 1,
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/common#/definitions/id"
+    },
+    "cert": {
+      "type": "string",
+      "description": "TLS public certificate."
+    },
+    "key": {
+      "type": "string",
+      "description": "TLS private key."
+    },
+    "routes": {
+      "type": "array",
+      "description": "List of route ids assigned to this certificate.",
+      "items": {
+        "$ref": "/schema/common#/definitions/id"
+      }
+    },
+    "created_at": {
+      "$ref": "/schema/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/common#/definitions/updated_at"
+    }
+  }
+}
