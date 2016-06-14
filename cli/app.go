@@ -219,6 +219,11 @@ func scaleToZero(appName string, client controller.Client) error {
 	}
 	processes := make(map[string]int)
 	expected := client.ExpectedScalingEvents(formation.Processes, processes, release.Processes, 1)
+
+	if expected.Count() == 0 {
+		return nil
+	}
+
 	watcher, err := client.WatchJobEvents(appName, release.ID)
 	if err != nil {
 		return err
