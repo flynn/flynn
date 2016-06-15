@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,6 +101,10 @@ func (m *Main) Run(args ...string) error {
 	}
 	m.peers = httpPeers
 
+	// Initialise the default client using the peer list
+	os.Setenv("DISCOVERD", strings.Join(opt.Peers, ","))
+	discoverd.DefaultClient = discoverd.NewClient()
+
 	// if there is a discoverd process already running on this
 	// address perform a deployment by starting a proxy DNS server
 	// and shutting down the old discoverd job
@@ -112,9 +115,6 @@ func (m *Main) Run(args ...string) error {
 	m.logger.Println("checking for existing discoverd process at", target)
 	if err := discoverd.NewClientWithURL(target).Ping(target); err == nil {
 		m.logger.Println("discoverd responding at", target, "taking over")
-
-		os.Setenv("DISCOVERD", strings.Join(opt.Peers, ","))
-		discoverd.DefaultClient = discoverd.NewClient()
 
 		deploy, err = dd.NewDeployment("discoverd")
 		if err != nil {
@@ -251,10 +251,7 @@ func (m *Main) Run(args ...string) error {
 	m.Notify(opt.Notify, opt.DNSAddr)
 	go func() {
 		for {
-			hb, err := discoverd.NewClientWithURL("http://"+httpAddr).AddServiceAndRegisterInstance("discoverd", &discoverd.Instance{
-				Addr: httpAddr,
-				Meta: map[string]string{"proxy": strconv.FormatBool(proxying)},
-			})
+			hb, err := discoverd.AddServiceAndRegister("discoverd", httpAddr)
 			if err != nil {
 				m.logger.Println("failed to register service/instance, retrying in 5 seconds:", err)
 				time.Sleep(5 * time.Second)
@@ -302,67 +299,44 @@ func (m *Main) Promote() error {
 	defer m.mu.Unlock()
 
 	m.logger.Printf("attempting promotion")
-	if m.store != nil {
-		return fmt.Errorf("can't join, already a raft peer")
-	}
-	if !m.handler.Proxy.Load().(bool) {
-		return fmt.Errorf("can't promote, handler not in proxy mode")
-	}
-
-	// Obtain leader address from one of the peers we know about.
-	var leaderAddr string
-	for _, peer := range m.peers {
-		client := discoverd.NewClientWithURL(peer)
-		leader, err := client.RaftLeader()
-		if err != nil {
-			continue
-		}
-		leaderAddr = leader.Host
-		break
-	}
-	if leaderAddr == "" {
-		return fmt.Errorf("failed to get leader address from configured peers")
-	}
 
 	// Request the leader joins us to the cluster.
 	m.logger.Println("requesting leader join us to cluster")
-	targetLogIndex, err := discoverd.NewClientWithURL(leaderAddr).RaftAddPeer(m.advertiseAddr)
+	targetLogIndex, err := discoverd.DefaultClient.RaftAddPeer(m.advertiseAddr)
 	if err != nil {
 		m.logger.Println("error requesting leader to join us to cluster:", err)
 		return err
 	}
 
 	// Open the store.
-	if err := m.openStore(); err != nil {
-		return err
-	}
+	if m.store == nil {
+		if err := m.openStore(); err != nil {
+			return err
+		}
 
-	// Wait for leadership.
-	if err := m.waitForLeader(LeaderTimeout); err != nil {
-		return err
-	}
+		// Wait for leadership.
+		if err := m.waitForLeader(LeaderTimeout); err != nil {
+			return err
+		}
 
-	// Wait for store to catchup
-	for m.store.LastIndex() < targetLogIndex.LastIndex {
-		m.logger.Println("Waiting for store to catchup, current:", m.store.LastIndex(), "target:", targetLogIndex.LastIndex)
-		time.Sleep(100 * time.Millisecond)
+		// Wait for store to catchup
+		for m.store.LastIndex() < targetLogIndex.LastIndex {
+			m.logger.Println("Waiting for store to catchup, current:", m.store.LastIndex(), "target:", targetLogIndex.LastIndex)
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 
 	// Update the DNS server to use the local store.
 	if m.dnsServer != nil {
 		m.dnsServer.SetStore(m.store)
+	} else {
+		// This should never happen, we should always have a running DNS server at this point
+		return fmt.Errorf("No DNS server open during promotion")
 	}
 
 	// Update the HTTP server to use the local store.
 	m.handler.Store = m.store
 	m.handler.Proxy.Store(false)
-
-	// Set the instance metadata to indicate we are now a raft peer
-	err = m.hb.SetMeta(map[string]string{"proxy": "false"})
-	if err != nil {
-		m.logger.Println("error setting instance meta", err)
-		return err
-	}
 
 	m.logger.Println("promoted sucessfully")
 	return nil
@@ -374,21 +348,27 @@ func (m *Main) Demote() error {
 	defer m.mu.Unlock()
 
 	m.logger.Println("demotion requested")
-	if m.store == nil {
-		return fmt.Errorf("can't leave, not currently a raft peer")
-	}
-	if m.handler.Proxy.Load().(bool) {
-		return fmt.Errorf("can't demote, handler in proxy mode")
-	}
 
-	leaderAddr := m.store.Leader()
-	if leaderAddr == "" {
-		return server.ErrNoKnownLeader
+	var leaderAddr string
+	if m.store != nil {
+		leaderAddr := m.store.Leader()
+		if leaderAddr == "" {
+			return server.ErrNoKnownLeader
+		}
+	} else {
+		leader, err := discoverd.DefaultClient.RaftLeader()
+		if err != nil || (err == nil && leader.Host == "") {
+			return fmt.Errorf("failed to get leader address from configured peers")
+		}
+		leaderAddr = leader.Host
 	}
 
 	// Update the dns server to use proxy store
 	if m.dnsServer != nil {
 		m.dnsServer.SetStore(&server.ProxyStore{Peers: m.peers})
+	} else {
+		// This should never happen, we should always have a running DNS server at this point
+		return fmt.Errorf("No DNS server open during promotion")
 	}
 
 	// Set handler into proxy mode
@@ -410,23 +390,18 @@ func (m *Main) Demote() error {
 			return err
 		}
 	} else {
-		if err := discoverd.NewClientWithURL(leaderAddr).RaftRemovePeer(m.advertiseAddr); err != nil {
+		if err := discoverd.DefaultClient.RaftRemovePeer(m.advertiseAddr); err != nil {
 			rollback()
 			return err
 		}
 	}
 
 	// Close the raft store.
-	m.store.Close()
-	m.handler.Store = nil
-	m.store = nil
-
-	// Set the instance metadata to indicate we are no longer a raft peer
-	err := m.hb.SetMeta(map[string]string{"proxy": "true"})
-	if err != nil {
-		m.logger.Println("error setting instance meta", err)
-		return err
+	if m.store != nil {
+		m.store.Close()
+		m.store = nil
 	}
+	m.handler.Store = nil
 
 	m.logger.Println("demoted sucessfully")
 	return nil

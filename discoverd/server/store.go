@@ -316,6 +316,8 @@ func (s *Store) AddPeer(peer string) error {
 	err := s.raft.AddPeer(peer).Error()
 	if err == raft.ErrNotLeader {
 		err = ErrNotLeader
+	} else if err == raft.ErrKnownPeer {
+		return nil
 	}
 	return err
 }
@@ -325,6 +327,8 @@ func (s *Store) RemovePeer(peer string) error {
 	err := s.raft.RemovePeer(peer).Error()
 	if err == raft.ErrNotLeader {
 		err = ErrNotLeader
+	} else if err == raft.ErrUnknownPeer {
+		return nil
 	}
 	return err
 }
