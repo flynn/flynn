@@ -10,7 +10,24 @@ import (
 	"github.com/flynn/flynn/pkg/ctxhelper"
 )
 
+type RequestLoggerFn func(handler http.Handler, logger log.Logger, clientIP string, rw *ResponseWriter, req *http.Request)
+
 func NewRequestLogger(handler http.Handler) http.Handler {
+	return newRequestLogger(handler, defaultLoggerFn)
+}
+
+func NewRequestLoggerCustom(handler http.Handler, loggerFn RequestLoggerFn) http.Handler {
+	return newRequestLogger(handler, loggerFn)
+}
+
+func defaultLoggerFn(handler http.Handler, logger log.Logger, clientIP string, rw *ResponseWriter, req *http.Request) {
+	start := time.Now()
+	logger.Info("request started", "method", req.Method, "path", req.URL.Path, "client_ip", clientIP)
+	handler.ServeHTTP(rw, req)
+	logger.Info("request completed", "status", rw.Status(), "duration", time.Since(start))
+}
+
+func newRequestLogger(handler http.Handler, loggerFn RequestLoggerFn) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		rw := w.(*ResponseWriter)
 
@@ -19,7 +36,6 @@ func NewRequestLogger(handler http.Handler) http.Handler {
 		logger := log.New(log.Ctx{"component": componentName, "req_id": reqID})
 		rw.ctx = ctxhelper.NewContextLogger(rw.Context(), logger)
 
-		start := time.Now()
 		var clientIP string
 		clientIPs := strings.Split(req.Header.Get("X-Forwarded-For"), ",")
 		if len(clientIPs) > 0 {
@@ -29,10 +45,6 @@ func NewRequestLogger(handler http.Handler) http.Handler {
 			clientIP, _, _ = net.SplitHostPort(req.RemoteAddr)
 		}
 
-		logger.Info("request started", "method", req.Method, "path", req.URL.Path, "client_ip", clientIP)
-
-		handler.ServeHTTP(rw, req)
-
-		logger.Info("request completed", "status", rw.Status(), "duration", time.Since(start))
+		loggerFn(handler, logger, clientIP, rw, req)
 	})
 }
