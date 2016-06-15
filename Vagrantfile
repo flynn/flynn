@@ -109,7 +109,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     curl --fail --silent https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
     sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list'
     sudo apt-get update
-    sudo apt-get install -y postgresql-9.4 postgresql-contrib-9.4
+    sudo apt-get install -y postgresql-9.5 postgresql-contrib-9.5
     sudo -u postgres createuser --superuser vagrant
     grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
 

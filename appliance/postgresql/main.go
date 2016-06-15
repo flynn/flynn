@@ -62,13 +62,13 @@ func main() {
 		ID:           id,
 		Singleton:    singleton,
 		DataDir:      filepath.Join(dataDir, "db"),
-		BinDir:       "/usr/lib/postgresql/9.4/bin/",
+		BinDir:       "/usr/lib/postgresql/9.5/bin/",
 		Password:     password,
 		Logger:       log.New("component", "postgres"),
 		ExtWhitelist: true,
 		WaitUpstream: true,
 		// TODO(titanous) investigate this:
-		SHMType: "sysv", // the default on 9.4, 'posix' is not currently supported in our containers
+		SHMType: "sysv", // the default on 9.5, 'posix' is not currently supported in our containers
 	})
 	dd := sd.NewDiscoverd(discoverd.DefaultClient.Service(serviceName), log.New("component", "discoverd"))
 

@@ -5,7 +5,7 @@ layout: docs
 
 # PostgreSQL
 
-The Flynn Postgres appliance provides PostgreSQL 9.4 in a highly-available
+The Flynn Postgres appliance provides PostgreSQL 9.5 in a highly-available
 configuration with automatic provisioning. It automatically fails over to
 a synchronous replica with no loss of data if the primary server goes down.
 
@@ -83,7 +83,7 @@ EXTENSION`:
 
 ```text
 $ flynn pg psql
-psql (9.4.1)
+psql (9.5.1)
 Type "help" for help.
 
 bbabc090024fcdd118b04c50a0fb0d8c=> CREATE EXTENSION hstore;
