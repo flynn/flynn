@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
 	"GoVersion": "go1.4",
-	"GodepVersion": "v70",
+	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
 	],
@@ -734,7 +734,7 @@
 		},
 		{
 			"ImportPath": "github.com/hashicorp/raft",
-			"Rev": "57cdb81412489befaac6c127ae3b63746904b58f"
+			"Rev": "4bcac2adb06930200744feb591fee8a0790f9c98"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/raft-boltdb",
