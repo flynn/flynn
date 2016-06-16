@@ -16,6 +16,7 @@ var preparedStatements = map[string]string{
 	"app_update_strategy":                   appUpdateStrategyQuery,
 	"app_update_meta":                       appUpdateMetaQuery,
 	"app_update_release":                    appUpdateReleaseQuery,
+	"app_update_deploy_timeout":             appUpdateDeployTimeoutQuery,
 	"app_delete":                            appDeleteQuery,
 	"app_next_name_id":                      appNextNameIDQuery,
 	"app_get_release":                       appGetReleaseQuery,
@@ -116,6 +117,8 @@ UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1`
 UPDATE apps SET meta = $2, updated_at = now() WHERE app_id = $1`
 	appUpdateReleaseQuery = `
 UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1`
+	appUpdateDeployTimeoutQuery = `
+UPDATE apps SET deploy_timeout = $2, updated_at = now() WHERE app_id = $1`
 	appDeleteQuery = `
 UPDATE apps SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL`
 	appNextNameIDQuery = `
