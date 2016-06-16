@@ -41,6 +41,12 @@ func JobHandler(db *postgres.DB, client controller.Client, logger log15.Logger) 
 	return (&context{db, client, logger}).HandleDomainMigration
 }
 
+func deployTimeout() <-chan struct{} {
+	ch := make(chan struct{})
+	time.AfterFunc(5*time.Minute, func() { close(ch) })
+	return ch
+}
+
 func (c *context) HandleDomainMigration(job *que.Job) (err error) {
 	log := c.logger.New("fn", "HandleDomainMigration")
 	log.Info("handling domain migration", "job_id", job.ID, "error_count", job.ErrorCount)
@@ -227,7 +233,7 @@ func (m *migration) maybeDeployController() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, deployTimeout()); err != nil {
 		log.Error("error deploying release", "error", err)
 		return err
 	}
@@ -256,7 +262,7 @@ func (m *migration) maybeDeployRouter() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, deployTimeout()); err != nil {
 		log.Error("error deploying release", "error", err)
 		return err
 	}
@@ -287,7 +293,7 @@ func (m *migration) maybeDeployDashboard() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, deployTimeout()); err != nil {
 		log.Error("error deploying release", "error", err)
 		return err
 	}

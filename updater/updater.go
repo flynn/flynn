@@ -25,6 +25,8 @@ var slugbuilderURI, slugrunnerURI string
 // assigning a TTY to the job causes reading images via stdin to fail.
 var isTTY = flag.Bool("tty", false, "use a TTY log formatter")
 
+const deployTimeout = 30 * time.Minute
+
 func main() {
 	flag.Parse()
 	if err := run(); err != nil {
@@ -223,7 +225,9 @@ func deployApp(client controller.Client, app *ct.App, uri string, updateFn updat
 		log.Error("error creating new release", "err", err)
 		return err
 	}
-	if err := client.DeployAppRelease(app.ID, release.ID); err != nil {
+	timeoutCh := make(chan struct{})
+	time.AfterFunc(deployTimeout, func() { close(timeoutCh) })
+	if err := client.DeployAppRelease(app.ID, release.ID, timeoutCh); err != nil {
 		log.Error("error deploying app", "err", err)
 		return err
 	}

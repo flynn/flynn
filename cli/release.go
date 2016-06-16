@@ -213,7 +213,7 @@ func runReleaseAddDocker(args *docopt.Args, client controller.Client) error {
 		return err
 	}
 
-	if err := client.DeployAppRelease(mustApp(), release.ID); err != nil {
+	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
 		return err
 	}
 
@@ -302,7 +302,7 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 		return err
 	}
 
-	if err := client.DeployAppRelease(mustApp(), release.ID); err != nil {
+	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
 		return err
 	}
 

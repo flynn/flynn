@@ -266,7 +266,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	if err := client.CreateRelease(release); err != nil {
 		return err
 	}
-	if err := client.DeployAppRelease(mustApp(), release.ID); err != nil {
+	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
 		return err
 	}
 	log.Printf("flynn: image deployed, scale it with 'flynn scale app=N'")

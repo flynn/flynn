@@ -63,7 +63,7 @@ type Client interface {
 	CreateDeployment(appID, releaseID string) (*ct.Deployment, error)
 	DeploymentList(appID string) ([]*ct.Deployment, error)
 	StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEvent) (stream.Stream, error)
-	DeployAppRelease(appID, releaseID string) error
+	DeployAppRelease(appID, releaseID string, stopWait <-chan struct{}) error
 	StreamJobEvents(appID string, output chan *ct.Job) (stream.Stream, error)
 	WatchJobEvents(appID, releaseID string) (ct.JobWatcher, error)
 	StreamEvents(opts ct.StreamEventsOptions, output chan *ct.Event) (stream.Stream, error)

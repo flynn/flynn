@@ -1211,10 +1211,12 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	defer stream.Close()
 
 	// deploy a new release with the same slug as the last release
+	timeoutCh := make(chan struct{})
+	time.AfterFunc(5*time.Minute, func() { close(timeoutCh) })
 	newRelease := *lastRelease
 	newRelease.ID = ""
 	t.Assert(client.CreateRelease(&newRelease), c.IsNil)
-	t.Assert(client.DeployAppRelease(app.ID, newRelease.ID), c.IsNil)
+	t.Assert(client.DeployAppRelease(app.ID, newRelease.ID, timeoutCh), c.IsNil)
 
 	// wait for garbage collection
 	select {

@@ -488,7 +488,7 @@ func (c *Client) StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEv
 	}, appEvents)
 }
 
-func (c *Client) DeployAppRelease(appID, releaseID string) error {
+func (c *Client) DeployAppRelease(appID, releaseID string, stopWait <-chan struct{}) error {
 	d, err := c.CreateDeployment(appID, releaseID)
 	if err != nil {
 		return err
@@ -506,14 +506,6 @@ func (c *Client) DeployAppRelease(appID, releaseID string) error {
 	}
 	defer stream.Close()
 
-	timeout := d.DeployTimeout
-	if timeout == 0 {
-		// although a non-zero timeout is set for all new apps, it
-		// could still be zero in the case of updating a cluster which
-		// doesn't have deploy timeouts set (as the controller
-		// migration may not have run yet) so use the default
-		timeout = ct.DefaultDeployTimeout
-	}
 outer:
 	for {
 		select {
@@ -527,8 +519,8 @@ outer:
 			case "failed":
 				return e.Err()
 			}
-		case <-time.After(time.Duration(timeout) * time.Second):
-			return errors.New("timed out waiting for deployment completion")
+		case <-stopWait:
+			return errors.New("deploy wait cancelled")
 
 		}
 	}

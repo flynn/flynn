@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"time"
+
 	ct "github.com/flynn/flynn/controller/types"
 )
 
@@ -104,5 +106,7 @@ func (a *DeployAppAction) Run(s *State) error {
 	}
 	as.Formation = formation
 
-	return client.DeployAppRelease(a.App.ID, a.Release.ID)
+	timeoutCh := make(chan struct{})
+	time.AfterFunc(5*time.Minute, func() { close(timeoutCh) })
+	return client.DeployAppRelease(a.App.ID, a.Release.ID, timeoutCh)
 }

@@ -198,7 +198,7 @@ Options:
 	if err := client.CreateRelease(release); err != nil {
 		log.Fatalln("Error creating release:", err)
 	}
-	if err := client.DeployAppRelease(app.Name, release.ID); err != nil {
+	if err := client.DeployAppRelease(app.Name, release.ID, nil); err != nil {
 		log.Fatalln("Error deploying app release:", err)
 	}
 
