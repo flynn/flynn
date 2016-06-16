@@ -258,5 +258,6 @@ func JSON(w http.ResponseWriter, status int, v interface{}) {
 
 func DecodeJSON(req *http.Request, i interface{}) error {
 	dec := json.NewDecoder(req.Body)
+	dec.UseNumber()
 	return dec.Decode(i)
 }

@@ -190,6 +190,22 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				tx.Rollback()
 				return nil, err
 			}
+		case "deploy_timeout":
+			timeout, ok := v.(json.Number)
+			if !ok {
+				tx.Rollback()
+				return nil, fmt.Errorf("controller: expected json.Number, got %T", v)
+			}
+			t, err := timeout.Int64()
+			if !ok {
+				tx.Rollback()
+				return nil, fmt.Errorf("controller: unable to decode json.Number: %s", err)
+			}
+			app.DeployTimeout = int32(t)
+			if err := tx.Exec("app_update_deploy_timeout", app.ID, app.DeployTimeout); err != nil {
+				tx.Rollback()
+				return nil, err
+			}
 		}
 	}
 

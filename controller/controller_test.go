@@ -189,6 +189,22 @@ func (s *S) TestUpdateApp(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(app.Meta, DeepEquals, meta)
 	c.Assert(app.Strategy, Equals, strategy)
+
+	timeout := int32(150)
+	app = &ct.App{
+		ID:            app.ID,
+		DeployTimeout: timeout,
+	}
+	c.Assert(s.c.UpdateApp(app), IsNil)
+	c.Assert(app.Meta, DeepEquals, meta)
+	c.Assert(app.Strategy, Equals, strategy)
+	c.Assert(app.DeployTimeout, Equals, timeout)
+
+	app, err = s.c.GetApp(app.ID)
+	c.Assert(err, IsNil)
+	c.Assert(app.Meta, DeepEquals, meta)
+	c.Assert(app.Strategy, Equals, strategy)
+	c.Assert(app.DeployTimeout, Equals, timeout)
 }
 
 func (s *S) TestUpdateAppMeta(c *C) {
