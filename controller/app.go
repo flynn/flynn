@@ -197,7 +197,7 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				return nil, fmt.Errorf("controller: expected json.Number, got %T", v)
 			}
 			t, err := timeout.Int64()
-			if !ok {
+			if err != nil {
 				tx.Rollback()
 				return nil, fmt.Errorf("controller: unable to decode json.Number: %s", err)
 			}
