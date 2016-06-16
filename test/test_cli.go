@@ -1053,6 +1053,17 @@ func (s *CLISuite) TestDeploy(t *c.C) {
 	t.Assert(deploy.Output, Matches, "complete")
 }
 
+func (s *CLISuite) TestDeployTimeout(t *c.C) {
+	timeout := flynn(t, "/", "-a", "status", "deployment", "timeout")
+	t.Assert(timeout, Succeeds)
+	t.Assert(timeout.Output, c.Equals, "120\n")
+
+	t.Assert(flynn(t, "/", "-a", "status", "deployment", "timeout", "150"), Succeeds)
+	timeout = flynn(t, "/", "-a", "status", "deployment", "timeout")
+	t.Assert(timeout, Succeeds)
+	t.Assert(timeout.Output, c.Equals, "150\n")
+}
+
 func (s *CLISuite) TestReleaseDelete(t *c.C) {
 	// create an app and release it twice
 	r := s.newGitRepo(t, "http")
