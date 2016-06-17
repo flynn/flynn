@@ -16,7 +16,7 @@ cleanup() {
 }
 trap cleanup ERR
 
-image="http://cdimage.ubuntu.com/ubuntu-core/releases/14.04.2/release/ubuntu-core-14.04.2-core-amd64.tar.gz"
+image="http://cdimage.ubuntu.com/ubuntu-base/releases/14.04/release/ubuntu-base-14.04-core-amd64.tar.gz"
 curl -L ${image} | sudo tar -xzC ${dir}
 
 # use jchroot (https://github.com/vincentbernat/jchroot) which uses a PID
