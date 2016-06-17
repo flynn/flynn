@@ -690,6 +690,10 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 		return
 	}
 
+	// reset the job's HostID in case we already placed it but it failed to
+	// start
+	req.Job.HostID = ""
+
 	formation := req.Job.Formation
 	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
 	var minCount int = math.MaxInt32
