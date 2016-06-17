@@ -130,7 +130,7 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 		Kernel: c.bc.Kernel,
 		User:   uid,
 		Group:  gid,
-		Memory: "4096",
+		Memory: "16384",
 		Cores:  8,
 		Drives: map[string]*VMDrive{
 			"hda": {FS: rootFS, COW: true, Temp: false},
@@ -271,11 +271,11 @@ func (c *Cluster) startVMs(typ ClusterType, rootFS string, count int, initial bo
 
 	instances := make([]*Instance, count)
 	for i := 0; i < count; i++ {
-		memory := "2048"
+		memory := "8192"
 		if initial && i == 0 {
 			// give the first instance more memory as that is where
 			// the test binary runs, and the tests use a lot of memory
-			memory = "8192"
+			memory = "16384"
 		}
 		inst, err := c.vm.NewInstance(&VMConfig{
 			Kernel: c.bc.Kernel,
