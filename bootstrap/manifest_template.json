@@ -387,7 +387,8 @@
     "release": {
       "processes": {
         "web": {
-          "ports": [{"port": 80, "proto": "tcp"}]
+          "ports": [{"port": 80, "proto": "tcp"}],
+          "service": "blobstore"
         }
       }
     },
