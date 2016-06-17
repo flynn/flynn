@@ -86,7 +86,7 @@ main() {
   tuf add --custom="{\"version\": \"${version}\"}"
 
   local export_args=()
-  if ! compress; then
+  if ! $compress; then
     export_args+=("--no-compress")
   fi
   "${ROOT}/util/release/flynn-release" export ${export_args[@]} "${ROOT}/version.json" "staged/targets"
