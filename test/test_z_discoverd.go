@@ -6,6 +6,7 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/attempt"
 	tc "github.com/flynn/flynn/test/cluster"
 )
 
@@ -71,6 +72,12 @@ func peerPresent(host *tc.Instance, peers []string) bool {
 	return present
 }
 
+var pingAttempts = attempt.Strategy{
+	Min:   5,
+	Total: time.Minute,
+	Delay: time.Second,
+}
+
 func (s *ZDiscoverdSuite) TestPromoteDemote(t *c.C) {
 	if testCluster == nil {
 		t.Skip("cannot boot new hosts")
@@ -91,12 +98,13 @@ func (s *ZDiscoverdSuite) TestPromoteDemote(t *c.C) {
 	newHost := s.addHost(t, "discoverd")
 	defer s.removeHost(t, newHost, "discoverd")
 
-	// Sleep just a little to give discoverd time to get started
-	time.Sleep(2 * time.Second)
-
-	// Promote the new node to a Raft member
+	// Ping the new node until it comes up
 	url := "http://" + newHost.IP + ":1111"
 	dd := discoverd.NewClientWithURL(url)
+	err = pingAttempts.Run(func() error { return dd.Ping(url) })
+	t.Assert(err, c.IsNil)
+
+	// Promote the new node to a Raft member
 	err = dd.Promote(url)
 	t.Assert(err, c.IsNil)
 
