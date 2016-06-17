@@ -75,15 +75,12 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   # create a slug for testing slug based app updates
   tar c -C "${src}/test/apps/http" . | docker run -i -a stdin -a stdout -a stderr flynn/slugbuilder - > "${dir}/slug.tgz"
 
-  # start a blobstore to serve the exported components
+  # start a file server to serve the exported components
   sudo start-stop-daemon \
     --start \
     --background \
-    --exec "${src}/blobstore/bin/flynn-blobstore" \
-    -- \
-    -d=false \
-    -s="${dir}" \
-    -p=8080
+    --chdir "${dir}" \
+    --exec "${src}/test/bin/flynn-test-file-server"
 ) >&2
 
 cat "${src}/version.json"

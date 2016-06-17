@@ -1,3 +1,4 @@
 include_rules
 : |> !cgo |> bin/flynn-test
 : |> !cgo ./runner |> bin/flynn-test-runner
+: |> !cgo ./util/file-server |> bin/flynn-test-file-server
