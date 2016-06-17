@@ -214,8 +214,8 @@ mv "${GOPATH}/bin/tuf-client" /usr/bin/tuf-client
 # install go cover
 go get golang.org/x/tools/cmd/cover
 
-# allow the test runner to set TEST_RUNNER_AUTH_KEY
-echo AcceptEnv TEST_RUNNER_AUTH_KEY >> /etc/ssh/sshd_config
+# allow the test runner to set certain environment variables
+echo AcceptEnv TEST_RUNNER_AUTH_KEY BLOBSTORE_S3_CONFIG >> /etc/ssh/sshd_config
 
 # install Bats and jq for running script unit tests
 tmpdir=$(mktemp --directory)
