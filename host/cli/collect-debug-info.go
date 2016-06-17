@@ -146,7 +146,7 @@ func captureJobs(gist *Gist, env bool) error {
 		name += job.Job.ID + ".log"
 
 		var content bytes.Buffer
-		printJobDesc(&job, &content, env)
+		printJobDesc(&job, &content, env, nil)
 		fmt.Fprint(&content, "\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
 		getLog(job.HostID, job.Job.ID, client, false, true, &content, &content)
 		gist.AddFile(name, content.String())
