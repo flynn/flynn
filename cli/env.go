@@ -189,7 +189,7 @@ func setEnv(client controller.Client, proc string, env map[string]*string) (stri
 	if err := client.CreateRelease(release); err != nil {
 		return "", err
 	}
-	if err := client.DeployAppRelease(mustApp(), release.ID); err != nil {
+	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
 		return "", err
 	}
 	return release.ID, nil

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
@@ -247,7 +248,9 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 	h.Logger.Info("formation", "formation", fmt.Sprintf("%#v", formation))
 
 	h.Logger.Info("deploying app release", "release.ID", release.ID)
-	if err := h.ControllerClient.DeployAppRelease(app.ID, release.ID); err != nil {
+	timeoutCh := make(chan struct{})
+	time.AfterFunc(5*time.Minute, func() { close(timeoutCh) })
+	if err := h.ControllerClient.DeployAppRelease(app.ID, release.ID, timeoutCh); err != nil {
 		h.Logger.Error("error deploying release", "err", err)
 		httphelper.Error(w, err)
 		return
