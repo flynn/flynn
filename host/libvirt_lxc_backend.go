@@ -39,6 +39,7 @@ import (
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/mounts"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
@@ -1024,7 +1025,12 @@ func (l *LibvirtLXCBackend) Stop(id string) error {
 	if err != nil {
 		return err
 	}
-	return c.Stop()
+	err = c.Stop()
+	if err == rpcplus.ErrShutdown {
+		// if the process is disconnected, the stop was probably successful
+		err = nil
+	}
+	return err
 }
 
 func (l *LibvirtLXCBackend) JobExists(id string) bool {
