@@ -3,9 +3,11 @@ GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`
 # NOTE: the `git tag` command is filtered through `grep .` so it returns non-zero when empty
 GIT_TAG=`git tag --list "v*" --sort "v:refname" --points-at HEAD 2>/dev/null | tail -n 1 | grep . || echo "none"`
 GIT_DIRTY=`test -n "$(git status --porcelain)" && echo true || echo false`
+GIT_DEV=GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false
+GO_ENV=GO15VENDOREXPERIMENT=0 GOROOT=`readlink -f util/_toolchain/go`
 
 all: toolchain
-	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup
+	@$(GIT_DEV) $(GO_ENV) tup
 
 release: toolchain
 	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) tup
@@ -15,21 +17,19 @@ clean:
 
 test: test-unit test-integration
 
-test-unit:
-	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup discoverd
-	go test ./...
+test-unit-deps: toolchain
+	@$(GIT_DEV) $(GO_ENV) tup discoverd host/cli/root_keys.go installer/bindata.go dashboard/bindata.go
 
-test-integration:
+test-unit: test-unit-deps
+	@$(GO_ENV) PATH=${PWD}/discoverd/bin:${PATH} util/_toolchain/go/bin/go test -race -cover ./...
+
+test-unit-root: test-unit
+	@$(GO_ENV) util/_toolchain/go/bin/go test -race -cover ./host/volume/zfs ./pinkerton
+
+test-integration: toolchain
 	script/run-integration-tests
 
-toolchain: util/_toolchain/go/bin/go
-
-util/_toolchain/go/bin/go: util/_toolchain/bin/gonative
-	cd util/_toolchain && rm -rf go && bin/gonative build -version=1.4.3 && ls | grep -v "^\(bin\|go\)$$" | xargs --no-run-if-empty rm -r
-
-
-util/_toolchain/bin/gonative: Godeps/_workspace/src/github.com/inconshreveable/gonative/*.go
-	go build -o util/_toolchain/bin/gonative github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/gonative
-
+toolchain:
+	@cd util/_toolchain && ./build.sh
 
 .PHONY: all clean dev release test test-unit test-integration

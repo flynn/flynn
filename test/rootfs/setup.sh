@@ -200,7 +200,7 @@ sed 's/#user_allow_other/user_allow_other/' -i /etc/fuse.conf
 
 # install go
 curl https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz | tar xz
-./godeb install 1.4.3
+./godeb install 1.6.2
 rm godeb
 
 # install go-tuf

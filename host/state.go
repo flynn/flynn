@@ -305,8 +305,7 @@ func (s *State) GetJob(id string) *host.ActiveJob {
 	if job == nil {
 		return nil
 	}
-	jobCopy := *job
-	return &jobCopy
+	return job.Dup()
 }
 
 func (s *State) RemoveJob(jobID string) {
@@ -316,12 +315,12 @@ func (s *State) RemoveJob(jobID string) {
 	s.persist(jobID)
 }
 
-func (s *State) Get() map[string]host.ActiveJob {
+func (s *State) Get() map[string]*host.ActiveJob {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	res := make(map[string]host.ActiveJob, len(s.jobs))
+	res := make(map[string]*host.ActiveJob, len(s.jobs))
 	for k, v := range s.jobs {
-		res[k] = *v
+		res[k] = v.Dup()
 	}
 	return res
 }
@@ -507,11 +506,11 @@ func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 }
 
 func (s *State) sendEvent(job *host.ActiveJob, event string) {
-	j := *job
+	j := job.Dup()
 	go func() {
 		s.listenMtx.RLock()
 		defer s.listenMtx.RUnlock()
-		e := host.Event{JobID: job.Job.ID, Job: &j, Event: event}
+		e := host.Event{JobID: job.Job.ID, Job: j, Event: event}
 		for ch := range s.listeners["all"] {
 			ch <- e
 		}

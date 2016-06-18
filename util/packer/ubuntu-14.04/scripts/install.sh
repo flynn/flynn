@@ -36,7 +36,6 @@ main() {
   install_flynn
   disable_docker_auto_restart
   bump_libvirt_start_timeout
-  install_go
   apt_cleanup
 
   if vagrant_build; then
@@ -215,12 +214,6 @@ disable_docker_auto_restart() {
 bump_libvirt_start_timeout() {
   # on EC2 libvirt can take longer to come up than the default timeout allows
   sed -i 's/sockfile_check_retries=5/sockfile_check_retries=10/' /etc/init/libvirt-bin.conf
-}
-
-install_go() {
-  cd /tmp
-  curl https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz | tar xz
-  ./godeb install 1.4.3
 }
 
 apt_cleanup() {

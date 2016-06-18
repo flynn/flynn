@@ -39,6 +39,7 @@ import (
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/mounts"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
@@ -512,6 +513,8 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		}
 	}
 
+	// mutating job state, take state write lock
+	l.state.mtx.Lock()
 	if job.Config.Env == nil {
 		job.Config.Env = make(map[string]string)
 	}
@@ -534,6 +537,8 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	if !job.Config.HostNetwork {
 		job.Config.Env["EXTERNAL_IP"] = container.IP.String()
 	}
+	// release the write lock, we won't mutate global structures from here on out
+	l.state.mtx.Unlock()
 
 	config := &containerinit.Config{
 		TTY:           job.Config.TTY,
@@ -1020,7 +1025,12 @@ func (l *LibvirtLXCBackend) Stop(id string) error {
 	if err != nil {
 		return err
 	}
-	return c.Stop()
+	err = c.Stop()
+	if err == rpcplus.ErrShutdown {
+		// if the process is disconnected, the stop was probably successful
+		err = nil
+	}
+	return err
 }
 
 func (l *LibvirtLXCBackend) JobExists(id string) bool {

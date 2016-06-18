@@ -219,6 +219,18 @@ type ActiveJob struct {
 	Error       *string   `json:"error,omitempty"`
 }
 
+func (j *ActiveJob) Dup() *ActiveJob {
+	job := *j
+	job.Job = j.Job.Dup()
+	if j.ExitStatus != nil {
+		*job.ExitStatus = *j.ExitStatus
+	}
+	if j.Error != nil {
+		*job.Error = *j.Error
+	}
+	return &job
+}
+
 var (
 	ErrJobNotRunning = errors.New("host: job not running")
 	ErrAttached      = errors.New("host: job is attached")

@@ -21,6 +21,7 @@ func (db *DB) Listen(channel string, log log15.Logger) (*Listener, error) {
 		log:     log,
 		db:      db,
 		conn:    conn,
+		closed:  make(chan struct{}),
 	}
 	if err := l.conn.Listen(channel); err != nil {
 		l.Close()
@@ -36,31 +37,40 @@ type Listener struct {
 
 	channel   string
 	closeOnce sync.Once
+	closed    chan struct{}
 	log       log15.Logger
 	db        *DB
 	conn      *pgx.Conn
 }
 
-func (l *Listener) Close() (err error) {
-	l.closeOnce.Do(func() {
-		l.conn.Close()
-		l.db.Release(l.conn)
-	})
-	return
+func (l *Listener) Close() error {
+	l.closeOnce.Do(func() { close(l.closed) })
+	return nil
 }
 
 func (l *Listener) listen() {
+	defer func() {
+		l.conn.Close()
+		l.db.Release(l.conn)
+		close(l.Notify)
+	}()
 	for {
+		select {
+		case <-l.closed:
+			return
+		default:
+		}
 		n, err := l.conn.WaitForNotification(10 * time.Second)
 		if err == pgx.ErrNotificationTimeout {
 			continue
-		}
-		if err != nil {
+		} else if err != nil {
 			l.Err = err
-			l.Close()
-			close(l.Notify)
 			return
 		}
-		l.Notify <- n
+		select {
+		case l.Notify <- n:
+		case <-l.closed:
+			return
+		}
 	}
 }

@@ -198,6 +198,7 @@ func (s sortJobs) Len() int           { return len(s) }
 func (s sortJobs) Less(i, j int) bool { return s[i].startedAt.Sub(s[j].startedAt) > 0 }
 func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s sortJobs) Sort()              { sort.Sort(s) }
+func (s sortJobs) SortReverse()       { sort.Sort(sort.Reverse(s)) }
 
 func (j Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]int {
 	counts := make(map[string]int)
