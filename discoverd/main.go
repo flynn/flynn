@@ -329,9 +329,6 @@ func (m *Main) Promote() error {
 	// Update the DNS server to use the local store.
 	if m.dnsServer != nil {
 		m.dnsServer.SetStore(m.store)
-	} else {
-		// This should never happen, we should always have a running DNS server at this point
-		return fmt.Errorf("No DNS server open during promotion")
 	}
 
 	// Update the HTTP server to use the local store.
@@ -366,9 +363,6 @@ func (m *Main) Demote() error {
 	// Update the dns server to use proxy store
 	if m.dnsServer != nil {
 		m.dnsServer.SetStore(&server.ProxyStore{Peers: m.peers})
-	} else {
-		// This should never happen, we should always have a running DNS server at this point
-		return fmt.Errorf("No DNS server open during promotion")
 	}
 
 	// Set handler into proxy mode
