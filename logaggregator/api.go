@@ -14,9 +14,9 @@ import (
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/julienschmidt/httprouter"
+	"golang.org/x/net/context"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 func apiHandler(agg *Aggregator, cursors *HostCursors) http.Handler {

@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/hashicorp/raft"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/hashicorp/raft-boltdb"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
+	"github.com/hashicorp/raft"
+	"github.com/hashicorp/raft-boltdb"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const (

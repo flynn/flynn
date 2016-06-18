@@ -33,11 +33,9 @@ import (
 	"syscall"
 	"time"
 
-	sigutil "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/signal"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/user"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/pty"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	sigutil "github.com/docker/docker/pkg/signal"
+	"github.com/docker/libcontainer/netlink"
+	"github.com/docker/libcontainer/user"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/health"
 	"github.com/flynn/flynn/host/resource"
@@ -45,6 +43,8 @@ import (
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
+	"github.com/kr/pty"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var logger log15.Logger

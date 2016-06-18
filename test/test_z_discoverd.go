@@ -3,11 +3,11 @@ package main
 import (
 	"time"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	tc "github.com/flynn/flynn/test/cluster"
+	c "github.com/flynn/go-check"
 )
 
 // Prefix the suite with "Z" so that it runs after all other tests

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/dialer"
+	c "github.com/flynn/go-check"
 )
 
 // Prefix the suite with "Z" so that it runs after all other tests because

@@ -5,9 +5,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker-utils/registry"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/flynn/docker-utils/registry"
 	"github.com/flynn/flynn/pkg/cliutil"
+	"github.com/flynn/go-docopt"
 )
 
 func run(cmd *exec.Cmd) {

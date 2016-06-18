@@ -3,9 +3,9 @@ package main
 import (
 	"time"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	. "github.com/flynn/go-check"
 )
 
 func (s *S) TestGetBackup(c *C) {

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/pkg/random"
+	. "github.com/flynn/go-check"
+	"golang.org/x/crypto/ssh"
 )
 
 func Test(t *testing.T) {

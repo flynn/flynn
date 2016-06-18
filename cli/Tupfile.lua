@@ -9,7 +9,7 @@ tup.rule({"../util/assetbuilder/*", "../util/cedarish/<docker>"},
           "^ docker build installer-builder^ cat ../log/docker-cedarish.log > /dev/null && ../util/assetbuilder/build.sh image installer | tee %o",
           {"../log/docker-installer-builder.log", "<docker>"})
 
-tup.rule("../util/_toolchain/go/bin/go build -o ../installer/bin/go-bindata ../Godeps/_workspace/src/github.com/jteeuwen/go-bindata/go-bindata",
+tup.rule("../util/_toolchain/go/bin/go build -o ../installer/bin/go-bindata ../vendor/github.com/jteeuwen/go-bindata/go-bindata",
           {"../installer/bin/go-bindata"})
 
 tup.rule("../util/_toolchain/go/bin/go build -o ../installer/app/compiler ../installer/app",

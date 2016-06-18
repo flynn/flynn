@@ -1,9 +1,9 @@
 package main
 
 import (
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	c "github.com/flynn/go-check"
 )
 
 type VolumeSuite struct {

@@ -11,10 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/context"
-	storage "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/storage/driver"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/storage/driver/base"
-	registry "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/storage/driver/factory"
+	"github.com/docker/distribution/context"
+	storage "github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/registry/storage/driver/base"
+	registry "github.com/docker/distribution/registry/storage/driver/factory"
 )
 
 const (

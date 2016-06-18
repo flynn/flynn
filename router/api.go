@@ -5,14 +5,14 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/pprof"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/router/types"
+	"github.com/julienschmidt/httprouter"
+	"golang.org/x/net/context"
 )
 
 type API struct {

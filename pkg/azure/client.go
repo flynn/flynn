@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/oauth2"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/oauth2"
 )
 
 const (

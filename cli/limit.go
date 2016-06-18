@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/typeconv"
+	"github.com/flynn/go-docopt"
 )
 
 func init() {

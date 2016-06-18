@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/worker/types"
@@ -16,6 +14,8 @@ import (
 	"github.com/flynn/flynn/pkg/tlscert"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
+	"github.com/flynn/que-go"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 // limits the number of concurrent requests to the router

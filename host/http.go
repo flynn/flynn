@@ -15,9 +15,6 @@ import (
 	"sync"
 	"time"
 
-	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/downloader"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/api"
@@ -29,6 +26,9 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/version"
+	tuf "github.com/flynn/go-tuf/client"
+	"github.com/julienschmidt/httprouter"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 type Host struct {

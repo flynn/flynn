@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	sc "github.com/flynn/flynn/pkg/sirenia/client"
 	"github.com/flynn/flynn/pkg/sirenia/state"
+	c "github.com/flynn/go-check"
 )
 
 type sireniaHookFunc func(t *c.C, r *ct.Release, d *sireniaDeploy)

@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"golang.org/x/net/context"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const (

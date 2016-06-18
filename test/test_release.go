@@ -11,12 +11,12 @@ import (
 	"strings"
 	"text/template"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	tc "github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/updater/types"
+	c "github.com/flynn/go-check"
 )
 
 type ReleaseSuite struct {

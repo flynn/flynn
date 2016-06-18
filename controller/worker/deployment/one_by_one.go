@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	ct "github.com/flynn/flynn/controller/types"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 type WaitJobsFn func(releaseID string, expected ct.JobEvents, log log15.Logger) error

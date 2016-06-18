@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/go-docopt"
 )
 
 func init() {

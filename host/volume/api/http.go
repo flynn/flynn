@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/julienschmidt/httprouter"
 )
 
 const snapshotContentType = "application/vnd.zfs.snapshot-stream"

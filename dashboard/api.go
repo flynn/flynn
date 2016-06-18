@@ -13,15 +13,15 @@ import (
 	"strings"
 	"time"
 
-	gctx "github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/sessions"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jvatic/asset-matrix-go"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
+	gctx "github.com/gorilla/context"
+	"github.com/gorilla/sessions"
+	"github.com/julienschmidt/httprouter"
+	"github.com/jvatic/asset-matrix-go"
+	"golang.org/x/net/context"
 )
 
 type LoginInfo struct {

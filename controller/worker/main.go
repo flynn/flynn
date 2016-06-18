@@ -5,8 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/schema"
 	"github.com/flynn/flynn/controller/worker/app_deletion"
@@ -18,6 +16,8 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
+	"github.com/flynn/que-go"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const workerCount = 10

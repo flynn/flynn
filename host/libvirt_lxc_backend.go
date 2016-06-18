@@ -21,12 +21,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/alexzorin/libvirt-go"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libnetwork/ipallocator"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/alexzorin/libvirt-go"
+	"github.com/docker/docker/pkg/term"
+	"github.com/docker/libcontainer/netlink"
+	"github.com/docker/libnetwork/ipallocator"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
@@ -41,6 +39,8 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
+	"github.com/miekg/dns"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const (

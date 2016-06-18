@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/router/types"
+	"github.com/jackc/pgx"
+	"golang.org/x/net/context"
 )
 
 var ErrNotFound = errors.New("router: route not found")

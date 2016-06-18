@@ -7,8 +7,8 @@ import (
 	"os"
 	"path"
 
-	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
 	"github.com/flynn/flynn/pkg/tufutil"
+	tuf "github.com/flynn/go-tuf/client"
 )
 
 func NewTUFSession(client *tuf.Client, ref *Ref) *tufSession {

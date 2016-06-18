@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	c "github.com/flynn/go-check"
 )
 
 type GitreceiveSuite struct {

@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
 	"github.com/flynn/flynn/pinkerton"
+	"github.com/flynn/go-docopt"
+	tuf "github.com/flynn/go-tuf/client"
 )
 
 func main() {

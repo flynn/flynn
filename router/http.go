@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -21,6 +20,7 @@ import (
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/types"
+	"golang.org/x/net/context"
 )
 
 type HTTPListener struct {

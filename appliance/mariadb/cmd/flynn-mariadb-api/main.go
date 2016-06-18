@@ -10,10 +10,6 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-sql-driver/mysql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/appliance/mariadb"
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/discoverd/client"
@@ -22,6 +18,10 @@ import (
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
 	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/julienschmidt/httprouter"
+	"golang.org/x/net/context"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var serviceName = os.Getenv("FLYNN_MYSQL")

@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
+	tuf "github.com/flynn/go-tuf/client"
 )
 
 func Download(client *tuf.Client, path string) (io.ReadCloser, error) {

@@ -8,11 +8,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/configuration"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/handlers"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/storage/driver/filesystem"
+	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/context"
+	"github.com/docker/distribution/registry/handlers"
+	_ "github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/flynn/flynn/pkg/random"
 )
 

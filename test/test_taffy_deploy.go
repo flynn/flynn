@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	c "github.com/flynn/go-check"
 )
 
 type TaffyDeploySuite struct {

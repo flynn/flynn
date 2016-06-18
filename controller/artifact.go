@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/jackc/pgx"
 )
 
 type ArtifactRepo struct {

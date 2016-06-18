@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/flynn/go-docopt"
 )
 
 type Status struct {

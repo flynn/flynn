@@ -3,7 +3,7 @@ package name
 import (
 	"fmt"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/dgryski/go-skip32"
+	"github.com/dgryski/go-skip32"
 )
 
 var cipher, _ = skip32.New(make([]byte, 10))

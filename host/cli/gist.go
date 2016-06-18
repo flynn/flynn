@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cheggaaa/pb"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/cheggaaa/pb"
+	"github.com/docker/docker/pkg/term"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 // Actual limit is likely ~200mb.

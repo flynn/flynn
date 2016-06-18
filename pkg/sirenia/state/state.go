@@ -20,9 +20,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/sirenia/xlog"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 type State struct {

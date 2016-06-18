@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"golang.org/x/net/context"
 )
 
 func NewResponseWriter(w http.ResponseWriter, ctx context.Context) *ResponseWriter {

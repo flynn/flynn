@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/golang/glog"
+	log "github.com/golang/glog"
 )
 
 type IPTables struct {

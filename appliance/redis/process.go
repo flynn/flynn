@@ -16,9 +16,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/garyburd/redigo/redis"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/garyburd/redigo/redis"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const (

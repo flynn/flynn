@@ -5,13 +5,13 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/stream"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
+	. "github.com/flynn/go-check"
 )
 
 func newFakeRouter() routerc.Client {

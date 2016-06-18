@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
+	"github.com/docker/libcontainer/netlink"
 )
 
 func DefaultExternalIP() (string, error) {

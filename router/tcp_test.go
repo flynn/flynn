@@ -7,10 +7,10 @@ import (
 	"net"
 	"strconv"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/router/types"
+	. "github.com/flynn/go-check"
 )
 
 func NewTCPTestServer(prefix string) *TCPTestServer {

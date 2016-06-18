@@ -4,7 +4,7 @@ source "$(dirname "${BASH_SOURCE}")/.validate"
 
 IFS=$'\n'
 files=( $(validate_diff --diff-filter=ACMR --name-only -- '*.go' \
-          | grep -v '^Godeps/' || true) )
+          | grep -v '^vendor/' || true) )
 unset IFS
 
 badFiles=()

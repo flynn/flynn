@@ -1,9 +1,9 @@
 package deployment
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	ct "github.com/flynn/flynn/controller/types"
 	dd "github.com/flynn/flynn/discoverd/deployment"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 // deployDiscoverMeta does a one-by-one deployment but uses discoverd.Deployment

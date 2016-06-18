@@ -12,16 +12,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/badgerodon/ioutil"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/oauth2"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/pkg/browser"
-	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/awslabs/aws-sdk-go/aws"
+	"github.com/badgerodon/ioutil"
 	"github.com/flynn/flynn/pkg/azure"
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
+	"github.com/flynn/oauth2"
+	"github.com/julienschmidt/httprouter"
+	"github.com/pkg/browser"
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type assetManifest struct {

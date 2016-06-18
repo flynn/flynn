@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/digitalocean/godo"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/oauth2"
+	"github.com/digitalocean/godo"
 	"github.com/flynn/flynn/pkg/sshkeygen"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/oauth2"
 )
 
 type doTokenSource struct {

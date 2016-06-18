@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/golang/glog"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/vishvananda/netlink"
+	log "github.com/golang/glog"
+	"github.com/vishvananda/netlink"
 
 	"github.com/flynn/flynn/flannel/backend"
 	"github.com/flynn/flynn/flannel/pkg/ip"

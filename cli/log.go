@@ -11,7 +11,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/flynn/go-docopt"
 )
 
 func init() {

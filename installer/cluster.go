@@ -16,12 +16,12 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/bootstrap/discovery"
 	cfg "github.com/flynn/flynn/cli/config"
 	cc "github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
+	"golang.org/x/crypto/ssh"
 )
 
 func (c *BaseCluster) FindCredentials() (*Credential, error) {

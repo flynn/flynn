@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/digitalocean/godo"
-	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/digitalocean/godo"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 var ClusterNotFoundError = errors.New("Cluster not found")

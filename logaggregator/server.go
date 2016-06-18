@@ -8,11 +8,11 @@ import (
 	"os"
 	"sync"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/logaggregator/snapshot"
 	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 type Server struct {

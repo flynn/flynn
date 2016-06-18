@@ -12,11 +12,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	dt "github.com/flynn/flynn/discoverd/types"
 	"github.com/flynn/flynn/pkg/httpclient"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var ErrTimedOut = errors.New("discoverd: timed out waiting for instances")

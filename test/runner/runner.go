@@ -24,12 +24,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/s3"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/thoj/go-ircevent"
+	"github.com/awslabs/aws-sdk-go/aws"
+	"github.com/awslabs/aws-sdk-go/gen/s3"
+	"github.com/boltdb/bolt"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"
@@ -41,6 +38,9 @@ import (
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/buildlog"
 	"github.com/flynn/flynn/test/cluster"
+	"github.com/flynn/tail"
+	"github.com/julienschmidt/httprouter"
+	"github.com/thoj/go-ircevent"
 )
 
 var logBucket = "flynn-ci-logs"

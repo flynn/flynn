@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/cluster/client"
+	"github.com/flynn/go-check"
+	"github.com/fsouza/go-dockerclient"
 )
 
 var args *arg.Args

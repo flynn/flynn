@@ -13,7 +13,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh"
 )
 
 type KnownHosts []*Line

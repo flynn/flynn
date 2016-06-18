@@ -5,12 +5,12 @@ import (
 	"io/ioutil"
 	"strings"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
+	. "github.com/flynn/go-check"
 )
 
 func (s *S) createTestJob(c *C, in *ct.Job) *ct.Job {

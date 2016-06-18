@@ -4,10 +4,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/go-units"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/docker/go-units"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/go-docopt"
 )
 
 func init() {

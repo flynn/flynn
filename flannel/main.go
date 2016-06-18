@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/golang/glog"
 	disc "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/flannel/backend"
 	"github.com/flynn/flynn/flannel/backend/alloc"
@@ -28,6 +27,7 @@ import (
 	"github.com/flynn/flynn/flannel/subnet"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
+	log "github.com/golang/glog"
 )
 
 type CmdLineOpts struct {
