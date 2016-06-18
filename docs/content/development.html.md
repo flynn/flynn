@@ -51,12 +51,12 @@ From now on, it is assumed that commands will be run inside the VM, unless other
 ## Making code changes
 
 The development VM is configured to share the Flynn source code from your machine and mount
-it at `/vagrant`, meaning you can edit files locally on your machine and those changes
+it inside the VM, meaning you can edit files locally on your machine and those changes
 will be visible inside the VM.
 
 Since Flynn is primarily written in Go, the source code needs to be inside a valid Go workspace.
-The development VM has a `GOPATH` of `$HOME/go` and the Flynn source code is symlinked from
-`/vagrant` to `$GOPATH/src/github.com/flynn/flynn`.
+The development VM has a `GOPATH` of `$HOME/go` and the Flynn source code is synchronized into
+`$GOPATH/src/github.com/flynn/flynn`.
 
 If you don't have a specific issue you are trying to fix, but are interested in contributing
 to the project, you should start by looking at GitHub issues labelled
