@@ -1,0 +1,48 @@
+@import "./colors";
+
+.cluster-status {
+  padding-bottom: 2rem;
+
+  > section {
+    background-color: $whiteColor;
+    box-shadow: 0px 1px 2px $grayBlueColor;
+    > ul {
+      display: flex;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+
+      &:first-of-type {
+        background-color: $almostWhiteColor;
+      }
+
+      > li {
+        position: relative;
+        text-align: center;
+        flex-grow: 1;
+        border-bottom: 2px solid $almostWhiteColor;
+
+        &.healthy {
+          > article > header > h3 > i {
+            color: $greenColor;
+          }
+        }
+
+        &.unhealthy {
+          border-bottom: 2px solid $redColor;
+        }
+
+        > article > header > h3 > i {
+          color: $redColor;
+          position: relative;
+          font-size: 3em;
+          top: 0.25em;
+        }
+      }
+
+      > li + li {
+        border-left: 2px solid $almostWhiteColor;
+      }
+    }
+  }
+}

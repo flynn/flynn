@@ -5,6 +5,7 @@ import LoginModel from '../views/models/login';
 import LoginComponent from '../views/login';
 import InstallCertComponent from '../views/install-cert';
 import ClusterBackupComponent from '../views/cluster-backup';
+import ClusterStatusComponent from '../views/cluster-status';
 
 var MainRouter = Router.createClass({
 	displayName: "routers.main",
@@ -13,7 +14,8 @@ var MainRouter = Router.createClass({
 		{ path: "", handler: "root" },
 		{ path: "login", handler: "login", auth: false },
 		{ path: "installcert", handler: "installCert", auth: false },
-		{ path: "backup", handler: "clusterBackup", auth: false }
+		{ path: "backup", handler: "clusterBackup" },
+		{ path: "status", handler: "clusterStatus" }
 	],
 
 	root: function (params) {
@@ -80,6 +82,12 @@ var MainRouter = Router.createClass({
 	clusterBackup: function () {
 		React.render(
 			React.createElement(ClusterBackupComponent),
+			this.context.el);
+	},
+
+	clusterStatus: function () {
+		React.render(
+			React.createElement(ClusterStatusComponent),
 			this.context.el);
 	}
 

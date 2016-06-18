@@ -227,6 +227,7 @@ type OAuthToken struct {
 type ExpandedUser struct {
 	Auths         map[string]*OAuthToken `json:"auths"`
 	ControllerKey string                 `json:"controller_key"`
+	StatusKey     string                 `json:"status_key"`
 }
 
 type UserConfig struct {
@@ -250,6 +251,7 @@ func (api *API) GetConfig(ctx context.Context, w http.ResponseWriter, req *http.
 	config := baseConfig
 
 	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", api.conf.ControllerDomain)
+	config.Endpoints["cluster_status"] = fmt.Sprintf("https://status.%s", api.conf.DefaultRouteDomain)
 	config.DefaultRouteDomain = api.conf.DefaultRouteDomain
 	config.GithubAPIURL = api.conf.GithubAPIURL
 	config.GithubTokenURL = api.conf.GithubTokenURL
@@ -264,6 +266,7 @@ func (api *API) GetConfig(ctx context.Context, w http.ResponseWriter, req *http.
 		}
 
 		config.User.ControllerKey = api.conf.ControllerKey
+		config.User.StatusKey = api.conf.StatusKey
 	}
 
 	httphelper.JSON(w, 200, config)
