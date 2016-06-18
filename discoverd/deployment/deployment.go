@@ -155,7 +155,6 @@ outer:
 			return nil
 		}
 	}
-	return nil
 }
 
 var attempts = attempt.Strategy{

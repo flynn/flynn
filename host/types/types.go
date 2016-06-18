@@ -315,7 +315,7 @@ const (
 )
 
 type ResourceCheck struct {
-	Ports []Port `json"ports,omitempty"`
+	Ports []Port `json:"ports,omitempty"`
 }
 
 type Command struct {

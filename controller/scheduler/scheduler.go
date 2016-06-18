@@ -389,7 +389,6 @@ func (s *Scheduler) Run() error {
 			<-s.resume
 		}
 	}
-	return nil
 }
 
 func (s *Scheduler) IsLeader() bool {

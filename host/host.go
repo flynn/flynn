@@ -188,7 +188,7 @@ func runDaemon(args *docopt.Args) {
 	}
 	for _, s := range []string{"user", "system", "background"} {
 		if _, ok := partitionCGroups[s]; !ok {
-			shutdown.Fatal("missing mandatory resource partition: %s", s)
+			shutdown.Fatalf("missing mandatory resource partition: %s", s)
 		}
 	}
 

@@ -116,7 +116,7 @@ outer:
 	}
 	expected := len(releases) - 1
 	if actual != expected {
-		c.Fatal("expected %d updates, got %d", expected, actual)
+		c.Fatalf("expected %d updates, got %d", expected, actual)
 	}
 }
 

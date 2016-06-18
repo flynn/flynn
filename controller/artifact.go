@@ -26,10 +26,10 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 		a.ID = random.UUID()
 	}
 	if a.Type == "" {
-		return ct.ValidationError{"type", "must not be empty"}
+		return ct.ValidationError{Field: "type", Message: "must not be empty"}
 	}
 	if a.URI == "" {
-		return ct.ValidationError{"uri", "must not be empty"}
+		return ct.ValidationError{Field: "uri", Message: "must not be empty"}
 	}
 	tx, err := r.db.Begin()
 	if err != nil {

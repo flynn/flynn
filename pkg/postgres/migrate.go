@@ -98,5 +98,4 @@ func ResetOnMigration(db *DB, log log15.Logger, doneCh chan struct{}) {
 			}
 		}
 	}
-	return
 }

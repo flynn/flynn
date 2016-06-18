@@ -223,7 +223,7 @@ func (f *ClusterFixer) FixFlannel() error {
 	for _, h := range f.hosts {
 		jobs, err := h.ListJobs()
 		if err != nil {
-			fmt.Errorf("error getting jobs list from %s: %s", h.ID(), err)
+			return fmt.Errorf("error getting jobs list from %s: %s", h.ID(), err)
 		}
 		for _, j := range jobs {
 			if j.Status != host.StatusRunning ||

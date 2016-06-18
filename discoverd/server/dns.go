@@ -217,7 +217,7 @@ func (d dnsAPI) ServiceLookup(w dns.ResponseWriter, req *dns.Msg) {
 	if !leader {
 		a, err := d.GetStore().Instances(service)
 		if err != nil {
-			log.Println("discoverd: dns: cannot retrieve instances: %s", err)
+			log.Printf("discoverd: dns: cannot retrieve instances: %s", err)
 			nxdomain()
 			return
 		} else if a == nil {
@@ -233,7 +233,7 @@ func (d dnsAPI) ServiceLookup(w dns.ResponseWriter, req *dns.Msg) {
 		if leader {
 			sl, err := d.GetStore().ServiceLeader(service)
 			if err != nil {
-				log.Println("discoverd: dns: cannot retrieve service leader: %s", err)
+				log.Printf("discoverd: dns: cannot retrieve service leader: %s", err)
 				nxdomain()
 				return
 			}
