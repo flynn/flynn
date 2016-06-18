@@ -306,19 +306,36 @@ func (enc *Encoder) eStruct(key Key, rv reflect.Value) {
 	addFields = func(rt reflect.Type, rv reflect.Value, start []int) {
 		for i := 0; i < rt.NumField(); i++ {
 			f := rt.Field(i)
-			// skip unexporded fields
-			if f.PkgPath != "" {
+			// skip unexported fields
+			if f.PkgPath != "" && !f.Anonymous {
 				continue
 			}
 			frv := rv.Field(i)
 			if f.Anonymous {
-				frv := eindirect(frv)
-				t := frv.Type()
-				if t.Kind() != reflect.Struct {
-					encPanic(errAnonNonStruct)
+				t := f.Type
+				switch t.Kind() {
+				case reflect.Struct:
+					// Treat anonymous struct fields with
+					// tag names as though they are not
+					// anonymous, like encoding/json does.
+					if getOptions(f.Tag).name == "" {
+						addFields(t, frv, f.Index)
+						continue
+					}
+				case reflect.Ptr:
+					if t.Elem().Kind() == reflect.Struct &&
+						getOptions(f.Tag).name == "" {
+						if !frv.IsNil() {
+							addFields(t.Elem(), frv.Elem(), f.Index)
+						}
+						continue
+					}
+					// Fall through to the normal field encoding logic below
+					// for non-struct anonymous fields.
 				}
-				addFields(t, frv, f.Index)
-			} else if typeIsHash(tomlTypeOfGo(frv)) {
+			}
+
+			if typeIsHash(tomlTypeOfGo(frv)) {
 				fieldsSub = append(fieldsSub, append(start, f.Index...))
 			} else {
 				fieldsDirect = append(fieldsDirect, append(start, f.Index...))
@@ -336,18 +353,18 @@ func (enc *Encoder) eStruct(key Key, rv reflect.Value) {
 				continue
 			}
 
-			keyName := sft.Tag.Get("toml")
-			if keyName == "-" {
+			opts := getOptions(sft.Tag)
+			if opts.skip {
 				continue
 			}
-			if keyName == "" {
-				keyName = sft.Name
+			keyName := sft.Name
+			if opts.name != "" {
+				keyName = opts.name
 			}
-
-			keyName, opts := getOptions(keyName)
-			if _, ok := opts["omitempty"]; ok && isEmpty(sf) {
+			if opts.omitempty && isEmpty(sf) {
 				continue
-			} else if _, ok := opts["omitzero"]; ok && isZero(sf) {
+			}
+			if opts.omitzero && isZero(sf) {
 				continue
 			}
 
@@ -441,50 +458,51 @@ func tomlArrayType(rv reflect.Value) tomlType {
 	return firstType
 }
 
-func getOptions(keyName string) (string, map[string]struct{}) {
-	opts := make(map[string]struct{})
-	ss := strings.Split(keyName, ",")
-	name := ss[0]
-	if len(ss) > 1 {
-		for _, opt := range ss {
-			opts[opt] = struct{}{}
+type tagOptions struct {
+	skip      bool // "-"
+	name      string
+	omitempty bool
+	omitzero  bool
+}
+
+func getOptions(tag reflect.StructTag) tagOptions {
+	t := tag.Get("toml")
+	if t == "-" {
+		return tagOptions{skip: true}
+	}
+	var opts tagOptions
+	parts := strings.Split(t, ",")
+	opts.name = parts[0]
+	for _, s := range parts[1:] {
+		switch s {
+		case "omitempty":
+			opts.omitempty = true
+		case "omitzero":
+			opts.omitzero = true
 		}
 	}
-
-	return name, opts
+	return opts
 }
 
 func isZero(rv reflect.Value) bool {
 	switch rv.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if rv.Int() == 0 {
-			return true
-		}
+		return rv.Int() == 0
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if rv.Uint() == 0 {
-			return true
-		}
+		return rv.Uint() == 0
 	case reflect.Float32, reflect.Float64:
-		if rv.Float() == 0.0 {
-			return true
-		}
+		return rv.Float() == 0.0
 	}
-
 	return false
 }
 
 func isEmpty(rv reflect.Value) bool {
 	switch rv.Kind() {
-	case reflect.String:
-		if len(strings.TrimSpace(rv.String())) == 0 {
-			return true
-		}
-	case reflect.Array, reflect.Slice, reflect.Map:
-		if rv.Len() == 0 {
-			return true
-		}
+	case reflect.Array, reflect.Slice, reflect.Map, reflect.String:
+		return rv.Len() == 0
+	case reflect.Bool:
+		return !rv.Bool()
 	}
-
 	return false
 }
 

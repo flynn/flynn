@@ -103,6 +103,13 @@ func (md *MetaData) PrimitiveDecode(primValue Primitive, v interface{}) error {
 // This decoder will not handle cyclic types. If a cyclic type is passed,
 // `Decode` will not terminate.
 func Decode(data string, v interface{}) (MetaData, error) {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Ptr {
+		return MetaData{}, e("Decode of non-pointer type %s", reflect.TypeOf(v))
+	}
+	if rv.IsNil() {
+		return MetaData{}, e("Decode of nil %s", reflect.TypeOf(v))
+	}
 	p, err := parse(data)
 	if err != nil {
 		return MetaData{}, err
@@ -111,7 +118,7 @@ func Decode(data string, v interface{}) (MetaData, error) {
 		p.mapping, p.types, p.ordered,
 		make(map[string]bool, len(p.ordered)), nil,
 	}
-	return md, md.unify(p.mapping, rvalue(v))
+	return md, md.unify(p.mapping, indirect(rv))
 }
 
 // DecodeFile is just like Decode, except it will automatically read the
@@ -225,6 +232,9 @@ func (md *MetaData) unify(data interface{}, rv reflect.Value) error {
 func (md *MetaData) unifyStruct(mapping interface{}, rv reflect.Value) error {
 	tmap, ok := mapping.(map[string]interface{})
 	if !ok {
+		if mapping == nil {
+			return nil
+		}
 		return mismatch(rv, "map", mapping)
 	}
 
@@ -267,6 +277,9 @@ func (md *MetaData) unifyStruct(mapping interface{}, rv reflect.Value) error {
 func (md *MetaData) unifyMap(mapping interface{}, rv reflect.Value) error {
 	tmap, ok := mapping.(map[string]interface{})
 	if !ok {
+		if tmap == nil {
+			return nil
+		}
 		return badtype("map", mapping)
 	}
 	if rv.IsNil() {
@@ -292,6 +305,9 @@ func (md *MetaData) unifyMap(mapping interface{}, rv reflect.Value) error {
 func (md *MetaData) unifyArray(data interface{}, rv reflect.Value) error {
 	datav := reflect.ValueOf(data)
 	if datav.Kind() != reflect.Slice {
+		if !datav.IsValid() {
+			return nil
+		}
 		return badtype("slice", data)
 	}
 	sliceLen := datav.Len()
@@ -305,12 +321,16 @@ func (md *MetaData) unifyArray(data interface{}, rv reflect.Value) error {
 func (md *MetaData) unifySlice(data interface{}, rv reflect.Value) error {
 	datav := reflect.ValueOf(data)
 	if datav.Kind() != reflect.Slice {
+		if !datav.IsValid() {
+			return nil
+		}
 		return badtype("slice", data)
 	}
-	sliceLen := datav.Len()
-	if rv.IsNil() {
-		rv.Set(reflect.MakeSlice(rv.Type(), sliceLen, sliceLen))
+	n := datav.Len()
+	if rv.IsNil() || rv.Cap() < n {
+		rv.Set(reflect.MakeSlice(rv.Type(), n, n))
 	}
+	rv.SetLen(n)
 	return md.unifySliceArray(datav, rv)
 }
 
