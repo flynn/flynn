@@ -64,6 +64,7 @@ type Deployment struct {
 	meta    *discoverd.ServiceMeta
 }
 
+// update drains any pending events, updating the service metadata, it doesn't block.
 func (d *Deployment) update() error {
 	select {
 	case event, ok := <-d.events:
@@ -87,6 +88,21 @@ outer:
 	for {
 		if err := d.update(); err != nil {
 			return err
+		}
+		// If the metadata is nil then wait for another metadata event before re-evaluating
+		if d.meta == nil {
+			select {
+			case event, ok := <-d.events:
+				if !ok {
+					return fmt.Errorf("service stream closed unexpectedly: %s", d.stream.Err())
+				}
+				if event.Kind == discoverd.EventKindServiceMeta {
+					d.meta = event.ServiceMeta
+					continue outer
+				}
+			case <-time.After(time.Duration(timeout) * time.Second):
+				return fmt.Errorf("timed out waiting for initial metadata")
+			}
 		}
 		deploymentMeta, err := d.decode(d.meta)
 		if err != nil {
