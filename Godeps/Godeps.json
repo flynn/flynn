@@ -928,11 +928,23 @@
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
-			"Rev": "96dbb961a39ddccf16860cdd355bfa639c497f23"
+			"Rev": "1961d9def2b2d7a28d7958926d2457d05a178ecd"
+		},
+		{
+			"ImportPath": "golang.org/x/net/http2",
+			"Rev": "1961d9def2b2d7a28d7958926d2457d05a178ecd"
+		},
+		{
+			"ImportPath": "golang.org/x/net/http2/hpack",
+			"Rev": "1961d9def2b2d7a28d7958926d2457d05a178ecd"
+		},
+		{
+			"ImportPath": "golang.org/x/net/lex/httplex",
+			"Rev": "1961d9def2b2d7a28d7958926d2457d05a178ecd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
-			"Rev": "96dbb961a39ddccf16860cdd355bfa639c497f23"
+			"Rev": "1961d9def2b2d7a28d7958926d2457d05a178ecd"
 		},
 		{
 			"ImportPath": "golang.org/x/oauth2",
