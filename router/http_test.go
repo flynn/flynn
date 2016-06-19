@@ -24,6 +24,7 @@ import (
 	"github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 	"github.com/jackc/pgx"
+	"golang.org/x/net/http2"
 	"golang.org/x/net/websocket"
 )
 
@@ -132,6 +133,22 @@ func newHTTPClient(serverName string) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{ServerName: serverName, RootCAs: pool},
+			TLSNextProto:    map[string]func(authority string, c *tls.Conn) http.RoundTripper{}, // disable HTTP/2
+		},
+	}
+}
+
+func newHTTP2Client(serverName string) *http.Client {
+	cert := tlsConfigForDomain(serverName)
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM([]byte(cert.CACert))
+
+	if strings.Contains(serverName, ":") {
+		serverName, _, _ = net.SplitHostPort(serverName)
+	}
+	return &http.Client{
+		Transport: &http2.Transport{
+			TLSClientConfig: &tls.Config{ServerName: serverName, RootCAs: pool},
 		},
 	}
 }
@@ -231,6 +248,14 @@ func (s *S) TestAddHTTPRouteWithCert(c *C) {
 
 	assertGet(c, "http://"+l.Addr, domain, "1")
 	assertGet(c, "https://"+l.TLSAddr, domain, "1")
+
+	res, err := newHTTP2Client(domain).Do(newReq("https://"+l.TLSAddr, domain))
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+	c.Assert(res.StatusCode, Equals, 200)
+	data, err := ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, "1")
 
 	unregister()
 }
