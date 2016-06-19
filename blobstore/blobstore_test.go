@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -13,6 +15,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/flynn/flynn/blobstore/backend"
+	"github.com/flynn/flynn/blobstore/data"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -20,21 +24,16 @@ import (
 	"github.com/jackc/pgx"
 )
 
-func TestOSFilesystem(t *testing.T) {
-	dir, err := ioutil.TempDir("", "blobstore")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	fs := NewOSFilesystem(dir)
-	testList(fs, t)
-	testDelete(fs, t)
-	testOffset(fs, t)
-	testFilesystem(fs, false, t)
+func initDB(t *testing.T) *postgres.DB {
+	db := createDB(t, "")
+	migrateDB(t, db)
+	return db
 }
 
-func TestPostgresFilesystem(t *testing.T) {
-	dbname := "blobstoretest"
+func createDB(t *testing.T, dbname string) *postgres.DB {
+	if dbname == "" {
+		dbname = "blobstoretest"
+	}
 	if err := pgtestutils.SetupPostgres(dbname); err != nil {
 		t.Fatal(err)
 	}
@@ -48,20 +47,54 @@ func TestPostgresFilesystem(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := postgres.New(pgxpool, nil)
-	defer db.Close()
+	return db
+}
 
-	fs, err := NewPostgresFilesystem(db)
+func migrateDB(t *testing.T, db *postgres.DB) {
+	if err := dbMigrations.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPostgresFilesystem(t *testing.T) {
+	db := initDB(t)
+	defer db.Close()
+	r := data.NewFileRepo(db, []backend.Backend{backend.Postgres}, "postgres")
+	testList(r, t)
+	testDelete(r, t)
+	testOffset(r, t, true)
+	testFilesystem(r, true, t)
+}
+
+func parseBackendEnv(s string) map[string]string {
+	info := make(map[string]string)
+	for _, token := range strings.Split(s, " ") {
+		kv := strings.SplitN(token, "=", 2)
+		info[kv[0]] = kv[1]
+	}
+	return info
+}
+
+func TestS3Filesystem(t *testing.T) {
+	cfg := os.Getenv("BLOBSTORE_S3_CONFIG")
+	if cfg == "" {
+		t.Skip("S3 not configured")
+	}
+	db := initDB(t)
+	defer db.Close()
+	b, err := backend.NewS3("s3-test", parseBackendEnv(cfg))
 	if err != nil {
 		t.Fatal(err)
 	}
-	testList(fs, t)
-	testDelete(fs, t)
-	testOffset(fs, t)
-	testFilesystem(fs, true, t)
+	r := data.NewFileRepo(db, []backend.Backend{b}, "s3-test")
+	testList(r, t)
+	testDelete(r, t)
+	testOffset(r, t, false)
+	testFilesystem(r, false, t)
 }
 
-func testList(fs Filesystem, t *testing.T) {
-	srv := httptest.NewServer(handler(fs))
+func testList(r *data.FileRepo, t *testing.T) {
+	srv := httptest.NewServer(handler(r))
 	defer srv.Close()
 
 	assertList := func(dir string, expected []string) {
@@ -139,30 +172,24 @@ func testList(fs Filesystem, t *testing.T) {
 	assertList("/dir2", []string{"/dir2/foo.txt"})
 }
 
-func testDelete(fs Filesystem, t *testing.T) {
+func testDelete(r *data.FileRepo, t *testing.T) {
 	put := func(path string) {
-		if err := fs.Put(path, bytes.NewReader([]byte("data")), 0, "text/plain"); err != nil {
+		if err := r.Put(path, bytes.NewReader([]byte("data")), 0, "text/plain"); err != nil {
 			t.Fatal(err)
 		}
 	}
 	del := func(path string) {
-		if err := fs.Delete(path); err != nil {
+		if err := r.Delete(path); err != nil {
 			t.Fatal(err)
 		}
 	}
 	assertExists := func(path string) {
-		f, err := fs.Open(path)
-		if err != nil {
+		if _, err := r.Get(path, false); err != nil {
 			t.Fatal(err)
 		}
-		f.Close()
 	}
 	assertNotExists := func(path string) {
-		f, err := fs.Open(path)
-		if err == nil {
-			f.Close()
-		}
-		if err != ErrNotFound {
+		if _, err := r.Get(path, false); err != backend.ErrNotFound {
 			t.Fatalf("expected path %q to not exist, got err=%v", path, err)
 		}
 	}
@@ -181,8 +208,8 @@ func testDelete(fs Filesystem, t *testing.T) {
 	assertNotExists("/dir/bar.txt")
 }
 
-func testOffset(fs Filesystem, t *testing.T) {
-	srv := httptest.NewServer(handler(fs))
+func testOffset(r *data.FileRepo, t *testing.T, checkEtags bool) {
+	srv := httptest.NewServer(handler(r))
 	defer srv.Close()
 
 	put := func(path, data string, offset int) {
@@ -199,7 +226,7 @@ func testOffset(fs Filesystem, t *testing.T) {
 		}
 		res.Body.Close()
 		if res.StatusCode != http.StatusOK {
-			t.Fatalf("expected PUT %s to return %d, got %d", http.StatusOK, res.StatusCode)
+			t.Fatalf("expected PUT %s to return %d, got %d", path, http.StatusOK, res.StatusCode)
 		}
 	}
 	assert := func(path, expected string) {
@@ -215,20 +242,27 @@ func testOffset(fs Filesystem, t *testing.T) {
 		if string(data) != expected {
 			t.Fatalf("expected GET %q to return %s, got %s", path, expected, string(data))
 		}
+		if checkEtags {
+			hash := sha512.Sum512([]byte(expected))
+			h := base64.StdEncoding.EncodeToString(hash[:])
+			if res.Header.Get("Etag") != h {
+				t.Fatalf("unexpected etag %q, want %q", res.Header.Get("Etag"), h)
+			}
+		}
 	}
 
 	put("/foo.txt", "foo", 0)
 	assert("/foo.txt", "foo")
 	put("/foo.txt", "bar", 3)
 	assert("/foo.txt", "foobar")
-	put("/foo.txt", "baz", 2)
-	assert("/foo.txt", "fobazr")
+	put("/foo.txt", "baz", 6)
+	assert("/foo.txt", "foobarbaz")
 }
 
 const concurrency = 5
 
-func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
-	srv := httptest.NewServer(handler(fs))
+func testFilesystem(r *data.FileRepo, testMeta bool, t *testing.T) {
+	srv := httptest.NewServer(handler(r))
 	defer srv.Close()
 
 	var wg sync.WaitGroup

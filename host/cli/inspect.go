@@ -21,7 +21,8 @@ usage: flynn-host inspect [options] ID
 Get low-level information about a job.
 
 options:
-  --omit-env  don't include the job environment, which may be sensitive
+  --omit-env         don't include the job environment, which may be sensitive
+  --redact-env ENVS  don't print the specified comma-separated env values
 `)
 }
 
@@ -40,7 +41,7 @@ func runInspect(args *docopt.Args, client *cluster.Client) error {
 		return fmt.Errorf("no such job")
 	}
 
-	printJobDesc(job, os.Stdout, !args.Bool["--omit-env"])
+	printJobDesc(job, os.Stdout, !args.Bool["--omit-env"], strings.Split(args.String["--redact-env"], ","))
 	return nil
 }
 
@@ -51,7 +52,7 @@ func displayTime(ts time.Time) string {
 	return ts.String()
 }
 
-func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
+func printJobDesc(job *host.ActiveJob, out io.Writer, env bool, redactEnv []string) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
 
@@ -83,6 +84,12 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	}
 	if env {
 		for k, v := range job.Job.Config.Env {
+			for _, s := range redactEnv {
+				if s == k {
+					v = "XXXREDACTEDXXX"
+					break
+				}
+			}
 			listRec(w, fmt.Sprintf("ENV[%s]", k), v)
 		}
 	}
