@@ -122,14 +122,6 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 		return err
 	}
 	err = tx.QueryRow("formation_insert", f.AppID, f.ReleaseID, f.Processes, f.Tags).Scan(&f.CreatedAt, &f.UpdatedAt)
-	if postgres.IsUniquenessError(err, "") {
-		tx.Rollback()
-		tx, err = r.db.Begin()
-		if err != nil {
-			return err
-		}
-		err = tx.QueryRow("formation_update", f.AppID, f.ReleaseID, f.Processes, f.Tags).Scan(&f.CreatedAt, &f.UpdatedAt)
-	}
 	if err != nil {
 		tx.Rollback()
 		return err
