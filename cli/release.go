@@ -22,6 +22,7 @@ usage: flynn release [-q|--quiet]
        flynn release update <file> [<id>] [--clean]
        flynn release show [--json] [<id>]
        flynn release delete [-y] <id>
+       flynn release rollback [-y] [<id>]
 
 Manage app releases.
 
@@ -59,6 +60,10 @@ Commands:
 	delete  delete a release
 
 		Any associated file artifacts (e.g. slugs) will also be deleted.
+
+	rollback  rollback to a previous release
+
+		Deploys the previous release or the given release id.
 
 Examples:
 
@@ -122,6 +127,9 @@ func runRelease(args *docopt.Args, client controller.Client) error {
 	}
 	if args.Bool["delete"] {
 		return runReleaseDelete(args, client)
+	}
+	if args.Bool["rollback"] {
+		return runReleaseRollback(args, client)
 	}
 	return runReleaseList(args, client)
 }
@@ -327,5 +335,41 @@ func runReleaseDelete(args *docopt.Args, client controller.Client) error {
 	} else {
 		log.Printf("Deleted release %s (deleted %d files)", releaseID, len(res.DeletedFiles))
 	}
+	return nil
+}
+
+func runReleaseRollback(args *docopt.Args, client controller.Client) error {
+	currentRelease, err := client.GetAppRelease(mustApp())
+	if err != nil {
+		return err
+	}
+	releaseID := args.String["<id>"]
+	if releaseID == "" {
+		releases, err := client.AppReleaseList(mustApp())
+		if err != nil {
+			return err
+		}
+		if len(releases) < 2 {
+			return fmt.Errorf("Not enough releases to perform a rollback.")
+		}
+		releaseID = releases[1].ID
+	} else if releaseID == currentRelease.ID {
+		return fmt.Errorf("Release id given is the current release.")
+	}
+
+	if !args.Bool["--yes"] {
+		if !promptYesNo(fmt.Sprintf("Are you sure you want to rollback to release %q?", releaseID)) {
+			return nil
+		}
+	}
+
+	log.Printf("Rolling back to release %s from %s.\n", releaseID, currentRelease.ID)
+
+	if err := client.DeployAppRelease(mustApp(), releaseID, nil); err != nil {
+		return err
+	}
+
+	log.Printf("Successfully rolled back to release %s.\n", releaseID)
+
 	return nil
 }
