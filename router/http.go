@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/types"
 	"golang.org/x/net/context"
+	"golang.org/x/net/http2"
 )
 
 type HTTPListener struct {
@@ -399,6 +400,7 @@ func (s *HTTPListener) listenAndServeTLS() error {
 	tlsConfig := tlsconfig.SecureCiphers(&tls.Config{
 		GetCertificate: certForHandshake,
 		Certificates:   []tls.Certificate{s.keypair},
+		NextProtos:     []string{http2.NextProtoTLS, "h2-14"},
 	})
 
 	l, err := listenFunc("tcp4", s.TLSAddr)
@@ -407,12 +409,25 @@ func (s *HTTPListener) listenAndServeTLS() error {
 	}
 	s.tlsListener = tls.NewListener(l, tlsConfig)
 
+	handler := fwdProtoHandler{
+		Handler: s,
+		Proto:   "https",
+		Port:    mustPortFromAddr(s.tlsListener.Addr().String()),
+	}
+	http2Server := &http2.Server{}
+	http2Handler := func(hs *http.Server, c *tls.Conn, h http.Handler) {
+		http2Server.ServeConn(c, &http2.ServeConnOpts{
+			Handler:    handler,
+			BaseConfig: hs,
+		})
+	}
+
 	server := &http.Server{
-		Addr: s.tlsListener.Addr().String(),
-		Handler: fwdProtoHandler{
-			Handler: s,
-			Proto:   "https",
-			Port:    mustPortFromAddr(s.tlsListener.Addr().String()),
+		Addr:    s.tlsListener.Addr().String(),
+		Handler: handler,
+		TLSNextProto: map[string]func(*http.Server, *tls.Conn, http.Handler){
+			http2.NextProtoTLS: http2Handler,
+			"h2-14":            http2Handler,
 		},
 	}
 
