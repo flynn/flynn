@@ -127,6 +127,20 @@ func (tx *Tx) Exec(sql string, arguments ...interface{}) (commandTag CommandTag,
 	return tx.conn.Exec(sql, arguments...)
 }
 
+// Prepare delegates to the underlying *Conn
+func (tx *Tx) Prepare(name, sql string) (*PreparedStatement, error) {
+	return tx.PrepareEx(name, sql, nil)
+}
+
+// PrepareEx delegates to the underlying *Conn
+func (tx *Tx) PrepareEx(name, sql string, opts *PrepareExOptions) (*PreparedStatement, error) {
+	if tx.status != TxStatusInProgress {
+		return nil, ErrTxClosed
+	}
+
+	return tx.conn.PrepareEx(name, sql, opts)
+}
+
 // Query delegates to the underlying *Conn
 func (tx *Tx) Query(sql string, args ...interface{}) (*Rows, error) {
 	if tx.status != TxStatusInProgress {
