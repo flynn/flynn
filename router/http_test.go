@@ -1628,3 +1628,40 @@ func (s *S) TestHTTPHijackUpgrade(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(string(pong), Equals, "pong!\n")
 }
+
+func (s *S) TestHTTPCloseNotify(c *C) {
+	success := make(chan struct{})
+	done := make(chan struct{})
+	cancel := make(chan struct{})
+	defer close(done)
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(200)
+		w.(http.Flusher).Flush()
+		select {
+		case <-w.(http.CloseNotifier).CloseNotify():
+			close(success)
+		case <-done:
+		}
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	req := newReq("http://"+l.Addr, "example.com")
+	req.Cancel = cancel
+	res, err := httpClient.Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+	close(cancel)
+
+	select {
+	case <-success:
+	case <-time.After(10 * time.Second):
+		c.Fatal("CloseNotify not called")
+	}
+}

@@ -503,7 +503,7 @@ func (r *httpRoute) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *h
 	req.Header.Set("X-Request-Start", strconv.FormatInt(start.UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	r.rp.ServeHTTP(w, req)
+	r.rp.ServeHTTP(ctx, w, req)
 }
 
 func mustPortFromAddr(addr string) string {
