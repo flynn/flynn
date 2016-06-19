@@ -293,7 +293,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		slug          io.Reader
 		dockerImage   struct {
 			config struct {
-				tag string `json:"tag"`
+				Tag string `json:"tag"`
 			}
 			archive io.Reader
 		}
@@ -533,7 +533,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	if dockerImage.config.tag != "" && dockerImage.archive != nil {
+	if dockerImage.config.Tag != "" && dockerImage.archive != nil {
 		// load the docker image into the Docker daemon
 		cmd := exec.Command("docker", "load")
 		cmd.Stdin = dockerImage.archive
@@ -552,7 +552,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			return err
 		}
 		tag := fmt.Sprintf("%s/%s:latest", host, app.Name)
-		if out, err := exec.Command("docker", "tag", "--force", dockerImage.config.tag, tag).CombinedOutput(); err != nil {
+		if out, err := exec.Command("docker", "tag", "--force", dockerImage.config.Tag, tag).CombinedOutput(); err != nil {
 			return fmt.Errorf("error tagging docker image: %s: %q", err, out)
 		}
 
