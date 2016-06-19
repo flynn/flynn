@@ -57,6 +57,7 @@ func (s *ServerTestSuite) TestServerDurability(c *C) {
 
 func (s *ServerTestSuite) TestHostCursors(c *C) {
 	srv := testServer(c)
+	srv.testMessageHook = make(chan struct{}, 1)
 	c.Assert(srv.Start(), IsNil)
 	defer srv.Shutdown()
 	cl := testClient(c, srv)
@@ -72,6 +73,7 @@ func (s *ServerTestSuite) TestHostCursors(c *C) {
 	}
 	write := func(msg *rfc5424.Message) {
 		conn.Write(rfc6587.Bytes(msg))
+		<-srv.testMessageHook
 	}
 
 	// write some messages

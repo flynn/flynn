@@ -30,6 +30,8 @@ type Server struct {
 
 	api      http.Handler
 	shutdown chan struct{}
+
+	testMessageHook chan struct{}
 }
 
 type ServerConfig struct {
@@ -186,6 +188,9 @@ func (s *Server) drainSyslogConn(conn net.Conn) {
 		} else {
 			s.Cursors.Update(string(msg.Hostname), cursor)
 			s.Aggregator.Feed(msg)
+		}
+		if s.testMessageHook != nil {
+			s.testMessageHook <- struct{}{}
 		}
 	}
 }
