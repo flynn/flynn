@@ -9,13 +9,13 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/downloader"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
+	"github.com/flynn/go-docopt"
+	tuf "github.com/flynn/go-tuf/client"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 func init() {

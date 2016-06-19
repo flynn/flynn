@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/appliance/mariadb"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -16,6 +15,7 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	sd "github.com/flynn/flynn/pkg/sirenia/discoverd"
 	"github.com/flynn/flynn/pkg/sirenia/state"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const (

@@ -4,8 +4,8 @@ import (
 	"crypto/subtle"
 	"net/http"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/auth"
+	"github.com/docker/distribution/context"
+	"github.com/docker/distribution/registry/auth"
 )
 
 func init() {

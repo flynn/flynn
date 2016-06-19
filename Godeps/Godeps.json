@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
-	"GoVersion": "go1.4",
+	"GoVersion": "go1.6",
 	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
@@ -16,8 +16,8 @@
 		},
 		{
 			"ImportPath": "github.com/BurntSushi/toml",
-			"Comment": "v0.1.0-21-g056c9bc",
-			"Rev": "056c9bc7be7190eaa7715723883caffa5f8fa3e4"
+			"Comment": "v0.2.0-9-gf0aeabc",
+			"Rev": "f0aeabca5a127c4078abb8c8d64298b147264b55"
 		},
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
@@ -71,24 +71,17 @@
 		},
 		{
 			"ImportPath": "github.com/boltdb/bolt",
+			"Comment": "v1.1.0-22-g6e1ca38",
 			"Rev": "6e1ca38c6a73025366cd8705553b404746ee6e63"
 		},
 		{
-			"ImportPath": "github.com/camlistore/go4/lock",
-			"Rev": "03efcb870d84809319ea509714dd6d19a1498483"
-		},
-		{
 			"ImportPath": "github.com/cheggaaa/pb",
+			"Comment": "go1.0-5-g0464652",
 			"Rev": "0464652af750701d218b6dd035f0217e407caf2d"
 		},
 		{
-			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-187-gc31a797",
-			"Rev": "c31a7975863e7810c92e2e288a9ab074f9a88f29"
-		},
-		{
 			"ImportPath": "github.com/cupcake/jsonschema",
-			"Rev": "9ed24dff3f2f097c8c35cc8ca31ba550a0397abc"
+			"Rev": "51bf6945446b931e0f902e65a74e8bae7f794d95"
 		},
 		{
 			"ImportPath": "github.com/cznic/b",
@@ -97,10 +90,6 @@
 		{
 			"ImportPath": "github.com/cznic/bufs",
 			"Rev": "3dcccbd7064a1689f9c093a988ea11ac00e21f51"
-		},
-		{
-			"ImportPath": "github.com/cznic/exp/lldb",
-			"Rev": "9b0e4be12fbdb7b843e0a658a04c35d160371789"
 		},
 		{
 			"ImportPath": "github.com/cznic/fileutil",
@@ -117,6 +106,16 @@
 		},
 		{
 			"ImportPath": "github.com/cznic/ql/driver",
+			"Comment": "v1.0.3",
+			"Rev": "16df2de8e03c0d80c4045de3b3ebad1f1f10d62c"
+		},
+		{
+			"ImportPath": "github.com/cznic/ql/vendored/github.com/camlistore/go4/lock",
+			"Comment": "v1.0.3",
+			"Rev": "16df2de8e03c0d80c4045de3b3ebad1f1f10d62c"
+		},
+		{
+			"ImportPath": "github.com/cznic/ql/vendored/github.com/cznic/exp/lldb",
 			"Comment": "v1.0.3",
 			"Rev": "16df2de8e03c0d80c4045de3b3ebad1f1f10d62c"
 		},
@@ -612,13 +611,13 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/docker-utils/registry",
-			"Comment": "1.1.1-42-gec23876",
-			"Rev": "ec238766da469b44c72464c11df02258375e9809"
+			"Comment": "1.1.1-44-ge2c404a",
+			"Rev": "e2c404ac90257ec1e2295708ae753d5057acc698"
 		},
 		{
 			"ImportPath": "github.com/flynn/docker-utils/version",
-			"Comment": "1.1.1-42-gec23876",
-			"Rev": "ec238766da469b44c72464c11df02258375e9809"
+			"Comment": "1.1.1-44-ge2c404a",
+			"Rev": "e2c404ac90257ec1e2295708ae753d5057acc698"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-check",
@@ -631,23 +630,23 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/client",
-			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
+			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/data",
-			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
+			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/keys",
-			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
+			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/signed",
-			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
+			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/util",
-			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
+			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
 		},
 		{
 			"ImportPath": "github.com/flynn/oauth2",
@@ -683,7 +682,6 @@
 		},
 		{
 			"ImportPath": "github.com/fsouza/go-dockerclient",
-			"Comment": "0.2.1-219-gadb8617",
 			"Rev": "adb861704259d548b45e08b5dd7b7c80efcd82e6"
 		},
 		{
@@ -756,7 +754,13 @@
 			"Rev": "bfe36d3254337b7cc18024805dfab2106613abdf"
 		},
 		{
+			"ImportPath": "github.com/jteeuwen/go-bindata/go-bindata",
+			"Comment": "v3.0.7-70-gbfe36d3",
+			"Rev": "bfe36d3254337b7cc18024805dfab2106613abdf"
+		},
+		{
 			"ImportPath": "github.com/julienschmidt/httprouter",
+			"Comment": "v1-22-g4680741",
 			"Rev": "46807412fe50aaceb73bb57061c2230fd26a1640"
 		},
 		{
@@ -947,10 +951,6 @@
 			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
 		},
 		{
-			"ImportPath": "gopkg.in/inconshreveable/go-update.v0/check",
-			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
-		},
-		{
 			"ImportPath": "gopkg.in/inconshreveable/go-update.v0/download",
 			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
 		},
@@ -977,10 +977,6 @@
 		{
 			"ImportPath": "gopkg.in/tomb.v1",
 			"Rev": "c131134a1947e9afd9cecfe11f4c6dff0732ae58"
-		},
-		{
-			"ImportPath": "gopkg.in/yaml.v1",
-			"Rev": "9f9df34309c04878acc86042b16630b0f696e1de"
 		},
 		{
 			"ImportPath": "gopkg.in/yaml.v2",

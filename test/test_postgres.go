@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
+	c "github.com/flynn/go-check"
 )
 
 type PostgresSuite struct {

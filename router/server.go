@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/vanillahsu/go_reuseport"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/router/types"
+	"github.com/vanillahsu/go_reuseport"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var logger = log15.New("app", "router")

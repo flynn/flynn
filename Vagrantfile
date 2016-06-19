@@ -29,6 +29,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box_url = "https://dl.flynn.io/vagrant/flynn-base.json"
   config.vm.box_version = "> 0"
 
+  config.vm.synced_folder ".", "/home/vagrant/go/src/github.com/flynn/flynn", create: true, group: "vagrant", owner: "vagrant"
+
   if Vagrant.has_plugin?("vagrant-vbguest")
     # vagrant-vbguest can cause the VM to not start: https://github.com/flynn/flynn/issues/2874
     config.vbguest.auto_update = false
@@ -92,8 +94,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.provision "shell", privileged: false, inline: <<-SCRIPT
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
     grep '^export DISCOVERD' ~/.bashrc || echo export DISCOVERD="192.0.2.200:1111" >> ~/.bashrc
-    grep '^export GOROOT' ~/.bashrc || echo export GOROOT=/vagrant/util/_toolchain/go >> ~/.bashrc
-    grep '^export PATH' ~/.bashrc || echo export PATH=~/go/bin:/vagrant/util/_toolchain/go/bin:/vagrant/discoverd/bin:/vagrant/cli/bin:/vagrant/host/bin:/vagrant/script:\\\$PATH: >> ~/.bashrc
+    grep '^export GOROOT' ~/.bashrc || echo export GOROOT=~/go/src/github.com/flynn/flynn/util/_toolchain/go >> ~/.bashrc
+    grep '^export PATH' ~/.bashrc || echo export PATH=~/go/bin:~/go/src/github.com/flynn/flynn/util/_toolchain/go/bin:~/go/src/github.com/flynn/flynn/discoverd/bin:~/go/src/github.com/flynn/flynn/cli/bin:~/go/src/github.com/flynn/flynn/host/bin:~/go/src/github.com/flynn/flynn/script:\\\$PATH: >> ~/.bashrc
 
     # For script unit tests
     tmpdir=$(mktemp --directory)
@@ -118,9 +120,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     git config --global user.email "flynn.dev@example.com"
     git config --global user.name "Flynn Dev"
 
-    mkdir -p ~/go/src/github.com/flynn
-    ln -s /vagrant ~/go/src/github.com/flynn/flynn
     grep ^cd ~/.bashrc || echo cd ~/go/src/github.com/flynn/flynn >> ~/.bashrc
+    sudo chown -R vagrant:vagrant ~/go
   SCRIPT
 
   if File.exists?("script/custom-vagrant")

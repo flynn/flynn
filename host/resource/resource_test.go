@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/go-units"
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/docker/go-units"
 	"github.com/flynn/flynn/pkg/typeconv"
+	. "github.com/flynn/go-check"
 )
 
 // Hook gocheck up to the "go test" runner

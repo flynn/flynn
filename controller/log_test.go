@@ -16,7 +16,7 @@ import (
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/typeconv"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	. "github.com/flynn/go-check"
 )
 
 var sampleMessages = []logaggc.Message{

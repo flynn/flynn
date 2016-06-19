@@ -6,11 +6,11 @@ import (
 	"net"
 	"sync"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/golang/glog"
 	"github.com/flynn/flynn/flannel/backend"
 	"github.com/flynn/flynn/flannel/pkg/ip"
 	"github.com/flynn/flynn/flannel/pkg/task"
 	"github.com/flynn/flynn/flannel/subnet"
+	log "github.com/golang/glog"
 )
 
 const (

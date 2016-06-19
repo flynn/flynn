@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
-	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/random"
+	zfs "github.com/mistifyio/go-zfs"
 )
 
 type zfsVolume struct {

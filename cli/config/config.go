@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
+	"github.com/BurntSushi/toml"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/mitchellh/go-homedir"
 )
 
 var ErrNoDockerPushURL = errors.New("ERROR: Docker push URL not configured, set it with 'flynn docker set-push-url'")

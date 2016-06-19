@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	matrix "github.com/flynn/flynn/Godeps/_workspace/src/github.com/jvatic/asset-matrix-go"
+	matrix "github.com/jvatic/asset-matrix-go"
 )
 
 func main() {

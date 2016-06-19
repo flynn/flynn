@@ -6,10 +6,10 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	gzfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/random"
+	. "github.com/flynn/go-check"
+	gzfs "github.com/mistifyio/go-zfs"
 )
 
 func Test(t *testing.T) { TestingT(t) }

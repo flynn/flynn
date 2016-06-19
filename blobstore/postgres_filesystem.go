@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/status"
+	"github.com/jackc/pgx"
 )
 
 const UniqueViolation = "23505"

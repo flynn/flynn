@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/installer"
+	"github.com/flynn/go-docopt"
 )
 
 func init() {

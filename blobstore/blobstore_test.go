@@ -13,11 +13,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
+	"github.com/jackc/pgx"
 )
 
 func TestOSFilesystem(t *testing.T) {

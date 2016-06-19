@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
 	"github.com/flynn/flynn/router/types"
+	. "github.com/flynn/go-check"
+	"github.com/jackc/pgx"
 )
 
 func init() {

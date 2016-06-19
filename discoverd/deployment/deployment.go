@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/stream"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 type DeploymentState string

@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/configuration"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/handlers"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/registry/storage/driver/filesystem"
+	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/context"
+	"github.com/docker/distribution/registry/handlers"
+	_ "github.com/docker/distribution/registry/storage/driver/filesystem"
 )
 
 func main() {

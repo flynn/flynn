@@ -10,7 +10,7 @@ import (
 	"path"
 	"path/filepath"
 
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/cznic/ql/driver"
+	_ "github.com/cznic/ql/driver"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 )

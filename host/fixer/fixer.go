@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
@@ -18,6 +16,8 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
 	state "github.com/flynn/flynn/pkg/sirenia/state"
+	"github.com/flynn/go-docopt"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 type ClusterFixer struct {

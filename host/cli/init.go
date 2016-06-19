@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/bootstrap/discovery"
 	"github.com/flynn/flynn/host/config"
+	"github.com/flynn/go-docopt"
 )
 
 func init() {

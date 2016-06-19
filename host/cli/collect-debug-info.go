@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/go-docopt"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var flynnHostLogs = map[string]string{

@@ -4,10 +4,10 @@ import (
 	"net/http/httptest"
 	"time"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
+	. "github.com/flynn/go-check"
 )
 
 func (s *S) newTestAPIServer(t testutil.TestingT) *testAPIServer {

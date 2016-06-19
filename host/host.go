@@ -12,8 +12,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/bootstrap/discovery"
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
@@ -24,6 +22,8 @@ import (
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
+	"github.com/flynn/go-docopt"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const configFile = "/etc/flynn/host.json"

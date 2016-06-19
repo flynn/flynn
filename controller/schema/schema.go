@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
+	"github.com/cupcake/jsonschema"
 	ct "github.com/flynn/flynn/controller/types"
 )
 

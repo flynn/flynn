@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-sql-driver/mysql"
 	"github.com/flynn/flynn/appliance/mariadb"
 	ct "github.com/flynn/flynn/controller/types"
+	c "github.com/flynn/go-check"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type MariaDBSuite struct {

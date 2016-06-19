@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/golang/glog"
+	log "github.com/golang/glog"
 
 	"github.com/flynn/flynn/flannel/pkg/ip"
 	"github.com/flynn/flynn/flannel/pkg/task"

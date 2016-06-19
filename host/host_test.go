@@ -1,6 +1,6 @@
 package main
 
-import . "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+import . "github.com/flynn/go-check"
 
 func (S) TestParseTagArgs(c *C) {
 	type test struct {

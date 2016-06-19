@@ -3,12 +3,12 @@ package main
 import (
 	"net/http"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
+	"golang.org/x/net/context"
 )
 
 func createRoute(db *postgres.DB, rc routerc.Client, appID string, route *router.Route) error {

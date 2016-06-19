@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-sql-driver/mysql"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/sirenia/state"
+	. "github.com/flynn/go-check"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // Hook gocheck up to the "go test" runner

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kardianos/osext"
+	"github.com/kardianos/osext"
 )
 
 func CACertPath(name string) string {

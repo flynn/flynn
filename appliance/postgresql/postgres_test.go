@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/sirenia/state"
+	. "github.com/flynn/go-check"
+	"github.com/jackc/pgx"
 )
 
 // Hook gocheck up to the "go test" runner

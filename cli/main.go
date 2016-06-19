@@ -12,12 +12,12 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/go-units"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/docker/go-units"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
+	"github.com/flynn/go-docopt"
 )
 
 var (

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	gzfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
-	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	gzfs "github.com/mistifyio/go-zfs"
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type Logger struct {

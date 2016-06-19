@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cheggaaa/pb"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/cheggaaa/pb"
+	"github.com/docker/docker/pkg/term"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/backup"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/go-docopt"
 )
 
 func init() {

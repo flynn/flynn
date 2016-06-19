@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	. "github.com/flynn/go-check"
 )
 
 type MonitorSuite struct{}

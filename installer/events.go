@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cznic/ql"
+	"github.com/cznic/ql"
 	"github.com/flynn/flynn/pkg/random"
 )
 

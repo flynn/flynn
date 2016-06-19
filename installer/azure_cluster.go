@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/oauth2"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/azure"
 	"github.com/flynn/flynn/pkg/sshkeygen"
+	"github.com/flynn/oauth2"
+	"golang.org/x/net/context"
 )
 
 func (i *Installer) azureClient(creds *Credential) *azure.Client {

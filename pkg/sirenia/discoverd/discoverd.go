@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/sirenia/state"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 type Discoverd struct {

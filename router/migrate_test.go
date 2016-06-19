@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
 	"github.com/flynn/flynn/router/types"
+	"github.com/jackc/pgx"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	. "github.com/flynn/go-check"
 )
 
 func setupTestDB(c *C, dbname string) *postgres.DB {

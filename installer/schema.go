@@ -6,15 +6,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/cloudformation"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/ec2"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cznic/ql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/digitalocean/godo"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
+	"github.com/awslabs/aws-sdk-go/aws"
+	"github.com/awslabs/aws-sdk-go/gen/cloudformation"
+	"github.com/awslabs/aws-sdk-go/gen/ec2"
+	"github.com/cznic/ql"
+	"github.com/digitalocean/godo"
 	"github.com/flynn/flynn/pkg/azure"
 	"github.com/flynn/flynn/pkg/knownhosts"
 	"github.com/flynn/flynn/pkg/sshkeygen"
+	"golang.org/x/crypto/ssh"
 )
 
 type Cluster interface {

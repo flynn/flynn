@@ -15,14 +15,14 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/natefinch/lumberjack.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
+	"gopkg.in/inconshreveable/log15.v2"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type message struct {

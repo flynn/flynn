@@ -13,14 +13,14 @@ import (
 	"runtime"
 	"time"
 
-	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
-	tufdata "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/data"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kardianos/osext"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/go-update.v0"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
+	tuf "github.com/flynn/go-tuf/client"
+	tufdata "github.com/flynn/go-tuf/data"
+	"github.com/kardianos/osext"
+	"gopkg.in/inconshreveable/go-update.v0"
 )
 
 const upcktimePath = "cktime"
