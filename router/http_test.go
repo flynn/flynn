@@ -1291,10 +1291,7 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 	tests := []ts{
 		{method: "GET", upgrade: false},
 		{method: "GET", upgrade: true},
-		// XXX(jpg): Something causing this to fail in Go 1.4.3 upgrade
-		// must investigate if this is an actual problem or a change in
-		// behavior that doesn't harm the actual function of the router
-		// {method: "POST", upgrade: false},
+		{method: "POST", upgrade: false},
 		{method: "POST", upgrade: true},
 	}
 
