@@ -4,9 +4,10 @@ ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update &&\
     apt-get dist-upgrade -y &&\
+    apt-get install -y curl software-properties-common &&\
+    add-apt-repository ppa:chris-lea/redis-server &&\
     apt-get update &&\
-    apt-get install -y curl &&\
-    apt-get install -y -q redis-server &&\
+    apt-get install -y redis-server &&\
     apt-get clean &&\
     apt-get autoremove -y &&\
     mkdir /data
