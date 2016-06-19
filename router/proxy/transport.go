@@ -72,10 +72,13 @@ func (t *transport) setStickyBackend(res *http.Response, originalStickyBackend s
 	}
 }
 
-func (t *transport) RoundTrip(req *http.Request, l log15.Logger) (*http.Response, error) {
+func (t *transport) RoundTrip(ctx context.Context, req *http.Request, l log15.Logger) (*http.Response, error) {
 	// http.Transport closes the request body on a failed dial, issue #875
 	req.Body = &fakeCloseReadCloser{req.Body}
 	defer req.Body.(*fakeCloseReadCloser).RealClose()
+
+	// hook up CloseNotify to cancel the request
+	req.Cancel = ctx.Done()
 
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
