@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -183,9 +182,9 @@ func (d *pgDataStore) AddCert(c *router.Certificate) error {
 func (d *pgDataStore) addCertWithTx(tx *pgx.Tx, c *router.Certificate) error {
 	c.Cert = strings.Trim(c.Cert, " \n")
 	c.Key = strings.Trim(c.Key, " \n")
-	tlsCertSHA256 := hex.EncodeToString(sha256.New().Sum([]byte(c.Cert)))
-	if err := tx.QueryRow(sqlSelectCert, tlsCertSHA256).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
-		if err := tx.QueryRow(sqlAddCert, c.Cert, c.Key, tlsCertSHA256).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	tlsCertSHA256 := sha256.Sum256([]byte(c.Cert))
+	if err := tx.QueryRow(sqlSelectCert, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := tx.QueryRow(sqlAddCert, c.Cert, c.Key, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return err
 		}
 	}

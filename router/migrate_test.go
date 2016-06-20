@@ -107,7 +107,7 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 		fetchedCert := &router.Certificate{}
 		var fetchedCertSHA256 string
 		err := db.QueryRow(`
-			SELECT r.parent_ref, r.service, r.domain, c.cert, c.key, c.cert_sha256 FROM http_routes AS r
+			SELECT r.parent_ref, r.service, r.domain, c.cert, c.key, encode(c.cert_sha256, 'hex') FROM http_routes AS r
 			INNER JOIN route_certificates AS rc ON rc.http_route_id = r.id
 			INNER JOIN certificates AS c ON rc.certificate_id = c.id
 			WHERE r.id = $1
