@@ -75,7 +75,7 @@ func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd, l log
 
 func newTestHosts() map[string]*FakeHostClient {
 	return map[string]*FakeHostClient{
-		testHostID: NewFakeHostClient(testHostID),
+		testHostID: NewFakeHostClient(testHostID, false),
 	}
 }
 
@@ -222,7 +222,6 @@ func (TestSuite) TestFormationChange(c *C) {
 	// Test scaling up an existing formation
 	c.Log("Test scaling up an existing formation. Wait for formation change and job start")
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 4}})
-	s.waitFormationChange()
 	for i := 0; i < 3; i++ {
 		job := s.waitJobStart()
 		c.Assert(job.Type, Equals, testJobType)
@@ -234,7 +233,6 @@ func (TestSuite) TestFormationChange(c *C) {
 	// Test scaling down an existing formation
 	c.Log("Test scaling down an existing formation. Wait for formation change and job stop")
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 1}})
-	s.waitFormationChange()
 	for i := 0; i < 3; i++ {
 		s.waitJobStop()
 	}
@@ -249,9 +247,8 @@ func (TestSuite) TestFormationChange(c *C) {
 	s.CreateRelease(release)
 	c.Assert(len(s.formations), Equals, 1)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	s.waitFormationChange()
-	c.Assert(len(s.formations), Equals, 2)
 	job := s.waitJobStart()
+	c.Assert(len(s.formations), Equals, 2)
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, release.ID)
@@ -262,7 +259,7 @@ func (TestSuite) TestRectify(c *C) {
 	defer s.Stop()
 
 	// wait for the formation to cascade to the scheduler
-	key := s.waitRectify()
+	key := utils.FormationKey{AppID: testAppID, ReleaseID: testReleaseID}
 	job := s.waitJobStart()
 	jobs := make(map[string]*Job)
 	jobs[job.JobID] = job
@@ -282,7 +279,6 @@ func (TestSuite) TestRectify(c *C) {
 
 	// Verify that the scheduler stops the extra job
 	c.Log("Verify that the scheduler stops the extra job")
-	s.waitRectify()
 	job = s.waitJobStop()
 	c.Assert(job.JobID, Equals, config.ID)
 	delete(jobs, job.JobID)
@@ -377,7 +373,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	})
 
 	c.Log("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
-	host2 := NewFakeHostClient("host2")
+	host2 := NewFakeHostClient("host2", true)
 	fakeCluster.AddHost(host2)
 	hosts[host2.ID()] = host2
 	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
@@ -389,7 +385,6 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	s.waitFormationChange()
 	s.waitJobStart()
 	s.waitJobStart()
 	assertJobs(hostJobs{
@@ -402,7 +397,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 		},
 	})
 
-	host3 := NewFakeHostClient("host3")
+	host3 := NewFakeHostClient("host3", true)
 	c.Log("Add a host, wait for omni job start on that host.")
 	fakeCluster.AddHost(host3)
 	s.waitJobStart()
@@ -423,7 +418,6 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	host3.CrashJob("job4")
 	s.waitJobStop()
 	s.waitJobStart()
-	s.waitRectify()
 	assertJobs(hostJobs{
 		host1: {
 			{Type: "web", state: JobStateStarting},
@@ -464,7 +458,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 
 	// resume the scheduler and check it moves the job back to host2
 	s.Resume()
-	s.waitRectify()
+	s.waitJobStart()
 	s.waitJobStart()
 	assertJobs(hostJobs{
 		host1: {
@@ -507,7 +501,6 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	host1.Healthy = false
 	fakeCluster.RemoveHost(host1.ID())
 	s.waitFormationSync()
-	s.waitRectify()
 	s.waitJobStart()
 	assertJobs(hostJobs{
 		host1: {
@@ -766,7 +759,6 @@ func (TestSuite) TestScaleCriticalApp(c *C) {
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	s.waitFormationChange()
 	s.waitJobStart()
 
 	// check we can't scale it down
@@ -779,11 +771,9 @@ func (TestSuite) TestScaleCriticalApp(c *C) {
 	newRelease := NewRelease("critical-release-2", artifact, processes)
 	s.CreateRelease(newRelease)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: newRelease.ID, Processes: processes})
-	s.waitFormationChange()
 	s.waitJobStart()
 
 	// check we can now scale the original down
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: nil})
-	s.waitFormationChange()
 	s.waitJobStop()
 }

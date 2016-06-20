@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/flynn/controller/testutils"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/stream"
@@ -88,6 +89,12 @@ func (h *Host) StreamEventsTo(ch chan *host.Event) (map[string]host.ActiveJob, e
 						break eventLoop
 					}
 					ch <- event
+
+					// if the host is a FakeHostClient with TestEventHook
+					// set, send on the channel to synchronize with tests
+					if h, ok := h.client.(*testutils.FakeHostClient); ok && h.TestEventHook != nil {
+						h.TestEventHook <- struct{}{}
+					}
 				case <-h.stop:
 					return
 				}

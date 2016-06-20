@@ -140,7 +140,7 @@ func (s *S) TestKillJob(c *C) {
 		State:     ct.JobStateStarting,
 		Meta:      map[string]string{"some": "info"},
 	})
-	hc := tu.NewFakeHostClient(hostID)
+	hc := tu.NewFakeHostClient(hostID, false)
 	hc.AddJob(&host.Job{ID: jobID})
 	s.cc.AddHost(hc)
 
@@ -153,7 +153,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker, URI: "docker://foo/bar"})
 	hostID := fakeHostID()
-	host := tu.NewFakeHostClient(hostID)
+	host := tu.NewFakeHostClient(hostID, false)
 	s.cc.AddHost(host)
 
 	release := s.createTestRelease(c, &ct.Release{
@@ -204,7 +204,7 @@ func (s *S) TestRunJobDetached(c *C) {
 func (s *S) TestRunJobAttached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-attached"})
 	hostID := fakeHostID()
-	hc := tu.NewFakeHostClient(hostID)
+	hc := tu.NewFakeHostClient(hostID, false)
 	s.cc.AddHost(hc)
 
 	done := make(chan struct{})
