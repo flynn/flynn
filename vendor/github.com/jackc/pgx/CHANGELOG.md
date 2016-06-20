@@ -1,3 +1,23 @@
+# Unreleased
+
+## Features
+
+* Add PrepareEx
+
+## Fixes
+
+* Fix *ConnPool.Deallocate() not deleting prepared statement from map
+
+## Features
+
+* Encode and decode between all Go and PostgreSQL integer types with bounds checking
+* Decode inet/cidr to net.IP
+* Encode/decode [][]byte to/from bytea[]
+
+## Performance
+
+* Substantial reduction in memory allocations
+
 # 2.8.1 (March 24, 2016)
 
 ## Features

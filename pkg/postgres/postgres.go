@@ -8,7 +8,6 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
-	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/jackc/pgx"
@@ -97,12 +96,12 @@ func Open(conf *Conf, afterConn func(*pgx.Conn) error) (*DB, error) {
 		User:     conf.User,
 		Database: conf.Database,
 		Password: conf.Password,
-		Dial:     dialer.Retry.Dial,
 	}
 	connPool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig:     connConfig,
 		AfterConnect:   afterConn,
 		MaxConnections: 20,
+		AcquireTimeout: 30 * time.Second,
 	})
 	db := &DB{connPool, conf}
 	return db, err

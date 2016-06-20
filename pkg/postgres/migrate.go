@@ -78,6 +78,7 @@ func ResetOnMigration(db *DB, log log15.Logger, doneCh chan struct{}) {
 	for {
 		listener, err := db.Listen("schema_migrations", log)
 		if err != nil {
+			time.Sleep(5 * time.Second)
 			continue
 		}
 	outer:

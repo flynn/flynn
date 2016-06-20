@@ -47,6 +47,7 @@ type Conn struct {
 	lastActivityTime   time.Time     // the last time the connection was used
 	reader             *bufio.Reader // buffered reader to improve read performance
 	wbuf               [1024]byte
+	writeBuf           WriteBuf
 	Pid                int32             // backend pid
 	SecretKey          int32             // key to use to send a cancel query message to the server
 	RuntimeParams      map[string]string // parameters that have been reported by the server
@@ -62,10 +63,11 @@ type Conn struct {
 	logLevel           int
 	mr                 msgReader
 	fp                 *fastpath
-	pgsql_af_inet      byte
-	pgsql_af_inet6     byte
+	pgsql_af_inet      *byte
+	pgsql_af_inet6     *byte
 	busy               bool
 	poolResetCount     int
+	preallocatedRows   []Rows
 }
 
 // PreparedStatement is a description of a prepared statement
@@ -74,6 +76,11 @@ type PreparedStatement struct {
 	SQL               string
 	FieldDescriptions []FieldDescription
 	ParameterOids     []Oid
+}
+
+// PrepareExOptions is an option struct that can be passed to PrepareEx
+type PrepareExOptions struct {
+	ParameterOids []Oid
 }
 
 // Notification is a message received from the PostgreSQL LISTEN/NOTIFY system
@@ -135,9 +142,29 @@ func (e ProtocolError) Error() string {
 // config.Host must be specified. config.User will default to the OS user name.
 // Other config fields are optional.
 func Connect(config ConnConfig) (c *Conn, err error) {
+	return connect(config, nil, nil, nil)
+}
+
+func connect(config ConnConfig, pgTypes map[Oid]PgType, pgsql_af_inet *byte, pgsql_af_inet6 *byte) (c *Conn, err error) {
 	c = new(Conn)
 
 	c.config = config
+
+	if pgTypes != nil {
+		c.PgTypes = make(map[Oid]PgType, len(pgTypes))
+		for k, v := range pgTypes {
+			c.PgTypes[k] = v
+		}
+	}
+
+	if pgsql_af_inet != nil {
+		c.pgsql_af_inet = new(byte)
+		*c.pgsql_af_inet = *pgsql_af_inet
+	}
+	if pgsql_af_inet6 != nil {
+		c.pgsql_af_inet6 = new(byte)
+		*c.pgsql_af_inet6 = *pgsql_af_inet6
+	}
 
 	if c.config.LogLevel != 0 {
 		c.logLevel = c.config.LogLevel
@@ -281,14 +308,18 @@ func (c *Conn) connect(config ConnConfig, network, address string, tlsConfig *tl
 				c.log(LogLevelInfo, "Connection established")
 			}
 
-			err = c.loadPgTypes()
-			if err != nil {
-				return err
+			if c.PgTypes == nil {
+				err = c.loadPgTypes()
+				if err != nil {
+					return err
+				}
 			}
 
-			err = c.loadInetConstants()
-			if err != nil {
-				return err
+			if c.pgsql_af_inet == nil || c.pgsql_af_inet6 == nil {
+				err = c.loadInetConstants()
+				if err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -301,7 +332,7 @@ func (c *Conn) connect(config ConnConfig, network, address string, tlsConfig *tl
 }
 
 func (c *Conn) loadPgTypes() error {
-	rows, err := c.Query("select t.oid, t.typname from pg_type t where t.typtype='b'")
+	rows, err := c.Query("select t.oid, t.typname from pg_type t left join pg_type base_type on t.typelem=base_type.oid where t.typtype='b' and (base_type.oid is null or base_type.typtype='b');")
 	if err != nil {
 		return err
 	}
@@ -334,8 +365,8 @@ func (c *Conn) loadInetConstants() error {
 		return err
 	}
 
-	c.pgsql_af_inet = ipv4[0]
-	c.pgsql_af_inet6 = ipv6[0]
+	c.pgsql_af_inet = &ipv4[0]
+	c.pgsql_af_inet6 = &ipv6[0]
 
 	return nil
 }
@@ -557,6 +588,17 @@ func configSSL(sslmode string, cc *ConnConfig) error {
 // name and sql arguments. This allows a code path to Prepare and Query/Exec without
 // concern for if the statement has already been prepared.
 func (c *Conn) Prepare(name, sql string) (ps *PreparedStatement, err error) {
+	return c.PrepareEx(name, sql, nil)
+}
+
+// PrepareEx creates a prepared statement with name and sql. sql can contain placeholders
+// for bound parameters. These placeholders are referenced positional as $1, $2, etc.
+// It defers from Prepare as it allows additional options (such as parameter OIDs) to be passed via struct
+//
+// PrepareEx is idempotent; i.e. it is safe to call PrepareEx multiple times with the same
+// name and sql arguments. This allows a code path to PrepareEx and Query/Exec without
+// concern for if the statement has already been prepared.
+func (c *Conn) PrepareEx(name, sql string, opts *PrepareExOptions) (ps *PreparedStatement, err error) {
 	if name != "" {
 		if ps, ok := c.preparedStatements[name]; ok && ps.SQL == sql {
 			return ps, nil
@@ -575,7 +617,18 @@ func (c *Conn) Prepare(name, sql string) (ps *PreparedStatement, err error) {
 	wbuf := newWriteBuf(c, 'P')
 	wbuf.WriteCString(name)
 	wbuf.WriteCString(sql)
-	wbuf.WriteInt16(0)
+
+	if opts != nil {
+		if len(opts.ParameterOids) > 65535 {
+			return nil, errors.New(fmt.Sprintf("Number of PrepareExOptions ParameterOids must be between 0 and 65535, received %d", len(opts.ParameterOids)))
+		}
+		wbuf.WriteInt16(int16(len(opts.ParameterOids)))
+		for _, oid := range opts.ParameterOids {
+			wbuf.WriteInt32(int32(oid))
+		}
+	} else {
+		wbuf.WriteInt16(0)
+	}
 
 	// describe
 	wbuf.startMsg('D')
@@ -608,6 +661,7 @@ func (c *Conn) Prepare(name, sql string) (ps *PreparedStatement, err error) {
 		case parseComplete:
 		case parameterDescription:
 			ps.ParameterOids = c.rxParameterDescription(r)
+
 			if len(ps.ParameterOids) > 65535 && softErr == nil {
 				softErr = fmt.Errorf("PostgreSQL supports maximum of 65535 parameters, received %d", len(ps.ParameterOids))
 			}
@@ -814,6 +868,7 @@ func (c *Conn) sendQuery(sql string, arguments ...interface{}) (err error) {
 }
 
 func (c *Conn) sendSimpleQuery(sql string, args ...interface{}) error {
+
 	if len(args) == 0 {
 		wbuf := newWriteBuf(c, 'Q')
 		wbuf.WriteCString(sql)
@@ -855,7 +910,7 @@ func (c *Conn) sendPreparedQuery(ps *PreparedStatement, arguments ...interface{}
 			wbuf.WriteInt16(TextFormatCode)
 		default:
 			switch oid {
-			case BoolOid, ByteaOid, Int2Oid, Int4Oid, Int8Oid, Float4Oid, Float8Oid, TimestampTzOid, TimestampTzArrayOid, TimestampOid, TimestampArrayOid, DateOid, BoolArrayOid, Int2ArrayOid, Int4ArrayOid, Int8ArrayOid, Float4ArrayOid, Float8ArrayOid, TextArrayOid, VarcharArrayOid, OidOid, InetOid, CidrOid, InetArrayOid, CidrArrayOid:
+			case BoolOid, ByteaOid, Int2Oid, Int4Oid, Int8Oid, Float4Oid, Float8Oid, TimestampTzOid, TimestampTzArrayOid, TimestampOid, TimestampArrayOid, DateOid, BoolArrayOid, ByteaArrayOid, Int2ArrayOid, Int4ArrayOid, Int8ArrayOid, Float4ArrayOid, Float8ArrayOid, TextArrayOid, VarcharArrayOid, OidOid, InetOid, CidrOid, InetArrayOid, CidrArrayOid:
 				wbuf.WriteInt16(BinaryFormatCode)
 			default:
 				wbuf.WriteInt16(TextFormatCode)
