@@ -43,6 +43,7 @@ func main() {
 		Version: configuration.CurrentVersion,
 		Storage: configuration.Storage{
 			blobstore.DriverName: configuration.Parameters{},
+			"delete":             configuration.Parameters{"enabled": true},
 		},
 		Middleware: map[string][]configuration.Middleware{
 			"repository": {

@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1327,12 +1328,27 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	file := filepath.Join(t.MkDir(), "export.tar")
 	t.Assert(flynn(t, "/", "-a", app.Name, "export", "-f", file), Succeeds)
 
+	// delete the image from the registry
+	release, err := client.GetAppRelease(app.Name)
+	t.Assert(err, c.IsNil)
+	artifact, err := client.GetArtifact(release.ImageArtifactID())
+	t.Assert(err, c.IsNil)
+	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
+	t.Assert(err, c.IsNil)
+	uri := fmt.Sprintf("http://%s/v2/%s/manifests/%s", u.Host, app.Name, artifact.Meta["docker-receive.digest"])
+	req, err := http.NewRequest("DELETE", uri, nil)
+	req.SetBasicAuth("", s.clusterConf(t).Key)
+	t.Assert(err, c.IsNil)
+	res, err := http.DefaultClient.Do(req)
+	t.Assert(err, c.IsNil)
+	res.Body.Close()
+
 	// import to another app
 	importApp := "cli-test-docker-import"
 	t.Assert(flynn(t, "/", "import", "--name", importApp, "--file", file), Succeeds)
 	defer flynn(t, "/", "-a", importApp, "scale", "app=0")
 
 	// wait for it to start
-	_, err := s.discoverdClient(t).Instances(importApp, 10*time.Second)
+	_, err = s.discoverdClient(t).Instances(importApp, 10*time.Second)
 	t.Assert(err, c.IsNil)
 }
