@@ -157,7 +157,7 @@ CREATE TRIGGER check_http_route_update
 			id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
 			cert text NOT NULL,
 			key text NOT NULL,
-			cert_sha256 text NOT NULL,
+			cert_sha256 bytea NOT NULL,
 			created_at timestamptz NOT NULL DEFAULT now(),
 			updated_at timestamptz NOT NULL DEFAULT now(),
 			deleted_at timestamptz
@@ -174,10 +174,10 @@ CREATE TRIGGER check_http_route_update
 		DECLARE
 			http_route RECORD;
 			certificate_id uuid;
-			certsha256 text;
+			certsha256 bytea;
 		BEGIN
 			FOR http_route IN SELECT * FROM http_routes WHERE tls_key IS NOT NULL LOOP
-				SELECT INTO certsha256 trim(leading '\\x' from digest(ltrim(' \n', rtrim(' \n', http_route.tls_cert)), 'sha256')::varchar);
+				SELECT INTO certsha256 digest(ltrim(' \n', rtrim(' \n', http_route.tls_cert)), 'sha256');
 				SELECT INTO certificate_id id FROM certificates WHERE cert_sha256 = certsha256;
 
 				IF NOT FOUND THEN
