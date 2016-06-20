@@ -149,11 +149,10 @@ func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string
 
 	push := r.git("push", "flynn", "master")
 	t.Assert(push, SuccessfulOutputContains, "Creating release")
-	t.Assert(push, SuccessfulOutputContains, "Application deployed")
-	t.Assert(push, SuccessfulOutputContains, "Waiting for web job to start...")
+	t.Assert(push, SuccessfulOutputContains, "Scaling initial release to web=1")
 	t.Assert(push, SuccessfulOutputContains, "* [new branch]      master -> master")
-	t.Assert(push, c.Not(OutputContains), "timed out waiting for scale")
-	t.Assert(push, SuccessfulOutputContains, "=====> Default web formation scaled to 1")
+	t.Assert(push, SuccessfulOutputContains, "Initial web job started")
+	t.Assert(push, SuccessfulOutputContains, "Application deployed")
 
 	watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateUp: 1}}, scaleTimeout, nil)
 
@@ -328,4 +327,25 @@ func (s *GitDeploySuite) TestCancel(t *c.C) {
 	// check that slugbuilder exits immediately
 	err = watcher.WaitFor(ct.JobEvents{"slugbuilder": {ct.JobStateUp: 1, ct.JobStateDown: 1}}, 10*time.Second, nil)
 	t.Assert(err, c.IsNil)
+}
+
+func (s *GitDeploySuite) TestCrashingApp(t *c.C) {
+	// create a crashing app
+	r := s.newGitRepo(t, "crash")
+	app := "crashing-app"
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	// check the push is rejected as the job won't start
+	push := r.git("push", "flynn", "master")
+	t.Assert(push, c.Not(Succeeds))
+	t.Assert(push, OutputContains, "web job failed to start")
+
+	// check the formation was scaled down
+	client := s.controllerClient(t)
+	release, err := client.GetAppRelease(app)
+	t.Assert(err, c.IsNil)
+	formation, err := client.GetFormation(app, release.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(formation.Processes["web"], c.Equals, 0)
 }
