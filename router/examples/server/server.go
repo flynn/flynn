@@ -20,6 +20,6 @@ func main() {
 	})
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		hb.Close()
-		log.Fatal()
+		log.Fatal(err)
 	}
 }

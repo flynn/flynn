@@ -239,40 +239,40 @@ func testSireniaDeploy(client controller.Client, disc *discoverd.Client, t *c.C,
 		if state.Primary == nil {
 			t.Fatal("no primary configured")
 		}
-		log := func(format string, v ...interface{}) {
+		logf := func(format string, v ...interface{}) {
 			debugf(t, "skipping expected state: %s", fmt.Sprintf(format, v...))
 		}
 	outer:
 		for i, expected := range remaining {
 			if state.Primary.Meta["FLYNN_RELEASE_ID"] != expected.Primary {
-				log("primary has incorrect release")
+				logf("primary has incorrect release")
 				continue
 			}
 			if state.Sync == nil {
 				if expected.Sync == "" {
 					return i
 				}
-				log("state has no sync node")
+				logf("state has no sync node")
 				continue
 			}
 			if state.Sync.Meta["FLYNN_RELEASE_ID"] != expected.Sync {
-				log("sync has incorrect release")
+				logf("sync has incorrect release")
 				continue
 			}
 			if state.Async == nil {
 				if expected.Async == nil {
 					return i
 				}
-				log("state has no async nodes")
+				logf("state has no async nodes")
 				continue
 			}
 			if len(state.Async) != len(expected.Async) {
-				log("expected %d asyncs, got %d", len(expected.Async), len(state.Async))
+				logf("expected %d asyncs, got %d", len(expected.Async), len(state.Async))
 				continue
 			}
 			for i, release := range expected.Async {
 				if state.Async[i].Meta["FLYNN_RELEASE_ID"] != release {
-					log("async[%d] has incorrect release", i)
+					logf("async[%d] has incorrect release", i)
 					continue outer
 				}
 			}

@@ -70,7 +70,7 @@ func runBootstrap(args *docopt.Args) error {
 	var err error
 	manifest, err = readBootstrapManifest(manifestFile)
 	if err != nil {
-		return fmt.Errorf("Error reading manifest:", err)
+		return fmt.Errorf("Error reading manifest: %s", err)
 	}
 
 	if n := args.String["--min-hosts"]; n != "" {

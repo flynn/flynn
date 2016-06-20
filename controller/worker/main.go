@@ -31,7 +31,7 @@ func main() {
 	client, err := controller.NewClient("", os.Getenv("AUTH_KEY"))
 	if err != nil {
 		log.Error("error creating controller client", "err", err)
-		shutdown.Fatal()
+		shutdown.Fatal(err)
 	}
 
 	log.Info("connecting to postgres")

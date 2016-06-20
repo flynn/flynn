@@ -176,7 +176,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	if err == controller.ErrNotFound {
 		prevRelease = &ct.Release{}
 	} else if err != nil {
-		return fmt.Errorf("error getting current app release:", err)
+		return fmt.Errorf("error getting current app release: %s", err)
 	}
 
 	// get the image config to determine Cmd, Entrypoint and Env

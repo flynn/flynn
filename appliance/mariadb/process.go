@@ -332,7 +332,7 @@ func (p *Process) extractBackupInfo() (*BackupInfo, error) {
 	}
 	fields := strings.Fields(string(buf))
 	if len(fields) < 3 {
-		return nil, fmt.Errorf("malformed xtrabackup_binlog_info, len", len(fields))
+		return nil, fmt.Errorf("malformed xtrabackup_binlog_info, len %d", len(fields))
 	}
 	return &BackupInfo{LogFile: fields[0], LogPos: fields[1], GTID: fields[2]}, nil
 }

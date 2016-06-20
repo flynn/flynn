@@ -58,7 +58,7 @@ func Tar(dir string, w *tar.Writer, filter func(string) bool) error {
 		defer f.Close()
 
 		if _, err := io.Copy(w, f); err != nil {
-			fmt.Errorf("archiver: error copying %s: %s", fpath, err)
+			return fmt.Errorf("archiver: error copying %s: %s", fpath, err)
 		}
 		return nil
 	}); err != nil {
