@@ -195,6 +195,7 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
           {
             "DeviceName": "/dev/sda1",
             "Ebs": {
+              "Encrypted": true,
               "VolumeSize": { "Ref" : "BootVolumeSize" },
               "VolumeType": "gp2"
             }
@@ -202,6 +203,7 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
           {
             "DeviceName": "/dev/sdb",
             "Ebs": {
+              "Encrypted": true,
               "VolumeSize": { "Ref" : "DataVolumeSize" },
               "VolumeType": "gp2"
             }
