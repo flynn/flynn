@@ -1115,6 +1115,40 @@ func (s *CLISuite) TestReleaseDelete(t *c.C) {
 	t.Assert(err, c.IsNil)
 }
 
+func (s *CLISuite) TestReleaseRollback(t *c.C) {
+	// create an app and release it
+	r := s.newGitRepo(t, "http")
+	app := "release-rollback-" + random.String(8)
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// check that rollback fails when there's only a single release
+	res := r.flynn("release", "rollback", "--yes")
+	t.Assert(res, c.Not(Succeeds))
+
+	// create a second release
+	t.Assert(r.git("commit", "--allow-empty", "--message", "empty commit"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// get the releases
+	client := s.controllerClient(t)
+	releases, err := client.AppReleaseList(app)
+	t.Assert(err, c.IsNil)
+	t.Assert(releases, c.HasLen, 2)
+
+	// rollback to the second release
+	res = r.flynn("release", "rollback", "--yes")
+	t.Assert(res, Succeeds)
+
+	// revert rollback
+	res = r.flynn("release", "rollback", "--yes", releases[0].ID)
+	t.Assert(res, Succeeds)
+
+	// check that attempting to rollback to the current release fails
+	res = r.flynn("release", "rollback", "--yes", releases[0].ID)
+	t.Assert(res, c.Not(Succeeds))
+}
+
 func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	client := s.controllerClient(t)
 
