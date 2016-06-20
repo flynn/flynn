@@ -75,7 +75,7 @@ func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd, l log
 
 func newTestHosts() map[string]*FakeHostClient {
 	return map[string]*FakeHostClient{
-		testHostID: NewFakeHostClient(testHostID),
+		testHostID: NewFakeHostClient(testHostID, false),
 	}
 }
 
@@ -373,7 +373,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	})
 
 	c.Log("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
-	host2 := NewFakeHostClient("host2")
+	host2 := NewFakeHostClient("host2", true)
 	fakeCluster.AddHost(host2)
 	hosts[host2.ID()] = host2
 	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
@@ -397,7 +397,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 		},
 	})
 
-	host3 := NewFakeHostClient("host3")
+	host3 := NewFakeHostClient("host3", true)
 	c.Log("Add a host, wait for omni job start on that host.")
 	fakeCluster.AddHost(host3)
 	s.waitJobStart()

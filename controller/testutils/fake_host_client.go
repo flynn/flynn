@@ -14,8 +14,8 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
-func NewFakeHostClient(hostID string) *FakeHostClient {
-	return &FakeHostClient{
+func NewFakeHostClient(hostID string, sync bool) *FakeHostClient {
+	h := &FakeHostClient{
 		hostID:        hostID,
 		stopped:       make(map[string]bool),
 		attach:        make(map[string]attachFunc),
@@ -24,6 +24,10 @@ func NewFakeHostClient(hostID string) *FakeHostClient {
 		eventChannels: make(map[chan<- *host.Event]struct{}),
 		Healthy:       true,
 	}
+	if sync {
+		h.TestEventHook = make(chan struct{})
+	}
+	return h
 }
 
 type FakeHostClient struct {
@@ -37,6 +41,7 @@ type FakeHostClient struct {
 	eventChannels    map[chan<- *host.Event]struct{}
 	jobsMtx          sync.RWMutex
 	Healthy          bool
+	TestEventHook    chan struct{}
 }
 
 func (c *FakeHostClient) ID() string { return c.hostID }
@@ -79,6 +84,9 @@ func (c *FakeHostClient) AddJob(job *host.Job) error {
 			Event: host.JobEventStart,
 			JobID: job.ID,
 			Job:   &j,
+		}
+		if c.TestEventHook != nil {
+			<-c.TestEventHook
 		}
 	}
 	return nil
@@ -125,6 +133,9 @@ func (c *FakeHostClient) stop(id string) error {
 			Event: host.JobEventStop,
 			JobID: id,
 			Job:   &job,
+		}
+		if c.TestEventHook != nil {
+			<-c.TestEventHook
 		}
 	}
 	return nil
