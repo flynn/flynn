@@ -152,7 +152,8 @@ apt-get install -y \
   btrfs-tools \
   libvirt-dev \
   libvirt-bin \
-  inotify-tools
+  inotify-tools \
+  libsasl2-dev
 
 # install flynn test dependencies: postgres, redis, mariadb
 # (normally these are used via appliances; install locally for unit tests)
