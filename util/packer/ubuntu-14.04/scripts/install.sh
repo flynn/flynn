@@ -181,6 +181,7 @@ install_packages() {
     "tup"
     "ubuntu-zfs"
     "vim-tiny"
+    "libsasl2-dev"
   )
 
   apt-get install -y ${packages[@]}
