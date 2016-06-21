@@ -23,9 +23,7 @@ The Flynn website also has [documentation](https://flynn.io/docs) including
 Flynn is very actively developed by [Prime Directive, Inc.](https://flynn.io)
 and the greater Flynn community.
 
-Learn more about Flynn's [stability](https://flynn.io/docs/stability).
-
-Learn more about Flynn's [security](https://flynn.io/docs/security).
+Learn more about Flynn's [stability](https://flynn.io/docs/stability) and [security](https://flynn.io/docs/security).
 
 We want to know if you run into any unexpected behavior. Please **report
 issues** on [this repository](https://github.com/flynn/flynn/issues) after
