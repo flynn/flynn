@@ -10,7 +10,7 @@ import (
 
 func init() {
 	register("remote", runRemote, `
-usage: flynn remote add [<remote>] [-y]
+usage: flynn [-a <app>] remote add [<remote>] [-y]
 
 Create a git remote that allows deploying the application via git.
 If a name for the remote is not provided 'flynn' will be used.
