@@ -250,4 +250,6 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	imageArtifact, err = client.GetArtifact(release.ImageArtifactID())
 	t.Assert(err, c.IsNil)
 	assertImage(imageArtifact.URI, "flynn/slugrunner")
+
+	t.Fatal("WIP: Error to see what is taking so long in this test")
 }
