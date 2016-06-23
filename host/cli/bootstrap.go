@@ -161,7 +161,7 @@ func runBootstrapBackup(manifest []byte, backupFile string, ch chan *bootstrap.S
 	}
 
 	var data struct {
-		Discoverd, Flannel, Postgres, MariaDB, Controller *ct.ExpandedFormation
+		Discoverd, Flannel, Postgres, MariaDB, MongoDB, Controller *ct.ExpandedFormation
 	}
 
 	jsonData, err := getFile("flynn.json")
@@ -263,6 +263,13 @@ $$;`, step.Artifact.URI, step.ID))
 			data.MariaDB = nil
 		}
 	}
+	if data.MongoDB != nil {
+		data.MongoDB.ImageArtifact.URI = artifactURIs["mongodb"]
+		if data.MongoDB.Processes["mongodb"] == 0 {
+			// skip mongodb if it wasn't scaled up in the backup
+			data.MongoDB = nil
+		}
+	}
 
 	sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE artifacts SET uri = '%s'
@@ -315,6 +322,17 @@ WHERE release_id = (SELECT release_id from apps WHERE name = '%s');`,
 			URL: "http://mariadb-api.discoverd/ping",
 		}))
 	}
+
+	// Only run up MongoDB if it's in the backup
+	if data.MongoDB != nil {
+		systemSteps = append(systemSteps, step("mongodb", "run-app", &bootstrap.RunAppAction{
+			ExpandedFormation: data.MongoDB,
+		}))
+		systemSteps = append(systemSteps, step("mongodb-wait", "wait", &bootstrap.WaitAction{
+			URL: "http://mongodb-api.discoverd/ping",
+		}))
+	}
+
 	state, err := systemSteps.Run(ch, cfg)
 	if err != nil {
 		return err
@@ -382,6 +400,39 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 				StepMeta:  meta,
 				State:     "error",
 				Error:     fmt.Sprintf("error running mysql restore: %s - %q", err, string(out)),
+				Err:       err,
+				Timestamp: time.Now().UTC(),
+			}
+			return err
+		}
+		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
+	}
+
+	var mongodb io.Reader
+	if data.MongoDB != nil {
+		mongodb, err = getFile("mongodb.archive.gz")
+		if err != nil {
+			return err
+		}
+	}
+
+	// load data into mongodb if it was present in the backup.
+	if mongodb != nil && data.MongoDB != nil {
+		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MongoDB.ImageArtifact.Type, URI: data.MongoDB.ImageArtifact.URI}, nil)
+		cmd.Entrypoint = []string{"mongorestore"}
+		cmd.Cmd = []string{"-h", "leader.mongodb.discoverd", "-u", "flynn", "-p", data.MongoDB.Release.Env["MONGO_PWD"], "--archive"}
+		cmd.Stdin = mongodb
+		meta = bootstrap.StepMeta{ID: "restore", Action: "restore-mongodb"}
+		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
+		out, err = cmd.CombinedOutput()
+		if os.Getenv("DEBUG") != "" {
+			fmt.Println(string(out))
+		}
+		if err != nil {
+			ch <- &bootstrap.StepInfo{
+				StepMeta:  meta,
+				State:     "error",
+				Error:     fmt.Sprintf("error running mongodb restore: %s - %q", err, string(out)),
 				Err:       err,
 				Timestamp: time.Now().UTC(),
 			}

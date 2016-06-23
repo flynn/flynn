@@ -54,6 +54,23 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 			return fmt.Errorf("error dumping mariadb database: %s", err)
 		}
 	}
+
+	// If mongodb is not present skip attempting to store the backup in the archive
+	if mongodb, ok := data["mongodb"]; ok && mongodb.Processes["mongodb"] > 0 {
+		mongodbRelease := mongodb.Release
+		mongodbJob := &ct.NewJob{
+			ReleaseID:  mongodbRelease.ID,
+			Entrypoint: []string{"bash"},
+			Cmd:        []string{"-c", fmt.Sprintf("set -o pipefail; /usr/bin/mongodump --host %s -u %s -p $MONGO_PWD --authenticationDatabase admin --archive | gzip -9", mongodbRelease.Env["MONGO_HOST"], mongodbRelease.Env["MONGO_USER"])},
+			Env: map[string]string{
+				"MONGO_PWD": mongodbRelease.Env["MONGO_PWD"],
+			},
+			DisableLog: true,
+		}
+		if err := tw.WriteCommandOutput(client, "mongodb.archive.gz", "mongodb", mongodbJob); err != nil {
+			return fmt.Errorf("error dumping mongodb database: %s", err)
+		}
+	}
 	return nil
 }
 
@@ -62,6 +79,7 @@ func getApps(client controller.Client) (map[string]*ct.ExpandedFormation, error)
 	apps := map[string]bool{
 		"postgres":   true,
 		"mariadb":    false,
+		"mongodb":    false,
 		"discoverd":  true,
 		"flannel":    true,
 		"controller": true,
