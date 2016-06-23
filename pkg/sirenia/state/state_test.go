@@ -75,6 +75,15 @@ func runSteps(t *testing.T, singleton bool, steps []step) {
 			if err := json.Unmarshal(dataOut.Bytes(), actual); err != nil {
 				t.Fatal("json decode error", err)
 			}
+			//XXX(jpg): Hack, nil out State so we don't have to handle
+			// it in Config until we refactor with the new Config obj
+			if p, ok := actual.(*simulator.PeerSimInfo); ok {
+				if p.Db != nil {
+					if p.Db.Config != nil {
+						p.Db.Config.State = nil
+					}
+				}
+			}
 			if diff := pretty.Compare(step.Check, actual); diff != "" {
 				t.Fatalf("check failed:\n%s", diff)
 			}
