@@ -195,8 +195,11 @@ func testSireniaDeploy(client controller.Client, disc *discoverd.Client, t *c.C,
 	sireniaClient := sc.NewClient(sireniaState.Primary.Addr)
 	t.Assert(sireniaClient.WaitForReplSync(sireniaState.Sync, 1*time.Minute), c.IsNil)
 
-	// connect to the db so we can test writes
-	d.db.initDb(t, release, d)
+	// connect to the db and run any initialisation required to later test writes
+	debug(t, "initialising db")
+	if d.db.initDb != nil {
+		d.db.initDb(t, release, d)
+	}
 
 	// check currently writeable
 	d.db.assertWriteable(t, release, d)
