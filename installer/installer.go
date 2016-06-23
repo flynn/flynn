@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -167,7 +168,16 @@ func (api *httpAPI) respondToPrompt(id string, res io.Reader) error {
 	defer api.pendingPromptsMux.Unlock()
 	if prompt, ok := api.pendingPrompts[id]; ok {
 		delete(api.pendingPrompts, id)
-		prompt.Respond(res)
+		example := prompt.ResponseExample()
+		if example == nil {
+			prompt.Respond(res)
+		} else {
+			data := reflect.New(reflect.TypeOf(example)).Interface()
+			if err := json.NewDecoder(res).Decode(&data); err != nil {
+				return err
+			}
+			prompt.Respond(data)
+		}
 	} else {
 		return fmt.Errorf("prompt with id %q not found", id)
 	}

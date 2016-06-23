@@ -1,8 +1,6 @@
 package installer
 
 import (
-	"bytes"
-	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
@@ -26,10 +24,7 @@ func respondToPromptEvent(c *C, ec *eventContext, res interface{}) {
 	c.Assert(event.Type, Equals, EventTypePrompt)
 	p, ok := event.Payload.(*prompt)
 	c.Assert(ok, Equals, true)
-	var data bytes.Buffer
-	err := json.NewEncoder(&data).Encode(res)
-	c.Assert(err, IsNil)
-	p.Respond(&data)
+	p.Respond(res)
 }
 
 func (s *S) TestYesNoPrompt(c *C) {
@@ -37,10 +32,10 @@ func (s *S) TestYesNoPrompt(c *C) {
 		ch: make(chan *Event),
 	}
 
-	go respondToPromptEvent(c, ec, &yesNoPromptResponse{Payload: true})
+	go respondToPromptEvent(c, ec, YesNoPromptResponse{true})
 	c.Assert(ec.YesNoPrompt("Yes or No?"), Equals, true)
 
-	go respondToPromptEvent(c, ec, &yesNoPromptResponse{Payload: false})
+	go respondToPromptEvent(c, ec, YesNoPromptResponse{false})
 	c.Assert(ec.YesNoPrompt("Yes or No?"), Equals, false)
 }
 
@@ -50,9 +45,9 @@ func (s *S) TestChoicePrompt(c *C) {
 	}
 
 	option := ChoicePromptOption{
-		Name:  "foo",
-		Value: "bar",
+		Description: "foo",
+		Value:       "bar",
 	}
-	go respondToPromptEvent(c, ec, &choicePromptResponse{Payload: &option})
+	go respondToPromptEvent(c, ec, ChoicePromptResponse{&option})
 	c.Assert(ec.ChoicePrompt("Pick one", []ChoicePromptOption{option}), DeepEquals, &option)
 }

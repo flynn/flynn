@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/awslabs/aws-sdk-go/aws"
+	"github.com/awslabs/aws-sdk-go/gen/cloudformation"
+	"github.com/awslabs/aws-sdk-go/gen/ec2"
+	"github.com/awslabs/aws-sdk-go/gen/route53"
 	"github.com/flynn/flynn/pkg/awsutil"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 	"github.com/flynn/flynn/util/release/types"
-	"src/github.com/awslabs/aws-sdk-go/aws"
-	"src/github.com/awslabs/aws-sdk-go/gen/cloudformation"
-	"src/github.com/awslabs/aws-sdk-go/gen/ec2"
-	"src/github.com/awslabs/aws-sdk-go/gen/route53"
 )
 
 var DisallowedEC2InstanceTypes = []string{"t1.micro", "t2.micro", "t2.small", "m1.small"}

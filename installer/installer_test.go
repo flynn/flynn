@@ -3,7 +3,6 @@ package installer
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,23 +16,37 @@ type TestCluster struct {
 	Type string `json:"type"`
 }
 
+func (c *TestCluster) LaunchSteps() []installer.Step {
+	return []installer.Step{}
+}
+
+func (c *TestCluster) DestroySteps() []installer.Step {
+	return []installer.Step{}
+}
+
 func NewTestCluster() *TestCluster {
 	return &TestCluster{Type: "test"}
 }
 
 type TestPrompt struct {
 	UUID     string
-	Response []byte
+	Response interface{}
+}
+
+type testPromptResponse struct {
+	Payload string `json:"payload"`
 }
 
 func (p *TestPrompt) ID() string {
 	return p.UUID
 }
 
-func (p *TestPrompt) Respond(res io.Reader) {
-	var data bytes.Buffer
-	io.Copy(&data, res)
-	p.Response = data.Bytes()
+func (p *TestPrompt) Respond(res interface{}) {
+	p.Response = res
+}
+
+func (p *TestPrompt) ResponseExample() interface{} {
+	return &testPromptResponse{}
 }
 
 // Hook gocheck up to the "go test" runner
@@ -46,7 +59,7 @@ type S struct {
 var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
-	installer.Register("test", TestCluster{})
+	installer.Register("test", &TestCluster{})
 
 	handler := apiHandler()
 	s.srv = httptest.NewServer(handler)
@@ -69,12 +82,14 @@ func (s *S) TestPromptResponse(c *C) {
 	}
 	api.addPendingPrompt(prompt)
 	payload := "testing prompt"
-	data := bytes.NewReader([]byte(payload))
-	_, err := http.Post(s.srv.URL+"/prompts/"+prompt.ID(), "", data)
+	data, err := json.Marshal(&testPromptResponse{payload})
 	c.Assert(err, IsNil)
-	c.Assert(string(prompt.Response), Equals, payload)
+	resp, err := http.Post(s.srv.URL+"/prompts/"+prompt.ID(), "", bytes.NewReader(data))
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, 200)
+	c.Assert(prompt.Response, Not(IsNil))
 
 	// second attempt should fail with 404
-	resp, _ := http.Post(s.srv.URL+"/prompts/"+prompt.ID(), "", data)
+	resp, _ = http.Post(s.srv.URL+"/prompts/"+prompt.ID(), "", bytes.NewReader(data))
 	c.Assert(resp.StatusCode, Equals, 404)
 }
