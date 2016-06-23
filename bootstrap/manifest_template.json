@@ -374,6 +374,58 @@
     "url": "http://mariadb-api.discoverd/databases"
   },
   {
+    "id": "mongodb-password",
+    "action": "gen-random"
+  },
+  {
+    "id": "mongodb",
+    "app": {
+      "name": "mongodb",
+      "strategy": "sirenia",
+      "meta": {"flynn-system-app": "true"},
+      "deploy_timeout": 240
+    },
+    "action": "deploy-app",
+    "release": {
+      "env": {
+        "FLYNN_MONGO": "mongodb",
+        "MONGO_HOST": "leader.mongodb.discoverd",
+        "MONGO_USER": "flynn",
+        "MONGO_PWD": "{{ (index .StepData \"mongodb-password\").Data }}",
+        "SIRENIA_PROCESS": "mongodb"
+      },
+      "processes": {
+        "mongodb": {
+          "ports": [{"port": 27017, "proto": "tcp"}],
+          "cmd": ["mongodb"],
+          "service": "mongodb",
+          "env": {
+            "SINGLETON": "{{ .Singleton }}"
+          },
+          "data": true
+        },
+        "web": {
+          "ports": [{"port": 80, "proto": "tcp"}],
+          "cmd": ["api"]
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/mongodb&id=$image_id[mongodb]"
+    },
+    "processes": {
+      "mongodb": 3,
+      "web": 2
+    }
+  },
+  {
+    "id": "add-mongodb-provider",
+    "action": "add-provider",
+    "name": "mongodb",
+    "url": "http://mongodb-api.discoverd/databases"
+  },
+  {
     "id": "blobstore",
     "action": "deploy-app",
     "app": {
@@ -694,6 +746,11 @@
     "id": "mariadb-wait",
     "action": "wait",
     "url": "http://mariadb-api.discoverd/ping"
+  },
+  {
+    "id": "mongodb-wait",
+    "action": "wait",
+    "url": "http://mongodb-api.discoverd/ping"
   },
   {
     "id": "blobstore-wait",
