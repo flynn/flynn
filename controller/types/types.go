@@ -155,18 +155,19 @@ type Job struct {
 	// empty if the job is pending
 	HostID string `json:"host_id,omitempty"`
 
-	AppID      string            `json:"app,omitempty"`
-	ReleaseID  string            `json:"release,omitempty"`
-	Type       string            `json:"type,omitempty"`
-	State      JobState          `json:"state,omitempty"`
-	Cmd        []string          `json:"cmd,omitempty"`
-	Meta       map[string]string `json:"meta,omitempty"`
-	ExitStatus *int32            `json:"exit_status,omitempty"`
-	HostError  *string           `json:"host_error,omitempty"`
-	RunAt      *time.Time        `json:"run_at,omitempty"`
-	Restarts   *int32            `json:"restarts,omitempty"`
-	CreatedAt  *time.Time        `json:"created_at,omitempty"`
-	UpdatedAt  *time.Time        `json:"updated_at,omitempty"`
+	AppID             string            `json:"app,omitempty"`
+	ReleaseID         string            `json:"release,omitempty"`
+	Type              string            `json:"type,omitempty"`
+	State             JobState          `json:"state,omitempty"`
+	Cmd               []string          `json:"cmd,omitempty"`
+	Meta              map[string]string `json:"meta,omitempty"`
+	ExitStatus        *int32            `json:"exit_status,omitempty"`
+	HostError         *string           `json:"host_error,omitempty"`
+	RunAt             *time.Time        `json:"run_at,omitempty"`
+	Restarts          *int32            `json:"restarts,omitempty"`
+	StatusDescription *string           `json:"status_description,omitempty"`
+	CreatedAt         *time.Time        `json:"created_at,omitempty"`
+	UpdatedAt         *time.Time        `json:"updated_at,omitempty"`
 }
 
 type JobState string

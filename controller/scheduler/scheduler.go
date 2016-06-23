@@ -715,8 +715,11 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	// if we didn't pick a host, the job's tags don't match any hosts so
 	// add it to s.pendingTagJobs and return an error to cause the
 	// StartJob goroutine to stop trying to place the job
+	// Update the StatusDescription and push job back to controller.
 	if req.Host == nil {
 		s.pendingTagJobs[req.Job.ID] = req.Job
+		req.Job.StatusDescription = "no hosts match job tags"
+		s.persistJob(req.Job)
 		req.Error(ErrNoHostsMatchTags)
 		return
 	}
@@ -876,13 +879,14 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 			log.Info(fmt.Sprintf("starting %d new %s jobs", n, typ))
 			for i := 0; i < n; i++ {
 				job := &Job{
-					ID:        s.generateJobUUID(),
-					Type:      typ,
-					AppID:     f.App.ID,
-					ReleaseID: f.Release.ID,
-					Formation: f,
-					StartedAt: time.Now(),
-					State:     JobStatePending,
+					ID:                s.generateJobUUID(),
+					Type:              typ,
+					AppID:             f.App.ID,
+					ReleaseID:         f.Release.ID,
+					Formation:         f,
+					StatusDescription: "awaiting placement",
+					StartedAt:         time.Now(),
+					State:             JobStatePending,
 				}
 				s.jobs.Add(job)
 
@@ -1519,15 +1523,16 @@ func (s *Scheduler) restartJob(job *Job) {
 	// create a new job so its state is tracked separately from the job
 	// it is replacing
 	newJob := &Job{
-		ID:        s.generateJobUUID(),
-		Type:      job.Type,
-		AppID:     job.AppID,
-		ReleaseID: job.ReleaseID,
-		Formation: job.Formation,
-		RunAt:     typeconv.TimePtr(time.Now().Add(backoff)),
-		StartedAt: time.Now(),
-		State:     JobStatePending,
-		Restarts:  restarts + 1,
+		ID:                s.generateJobUUID(),
+		Type:              job.Type,
+		AppID:             job.AppID,
+		ReleaseID:         job.ReleaseID,
+		Formation:         job.Formation,
+		StatusDescription: fmt.Sprintf("waiting for restart backoff"),
+		RunAt:             typeconv.TimePtr(time.Now().Add(backoff)),
+		StartedAt:         time.Now(),
+		State:             JobStatePending,
+		Restarts:          restarts + 1,
 	}
 	s.jobs.Add(newJob)
 

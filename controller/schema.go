@@ -384,6 +384,9 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(18,
 		`INSERT INTO event_types (name) VALUES ('app_garbage_collection')`,
 	)
+	migrations.Add(19,
+		`ALTER TABLE job_cache ADD COLUMN status_description text`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

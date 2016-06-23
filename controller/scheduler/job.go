@@ -87,6 +87,10 @@ type Job struct {
 	// referenced from within the main scheduler loop
 	State JobState `json:"state"`
 
+	// statusDescription is a human readable description of why a job
+	// is in a certain state
+	StatusDescription string
+
 	// metadata is the cluster job's metadata, assigned whenever a host
 	// event is received for the job, and is used when persisting the job
 	// to the controller
@@ -170,6 +174,9 @@ func (j *Job) ControllerJob() *ct.Job {
 	}
 	if j.Restarts > 0 {
 		job.Restarts = typeconv.Int32Ptr(int32(j.Restarts))
+	}
+	if j.StatusDescription != "" {
+		job.StatusDescription = &j.StatusDescription
 	}
 
 	return job

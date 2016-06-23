@@ -57,6 +57,10 @@
       "description": "time a pending job will be started",
       "format": "date-time"
     },
+    "status_description": {
+      "type": "string",
+      "description": "description of job status"
+    },
     "restarts": {
       "type": "integer",
       "description": "number of times this job has been restarted"
