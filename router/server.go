@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/router/schema"
 	"github.com/flynn/flynn/router/types"
 	"gopkg.in/inconshreveable/log15.v2"
 )
@@ -129,6 +130,10 @@ func main() {
 	if err := migrateDB(db); err != nil {
 		shutdown.Fatal(err)
 	}
+	db.Close()
+
+	log.Info("reconnecting to postgres with prepared queries")
+	db = postgres.Wait(nil, schema.PrepareStatements)
 
 	shutdown.BeforeExit(func() { db.Close() })
 
