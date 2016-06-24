@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/flynn/flynn/pkg/version"
@@ -31,6 +33,12 @@ func parsePairs(args *docopt.Args, str string) (map[string]string, error) {
 	return item, nil
 }
 
+func ensureDir(dir string) {
+	if err := os.MkdirAll(filepath.Join(dir, ".ssh"), 0700); err != nil {
+		log.Fatal(err)
+	}
+}
+
 func main() {
 	usage := `
 Usage: taffy <app> <repo> <branch> <rev> [-e <var>=<val>]... [-m <key>=<val>]...
@@ -46,12 +54,34 @@ Options:
 	branch := args.String["<branch>"]
 	rev := args.String["<rev>"]
 
+	clientKey := os.Getenv("SSH_CLIENT_KEY")
+	clientHosts := os.Getenv("SSH_CLIENT_HOSTS")
+	homeFolder := os.Getenv("HOME")
+
 	meta := map[string]string{
 		"git":       "true",
 		"clone_url": repo,
 		"branch":    branch,
 		"rev":       rev,
 		"taffy_job": os.Getenv("FLYNN_JOB_ID"),
+	}
+
+	if homeFolder == "" || homeFolder == "/" {
+		homeFolder = "/root"
+	}
+
+	if clientKey != "" {
+		ensureDir(homeFolder)
+		if err := ioutil.WriteFile(filepath.Join(homeFolder, ".ssh", "id_rsa"), []byte(clientKey), 0600); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if clientHosts != "" {
+		ensureDir(homeFolder)
+		if err := ioutil.WriteFile(filepath.Join(homeFolder, ".ssh", "known_hosts"), []byte(clientHosts), 0600); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	env, err := parsePairs(args, "--env")
@@ -99,6 +129,7 @@ func runReceiver(app, rev string, env, meta map[string]string) error {
 		}
 	}
 	r, w := io.Pipe()
+
 	cmd := exec.Command("/bin/flynn-receiver", args...)
 	cmd.Stdin = r
 	cmd.Stdout = os.Stdout
