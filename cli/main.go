@@ -59,6 +59,7 @@ Commands:
 	mysql       manage mysql database
 	redis       manage redis database
 	provider    manage resource providers
+	docker      deploy Docker images to a Flynn cluster
 	remote      manage git remotes
 	resource    provision a new resource
 	release     manage app releases
