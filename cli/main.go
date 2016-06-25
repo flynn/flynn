@@ -61,7 +61,7 @@ Commands:
 	provider    manage resource providers
 	remote      manage git remotes
 	resource    provision a new resource
-	release     add a docker image release
+	release     manage app releases
 	deployment  list deployments
 	export      export app data
 	import      create app from exported data
