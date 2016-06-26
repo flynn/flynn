@@ -111,7 +111,7 @@ func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 
 type jobAPI struct {
 	host                  *Host
-	addJobRatelimitBucket chan struct{}
+	addJobRateLimitBucket *RateLimitBucket
 }
 
 func (h *jobAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -271,9 +271,7 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 
 	log := h.host.log.New("fn", "AddJob", "job.id", id)
 
-	select {
-	case h.addJobRatelimitBucket <- struct{}{}:
-	default:
+	if !h.addJobRateLimitBucket.Take() {
 		log.Warn("maximum concurrent AddJob calls running")
 		httphelper.Error(w, httphelper.JSONError{
 			Code:    httphelper.RatelimitedErrorCode,
@@ -321,13 +319,13 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 
 	go func() {
 		log.Info("running job")
-		err := h.host.backend.Run(job, nil)
+		err := h.host.backend.Run(job, nil, h.addJobRateLimitBucket)
 		h.host.state.Release()
 		if err != nil {
 			log.Error("error running job", "err", err)
 			h.host.state.SetStatusFailed(job.ID, err)
 		}
-		<-h.addJobRatelimitBucket
+		h.addJobRateLimitBucket.Put()
 	}()
 
 	// TODO(titanous): return 201 Accepted
@@ -535,7 +533,7 @@ func (h *Host) ServeHTTP() {
 
 	jobAPI := &jobAPI{
 		host: h,
-		addJobRatelimitBucket: make(chan struct{}, h.maxJobConcurrency),
+		addJobRateLimitBucket: NewRateLimitBucket(h.maxJobConcurrency),
 	}
 	jobAPI.RegisterRoutes(r)
 
@@ -586,4 +584,34 @@ func newHTTPListener(addr string) (net.Listener, error) {
 	file := os.NewFile(uintptr(fd), "http")
 	defer file.Close()
 	return net.FileListener(file)
+}
+
+// RateLimitBucket implements a Token Bucket using a buffered channel
+type RateLimitBucket struct {
+	ch chan struct{}
+}
+
+func NewRateLimitBucket(size uint64) *RateLimitBucket {
+	return &RateLimitBucket{ch: make(chan struct{}, size)}
+}
+
+// Take attempts to take a token from the bucket, returning whether or not a
+// token was taken
+func (r *RateLimitBucket) Take() bool {
+	select {
+	case r.ch <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// Wait takes the next available token
+func (r *RateLimitBucket) Wait() {
+	r.ch <- struct{}{}
+}
+
+// Put returns a token to the bucket
+func (r *RateLimitBucket) Put() {
+	<-r.ch
 }
