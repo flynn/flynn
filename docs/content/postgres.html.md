@@ -146,50 +146,13 @@ default:
 | swedish\_stem    | snowball stemmer for swedish language                     |
 | turkish\_stem    | snowball stemmer for turkish language                     |
 
+## Safety
 
-## Design
+This appliance is designed to provide full consistency and partition tolerance
+for all operations that are committed to the write-ahead log (WAL). Note that
+this guarantee does not apply to advisory locks, as they are specific to the
+server they are acquired and are not persisted to the WAL.
 
-The Flynn Postgres appliance was designed with a few goals in mind:
-
-1. Acknowledged writes must not be lost and must be consistent.
-1. Network partitions must be tolerated without corrupting data. There should be
-   no potential for split-brain or other data-mangling failures.
-1. When a failure occurs, the appliance should transition into an available
-   configuration without operator intervention if it can do so safely.
-
-The resulting system can be described as a 'CP' system under [CAP
-theorem](https://en.wikipedia.org/wiki/CAP_theorem). The appliance is a cluster
-of three or more Postgres instances where:
-
-- One member of the cluster, the _primary_, serves consistent reads and writes.
-- The primary has synchronous replication to a single member called the _sync_.
-  Write transactions are not acknowledged to client until they have been added
-  to the sync's transaction log.
-- Replicating from the sync is a daisy chain of one or more _async_ instances,
-  which replicate changes asynchronously from their upstream link in the chain.
-- If possible, the system automatically reconfigures itself after failures to
-  maximize uptime and never lose data.
-
-In the face of an arbitrary failure or maintenance action, the cluster can
-temporarily lose the ability to handle writes and consistent reads. Eventually
-consistent reads are always available from the sync and async instances.
-
-If the primary fails, the sync sees this and promotes itself to primary,
-converting the async replicating from it to the new sync. Writes are not
-accepted until the new sync has caught up. A variety of safety conditions are in
-place so that a promotion will never cause writes to be lost or split brain to
-occur.
-
-The built-in Postgres streaming write ahead log replication features are wrapped
-in a cluster state machine to achieve this. The cluster state is maintained by
-the primary and stored in discoverd. The discoverd DNS and HTTP APIs expose the
-current primary instance.
-
-This design is heavily based on the prior work done by Joyent on the [Manatee
-state machine](https://github.com/joyent/manatee-state-machine).
-
-Flynn comes with a cluster configured with three instances by default. If an
-instance fails, the scheduler will create a new instance and the cluster will be
-reconfigured by the primary without operator intervention. When a user runs
-`flynn resource add postgres`, a new user and database is created on the default
-cluster.
+There is currently no support for tuning, and data transfer during recovery is
+not optimized, so we do not recommend using the appliance for applications that
+have high throughput or many records.
