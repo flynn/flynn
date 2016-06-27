@@ -8,9 +8,20 @@ source "${ROOT}/script/lib/util.sh"
 
 usage() {
   cat <<USAGE >&2
-usage: $0 INDEX
+usage: $0 [options] INDEX
 
-Start a flynn node with specific binary, ip and index
+Start a flynn node with specific binary, ip and index.
+
+Options:
+
+  -k, --no-destroy-state   Don't destroy job state
+
+  -z, --no-destroy-vols    Don't destroy volumes
+
+  -p, --peers PEERS        Join existing cluster (PEERS should be a comma
+                           separated list of indexes, e.g. 0,1,2)
+
+  -h, --help               Show this help message
 USAGE
 }
 
@@ -21,6 +32,10 @@ main() {
 
   while true; do
     case "$1" in
+      -h | --help)
+        usage
+        exit
+        ;;
       -k | --no-destroy-state)
         destroy_state=false
         shift
@@ -30,7 +45,10 @@ main() {
         shift
         ;;
       -p | --peers)
-        # Initialises array by replacing , with whitespace
+        if [[ -z "$2" ]]; then
+          fail "--peers flag requires an argument"
+        fi
+        # Initialise array by replacing "," with " "
         peers=(${2//,/ })
         shift 2
         ;;
