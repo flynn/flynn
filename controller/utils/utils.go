@@ -105,6 +105,10 @@ func NewFormationKey(appID, releaseID string) FormationKey {
 	return FormationKey{AppID: appID, ReleaseID: releaseID}
 }
 
+func (f FormationKey) String() string {
+	return fmt.Sprintf("%s:%s", f.AppID, f.ReleaseID)
+}
+
 func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation, error) {
 	app, err := c.GetApp(f.AppID)
 	if err != nil {

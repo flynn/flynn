@@ -3,10 +3,13 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/go-docopt"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -68,6 +71,11 @@ func runCollectDebugInfo(args *docopt.Args) error {
 		if err := gist.AddLocalFile(name, filepath); err != nil && !os.IsNotExist(err) {
 			log.Error(fmt.Sprintf("error getting flynn-host log %q", filepath), "err", err)
 		}
+	}
+
+	log.Info("getting scheduler state")
+	if err := captureSchedulerState(gist); err != nil {
+		log.Error("error getting scheduler state", "err", err)
 	}
 
 	log.Info("getting job logs")
@@ -152,5 +160,26 @@ func captureJobs(gist *Gist, env bool) error {
 		gist.AddFile(name, content.String())
 	}
 
+	return nil
+}
+
+func captureSchedulerState(gist *Gist) error {
+	leader, err := discoverd.NewService("controller-scheduler").Leader()
+	if err != nil {
+		return err
+	}
+	res, err := http.Get(fmt.Sprintf("http://%s/debug/state", leader.Addr))
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected HTTP status: %s", res.Status)
+	}
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	gist.AddFile("scheduler-state.json", string(body))
 	return nil
 }

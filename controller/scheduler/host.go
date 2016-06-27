@@ -14,15 +14,16 @@ import (
 )
 
 type Host struct {
-	ID       string
-	Tags     map[string]string
+	ID       string            `json:"id"`
+	Tags     map[string]string `json:"tags"`
+	Healthy  bool              `json:"healthy"`
+	Checks   int               `json:"checks"`
+	Shutdown bool              `json:"shutdown"`
+
 	client   utils.HostClient
-	healthy  bool
-	checks   int
 	stop     chan struct{}
 	stopOnce sync.Once
 	done     chan struct{}
-	shutdown bool
 	logger   log15.Logger
 }
 
@@ -30,8 +31,8 @@ func NewHost(h utils.HostClient, l log15.Logger) *Host {
 	return &Host{
 		ID:      h.ID(),
 		Tags:    h.Tags(),
+		Healthy: true,
 		client:  h,
-		healthy: true,
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 		logger:  l,
