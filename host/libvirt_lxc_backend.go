@@ -357,7 +357,7 @@ func (l *LibvirtLXCBackend) SetDefaultEnv(k, v string) {
 	}
 }
 
-func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
+func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBucket *RateLimitBucket) (err error) {
 	log := l.logger.New("fn", "run", "job.id", job.ID)
 
 	// if the job has been stopped, just return
@@ -381,11 +381,19 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		return fmt.Errorf("host: invalid job partition %q", job.Partition)
 	}
 
+	wait := func(ch chan struct{}) {
+		if rateLimitBucket != nil {
+			// unblock the rate limiter whilst waiting
+			rateLimitBucket.Put()
+			defer rateLimitBucket.Wait()
+		}
+		<-ch
+	}
 	if !job.Config.HostNetwork {
-		<-l.networkConfigured
+		wait(l.networkConfigured)
 	}
 	if _, ok := job.Config.Env["DISCOVERD"]; !ok {
-		<-l.discoverdConfigured
+		wait(l.discoverdConfigured)
 	}
 
 	if runConfig == nil {

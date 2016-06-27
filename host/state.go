@@ -131,7 +131,7 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 				newJob.ID = cluster.GenerateJobID(s.id, "")
 				log.Printf("resurrecting %s as %s", job.ID, newJob.ID)
 				s.AddJob(newJob)
-				backend.Run(newJob, nil)
+				backend.Run(newJob, nil, nil)
 				wg.Done()
 			}(job)
 		}
