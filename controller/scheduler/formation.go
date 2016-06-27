@@ -71,7 +71,7 @@ type Formation struct {
 	// OriginalProcesses are the processes from the controller formation
 	// without any changes for omni jobs so we can recalculate omni counts
 	// when host counts change
-	OriginalProcesses Processes
+	OriginalProcesses Processes `json:"original_processes"`
 }
 
 func NewFormation(ef *ct.ExpandedFormation) *Formation {

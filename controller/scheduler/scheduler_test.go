@@ -349,11 +349,11 @@ func (TestSuite) TestMultipleHosts(c *C) {
 			for i, job := range jobs {
 				j := actual[i]
 				c.Assert(j.Type, Equals, job.Type)
-				c.Assert(j.state, Equals, job.state)
+				c.Assert(j.State, Equals, job.State)
 
 				// check the host has the job if it is running (stopped
 				// jobs are removed from the host)
-				if job.state != JobStateStarting {
+				if job.State != JobStateStarting {
 					continue
 				}
 				id := cluster.GenerateJobID(host.ID(), j.ID)
@@ -368,7 +368,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 	assertJobs(hostJobs{
 		host1: {
-			{Type: "web", state: JobStateStarting},
+			{Type: "web", State: JobStateStarting},
 		},
 	})
 
@@ -389,11 +389,11 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 	assertJobs(hostJobs{
 		host1: {
-			{Type: "web", state: JobStateStarting},
-			{Type: "omni", state: JobStateStarting},
+			{Type: "web", State: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host2: {
-			{Type: "omni", state: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 	})
 
@@ -403,14 +403,14 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 	assertJobs(hostJobs{
 		host1: {
-			{Type: "web", state: JobStateStarting},
-			{Type: "omni", state: JobStateStarting},
+			{Type: "web", State: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host2: {
-			{Type: "omni", state: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host3: {
-			{Type: "omni", state: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 	})
 
@@ -420,15 +420,15 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 	assertJobs(hostJobs{
 		host1: {
-			{Type: "web", state: JobStateStarting},
-			{Type: "omni", state: JobStateStarting},
+			{Type: "web", State: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host2: {
-			{Type: "omni", state: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host3: {
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStarting},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStarting},
 		},
 	})
 
@@ -462,17 +462,17 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 	assertJobs(hostJobs{
 		host1: {
-			{Type: "web", state: JobStateStarting},
-			{Type: "omni", state: JobStateStarting},
+			{Type: "web", State: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host2: {
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStarting},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host3: {
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStarting},
-			{Type: "omni", state: JobStateStopped},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStarting},
+			{Type: "omni", State: JobStateStopped},
 		},
 	})
 
@@ -483,17 +483,17 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitRectify()
 	assertJobs(hostJobs{
 		host1: {
-			{Type: "web", state: JobStateStarting},
-			{Type: "omni", state: JobStateStarting},
+			{Type: "web", State: JobStateStarting},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host2: {
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStarting},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStarting},
 		},
 		host3: {
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStopped},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStopped},
 		},
 	})
 
@@ -504,18 +504,18 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 	assertJobs(hostJobs{
 		host1: {
-			{Type: "web", state: JobStateStopped},
-			{Type: "omni", state: JobStateStopped},
+			{Type: "web", State: JobStateStopped},
+			{Type: "omni", State: JobStateStopped},
 		},
 		host2: {
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStarting},
-			{Type: "web", state: JobStateStarting},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStarting},
+			{Type: "web", State: JobStateStarting},
 		},
 		host3: {
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStopped},
-			{Type: "omni", state: JobStateStopped},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStopped},
+			{Type: "omni", State: JobStateStopped},
 		},
 	})
 }
@@ -606,39 +606,39 @@ func (TestSuite) TestStopJob(c *C) {
 		},
 		{
 			desc:       "a running job",
-			jobs:       Jobs{"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning}},
+			jobs:       Jobs{"job1": &Job{ID: "job1", Formation: formation, Type: "web", State: JobStateRunning}},
 			shouldStop: "job1",
 		},
 		{
 			desc: "multiple running jobs, stops most recent",
 			jobs: Jobs{
-				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-5 * time.Minute)},
-				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
-				"job3": &Job{ID: "job3", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-10 * time.Minute)},
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", State: JobStateRunning, StartedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", State: JobStateRunning, StartedAt: recent},
+				"job3": &Job{ID: "job3", Formation: formation, Type: "web", State: JobStateRunning, StartedAt: recent.Add(-10 * time.Minute)},
 			},
 			shouldStop: "job2",
 		},
 		{
 			desc: "one running and one stopped, stops running job",
 			jobs: Jobs{
-				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-5 * time.Minute)},
-				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateStopped, startedAt: recent},
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", State: JobStateRunning, StartedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", State: JobStateStopped, StartedAt: recent},
 			},
 			shouldStop: "job1",
 		},
 		{
 			desc: "one running and one scheduled, stops scheduled job",
 			jobs: Jobs{
-				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStatePending, startedAt: recent.Add(-5 * time.Minute), restartTimer: time.NewTimer(0)},
-				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", State: JobStatePending, StartedAt: recent.Add(-5 * time.Minute), restartTimer: time.NewTimer(0)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", State: JobStateRunning, StartedAt: recent},
 			},
 			shouldStop: "job1",
 		},
 		{
 			desc: "one running and one new, stops new job",
 			jobs: Jobs{
-				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStatePending, startedAt: recent.Add(-5 * time.Minute)},
-				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", State: JobStatePending, StartedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", State: JobStateRunning, StartedAt: recent},
 			},
 			shouldStop: "job1",
 		},
@@ -735,7 +735,7 @@ func (TestSuite) TestJobPlacementTags(c *C) {
 	} {
 		hosts := make(map[string]int, 3)
 		for i := 0; i < t.count; i++ {
-			job := s.jobs.Add(&Job{ID: fmt.Sprintf("job-%s-%d", t.typ, i), Formation: formation, Type: t.typ, state: JobStatePending})
+			job := s.jobs.Add(&Job{ID: fmt.Sprintf("job-%s-%d", t.typ, i), Formation: formation, Type: t.typ, State: JobStatePending})
 			req := &PlacementRequest{Job: job, Err: make(chan error, 1)}
 			s.HandlePlacementRequest(req)
 			c.Assert(<-req.Err, IsNil, Commentf("placing %s job %d", t.typ, i))

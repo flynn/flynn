@@ -444,7 +444,7 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 
 		// persist the job if it has a different in-memory state
-		if job.State == ct.JobStateStarting && j.state != JobStateStarting || job.State == ct.JobStateUp && j.state != JobStateRunning {
+		if job.State == ct.JobStateStarting && j.State != JobStateStarting || job.State == ct.JobStateUp && j.State != JobStateRunning {
 			s.persistJob(j)
 		}
 	}
@@ -515,7 +515,7 @@ func (s *Scheduler) SyncHosts() (err error) {
 	// mark any hosts as unhealthy which are not returned from s.Hosts()
 	// and are not explicitly shutdown
 	for id, host := range s.hosts {
-		if _, ok := known[id]; !ok && !host.shutdown {
+		if _, ok := known[id]; !ok && !host.Shutdown {
 			s.markHostAsUnhealthy(host)
 		}
 	}
@@ -676,7 +676,7 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	// don't attempt to place a job which is no longer pending, which could
 	// be the case either if the job has been marked as stopped, or AddJob
 	// failed in some way (e.g. a timeout) but the job did actually start
-	if req.Job.state != JobStatePending {
+	if req.Job.State != JobStatePending {
 		req.Error(ErrJobNotPending)
 		return
 	}
@@ -697,7 +697,7 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
 	var minCount int = math.MaxInt32
 	for _, h := range s.ShuffledHosts() {
-		if h.shutdown {
+		if h.Shutdown {
 			continue
 		}
 		if !req.Job.TagsMatchHost(h) {
@@ -790,8 +790,8 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 					AppID:     f.App.ID,
 					ReleaseID: f.Release.ID,
 					Formation: f,
-					startedAt: time.Now(),
-					state:     JobStatePending,
+					StartedAt: time.Now(),
+					State:     JobStatePending,
 				}
 				s.jobs.Add(job)
 
@@ -927,7 +927,7 @@ func (s *Scheduler) unfollowHost(host *Host) {
 	}
 
 	for _, job := range s.jobs {
-		if job.HostID == host.ID && job.state != JobStateStopped {
+		if job.HostID == host.ID && job.State != JobStateStopped {
 			log.Info("removing job", "job.id", job.JobID)
 			s.markAsStopped(job)
 		}
@@ -938,7 +938,7 @@ func (s *Scheduler) unfollowHost(host *Host) {
 
 func (s *Scheduler) markHostAsUnhealthy(host *Host) {
 	s.logger.Warn("host service is down, marking as unhealthy and triggering host checks", "host.id", host.ID)
-	host.healthy = false
+	host.Healthy = false
 	s.triggerHostChecks()
 }
 
@@ -970,7 +970,7 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 		// unfollowed when we get the eventual down event)
 		if isShutdown {
 			log.Info("marking host as shutdown", "host.id", host.ID)
-			host.shutdown = true
+			host.Shutdown = true
 
 			// rectify the omni job counts now the host is shutdown
 			// so that when down events are received for omni jobs,
@@ -1000,7 +1000,7 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 			log.Warn("ignoring host down event, unknown host")
 			return
 		}
-		if host.shutdown {
+		if host.Shutdown {
 			s.unfollowHost(host)
 		} else {
 			s.markHostAsUnhealthy(host)
@@ -1035,7 +1035,7 @@ func (s *Scheduler) handleNewHost(id string) {
 func (s *Scheduler) activeHostCount() int {
 	count := 0
 	for _, host := range s.hosts {
-		if !host.shutdown {
+		if !host.Shutdown {
 			count++
 		}
 	}
@@ -1049,7 +1049,7 @@ func (s *Scheduler) PerformHostChecks() {
 	allHealthy := true
 
 	for id, host := range s.hosts {
-		if host.healthy {
+		if host.Healthy {
 			continue
 		}
 
@@ -1058,13 +1058,13 @@ func (s *Scheduler) PerformHostChecks() {
 		if _, err := host.client.GetStatus(); err == nil {
 			// assume the host is healthy if we can get its status
 			log.Info("host is now healthy")
-			host.healthy = true
-			host.checks = 0
+			host.Healthy = true
+			host.Checks = 0
 			continue
 		}
 
-		host.checks++
-		if host.checks >= s.maxHostChecks {
+		host.Checks++
+		if host.Checks >= s.maxHostChecks {
 			log.Warn(fmt.Sprintf("host unhealthy for %d consecutive checks, unfollowing", s.maxHostChecks))
 			s.unfollowHost(host)
 			continue
@@ -1125,7 +1125,7 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 		s.jobs.Add(job)
 	}
 
-	job.startedAt = activeJob.StartedAt
+	job.StartedAt = activeJob.StartedAt
 	job.metadata = hostJob.Metadata
 	job.exitStatus = activeJob.ExitStatus
 	job.hostError = activeJob.Error
@@ -1143,19 +1143,19 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 	log := s.logger.New("fn", "handleJobStatus", "job.id", job.JobID, "app.id", job.AppID, "release.id", job.ReleaseID, "job.type", job.Type)
 
 	// update the job's state, keeping a reference to the previous state
-	previousState := job.state
+	previousState := job.State
 	switch status {
 	case host.StatusStarting:
-		job.state = JobStateStarting
+		job.State = JobStateStarting
 	case host.StatusRunning:
-		job.state = JobStateRunning
+		job.State = JobStateRunning
 	case host.StatusDone, host.StatusCrashed, host.StatusFailed:
-		job.state = JobStateStopped
+		job.State = JobStateStopped
 	}
 
 	// if the job's state has changed, persist it to the controller
-	if job.state != previousState {
-		log.Info("handling job status change", "from", previousState, "to", job.state)
+	if job.State != previousState {
+		log.Info("handling job status change", "from", previousState, "to", job.State)
 		s.persistJob(job)
 	}
 
@@ -1178,7 +1178,7 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 
 				// only log an error if the state changed (so we don't
 				// keep logging it in periodic SyncJobs calls)
-				if job.state != previousState {
+				if job.State != previousState {
 					log.Error("error looking up formation for job", "err", err)
 				}
 				return
@@ -1200,7 +1200,7 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 
 	// if the job has just transitioned to the stopped state, check if we
 	// expect it to be running, and if we do, restart it
-	if previousState != JobStateStopped && job.state == JobStateStopped {
+	if previousState != JobStateStopped && job.State == JobStateStopped {
 		if diff := s.formationDiff(job.Formation); diff[job.Type] > 0 {
 			s.restartJob(job)
 		}
@@ -1295,10 +1295,10 @@ func (s *Scheduler) stopJobOfType(f *Formation, typ string) (err error) {
 }
 
 func (s *Scheduler) stopJob(job *Job) error {
-	log := s.logger.New("fn", "stopJob", "job.id", job.ID, "job.type", job.Type, "job.state", job.state)
+	log := s.logger.New("fn", "stopJob", "job.id", job.ID, "job.type", job.Type, "job.state", job.State)
 	log.Info("stopping job")
 
-	switch job.state {
+	switch job.State {
 	case JobStatePending:
 		// If it's a pending job with a HostID, then it has been
 		// placed in the cluster but we are yet to receive a
@@ -1319,7 +1319,7 @@ func (s *Scheduler) stopJob(job *Job) error {
 		// also marked as stopped so that if the timer has already
 		// fired, it won't actually be placed in the cluster.
 		log.Info("stopping pending job", "job.id", job.ID)
-		job.state = JobStateStopped
+		job.State = JobStateStopped
 		s.persistJob(job)
 		if job.restartTimer != nil {
 			job.restartTimer.Stop()
@@ -1336,7 +1336,7 @@ func (s *Scheduler) stopJob(job *Job) error {
 	}
 
 	log.Info("requesting host to stop job", "host.id", job.HostID)
-	job.state = JobStateStopping
+	job.State = JobStateStopping
 	go func() {
 		// host.StopJob can block, so run it in a goroutine
 		if err := host.client.StopJob(job.JobID); err != nil {
@@ -1352,7 +1352,7 @@ func (s *Scheduler) stopJob(job *Job) error {
 func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 	var runningJob *Job
 	for _, job := range s.jobs.WithFormationAndType(f, typ) {
-		switch job.state {
+		switch job.State {
 		case JobStatePending:
 			return job, nil
 		case JobStateStarting, JobStateRunning:
@@ -1362,7 +1362,7 @@ func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 			// remove a shut down host could cause a subsequent
 			// rectify to stop a job on an active host before the
 			// shutting down host's job has stopped)
-			if host, ok := s.hosts[job.HostID]; ok && host.shutdown {
+			if host, ok := s.hosts[job.HostID]; ok && host.Shutdown {
 				return job, nil
 			}
 
@@ -1421,10 +1421,10 @@ func (s *Scheduler) RunningJobs() map[string]*Job {
 }
 
 func (s *Scheduler) restartJob(job *Job) {
-	restarts := job.restarts
+	restarts := job.Restarts
 	// reset the restart count if it has been running for longer than the
 	// back off period
-	if !job.startedAt.IsZero() && job.startedAt.Before(time.Now().Add(-s.backoffPeriod)) {
+	if !job.StartedAt.IsZero() && job.StartedAt.Before(time.Now().Add(-s.backoffPeriod)) {
 		restarts = 0
 	}
 	backoff := s.getBackoffDuration(restarts)
@@ -1437,17 +1437,17 @@ func (s *Scheduler) restartJob(job *Job) {
 		AppID:     job.AppID,
 		ReleaseID: job.ReleaseID,
 		Formation: job.Formation,
-		runAt:     typeconv.TimePtr(time.Now().Add(backoff)),
-		startedAt: time.Now(),
-		state:     JobStatePending,
-		restarts:  restarts + 1,
+		RunAt:     typeconv.TimePtr(time.Now().Add(backoff)),
+		StartedAt: time.Now(),
+		State:     JobStatePending,
+		Restarts:  restarts + 1,
 	}
 	s.jobs.Add(newJob)
 
 	// persist the job so that it appears as pending in the database
 	s.persistJob(newJob)
 
-	s.logger.Info("scheduling job restart", "fn", "restartJob", "old_job.id", job.ID, "new_job.id", newJob.ID, "attempts", newJob.restarts, "delay", backoff)
+	s.logger.Info("scheduling job restart", "fn", "restartJob", "old_job.id", job.ID, "new_job.id", newJob.ID, "attempts", newJob.Restarts, "delay", backoff)
 	newJob.restartTimer = time.AfterFunc(backoff, func() { s.StartJob(newJob) })
 }
 
