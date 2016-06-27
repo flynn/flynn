@@ -3,18 +3,29 @@
 # A script to install Flynn from a TUF repository.
 
 FLYNN_HOST_CHECKSUM="${FLYNN_HOST_CHECKSUM:="{{FLYNN-HOST-CHECKSUM}}"}"
-FLYNN_UPDATE_CHANNEL="${FLYNN_UPDATE_CHANNEL:="stable"}"
 
 usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
+A script to install Flynn on Ubuntu 14.04.
+See https://flynn.io/docs/installation/manual for further information.
+
 OPTIONS:
-  -h, --help            Show this message
-  -r, --repo URL        The TUF repository to download files from [default: https://dl.flynn.io]
-  --clean               Install from a clean state (implies --remove) [DANGER: this will remove all associated data]
-  --remove              Remove existing Flynn installation [DANGER: this will remove all associated data]
-  --yes                 Automatic yes to prompts
+  -h, --help              Show this message
+
+  -v, --version VERSION   Install explicit VERSION (e.g. v20160512.0)
+
+  -c, --channel CHANNEL   Fetch updates from CHANNEL (either "stable" or "nightly") [default: stable]
+
+  --clean                 Install from a clean state (implies --remove) [DANGER: this will remove all associated data]
+
+  --remove                Remove existing Flynn installation [DANGER: this will remove all associated data]
+
+  --yes                   Automatic yes to prompts
+
+  -r, --repo URL          The TUF repository to download files from [default: https://dl.flynn.io]
+
 
 VARIABLES:
   FLYNN_UPDATE_CHANNEL   The release channel to fetch updates from (either "nightly" or "stable") [default: stable]
@@ -36,12 +47,27 @@ main() {
   local install=true
   local remove=false
   local assume_yes=false
+  local channel="${FLYNN_UPDATE_CHANNEL:-"stable"}"
   local repo_url
 
   export DEBIAN_FRONTEND=noninteractive
 
   while true; do
     case "$1" in
+      -v | --version)
+        if [[ -z "$2" ]]; then
+          fail "--version requires an argument"
+        fi
+        export FLYNN_VERSION="$2"
+        shift 2
+        ;;
+      -c | --channel)
+        if [[ -z "$2" ]]; then
+          fail "--channel requires an argument"
+        fi
+        channel="$2"
+        shift 2
+        ;;
       --clean)
         remove=true
         shift
@@ -61,8 +87,7 @@ main() {
         ;;
       -r | --repo)
         if [[ -z "$2" ]]; then
-          usage
-          exit 1
+          fail "--repo requires an argument"
         fi
         repo_url="$2"
         shift 2
@@ -130,9 +155,9 @@ main() {
   run gunzip "flynn-host.gz"
   run chmod +x "flynn-host"
 
-  info "setting release update channel to \"${FLYNN_UPDATE_CHANNEL}\""
+  info "setting release update channel to \"${channel}\""
   mkdir -p "/etc/flynn"
-  echo "${FLYNN_UPDATE_CHANNEL}" > "/etc/flynn/channel.txt"
+  echo "${channel}" > "/etc/flynn/channel.txt"
 
   info "downloading Flynn components"
   mkdir -p "/etc/flynn"
