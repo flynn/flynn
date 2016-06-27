@@ -34,7 +34,7 @@ Nightly updates will include all the bleeding edge changes that have just been
 merged into Flynn. These changes have all passed code review and our CI system,
 but may not be fully tested in "the real world".
 
-The stable channel is currently released weekly and changes have had more time
+The stable channel is currently released monthly and changes have had more time
 to stabilize. We can't guarantee that these releases will be free of bugs or
 unexpected behavior, but our standards are and will continue to be high. It's
 important to us that users feel they can trust us and the systems we build, and
@@ -45,6 +45,6 @@ train system used by major web browsers.
 Flynn currently has some [security considerations](/docs/security) that you
 should take into account when evaluating it.
 
-Currently we do not recommend using the built-in Postgres appliance for
-databases with high write volume or a large amount of data as it is not
-yet optimized for this.
+Currently we do not recommend using the built-in database appliances for
+databases with high write volume or a large amount of data as they are not yet
+optimized for demanding use cases.

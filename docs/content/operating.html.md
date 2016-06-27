@@ -24,15 +24,19 @@ necessary.
 
 Each host should have a minimum of 1GB of memory, and inter-host network packets
 should have a latency of less than 2ms. Deploying a single Flynn cluster across
-higher latency WAN links is not recommended, as it can have a negative impact on
-cluster consensus.
+higher latency WAN links is not recommended, as it can have a significant impact
+on the stability of cluster consensus.
 
 ## Storage
 
 Flynn uses ZFS to store data. By default, a ZFS pool is created in a sparse file
-on top of the existing filesystem at `/var/lib/flynn/volumes`. This is not
-recommended for production for performance and reliability reasons. Before
-starting the `flynn-host` daemon, you can create a ZFS pool named
+on top of the existing filesystem at `/var/lib/flynn/volumes`. We don't
+recommend keeping this configuration in production, as it is not as reliable as
+dedicating whole disks to the ZFS pool.
+
+### Custom ZFS pool
+
+Before starting the `flynn-host` daemon, you can create a ZFS pool named
 `flynn-default` and it will be used instead of a sparse file.
 
 ```text
@@ -44,10 +48,10 @@ off of the sparse file by first attaching your disk as a mirror, then detaching
 the sparse file after it has been replicated to the new disk:
 
 ```text
-# Attach /dev/sdb1 to the flynn-default ZFS pool
+# Attach /dev/sdb1 (specify your disk instead of sdb1) to the flynn-default ZFS pool
 $ sudo zpool attach flynn-default /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev /dev/sdb1
 
-# Check the replication status
+# Wait for the resilver to copy all data onto the newly added disk
 $ sudo zpool status flynn-default
   pool: flynn-default
  state: ONLINE
@@ -195,7 +199,7 @@ Upstart manages the `flynn-host` daemon and stores the log at
 
 The `flynn-host collect-debug-info` command will collect information about the
 system it is run on along with recent logs from all apps and the `flynn-host`
-daemon. By default it uploads these logs to [Github's
+daemon. By default it uploads these logs to [GitHub's
 Gist](https://gist.github.com) service, but they can also be saved to a local
 tarball with the `--tarball` flag.
 

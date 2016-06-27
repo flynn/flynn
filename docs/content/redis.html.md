@@ -5,10 +5,9 @@ layout: docs
 
 # Redis
 
-The Flynn Redis appliance provides Redis 2.8 in a single process configuration.
-The data for this process is ephemeral and is intended for caching and
-development usage.
-
+The Flynn Redis appliance provides Redis 3.0 in a single process configuration.
+The data stored in this process is ephemeral and is intended for caching and
+development use.
 
 ## Usage
 
@@ -38,3 +37,9 @@ by some libraries to configure connections.
 To connect to a console for the database, run `flynn redis redis-cli`. This does
 not require the Redis client to be installed locally or firewall/security
 changes, as it runs in a container on the Flynn cluster.
+
+## Safety
+
+No safety or availability guarantees are currently provided for the Redis
+appliance. Data loss and inconsistency is likely. Any data stored should be
+treated as ephemeral and only used for caching, development, and testing.

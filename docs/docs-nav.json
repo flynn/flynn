@@ -15,7 +15,11 @@
     { "title": "How To Deploy Python", "path": "/docs/how-to-deploy-python" },
     { "title": "How To Deploy Ruby", "path": "/docs/how-to-deploy-ruby" }
   ] },
-  { "title": "Databases", "path": "/docs/postgres" },
+  { "title": "Databases", "path": "/docs/databases", "children": [
+		{ "title": "PostgreSQL", "path": "/docs/postgres" },	
+		{ "title": "MySQL", "path": "/docs/mysql" },	
+		{ "title": "Redis", "path": "/docs/redis" },	
+	] },
   { "title": "Stability", "path": "/docs/stability" },
   { "title": "Security", "path": "/docs/security" },
   { "title": "Contributing", "path": "/docs/contributing" },
