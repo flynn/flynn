@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -63,15 +64,16 @@ type Scheduler struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
-	syncJobs          chan struct{}
-	syncFormations    chan struct{}
-	syncHosts         chan struct{}
-	hostChecks        chan struct{}
-	rectify           chan struct{}
-	hostEvents        chan *discoverd.Event
-	formationEvents   chan *ct.ExpandedFormation
-	putJobs           chan *ct.Job
-	placementRequests chan *PlacementRequest
+	syncJobs              chan struct{}
+	syncFormations        chan struct{}
+	syncHosts             chan struct{}
+	hostChecks            chan struct{}
+	rectify               chan struct{}
+	hostEvents            chan *discoverd.Event
+	formationEvents       chan *ct.ExpandedFormation
+	putJobs               chan *ct.Job
+	placementRequests     chan *PlacementRequest
+	internalStateRequests chan *InternalStateRequest
 
 	rectifyBatch map[utils.FormationKey]struct{}
 
@@ -98,33 +100,34 @@ type Scheduler struct {
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc Discoverd, l log15.Logger) *Scheduler {
 	return &Scheduler{
-		ControllerClient:  cc,
-		ClusterClient:     cluster,
-		discoverd:         disc,
-		logger:            l,
-		backoffPeriod:     getBackoffPeriod(),
-		maxHostChecks:     defaultMaxHostChecks,
-		hosts:             make(map[string]*Host),
-		jobs:              make(map[string]*Job),
-		formations:        make(Formations),
-		jobEvents:         make(chan *host.Event, eventBufferSize),
-		stop:              make(chan struct{}),
-		syncJobs:          make(chan struct{}, 1),
-		syncFormations:    make(chan struct{}, 1),
-		syncHosts:         make(chan struct{}, 1),
-		hostChecks:        make(chan struct{}, 1),
-		rectifyBatch:      make(map[utils.FormationKey]struct{}),
-		rectify:           make(chan struct{}, 1),
-		formationEvents:   make(chan *ct.ExpandedFormation, eventBufferSize),
-		hostEvents:        make(chan *discoverd.Event, eventBufferSize),
-		putJobs:           make(chan *ct.Job, eventBufferSize),
-		placementRequests: make(chan *PlacementRequest, eventBufferSize),
-		formationlessJobs: make(map[utils.FormationKey]map[string]*Job),
-		getJobs:           make(chan Jobs),
-		pendingTagJobs:    make(map[string]*Job),
-		pause:             make(chan struct{}),
-		resume:            make(chan struct{}),
-		generateJobUUID:   random.UUID,
+		ControllerClient:      cc,
+		ClusterClient:         cluster,
+		discoverd:             disc,
+		logger:                l,
+		backoffPeriod:         getBackoffPeriod(),
+		maxHostChecks:         defaultMaxHostChecks,
+		hosts:                 make(map[string]*Host),
+		jobs:                  make(map[string]*Job),
+		formations:            make(Formations),
+		jobEvents:             make(chan *host.Event, eventBufferSize),
+		stop:                  make(chan struct{}),
+		syncJobs:              make(chan struct{}, 1),
+		syncFormations:        make(chan struct{}, 1),
+		syncHosts:             make(chan struct{}, 1),
+		hostChecks:            make(chan struct{}, 1),
+		rectifyBatch:          make(map[utils.FormationKey]struct{}),
+		rectify:               make(chan struct{}, 1),
+		formationEvents:       make(chan *ct.ExpandedFormation, eventBufferSize),
+		hostEvents:            make(chan *discoverd.Event, eventBufferSize),
+		putJobs:               make(chan *ct.Job, eventBufferSize),
+		placementRequests:     make(chan *PlacementRequest, eventBufferSize),
+		internalStateRequests: make(chan *InternalStateRequest, eventBufferSize),
+		formationlessJobs:     make(map[utils.FormationKey]map[string]*Job),
+		getJobs:               make(chan Jobs),
+		pendingTagJobs:        make(map[string]*Job),
+		pause:                 make(chan struct{}),
+		resume:                make(chan struct{}),
+		generateJobUUID:       random.UUID,
 	}
 }
 
@@ -370,6 +373,8 @@ func (s *Scheduler) Run() error {
 			s.HandleLeaderChange(isLeader)
 		case req := <-s.placementRequests:
 			s.HandlePlacementRequest(req)
+		case req := <-s.internalStateRequests:
+			s.HandleInternalStateRequest(req)
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
 		case <-s.hostChecks:
@@ -733,6 +738,99 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	req.Job.JobID = req.Config.ID
 	req.Job.HostID = req.Host.ID
 	req.Error(nil)
+}
+
+type InternalState struct {
+	Hosts      map[string]*Host      `json:"hosts"`
+	Jobs       Jobs                  `json:"jobs"`
+	Formations map[string]*Formation `json:"formations"`
+	IsLeader   *bool                 `json:"is_leader,omitempty"`
+}
+
+func NewInternalStateRequest() *InternalStateRequest {
+	return &InternalStateRequest{Done: make(chan struct{})}
+}
+
+type InternalStateRequest struct {
+	State *InternalState
+	Done  chan struct{}
+}
+
+func (s *Scheduler) HandleInternalStateRequest(req *InternalStateRequest) {
+	log := s.logger.New("fn", "HandleInternalStateRequest")
+	log.Info("handling internal state request")
+
+	// create an InternalState as a snapshot of the current state by
+	// copying objects and their exported fields
+	req.State = &InternalState{
+		Hosts:      make(map[string]*Host, len(s.hosts)),
+		Jobs:       make(map[string]*Job, len(s.jobs)),
+		Formations: make(map[string]*Formation, len(s.formations)),
+		IsLeader:   s.isLeader,
+	}
+
+	for id, host := range s.hosts {
+		h := *host
+		h.Tags = make(map[string]string, len(host.Tags))
+		for key, val := range host.Tags {
+			h.Tags[key] = val
+		}
+		req.State.Hosts[id] = &h
+	}
+
+	for id, job := range s.jobs {
+		req.State.Jobs[id] = &(*job)
+	}
+
+	for key, formation := range s.formations {
+		f := Formation{
+			ExpandedFormation: &ct.ExpandedFormation{
+				App: &ct.App{
+					ID:   formation.App.ID,
+					Name: formation.App.Name,
+					Meta: formation.App.Meta,
+				},
+				Release: &ct.Release{
+					ID:        formation.Release.ID,
+					Processes: make(map[string]ct.ProcessType, len(formation.Release.Processes)),
+				},
+				Processes: make(map[string]int, len(formation.Processes)),
+				Tags:      make(map[string]map[string]string, len(formation.Tags)),
+				UpdatedAt: formation.UpdatedAt,
+			},
+			OriginalProcesses: formation.OriginalProcesses,
+		}
+		for typ, n := range formation.Processes {
+			f.Processes[typ] = n
+		}
+		for typ, n := range formation.OriginalProcesses {
+			f.OriginalProcesses[typ] = n
+		}
+		for typ, tags := range formation.Tags {
+			f.Tags[typ] = make(map[string]string, len(tags))
+			for key, val := range tags {
+				f.Tags[typ][key] = val
+			}
+		}
+		for name, proc := range formation.Release.Processes {
+			f.Release.Processes[name] = ct.ProcessType{
+				Cmd:        proc.Cmd,
+				Entrypoint: proc.Entrypoint,
+				Data:       proc.Data,
+				Omni:       proc.Omni,
+			}
+		}
+		req.State.Formations[key.String()] = &f
+	}
+
+	close(req.Done)
+}
+
+func (s *Scheduler) InternalState() *InternalState {
+	req := NewInternalStateRequest()
+	s.internalStateRequests <- req
+	<-req.Done
+	return req.State
 }
 
 func (s *Scheduler) ShuffledHosts() []*Host {
@@ -1462,6 +1560,11 @@ func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
 
 func (s *Scheduler) startHTTPServer(port string) {
 	log := s.logger.New("fn", "startHTTPServer")
+
+	http.HandleFunc("/debug/state", func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(s.InternalState())
+	})
+
 	status.AddHandler(status.HealthyHandler)
 	addr := ":" + port
 	log.Info("serving HTTP requests", "addr", addr)
