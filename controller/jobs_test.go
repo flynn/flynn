@@ -18,7 +18,7 @@ func (s *S) createTestJob(c *C, in *ct.Job) *ct.Job {
 
 func (s *S) TestJobList(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-list"})
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 	id := random.UUID()
 	s.createTestJob(c, &ct.Job{UUID: id, AppID: app.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting, Meta: map[string]string{"some": "info"}})
@@ -35,7 +35,7 @@ func (s *S) TestJobList(c *C) {
 
 func (s *S) TestJobListActive(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-list-active"})
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
 
 	// mark all existing jobs as down
 	c.Assert(s.hc.db.Exec("UPDATE job_cache SET state = 'down'"), IsNil)
@@ -78,7 +78,7 @@ func (s *S) TestJobListActive(c *C) {
 
 func (s *S) TestJobGet(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-get"})
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 	uuid := random.UUID()
 	hostID := "host0"
@@ -113,7 +113,7 @@ func fakeHostID() string {
 
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
 	hostID := fakeHostID()
 	uuid := random.UUID()
 	jobID := cluster.GenerateJobID(hostID, uuid)
@@ -143,7 +143,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	host := tu.NewFakeHostClient(hostID, false)
 	s.cc.AddHost(host)
 
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, app.ID, &ct.Release{
 		ArtifactIDs: []string{artifact.ID},
 		Env:         map[string]string{"RELEASE": "true", "FOO": "bar"},
 	})
@@ -221,7 +221,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, app.ID, &ct.Release{
 		ArtifactIDs: []string{artifact.ID},
 		Env:         map[string]string{"RELEASE": "true", "FOO": "bar"},
 	})

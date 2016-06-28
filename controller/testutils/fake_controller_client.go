@@ -121,7 +121,7 @@ func (c *FakeControllerClient) CreateApp(app *ct.App) error {
 	return nil
 }
 
-func (c *FakeControllerClient) CreateRelease(release *ct.Release) error {
+func (c *FakeControllerClient) CreateRelease(appID string, release *ct.Release) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 

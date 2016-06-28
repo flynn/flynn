@@ -403,7 +403,7 @@ func (h *Helper) createAppWithClient(t *c.C, client controller.Client) (*ct.App,
 			},
 		},
 	}
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
 	return app, release
 }

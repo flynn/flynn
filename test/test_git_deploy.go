@@ -373,17 +373,19 @@ func (s *GitDeploySuite) TestCustomPort(t *c.C) {
 
 	// Update release with a different port
 	cc := s.controllerClient(t)
+	app, err := cc.GetApp(name)
+	t.Assert(err, c.IsNil)
 	release, err := cc.GetAppRelease(name)
 	t.Assert(err, c.IsNil)
 	release.ID = ""
 	release.Processes["web"].Ports[0].Port = 9090
-	t.Assert(cc.CreateRelease(release), c.IsNil)
-	t.Assert(cc.DeployAppRelease(name, release.ID, nil), c.IsNil)
+	t.Assert(cc.CreateRelease(app.ID, release), c.IsNil)
+	t.Assert(cc.DeployAppRelease(app.ID, release.ID, nil), c.IsNil)
 
 	// Deploy again, check that port stays the same
 	t.Assert(r.git("commit", "-m", "foo", "--allow-empty"), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
-	release, err = cc.GetAppRelease(name)
+	release, err = cc.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(release.Processes["web"].Ports[0].Port, c.Equals, 9090)
 }

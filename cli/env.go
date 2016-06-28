@@ -149,7 +149,11 @@ func runEnvGet(args *docopt.Args, client controller.Client) error {
 }
 
 func setEnv(client controller.Client, proc string, env map[string]*string) (string, error) {
-	release, err := client.GetAppRelease(mustApp())
+	app, err := client.GetApp(mustApp())
+	if err != nil {
+		return "", err
+	}
+	release, err := client.GetAppRelease(app.ID)
 	if err == controller.ErrNotFound {
 		release = &ct.Release{}
 		if proc != "" {
@@ -186,10 +190,10 @@ func setEnv(client controller.Client, proc string, env map[string]*string) (stri
 	}
 
 	release.ID = ""
-	if err := client.CreateRelease(release); err != nil {
+	if err := client.CreateRelease(app.ID, release); err != nil {
 		return "", err
 	}
-	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
+	if err := client.DeployAppRelease(app.ID, release.ID, nil); err != nil {
 		return "", err
 	}
 	return release.ID, nil

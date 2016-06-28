@@ -96,7 +96,7 @@ func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service stri
 
 	// create a new release for the deployment
 	release.ID = ""
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 
 	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
@@ -247,7 +247,7 @@ func (s *DeployerSuite) TestRollbackFailedJob(t *c.C) {
 	printer := release.Processes["printer"]
 	printer.Args = []string{"this-is-gonna-fail"}
 	release.Processes["printer"] = printer
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 
@@ -287,7 +287,7 @@ func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
 		},
 	}}
 	release.Processes["printer"] = printer
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 
@@ -333,7 +333,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	app.Strategy = "all-at-once"
 	t.Assert(client.UpdateApp(app), c.IsNil)
 	release.ID = ""
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	events := make(chan *ct.DeploymentEvent)
@@ -358,7 +358,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	app.Strategy = "one-by-one"
 	t.Assert(client.UpdateApp(app), c.IsNil)
 	release.ID = ""
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	// try creating the deployment multiple times to avoid getting a
 	// "Cannot create deploy, one is already in progress" error (there
 	// is no guarantee the previous deploy has finished yet)

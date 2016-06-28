@@ -13,7 +13,7 @@ import (
 func (s *S) TestEvents(c *C) {
 	app1 := s.createTestApp(c, &ct.App{Name: "app1"})
 	app2 := s.createTestApp(c, &ct.App{Name: "app2"})
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, "", &ct.Release{})
 
 	jobID1 := random.UUID()
 	jobID2 := random.UUID()
@@ -76,15 +76,14 @@ func (s *S) TestEvents(c *C) {
 }
 
 func (s *S) TestStreamAppLifeCycleEvents(c *C) {
-	release := s.createTestRelease(c, &ct.Release{})
-	nextRelease := s.createTestRelease(c, &ct.Release{})
-
 	events := make(chan *ct.Event)
 	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{}, events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
 	app := s.createTestApp(c, &ct.App{Name: "app3"})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
+	nextRelease := s.createTestRelease(c, app.ID, &ct.Release{})
 
 	c.Assert(s.c.SetAppRelease(app.ID, release.ID), IsNil)
 	newStrategy := "one-by-one"
@@ -111,6 +110,15 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 		c.Assert(eventApp.ID, Equals, app.ID)
 		return eventApp
 	}
+	assertReleaseEvent := func(e *ct.Event, id string) {
+		var eventRelease *ct.Release
+		c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
+		c.Assert(e.ObjectType, Equals, ct.EventTypeRelease)
+		c.Assert(e.ObjectID, Equals, id)
+		c.Assert(eventRelease, NotNil)
+		c.Assert(eventRelease.ID, Equals, id)
+		c.Assert(eventRelease.AppID, Equals, app.ID)
+	}
 
 	eventAssertions := []func(*ct.Event){
 		func(e *ct.Event) {
@@ -120,6 +128,12 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 			c.Assert(a.Meta, DeepEquals, app.Meta)
 		},
 		func(e *ct.Event) {
+			assertReleaseEvent(e, release.ID)
+		},
+		func(e *ct.Event) {
+			assertReleaseEvent(e, nextRelease.ID)
+		},
+		func(e *ct.Event) {
 			var eventRelease *ct.AppRelease
 			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
 			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
@@ -127,6 +141,7 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 			c.Assert(eventRelease, NotNil)
 			c.Assert(eventRelease.Release, NotNil)
 			c.Assert(eventRelease.Release.ID, Equals, release.ID)
+			c.Assert(eventRelease.PrevRelease, IsNil)
 		},
 		func(e *ct.Event) {
 			a := assertAppEvent(e)
@@ -174,12 +189,14 @@ outer:
 }
 
 func (s *S) TestStreamReleaseEvents(c *C) {
+	app := s.createTestApp(c, &ct.App{})
+
 	events := make(chan *ct.Event)
 	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{}, events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
 
 	var gotRelease, gotArtifact bool
 	for i := 0; i < 2; i++ {
@@ -192,7 +209,6 @@ func (s *S) TestStreamReleaseEvents(c *C) {
 			case ct.EventTypeArtifact:
 				var eventArtifact *ct.Artifact
 				c.Assert(json.Unmarshal(e.Data, &eventArtifact), IsNil)
-				c.Assert(e.AppID, Equals, "")
 				c.Assert(e.ObjectID, Equals, release.ArtifactIDs[0])
 				c.Assert(eventArtifact, NotNil)
 				c.Assert(eventArtifact.ID, Equals, release.ArtifactIDs[0])
@@ -200,10 +216,11 @@ func (s *S) TestStreamReleaseEvents(c *C) {
 			case ct.EventTypeRelease:
 				var eventRelease *ct.Release
 				c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
-				c.Assert(e.AppID, Equals, "")
+				c.Assert(e.AppID, Equals, app.ID)
 				c.Assert(e.ObjectID, Equals, release.ID)
 				c.Assert(eventRelease, DeepEquals, release)
 				gotRelease = true
+			case ct.EventTypeApp:
 			default:
 				c.Errorf("unexpected event object %s", e.ObjectType)
 			}
@@ -217,10 +234,10 @@ func (s *S) TestStreamReleaseEvents(c *C) {
 }
 
 func (s *S) TestStreamFormationEvents(c *C) {
-	release := s.createTestRelease(c, &ct.Release{
+	app := s.createTestApp(c, &ct.App{Name: "stream-formation-test"})
+	release := s.createTestRelease(c, app.ID, &ct.Release{
 		Processes: map[string]ct.ProcessType{"foo": {}},
 	})
-	app := s.createTestApp(c, &ct.App{Name: "stream-formation-test"})
 
 	events := make(chan *ct.Event)
 	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{
@@ -374,9 +391,8 @@ func (s *S) TestStreamResourceEvents(c *C) {
 }
 
 func (s *S) TestListEvents(c *C) {
-	release := s.createTestRelease(c, &ct.Release{})
-
 	app := s.createTestApp(c, &ct.App{Name: "app5"})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
 
 	c.Assert(s.c.SetAppRelease(app.ID, release.ID), IsNil)
 	newStrategy := "one-by-one"
@@ -393,7 +409,7 @@ func (s *S) TestListEvents(c *C) {
 	}), IsNil)
 
 	events, err := s.c.ListEvents(ct.ListEventsOptions{
-		ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeAppRelease},
+		ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeRelease, ct.EventTypeAppRelease},
 		AppID:       app.ID,
 	})
 	c.Assert(err, IsNil)
@@ -415,6 +431,16 @@ func (s *S) TestListEvents(c *C) {
 			c.Assert(a.ReleaseID, Equals, app.ReleaseID)
 			c.Assert(a.Strategy, Equals, app.Strategy)
 			c.Assert(a.Meta, DeepEquals, app.Meta)
+		},
+		func(e *ct.Event) {
+			var eventRelease *ct.Release
+			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
+			c.Assert(e.AppID, Equals, app.ID)
+			c.Assert(e.ObjectType, Equals, ct.EventTypeRelease)
+			c.Assert(e.ObjectID, Equals, release.ID)
+			c.Assert(eventRelease, NotNil)
+			c.Assert(eventRelease.ID, Equals, release.ID)
+			c.Assert(eventRelease.AppID, Equals, app.ID)
 		},
 		func(e *ct.Event) {
 			var eventRelease *ct.AppRelease
@@ -467,7 +493,7 @@ func (s *S) TestListEvents(c *C) {
 
 func (s *S) TestGetEvent(c *C) {
 	// ensure there's at least one event
-	_ = s.createTestRelease(c, &ct.Release{})
+	_ = s.createTestRelease(c, "", &ct.Release{})
 
 	events, err := s.c.ListEvents(ct.ListEventsOptions{})
 	c.Assert(err, IsNil)

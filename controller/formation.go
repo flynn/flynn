@@ -154,6 +154,7 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 			f.Release.LegacyArtifactID = f.Release.ArtifactIDs[0]
 		}
 	}
+	f.Release.AppID = f.App.ID
 	return f, nil
 }
 

@@ -94,7 +94,11 @@ func formatLimits(w io.Writer, s string, r resource.Resources) {
 
 func runLimitSet(args *docopt.Args, client controller.Client) error {
 	proc := args.String["<proc>"]
-	release, err := client.GetAppRelease(mustApp())
+	app, err := client.GetApp(mustApp())
+	if err != nil {
+		return err
+	}
+	release, err := client.GetAppRelease(app.ID)
 	if err == controller.ErrNotFound {
 		release = &ct.Release{}
 	} else if err != nil {
@@ -131,10 +135,10 @@ func runLimitSet(args *docopt.Args, client controller.Client) error {
 	release.Processes[proc] = t
 
 	release.ID = ""
-	if err := client.CreateRelease(release); err != nil {
+	if err := client.CreateRelease(app.ID, release); err != nil {
 		return err
 	}
-	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
+	if err := client.DeployAppRelease(app.ID, release.ID, nil); err != nil {
 		return err
 	}
 	fmt.Printf("Created release %s\n", release.ID)

@@ -60,7 +60,7 @@ loop:
 	app := &ct.App{}
 	t.Assert(client.CreateApp(app), c.IsNil)
 	release := &ct.Release{ArtifactIDs: []string{artifact.ID}}
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
 
 	// check running a job uses the image

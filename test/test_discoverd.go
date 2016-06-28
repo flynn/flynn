@@ -27,7 +27,7 @@ func (s *DiscoverdSuite) TestDeploy(t *c.C) {
 	release, err := client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
 	release.ID = ""
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 

@@ -29,7 +29,7 @@ func (s *HealthcheckSuite) createAppWithService(t *c.C, process string, service 
 	}}
 	release.Processes[process] = proctype
 
-	t.Assert(s.controllerClient(t).CreateRelease(release), c.IsNil)
+	t.Assert(s.controllerClient(t).CreateRelease(app.ID, release), c.IsNil)
 	t.Assert(s.controllerClient(t).SetAppRelease(app.ID, release.ID), c.IsNil)
 	return app, release
 }

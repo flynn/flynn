@@ -178,7 +178,11 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 
 	image := args.String["<image>"]
 
-	prevRelease, err := client.GetAppRelease(mustApp())
+	app, err := client.GetApp(mustApp())
+	if err != nil {
+		return err
+	}
+	prevRelease, err := client.GetAppRelease(app.ID)
 	if err == controller.ErrNotFound {
 		prevRelease = &ct.Release{}
 	} else if err != nil {
@@ -209,7 +213,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	}
 
 	// tag the docker image ready to be pushed
-	tag := fmt.Sprintf("%s/%s:latest", dockerHost, mustApp())
+	tag := fmt.Sprintf("%s/%s:latest", dockerHost, app.Name)
 	cmd = exec.Command("docker", "tag", image, tag)
 	log.Printf("flynn: tagging Docker image with %q", strings.Join(cmd.Args, " "))
 	cmd.Stdout = os.Stdout
@@ -218,7 +222,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 		return err
 	}
 
-	artifact, err := dockerPush(client, mustApp(), tag)
+	artifact, err := dockerPush(client, app.Name, tag)
 	if err != nil {
 		return err
 	}
@@ -242,7 +246,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 			Port:  8080,
 			Proto: "tcp",
 			Service: &host.Service{
-				Name:   mustApp() + "-web",
+				Name:   app.Name + "-web",
 				Create: true,
 			},
 		}}
@@ -272,10 +276,10 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	}
 	release.Meta["docker-receive"] = "true"
 
-	if err := client.CreateRelease(release); err != nil {
+	if err := client.CreateRelease(app.ID, release); err != nil {
 		return err
 	}
-	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
+	if err := client.DeployAppRelease(app.ID, release.ID, nil); err != nil {
 		return err
 	}
 	log.Printf("flynn: image deployed, scale it with 'flynn scale app=N'")

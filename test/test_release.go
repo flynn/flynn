@@ -184,7 +184,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		Meta:        map[string]string{"git": "true"},
 		Env:         resource.Env,
 	}
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(slugApp.ID, release), c.IsNil)
 	t.Assert(client.SetAppRelease(slugApp.ID, release.ID), c.IsNil)
 	watcher, err := client.WatchJobEvents(slugApp.ID, release.ID)
 	t.Assert(err, c.IsNil)

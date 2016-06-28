@@ -219,10 +219,10 @@ Options:
 	}
 	release.Processes = procs
 
-	if err := client.CreateRelease(release); err != nil {
+	if err := client.CreateRelease(app.ID, release); err != nil {
 		return fmt.Errorf("Error creating release: %s", err)
 	}
-	if err := client.DeployAppRelease(app.Name, release.ID, nil); err != nil {
+	if err := client.DeployAppRelease(app.ID, release.ID, nil); err != nil {
 		return fmt.Errorf("Error deploying app release: %s", err)
 	}
 

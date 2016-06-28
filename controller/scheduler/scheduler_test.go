@@ -71,7 +71,7 @@ func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd, proce
 	cc := NewFakeControllerClient()
 	cc.CreateApp(app)
 	cc.CreateArtifact(artifact)
-	cc.CreateRelease(release)
+	cc.CreateRelease(app.ID, release)
 	cc.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	return NewScheduler(cluster, cc, discoverd, l)
 }
@@ -266,7 +266,7 @@ func (TestSuite) TestFormationChange(c *C) {
 	processes := map[string]int{testJobType: testJobCount}
 	release = NewRelease(random.UUID(), artifact, processes)
 	s.CreateArtifact(artifact)
-	s.CreateRelease(release)
+	s.CreateRelease(app.ID, release)
 	c.Assert(len(s.formations), Equals, 1)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	job := s.waitJobStart()
@@ -324,7 +324,7 @@ func (TestSuite) TestRectify(c *C) {
 	c.Log("Add the formation to the controller. Wait for formation change. Check the job has a formation and no new job was created")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
-	s.CreateRelease(release)
+	s.CreateRelease(app.ID, release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitFormationChange()
 	_, err := s.waitDurationForEvent("handled job start event", 1*time.Second, nil)
@@ -405,7 +405,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	c.Log("Add the formation to the controller. Wait for formation change and job start on both hosts.")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
-	s.CreateRelease(release)
+	s.CreateRelease(app.ID, release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitJobStart()
 	s.waitJobStart()
@@ -778,7 +778,7 @@ func (TestSuite) TestScaleCriticalApp(c *C) {
 	release := NewRelease("critical-release-1", artifact, processes)
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
-	s.CreateRelease(release)
+	s.CreateRelease(app.ID, release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitJobStart()
 
@@ -790,7 +790,7 @@ func (TestSuite) TestScaleCriticalApp(c *C) {
 
 	// scale up another formation
 	newRelease := NewRelease("critical-release-2", artifact, processes)
-	s.CreateRelease(newRelease)
+	s.CreateRelease(app.ID, newRelease)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: newRelease.ID, Processes: processes})
 	s.waitJobStart()
 

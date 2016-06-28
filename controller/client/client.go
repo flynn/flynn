@@ -26,7 +26,7 @@ type Client interface {
 	StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error)
 	PutDomain(dm *ct.DomainMigration) error
 	CreateArtifact(artifact *ct.Artifact) error
-	CreateRelease(release *ct.Release) error
+	CreateRelease(appID string, release *ct.Release) error
 	CreateApp(app *ct.App) error
 	UpdateApp(app *ct.App) error
 	UpdateAppMeta(app *ct.App) error

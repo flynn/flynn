@@ -271,7 +271,7 @@ type ControllerClient interface {
 	GetArtifact(artifactID string) (*ct.Artifact, error)
 	GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error)
 	CreateApp(app *ct.App) error
-	CreateRelease(release *ct.Release) error
+	CreateRelease(appID string, release *ct.Release) error
 	CreateArtifact(artifact *ct.Artifact) error
 	PutFormation(formation *ct.Formation) error
 	StreamFormations(since *time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error)
