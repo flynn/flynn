@@ -18,13 +18,15 @@ type Cluster struct {
 
 	// inputs
 	InstanceType string    `json:"instance_type"`
+	Region       string    `json:"region"`
+	ImageID      string    `json:"image_id"`
 	VpcCIDR      string    `json:"vpc_cidr,omitempty"`
 	SubnetCIDR   string    `json:"subnet_cidr,omitempty"`
 	AWSClient    AWSClient `json:"-"`
 
-	sshKey  *installer.SSHKey
-	imageID string
-	stackID string
+	sshKey      *installer.SSHKey
+	startScript string
+	stackID     string
 }
 
 // LaunchSteps returns steps for launching a Flynn cluster on AWS
@@ -103,12 +105,36 @@ func (c *Cluster) allocateDomainStep(ctx installer.EventContext) error {
 }
 
 func (c *Cluster) resolveImageIDStep(ctx installer.EventContext) error {
-	// TODO
+	images, err := c.AWSClient.EC2Images(c.Region)
+	if err != nil {
+		return err
+	}
+	if c.ImageID != "" {
+		for _, i := range images {
+			if i.ID == c.ImageID {
+				ctx.SendOutput("ec2_image_id", imageID)
+				return nil
+			}
+		}
+		return fmt.Errorf("Image %s not found for region %s", c.ImageID, c.Region)
+	}
+	if len(images) == 0 {
+		return fmt.Errorf("No image found for region %s", c.Region)
+	}
+	imagesID := images[0].ID
+	c.ImageID = imageID
+	ctx.SendOutput("ec2_image_id", imageID)
 	return nil
 }
 
 func (c *Cluster) generateStartScriptStep(ctx installer.EventContext) error {
-	// TODO
+	data, err := c.BaseCluster.GenerateStartScript("/dev/xvdb")
+	if err != nil {
+		return err
+	}
+	c.DiscoveryToken = data.DiscoveryToken
+	c.startScript = data.Script
+	ctx.SendOutput("discovery_token", data.DiscoveryToken)
 	return nil
 }
 

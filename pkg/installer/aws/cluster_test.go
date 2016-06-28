@@ -4,10 +4,12 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/awslabs/aws-sdk-go/gen/cloudformation"
 	"github.com/flynn/flynn/pkg/installer"
 	"github.com/flynn/flynn/pkg/sshkeygen"
+	"github.com/flynn/flynn/util/release/types"
 	. "github.com/flynn/go-check"
 )
 
@@ -58,6 +60,10 @@ func (aws *fakeAWSClient) AssertInvocations(c *C, name string, n int) {
 	c.Assert(aws.invocations[name], Equals, n)
 }
 
+func (aws *fakeAWSClient) EC2Images(region string) ([]*release.EC2Image, error) {
+	return nil, nil
+}
+
 func (aws *fakeAWSClient) CheckKeyPairExists(key *installer.SSHKey) (string, error) {
 	aws.invocation("CheckKeyPairExists")
 	args := aws.getResponse("CheckKeyPairExists")
@@ -91,15 +97,17 @@ func (aws *fakeAWSClient) CreateStack(input *cloudformation.CreateStackInput) (*
 	return nil, nil
 }
 
-func (aws *fakeAWSClient) StreamStackEvents(stackName string) (<-chan *AWSStackEvent, <-chan error) {
+func (aws *fakeAWSClient) StreamStackEvents(stackName string, since time.Time) (<-chan *AWSStackEvent, <-chan error) {
 	events := make(chan *AWSStackEvent)
 	errors := make(chan error)
-	// TODO
 	return events, errors
 }
 
+func (aws *fakeAWSClient) WaitForStackEvent(stackName, resourceType, resourceStatus string, since time.Time) error {
+	return nil
+}
+
 func (aws *fakeAWSClient) GetHostedZoneNameServers(zoneID string) ([]string, error) {
-	// TODO
 	return []string{}, nil
 }
 
