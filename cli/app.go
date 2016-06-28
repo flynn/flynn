@@ -142,8 +142,8 @@ func runDelete(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	log.Printf("Deleted %s (removed %d routes, deprovisioned %d resources)",
-		appName, len(res.DeletedRoutes), len(res.DeletedResources))
+	log.Printf("Deleted %s (removed %d routes, deleted %d releases, deprovisioned %d resources)",
+		appName, len(res.DeletedRoutes), len(res.DeletedReleases), len(res.DeletedResources))
 	return nil
 }
 
