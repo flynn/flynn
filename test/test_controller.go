@@ -378,6 +378,12 @@ func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
 	numResources := 1
 	t.Assert(resources, c.HasLen, numResources)
 
+	// create another release
+	t.Assert(r.git("commit", "--allow-empty", "--message", "deploy"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	releases, err := client.AppReleaseList(app)
+	t.Assert(err, c.IsNil)
+
 	// delete app
 	cmd := r.flynn("delete", "--yes")
 	t.Assert(cmd, Succeeds)
@@ -386,6 +392,13 @@ func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
 	t.Assert(cmd, OutputContains, fmt.Sprintf("removed %d routes", numRoutes))
 	for _, route := range routes {
 		assertRouteStatus(route, 404)
+	}
+
+	// check release cleanup
+	t.Assert(cmd, OutputContains, fmt.Sprintf("deleted %d releases", len(releases)))
+	for _, release := range releases {
+		_, err := client.GetRelease(release.ID)
+		t.Assert(err, c.Equals, controller.ErrNotFound)
 	}
 
 	// check resource cleanup

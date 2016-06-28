@@ -387,6 +387,7 @@ type AppDeletion struct {
 	AppID            string          `json:"app"`
 	DeletedRoutes    []*router.Route `json:"deleted_routes"`
 	DeletedResources []*Resource     `json:"deleted_resources"`
+	DeletedReleases  []*Release      `json:"deleted_releases"`
 }
 
 type AppDeletionEvent struct {
