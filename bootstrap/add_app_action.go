@@ -51,7 +51,7 @@ func (a *AddAppAction) Run(s *State) error {
 		}
 	}
 	as.Artifacts = data.Artifacts
-	if err := client.CreateRelease(data.Release); err != nil {
+	if err := client.CreateRelease(a.App.ID, data.Release); err != nil {
 		return err
 	}
 	as.Release = data.Release

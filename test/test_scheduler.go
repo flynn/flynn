@@ -571,7 +571,7 @@ func (s *SchedulerSuite) TestRollbackController(t *c.C) {
 	worker := release.Processes["worker"]
 	worker.Args = []string{"/i/dont/exist"}
 	release.Processes["worker"] = worker
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 
@@ -664,7 +664,7 @@ func (s *SchedulerSuite) TestDeployController(t *c.C) {
 
 	// create a controller deployment
 	release.ID = ""
-	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
 	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 

@@ -183,7 +183,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		})
 		release.Processes["host"] = proc
 	}
-	if err := c.Client.CreateRelease(release); err != nil {
+	if err := c.Client.CreateRelease(app.ID, release); err != nil {
 		log.Error("error creating release", "err", err)
 		return nil, err
 	}

@@ -161,6 +161,7 @@ func (m *migration) generateTLSCert() (*tlscert.Cert, error) {
 
 func dupRelease(release *ct.Release) *ct.Release {
 	return &ct.Release{
+		AppID:       release.AppID,
 		ArtifactIDs: release.ArtifactIDs,
 		Env:         release.Env,
 		Meta:        release.Meta,
@@ -236,11 +237,11 @@ func (m *migration) maybeDeployController() error {
 	release = dupRelease(release)
 	release.Env["DEFAULT_ROUTE_DOMAIN"] = m.dm.Domain
 	release.Env["CA_CERT"] = m.dm.TLSCert.CACert
-	if err := m.client.CreateRelease(release); err != nil {
+	if err := m.client.CreateRelease(release.AppID, release); err != nil {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID, m.cancelDeploy()); err != nil {
+	if err := m.client.DeployAppRelease(release.AppID, release.ID, m.cancelDeploy()); err != nil {
 		log.Error("error deploying release", "error", err)
 		select {
 		case <-m.stop:
@@ -270,11 +271,11 @@ func (m *migration) maybeDeployRouter() error {
 	release = dupRelease(release)
 	release.Env["TLSCERT"] = m.dm.TLSCert.Cert
 	release.Env["TLSKEY"] = m.dm.TLSCert.PrivateKey
-	if err := m.client.CreateRelease(release); err != nil {
+	if err := m.client.CreateRelease(release.AppID, release); err != nil {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID, m.cancelDeploy()); err != nil {
+	if err := m.client.DeployAppRelease(release.AppID, release.ID, m.cancelDeploy()); err != nil {
 		log.Error("error deploying release", "error", err)
 		select {
 		case <-m.stop:
@@ -306,11 +307,11 @@ func (m *migration) maybeDeployDashboard() error {
 	release.Env["DEFAULT_ROUTE_DOMAIN"] = m.dm.Domain
 	release.Env["CONTROLLER_DOMAIN"] = fmt.Sprintf("controller.%s", m.dm.Domain)
 	release.Env["URL"] = fmt.Sprintf("https://dashboard.%s", m.dm.Domain)
-	if err := m.client.CreateRelease(release); err != nil {
+	if err := m.client.CreateRelease(release.AppID, release); err != nil {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID, m.cancelDeploy()); err != nil {
+	if err := m.client.DeployAppRelease(release.AppID, release.ID, m.cancelDeploy()); err != nil {
 		log.Error("error deploying release", "error", err)
 		select {
 		case <-m.stop:

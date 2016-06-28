@@ -233,7 +233,7 @@ func deployApp(client controller.Client, app *ct.App, image *ct.Artifact, update
 	if updateFn != nil {
 		updateFn(release)
 	}
-	if err := client.CreateRelease(release); err != nil {
+	if err := client.CreateRelease(app.ID, release); err != nil {
 		log.Error("error creating new release", "err", err)
 		return err
 	}

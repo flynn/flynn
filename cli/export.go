@@ -757,7 +757,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			}
 			release.Processes[t] = proc
 		}
-		if err := client.CreateRelease(release); err != nil {
+		if err := client.CreateRelease(app.ID, release); err != nil {
 			return fmt.Errorf("error creating release: %s", err)
 		}
 		if err := client.SetAppRelease(app.ID, release.ID); err != nil {
@@ -795,7 +795,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			release.Meta = make(map[string]string, 1)
 		}
 		release.Meta["git"] = "true"
-		if err := client.CreateRelease(release); err != nil {
+		if err := client.CreateRelease(app.ID, release); err != nil {
 			return fmt.Errorf("error creating release: %s", err)
 		}
 		if err := client.SetAppRelease(app.ID, release.ID); err != nil {

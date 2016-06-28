@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -454,6 +456,53 @@ func (MigrateSuite) TestMigrateProcessData(c *C) {
 			} else {
 				c.Assert(procs[typ].Volumes, IsNil)
 			}
+		}
+	}
+}
+
+func (MigrateSuite) TestMigrateReleaseAppID(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_release_app_id")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 26
+	m.migrateTo(26)
+
+	// create some apps, releases and formations
+	apps := []string{random.UUID(), random.UUID(), random.UUID()}
+	for _, app := range apps {
+		c.Assert(db.Exec(`INSERT INTO apps (app_id, name) VALUES ($1, $2)`, app, app), IsNil)
+	}
+	releases := []string{random.UUID(), random.UUID(), random.UUID()}
+	for _, release := range releases {
+		c.Assert(db.Exec(`INSERT INTO releases (release_id) VALUES ($1)`, release), IsNil)
+	}
+	// associate via formation:
+	// release0 with app0
+	// release1 with app1 and app2
+	// release2 with no apps
+	for release, app := range map[string]string{
+		releases[0]: apps[0],
+		releases[1]: apps[1],
+		releases[1]: apps[2],
+	} {
+		c.Assert(db.Exec(`INSERT INTO formations (app_id, release_id) VALUES ($1, $2)`, app, release), IsNil)
+	}
+
+	// migrate to 27 and check the app_id column was set correctly
+	m.migrateTo(27)
+	for release, app := range map[string]*string{
+		releases[0]: &apps[0],
+		releases[1]: &apps[2],
+		releases[2]: nil,
+	} {
+		var appID *string
+		var deletedAt *time.Time
+		c.Assert(db.QueryRow(`SELECT app_id, deleted_at FROM releases WHERE release_id = $1`, release).Scan(&appID, &deletedAt), IsNil)
+		c.Assert(appID, DeepEquals, app)
+		if app == nil {
+			c.Assert(deletedAt, NotNil)
+		} else {
+			c.Assert(deletedAt, IsNil)
 		}
 	}
 }

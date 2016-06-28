@@ -18,6 +18,9 @@
     "id": {
       "$ref": "/schema/controller/common#/definitions/id"
     },
+    "app_id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
     "artifact": {
       "description": "DEPRECATED: legacy artifact ID",
       "$ref": "/schema/controller/common#/definitions/id"

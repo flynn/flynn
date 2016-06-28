@@ -86,7 +86,7 @@ func (a *DeployAppAction) Run(s *State) error {
 	}
 	as.Artifacts = a.Artifacts
 
-	if err := client.CreateRelease(a.Release); err != nil {
+	if err := client.CreateRelease(a.App.ID, a.Release); err != nil {
 		return err
 	}
 	as.Release = a.Release

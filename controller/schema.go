@@ -436,6 +436,32 @@ $$ LANGUAGE plpgsql`,
 		$$ LANGUAGE plpgsql`,
 		`CREATE TRIGGER check_artifact_manifest AFTER INSERT ON artifacts FOR EACH ROW EXECUTE PROCEDURE check_artifact_manifest()`,
 	)
+	migrations.Add(27,
+		// Add an "app_id" column to releases to associate them
+		// with apps directly (rather than indirectly through
+		// formations).
+		`ALTER TABLE releases ADD COLUMN app_id uuid REFERENCES apps (app_id)`,
+		`DO $$
+		DECLARE
+			release uuid;
+		BEGIN
+			FOR release IN SELECT release_id FROM releases LOOP
+				UPDATE releases
+				SET app_id = formation.app_id
+				FROM (
+					SELECT app_id
+					FROM formations
+					WHERE release_id = release
+					ORDER BY created_at DESC
+					LIMIT 1
+				) AS formation
+				WHERE release_id = release;
+			END LOOP;
+		END $$`,
+		`UPDATE releases SET deleted_at = now() WHERE app_id IS NULL`,
+		`CREATE INDEX ON releases (app_id) WHERE deleted_at IS NULL`,
+		`ALTER TABLE releases ADD CHECK (app_id IS NOT NULL OR deleted_at IS NOT NULL)`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

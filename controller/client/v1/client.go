@@ -150,7 +150,8 @@ func (c *Client) CreateArtifact(artifact *ct.Artifact) error {
 }
 
 // CreateRelease creates a new release.
-func (c *Client) CreateRelease(release *ct.Release) error {
+func (c *Client) CreateRelease(appID string, release *ct.Release) error {
+	release.AppID = appID
 	return c.Post("/releases", release, release)
 }
 

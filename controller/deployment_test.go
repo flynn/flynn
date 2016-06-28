@@ -11,7 +11,7 @@ import (
 
 func (s *S) TestCreateDeployment(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "create-deployment"})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, app.ID, &ct.Release{
 		Processes: map[string]ct.ProcessType{"web": {}},
 	})
 	c.Assert(s.c.PutFormation(&ct.Formation{
@@ -29,7 +29,7 @@ func (s *S) TestCreateDeployment(c *C) {
 	gotRelease, err := s.c.GetAppRelease(app.ID)
 	c.Assert(release.ID, Equals, gotRelease.ID)
 
-	newRelease := s.createTestRelease(c, &ct.Release{})
+	newRelease := s.createTestRelease(c, app.ID, &ct.Release{})
 
 	d, err = s.c.CreateDeployment(app.ID, newRelease.ID)
 	c.Assert(err, IsNil)
@@ -47,7 +47,7 @@ func (s *S) TestCreateDeployment(c *C) {
 
 func (s *S) TestStreamDeployment(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "stream-deployment"})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, app.ID, &ct.Release{
 		Processes: map[string]ct.ProcessType{"web": {}},
 	})
 	c.Assert(s.c.PutFormation(&ct.Formation{
@@ -58,7 +58,7 @@ func (s *S) TestStreamDeployment(c *C) {
 	defer s.c.DeleteFormation(app.ID, release.ID)
 	c.Assert(s.c.SetAppRelease(app.ID, release.ID), IsNil)
 
-	newRelease := s.createTestRelease(c, &ct.Release{})
+	newRelease := s.createTestRelease(c, app.ID, &ct.Release{})
 
 	d, err := s.c.CreateDeployment(app.ID, newRelease.ID)
 	c.Assert(err, IsNil)
@@ -92,7 +92,7 @@ func (s *S) TestStreamDeployment(c *C) {
 
 func (s *S) TestGetDeployment(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "get-deployment"})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, app.ID, &ct.Release{
 		Processes: map[string]ct.ProcessType{"web": {}},
 	})
 	c.Assert(s.c.PutFormation(&ct.Formation{
@@ -106,7 +106,7 @@ func (s *S) TestGetDeployment(c *C) {
 	d, err := s.c.CreateDeployment(app.ID, release.ID)
 	c.Assert(err, IsNil)
 	c.Assert(d.Status, Equals, "complete")
-	newRelease := s.createTestRelease(c, &ct.Release{})
+	newRelease := s.createTestRelease(c, app.ID, &ct.Release{})
 
 	// create a second deployment
 	d, err = s.c.CreateDeployment(app.ID, newRelease.ID)
@@ -126,7 +126,7 @@ func (s *S) TestGetDeployment(c *C) {
 
 func (s *S) TestDeploymentList(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "list-deployment"})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, app.ID, &ct.Release{
 		Processes: map[string]ct.ProcessType{"web": {}},
 	})
 	c.Assert(s.c.PutFormation(&ct.Formation{
@@ -140,7 +140,7 @@ func (s *S) TestDeploymentList(c *C) {
 	initial, err := s.c.CreateDeployment(app.ID, release.ID)
 	c.Assert(err, IsNil)
 	c.Assert(initial.Status, Equals, "complete")
-	newRelease := s.createTestRelease(c, &ct.Release{})
+	newRelease := s.createTestRelease(c, app.ID, &ct.Release{})
 
 	// create a second deployment
 	second, err := s.c.CreateDeployment(app.ID, newRelease.ID)

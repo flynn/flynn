@@ -355,7 +355,7 @@ func (e *generator) createRelease() {
 			},
 		},
 	}
-	err := e.client.CreateRelease(release)
+	err := e.client.CreateRelease(e.resourceIds["app"], release)
 	if err != nil {
 		log.Fatal(err)
 	}

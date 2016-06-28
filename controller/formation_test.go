@@ -9,8 +9,8 @@ import (
 
 func (s *S) TestFormationStreaming(c *C) {
 	before := time.Now()
-	release := s.createTestRelease(c, &ct.Release{})
 	app := s.createTestApp(c, &ct.App{Name: "streamtest-existing"})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
 	updates := make(chan *ct.ExpandedFormation)
@@ -25,7 +25,7 @@ func (s *S) TestFormationStreaming(c *C) {
 				if !ok {
 					c.Fatalf("formation stream closed: %s", stream.Err())
 				}
-				if f.App == nil {
+				if f.Release == nil || f.Release.AppID != app.ID {
 					continue
 				}
 				return f
@@ -39,10 +39,10 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(update.App, DeepEquals, app)
 	c.Assert(update.Release, DeepEquals, release)
 
-	release = s.createTestRelease(c, &ct.Release{
+	app = s.createTestApp(c, &ct.App{Name: "streamtest"})
+	release = s.createTestRelease(c, app.ID, &ct.Release{
 		Processes: map[string]ct.ProcessType{"foo": {}},
 	})
-	app = s.createTestApp(c, &ct.App{Name: "streamtest"})
 	formation := s.createTestFormation(c, &ct.Formation{
 		ReleaseID: release.ID,
 		AppID:     app.ID,
@@ -72,7 +72,7 @@ func (s *S) TestFormationStreamDeleted(c *C) {
 	// create 3 releases with formations
 	releases := make([]*ct.Release, 3)
 	for i := 0; i < 3; i++ {
-		releases[i] = s.createTestRelease(c, &ct.Release{})
+		releases[i] = s.createTestRelease(c, app.ID, &ct.Release{})
 		s.createTestFormation(c, &ct.Formation{ReleaseID: releases[i].ID, AppID: app.ID})
 	}
 
@@ -131,7 +131,7 @@ func (s *S) TestFormationListActive(c *C) {
 		for typ := range procs {
 			release.Processes[typ] = ct.ProcessType{}
 		}
-		s.createTestRelease(c, release)
+		s.createTestRelease(c, app.ID, release)
 		s.createTestFormation(c, &ct.Formation{
 			AppID:     app.ID,
 			ReleaseID: release.ID,

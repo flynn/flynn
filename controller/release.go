@@ -34,7 +34,7 @@ func NewReleaseRepo(db *postgres.DB, artifacts *ArtifactRepo, que *que.Client) *
 func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 	var artifactIDs string
 	release := &ct.Release{}
-	err := s.Scan(&release.ID, &artifactIDs, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
+	err := s.Scan(&release.ID, &release.AppID, &artifactIDs, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = ErrNotFound
@@ -89,7 +89,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		return err
 	}
 
-	err = tx.QueryRow("release_insert", release.ID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
+	err = tx.QueryRow("release_insert", release.ID, release.AppID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -109,6 +109,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	}
 
 	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      release.AppID,
 		ObjectID:   release.ID,
 		ObjectType: ct.EventTypeRelease,
 	}, release); err != nil {
@@ -168,8 +169,10 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 		return err
 	}
 
-	// if the release still has formations, don't remove it entirely, just
-	// save a release deletion event and return
+	// if the release still has formations for other apps, don't remove it
+	// entirely, just save a release deletion event and return (this should
+	// be a rare occurrence, but is possible for releases created before
+	// migration 19 which associated all releases with a single app).
 	rows, err := tx.Query("formation_list_by_release", release.ID)
 	if err != nil {
 		tx.Rollback()

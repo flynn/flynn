@@ -200,6 +200,10 @@ func runReleaseShow(args *docopt.Args, client controller.Client) error {
 func runReleaseAddDocker(args *docopt.Args, client controller.Client) error {
 	fmt.Fprintln(os.Stderr, "WARN: The 'release add' command is deprecated and only works on legacy clusters, use 'docker push' to push Docker images")
 
+	app, err := client.GetApp(mustApp())
+	if err != nil {
+		return err
+	}
 	release := &ct.Release{}
 	if args.String["--file"] != "" {
 		data, err := ioutil.ReadFile(args.String["--file"])
@@ -220,11 +224,11 @@ func runReleaseAddDocker(args *docopt.Args, client controller.Client) error {
 	}
 
 	release.ArtifactIDs = []string{artifact.ID}
-	if err := client.CreateRelease(release); err != nil {
+	if err := client.CreateRelease(app.ID, release); err != nil {
 		return err
 	}
 
-	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
+	if err := client.DeployAppRelease(app.ID, release.ID, nil); err != nil {
 		return err
 	}
 
@@ -234,12 +238,15 @@ func runReleaseAddDocker(args *docopt.Args, client controller.Client) error {
 }
 
 func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
+	app, err := client.GetApp(mustApp())
+	if err != nil {
+		return err
+	}
 	var release *ct.Release
-	var err error
 	if args.String["<id>"] != "" {
 		release, err = client.GetRelease(args.String["<id>"])
 	} else {
-		release, err = client.GetAppRelease(mustApp())
+		release, err = client.GetAppRelease(app.ID)
 	}
 	if err != nil {
 		return err
@@ -310,11 +317,11 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	if err := client.CreateRelease(release); err != nil {
+	if err := client.CreateRelease(app.ID, release); err != nil {
 		return err
 	}
 
-	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
+	if err := client.DeployAppRelease(app.ID, release.ID, nil); err != nil {
 		return err
 	}
 

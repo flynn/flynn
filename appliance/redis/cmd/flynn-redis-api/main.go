@@ -219,7 +219,7 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 	}
 
 	h.Logger.Info("creating release", "artifact.id", h.RedisImageID)
-	if err := h.ControllerClient.CreateRelease(release); err != nil {
+	if err := h.ControllerClient.CreateRelease(app.ID, release); err != nil {
 		h.Logger.Error("error creating release", "err", err)
 		httphelper.Error(w, err)
 		return

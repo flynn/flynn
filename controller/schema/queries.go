@@ -122,7 +122,7 @@ UPDATE apps SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL`
 	appNextNameIDQuery = `
 SELECT nextval('name_ids')`
 	appGetReleaseQuery = `
-SELECT r.release_id,
+SELECT r.release_id, r.app_id,
   ARRAY(
 	SELECT a.artifact_id
 	FROM release_artifacts a
@@ -132,7 +132,7 @@ SELECT r.release_id,
 FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1 AND r.deleted_at IS NULL`
 
 	releaseListQuery = `
-SELECT r.release_id,
+SELECT r.release_id, r.app_id,
   ARRAY(
 	SELECT a.artifact_id
 	FROM release_artifacts a
@@ -141,7 +141,7 @@ SELECT r.release_id,
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseSelectQuery = `
-SELECT r.release_id,
+SELECT r.release_id, r.app_id,
   ARRAY(
 	SELECT a.artifact_id
 	FROM release_artifacts a
@@ -150,18 +150,17 @@ SELECT r.release_id,
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r WHERE r.release_id = $1 AND r.deleted_at IS NULL`
 	releaseInsertQuery = `
-INSERT INTO releases (release_id, env, processes, meta)
-VALUES ($1, $2, $3, $4) RETURNING created_at`
+INSERT INTO releases (release_id, app_id, env, processes, meta)
+VALUES ($1, $2, $3, $4, $5) RETURNING created_at`
 	releaseAppListQuery = `
-SELECT DISTINCT(r.release_id),
+SELECT r.release_id, r.app_id,
   ARRAY(
 	SELECT a.artifact_id
 	FROM release_artifacts a
 	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
 	ORDER BY a.index
   ), r.env, r.processes, r.meta, r.created_at
-FROM releases r JOIN formations f USING (release_id)
-WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`
+FROM releases r WHERE r.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseArtifactsInsertQuery = `
 INSERT INTO release_artifacts (release_id, artifact_id, index) VALUES ($1, $2, $3)`
 	releaseArtifactsDeleteQuery = `

@@ -74,6 +74,7 @@ func (a *App) Critical() bool {
 
 type Release struct {
 	ID          string                 `json:"id,omitempty"`
+	AppID       string                 `json:"app_id,omitempty"`
 	ArtifactIDs []string               `json:"artifacts,omitempty"`
 	Env         map[string]string      `json:"env,omitempty"`
 	Meta        map[string]string      `json:"meta,omitempty"`
