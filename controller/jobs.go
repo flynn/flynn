@@ -488,7 +488,10 @@ func (c *controllerAPI) AddJobRequest(ctx context.Context, w http.ResponseWriter
 		req.ArtifactIDs = release.ArtifactIDs
 	}
 
-	// TODO: validate
+	if err := schema.Validate(req); err != nil {
+		respondWithError(w, err)
+		return
+	}
 
 	if err := c.jobRepo.AddJobRequest(&req); err != nil {
 		respondWithError(w, err)
