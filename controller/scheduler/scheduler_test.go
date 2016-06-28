@@ -334,7 +334,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 		// get a sorted list of scheduler jobs per host to compare
 		// against the expected list
 		actual := make(map[string]sortJobs)
-		for _, job := range s.Jobs() {
+		for _, job := range s.InternalState().Jobs {
 			actual[job.HostID] = append(actual[job.HostID], job)
 		}
 		for _, jobs := range actual {
