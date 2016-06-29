@@ -69,6 +69,9 @@ func (s *BlobstoreSuite) TestBlobstoreBackendSwitching(t *c.C) {
 	t.Assert(r.git("commit", "--allow-empty", "-m", "foo"), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 
+	// test that exporting the app works
+	t.Assert(r.flynn("export", "--file", "/dev/null"), Succeeds)
+
 	// change default backend back to postgres
 	t.Assert(flynn(t, "/", "-a", "blobstore", "env", "set", "DEFAULT_BACKEND=postgres"), Succeeds)
 
