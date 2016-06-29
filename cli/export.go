@@ -210,7 +210,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 			Release:    release.ID,
 			DisableLog: true,
 			Entrypoint: []string{"curl"},
-			Args:       []string{"--include", "--raw", slugURL},
+			Args:       []string{"--include", "--location", "--raw", slugURL},
 			Stdout:     reqW,
 			Stderr:     ioutil.Discard,
 		}
@@ -222,11 +222,19 @@ func runExport(args *docopt.Args, client controller.Client) error {
 				shutdown.Fatalf("error retrieving slug: %s", err)
 			}
 		}()
-		res, err := http.ReadResponse(bufio.NewReader(reqR), nil)
-		if err != nil {
-			return fmt.Errorf("error reading slug response: %s", err)
+		req := bufio.NewReader(reqR)
+		var res *http.Response
+		maxRedirects := 5
+		for i := 0; i < maxRedirects; i++ {
+			res, err = http.ReadResponse(req, nil)
+			if err != nil {
+				return fmt.Errorf("error reading slug response: %s", err)
+			}
+			if res.StatusCode != http.StatusFound {
+				break
+			}
 		}
-		if res.StatusCode != 200 {
+		if res.StatusCode != http.StatusOK {
 			return fmt.Errorf("unexpected status getting slug: %d", res.StatusCode)
 		}
 		length, err := strconv.Atoi(res.Header.Get("Content-Length"))
