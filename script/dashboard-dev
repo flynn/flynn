@@ -1,0 +1,97 @@
+#!/bin/bash
+
+set -e
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [-h|--help] <command>
+
+COMMANDS:
+  compile       Compile the dashboard assets
+
+  run           Build and run the dashboard
+
+OPTIONS:
+  -h, --help    Show this message
+USAGE
+}
+
+main() {
+  if [[ "$1" = "-h" ]] || [[ "$1" = "--help" ]]; then
+    usage
+    exit
+  fi
+
+  case "$1" in
+    compile)
+      compile
+      ;;
+    run)
+      run
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+compile() {
+  docker run \
+    --volume "${ROOT}/dashboard/app:/build" \
+    --workdir /build \
+    flynn/dashboard-builder \
+    bash -c "cp --recursive /app/.bundle . && cp --recursive /app/vendor/bundle vendor/ && cp --recursive /app/node_modules . && ./compiler && chown -R $(id -u):$(id -g) ."
+}
+
+run() {
+  cd "${ROOT}/dashboard"
+
+  info "updating dashboard to read assets from the filesystem"
+  cat <<BINDATA > bindata.go
+package main
+
+import (
+    "bytes"
+    "io"
+    "os"
+)
+
+func Asset(path string) ([]byte, error) {
+    file, err := os.Open(path)
+    if err != nil {
+        return nil, err
+    }
+    var buf bytes.Buffer
+    _, err = io.Copy(&buf, file)
+    return buf.Bytes(), err
+}
+
+func AssetInfo(path string) (os.FileInfo, error) {
+    return os.Stat(path)
+}
+BINDATA
+
+  info "building dashboard"
+  go build
+
+  info "setting environment variables"
+  export DISABLE_CACHE="true"
+  export LOGIN_TOKEN="test"
+  export SESSION_SECRET="abc123"
+  export URL="http://dashboard.1.localflynn.com:4457"
+  export PORT="4457"
+  export APP_NAME="dashboard"
+  export DEFAULT_ROUTE_DOMAIN="1.localflynn.com"
+  export CONTROLLER_DOMAIN="controller.1.localflynn.com"
+  export CONTROLLER_KEY="${CONTROLLER_KEY}"
+  export GITHUB_TOKEN="MY_TOKEN"
+
+  info "running dashboard on ${URL} (TOKEN='${LOGIN_TOKEN}')"
+  ./dashboard
+}
+
+main $@
