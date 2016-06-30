@@ -314,6 +314,11 @@ func appHandler(c handlerConfig) http.Handler {
 
 func muxHandler(main http.Handler, authKeys []string) http.Handler {
 	return httphelper.CORSAllowAll.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if shutdown.IsActive() {
+			httphelper.ServiceUnavailableError(w, ErrShutdown.Error())
+			return
+		}
+
 		if r.URL.Path == "/ping" {
 			w.WriteHeader(200)
 			return

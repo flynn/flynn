@@ -366,11 +366,11 @@ func (r *FormationRepo) startListener() error {
 		return err
 	}
 	go func() {
+		defer r.unsubscribeAll()
 		for {
 			select {
 			case n, ok := <-listener.Notify:
 				if !ok {
-					r.unsubscribeAll()
 					return
 				}
 				ids := strings.SplitN(n.Payload, ":", 2)

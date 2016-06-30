@@ -225,7 +225,7 @@ func PreconditionFailedErr(message string) error {
 }
 
 func ServiceUnavailableError(w http.ResponseWriter, message string) {
-	Error(w, JSONError{Code: ServiceUnavailableErrorCode, Message: message})
+	Error(w, JSONError{Code: ServiceUnavailableErrorCode, Message: message, Retry: true})
 }
 
 func ValidationError(w http.ResponseWriter, field, message string) {

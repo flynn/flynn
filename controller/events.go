@@ -465,6 +465,7 @@ func (e *EventListener) Listen() error {
 				e.Notify(event)
 			case <-e.doneCh:
 				listener.Close()
+				return
 			}
 		}
 	}()
