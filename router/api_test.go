@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http/httptest"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/discoverd/testutil"
@@ -184,6 +185,16 @@ func (s *S) TestAPIListRoutes(c *C) {
 	r2 := router.TCPRoute{Service: "test"}.ToRoute()
 	r3 := router.TCPRoute{Service: "test", ParentRef: "foo"}.ToRoute()
 
+	tlsCert := tlsConfigForDomain("*.bar.example.org")
+	r4 := router.HTTPRoute{
+		Domain:  "1.bar.example.org",
+		Service: "test",
+		Certificate: &router.Certificate{
+			Cert: tlsCert.Cert,
+			Key:  tlsCert.PrivateKey,
+		},
+	}.ToRoute()
+
 	err := srv.CreateRoute(r0)
 	c.Assert(err, IsNil)
 	err = srv.CreateRoute(r1)
@@ -192,14 +203,21 @@ func (s *S) TestAPIListRoutes(c *C) {
 	c.Assert(err, IsNil)
 	err = srv.CreateRoute(r3)
 	c.Assert(err, IsNil)
+	err = srv.CreateRoute(r4)
+	c.Assert(err, IsNil)
 
 	routes, err := srv.ListRoutes("")
 	c.Assert(err, IsNil)
-	c.Assert(routes, HasLen, 4)
-	c.Assert(routes[3].ID, Equals, r0.ID)
-	c.Assert(routes[2].ID, Equals, r1.ID)
-	c.Assert(routes[1].ID, Equals, r2.ID)
-	c.Assert(routes[0].ID, Equals, r3.ID)
+	c.Assert(routes, HasLen, 5)
+	c.Assert(routes[4].ID, Equals, r0.ID)
+	c.Assert(routes[3].ID, Equals, r1.ID)
+	c.Assert(routes[2].ID, Equals, r2.ID)
+	c.Assert(routes[1].ID, Equals, r3.ID)
+	c.Assert(routes[0].ID, Equals, r4.ID)
+
+	c.Assert(routes[0].Certificate, Not(IsNil))
+	c.Assert(routes[0].Certificate.Cert, Equals, strings.TrimSuffix(tlsCert.Cert, "\n"))
+	c.Assert(routes[0].Certificate.Key, Equals, strings.TrimSuffix(tlsCert.PrivateKey, "\n"))
 
 	routes, err = srv.ListRoutes("foo")
 	c.Assert(err, IsNil)

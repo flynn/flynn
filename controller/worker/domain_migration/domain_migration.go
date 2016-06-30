@@ -375,7 +375,7 @@ func (m *migration) appMaybeCreateRoute(appID string, oldRoute *router.Route, ro
 		Sticky:  oldRoute.Sticky,
 		Service: oldRoute.Service,
 	}
-	if oldRoute.Certificate != nil && oldRoute.Certificate.Cert == m.dm.OldTLSCert.Cert {
+	if oldRoute.Certificate != nil && oldRoute.Certificate.Cert == strings.TrimSpace(m.dm.OldTLSCert.Cert) {
 		route.Certificate = &router.Certificate{
 			Cert: m.dm.TLSCert.Cert,
 			Key:  m.dm.TLSCert.PrivateKey,
