@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx"
@@ -33,19 +34,23 @@ type Listener struct {
 	Notify chan *pgx.Notification
 	Err    error
 
-	channel string
-	log     log15.Logger
-	db      *DB
-	conn    *pgx.Conn
+	channel   string
+	log       log15.Logger
+	db        *DB
+	conn      *pgx.Conn
+	closeOnce sync.Once
 }
 
-func (l *Listener) Close() error {
-	return l.conn.Close()
+func (l *Listener) Close() (err error) {
+	l.closeOnce.Do(func() {
+		err = l.conn.Close()
+	})
+	return
 }
 
 func (l *Listener) listen() {
 	defer func() {
-		l.conn.Close()
+		l.Close()
 		l.db.Release(l.conn)
 		close(l.Notify)
 	}()
