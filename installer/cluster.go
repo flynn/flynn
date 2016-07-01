@@ -21,6 +21,7 @@ import (
 	cc "github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/router/types"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -673,6 +674,9 @@ func (c *BaseCluster) bootstrapTarget(t *TargetServer) error {
 		if err != nil {
 			return err
 		}
+		if err := c.migrateDomainWorkaroundIssue2987(dm, t); err != nil {
+			c.SendLog(fmt.Sprintf("WARNING: Failed to run workaround for issue #2987: %s", err))
+		}
 		c.CACert = dm.TLSCert.CACert
 		c.ControllerPin = dm.TLSCert.Pin
 	} else {
@@ -765,6 +769,47 @@ func (c *BaseCluster) migrateDomain(dm *ct.DomainMigration, t *TargetServer) (*c
 			return nil, errors.New("timed out waiting for domain migration to complete")
 		}
 	}
+}
+
+// Workaround for https://github.com/flynn/flynn/issues/2987
+// Make sure system apps are using correct cert
+func (c *BaseCluster) migrateDomainWorkaroundIssue2987(dm *ct.DomainMigration, t *TargetServer) error {
+	client, err := cc.NewClientWithHTTP(fmt.Sprintf("http://%s", t.IP), c.ControllerKey, &http.Client{Transport: &http.Transport{Dial: t.SSHClient.Dial}})
+	if err != nil {
+		return fmt.Errorf("Error creating client: %s", err)
+	}
+	if v1client, ok := client.(*v1controller.Client); ok {
+		v1client.Host = fmt.Sprintf("controller.%s", dm.OldDomain)
+	}
+
+	for _, appName := range []string{"controller", "dashboard"} {
+		app, err := client.GetApp(appName)
+		if err != nil {
+			return fmt.Errorf("Error fetching app %s: %s", appName, err)
+		}
+		routes, err := client.RouteList(app.ID)
+		if err != nil {
+			return fmt.Errorf("Error listing routes for %s: %s", appName, err)
+		}
+		var route *router.Route
+		for _, r := range routes {
+			if strings.HasSuffix(r.Domain, dm.Domain) {
+				route = r
+				break
+			}
+		}
+		if route == nil {
+			return fmt.Errorf("couldn't find route for %s matching %s", appName, dm.Domain)
+		}
+		route.Certificate = &router.Certificate{
+			Cert: dm.TLSCert.Cert,
+			Key:  dm.TLSCert.PrivateKey,
+		}
+		if err := client.UpdateRoute(app.ID, route.FormattedID(), route); err != nil {
+			return fmt.Errorf("Error updating route for app %s: %s", appName, err)
+		}
+	}
+	return nil
 }
 
 func (c *BaseCluster) waitForDNS() error {
