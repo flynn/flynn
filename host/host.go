@@ -82,6 +82,7 @@ Commands:
   version                    Show current version
   fix                        Fix a broken cluster
   tags                       Manage flynn-host daemon tags
+  discover                   Return low-level information about a service
 
 See 'flynn-host help <command>' for more information on a specific command.
 `
