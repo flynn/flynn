@@ -42,7 +42,7 @@ options:
   --force                    kill all containers booted by flynn-host before starting
   --volpath=PATH             directory to create volumes in [default: /var/lib/flynn/volumes]
   --vol-provider=VOL         volume provider [default: zfs]
-  --backend=BACKEND          runner backend [default: libvirt-lxc]
+  --backend=BACKEND          runner backend [default: libcontainer]
   --flynn-init=PATH          path to flynn-init binary [default: /usr/local/bin/flynn-init]
   --nsumount=PATH            path to flynn-nsumount binary [default: /usr/local/bin/flynn-nsumount]
   --log-dir=DIR              directory to store job logs [default: /var/log/flynn]
@@ -272,8 +272,8 @@ func runDaemon(args *docopt.Args) {
 	log.Info("initializing job backend", "type", backendName)
 	var backend Backend
 	switch backendName {
-	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, bridgeName, flynnInit, nsumount, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libvirt-lxc"))
+	case "libcontainer":
+		backend, err = NewLibcontainerBackend(state, vman, bridgeName, flynnInit, nsumount, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"))
 	case "mock":
 		backend = MockBackend{}
 	default:

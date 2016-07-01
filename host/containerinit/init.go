@@ -21,7 +21,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -34,7 +33,6 @@ import (
 	"time"
 
 	sigutil "github.com/docker/docker/pkg/signal"
-	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libcontainer/user"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/health"
@@ -339,49 +337,6 @@ func runRPCServer() {
 	os.Exit(70)
 }
 
-func setupHostname(c *Config) error {
-	hostname := c.Env["HOSTNAME"]
-	if hostname == "" {
-		return nil
-	}
-	return syscall.Sethostname([]byte(hostname))
-}
-
-func setupNetworking(c *Config) error {
-	if c.IP == "" {
-		return nil
-	}
-
-	// loopback
-	iface, err := net.InterfaceByName("lo")
-	if err != nil {
-		return fmt.Errorf("Unable to set up networking: %v", err)
-	}
-	if err := netlink.NetworkLinkUp(iface); err != nil {
-		return fmt.Errorf("Unable to set up networking: %v", err)
-	}
-	if iface, err = net.InterfaceByName("eth0"); err != nil {
-		return fmt.Errorf("Unable to set up networking: %v", err)
-	}
-	ip, ipNet, err := net.ParseCIDR(c.IP)
-	if err != nil {
-		return fmt.Errorf("Unable to set up networking: %v", err)
-	}
-	if err := netlink.NetworkLinkAddIp(iface, ip, ipNet); err != nil {
-		return fmt.Errorf("Unable to set up networking: %v", err)
-	}
-	if c.Gateway != "" {
-		if err := netlink.AddDefaultGw(c.Gateway, "eth0"); err != nil {
-			return fmt.Errorf("Unable to set up networking: %v", err)
-		}
-	}
-	if err := netlink.NetworkLinkUp(iface); err != nil {
-		return fmt.Errorf("Unable to set up networking: %v", err)
-	}
-
-	return nil
-}
-
 func getCredential(c *Config) (*syscall.Credential, error) {
 	if c.User == "" {
 		return nil, nil
@@ -400,14 +355,6 @@ func getCredential(c *Config) (*syscall.Credential, error) {
 }
 
 func setupCommon(c *Config, log log15.Logger) error {
-	if err := setupHostname(c); err != nil {
-		return err
-	}
-
-	if err := setupNetworking(c); err != nil {
-		return err
-	}
-
 	// fetch file artifacts in parallel now that the network is configured
 	fetchErr := make(chan error)
 	for _, artifact := range c.FileArtifacts {

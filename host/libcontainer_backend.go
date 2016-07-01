@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -21,13 +20,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alexzorin/libvirt-go"
 	"github.com/docker/docker/pkg/term"
+	"github.com/docker/go-units"
 	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libnetwork/ipallocator"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/containerinit"
-	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
@@ -40,20 +38,25 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/miekg/dns"
+	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const (
-	imageRoot        = "/var/lib/docker"
-	flynnRoot        = "/var/lib/flynn"
-	defaultPartition = "user"
+	imageRoot         = "/var/lib/docker"
+	flynnRoot         = "/var/lib/flynn"
+	containerRoot     = "/var/lib/flynn/container"
+	defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
+	defaultPartition  = "user"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath, umountPath string, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
-	libvirtc, err := libvirt.NewVirConnection("lxc:///")
-	if err != nil {
-		return nil, err
-	}
+func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath, umountPath string, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
+	factory, err := libcontainer.New(
+		containerRoot,
+		libcontainer.Cgroupfs,
+		libcontainer.InitPath(initPath, initPath, "libcontainer-init"),
+	)
 
 	pinkertonCtx, err := pinkerton.BuildContext("aufs", imageRoot)
 	if err != nil {
@@ -66,15 +69,15 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName,
 		}
 	}
 
-	return &LibvirtLXCBackend{
+	return &LibcontainerBackend{
 		InitPath:            initPath,
 		UmountPath:          umountPath,
-		libvirt:             libvirtc,
+		factory:             factory,
 		state:               state,
 		vman:                vman,
 		pinkerton:           pinkertonCtx,
 		logStreams:          make(map[string]map[string]*logmux.LogStream),
-		containers:          make(map[string]*libvirtContainer),
+		containers:          make(map[string]*Container),
 		defaultEnv:          make(map[string]string),
 		resolvConf:          "/etc/resolv.conf",
 		mux:                 mux,
@@ -87,10 +90,10 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName,
 	}, nil
 }
 
-type LibvirtLXCBackend struct {
+type LibcontainerBackend struct {
 	InitPath   string
 	UmountPath string
-	libvirt    libvirt.VirConnection
+	factory    libcontainer.Factory
 	state      *State
 	vman       *volumemanager.Manager
 	pinkerton  *pinkerton.Context
@@ -107,7 +110,7 @@ type LibvirtLXCBackend struct {
 	mux          *logmux.Mux
 
 	containersMtx sync.RWMutex
-	containers    map[string]*libvirtContainer
+	containers    map[string]*Container
 
 	envMtx     sync.RWMutex
 	defaultEnv map[string]string
@@ -120,13 +123,14 @@ type LibvirtLXCBackend struct {
 	logger log15.Logger
 }
 
-type libvirtContainer struct {
-	RootPath string
-	Domain   *lt.Domain
-	IP       net.IP
-	job      *host.Job
-	l        *LibvirtLXCBackend
-	done     chan struct{}
+type Container struct {
+	RootPath  string
+	IP        net.IP
+	Pid       int
+	container libcontainer.Container
+	job       *host.Job
+	l         *LibcontainerBackend
+	done      chan struct{}
 	*containerinit.Client
 }
 
@@ -196,7 +200,7 @@ var networkConfigAttempts = attempt.Strategy{
 // ConfigureNetworking is called once during host startup and passed the
 // strategy and identifier of the networking coordinatior job. Currently the
 // only strategy implemented uses flannel.
-func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) error {
+func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) error {
 	log := l.logger.New("fn", "ConfigureNetworking")
 	var err error
 	l.bridgeAddr, l.bridgeNet, err = net.ParseCIDR(config.Subnet)
@@ -248,37 +252,6 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 		return err
 	}
 
-	network, err := l.libvirt.LookupNetworkByName(l.bridgeName)
-	if err != nil {
-		// network doesn't exist
-		networkConfig := &lt.Network{
-			Name:    l.bridgeName,
-			Bridge:  lt.Bridge{Name: l.bridgeName},
-			Forward: lt.Forward{Mode: "bridge"},
-		}
-		network, err = l.libvirt.NetworkDefineXML(string(networkConfig.XML()))
-		if err != nil {
-			return err
-		}
-	}
-	defer network.Free()
-	active, err := network.IsActive()
-	if err != nil {
-		return err
-	}
-	if !active {
-		if err := network.Create(); err != nil {
-			return err
-		}
-	}
-	if defaultNet, err := l.libvirt.LookupNetworkByName("default"); err == nil {
-		// The default network causes dnsmasq to run and bind to all interfaces,
-		// including ours. This prevents discoverd from binding its DNS server.
-		// We don't use it, so destroy it if it exists.
-		defaultNet.Destroy()
-		defaultNet.Free()
-	}
-
 	// enable IP forwarding
 	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1\n"), 0644); err != nil {
 		return err
@@ -327,28 +300,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 	return nil
 }
 
-var libvirtAttempts = attempt.Strategy{
-	Total: 10 * time.Second,
-	Delay: 200 * time.Millisecond,
-}
-
-func (l *LibvirtLXCBackend) withConnRetries(f func() error) error {
-	return libvirtAttempts.Run(func() error {
-		err := f()
-		if err != nil {
-			if alive, err := l.libvirt.IsAlive(); err != nil || !alive {
-				conn, connErr := libvirt.NewVirConnection("lxc:///")
-				if connErr != nil {
-					return connErr
-				}
-				l.libvirt = conn
-			}
-		}
-		return err
-	})
-}
-
-func (l *LibvirtLXCBackend) SetDefaultEnv(k, v string) {
+func (l *LibcontainerBackend) SetDefaultEnv(k, v string) {
 	l.envMtx.Lock()
 	l.defaultEnv[k] = v
 	l.envMtx.Unlock()
@@ -357,7 +309,7 @@ func (l *LibvirtLXCBackend) SetDefaultEnv(k, v string) {
 	}
 }
 
-func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBucket *RateLimitBucket) (err error) {
+func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBucket *RateLimitBucket) (err error) {
 	log := l.logger.New("fn", "run", "job.id", job.ID)
 
 	// if the job has been stopped, just return
@@ -399,7 +351,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBu
 	if runConfig == nil {
 		runConfig = &RunConfig{}
 	}
-	container := &libvirtContainer{
+	container := &Container{
 		l:    l,
 		job:  job,
 		done: make(chan struct{}),
@@ -548,7 +500,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBu
 	// release the write lock, we won't mutate global structures from here on out
 	l.state.mtx.Unlock()
 
-	config := &containerinit.Config{
+	initConfig := &containerinit.Config{
 		TTY:           job.Config.TTY,
 		OpenStdin:     job.Config.Stdin,
 		WorkDir:       job.Config.WorkingDir,
@@ -556,35 +508,35 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBu
 		FileArtifacts: job.FileArtifacts,
 	}
 	if !job.Config.HostNetwork {
-		config.IP = container.IP.String() + "/24"
-		config.Gateway = l.bridgeAddr.String()
+		initConfig.IP = container.IP.String() + "/24"
+		initConfig.Gateway = l.bridgeAddr.String()
 	}
-	if config.WorkDir == "" {
-		config.WorkDir = imageConfig.WorkingDir
+	if initConfig.WorkDir == "" {
+		initConfig.WorkDir = imageConfig.WorkingDir
 	}
 	if job.Config.Uid > 0 {
-		config.User = strconv.Itoa(job.Config.Uid)
+		initConfig.User = strconv.Itoa(job.Config.Uid)
 	} else if imageConfig.User != "" {
 		// TODO: check and lookup user from image config
 	}
 	if len(job.Config.Entrypoint) > 0 {
-		config.Args = job.Config.Entrypoint
-		config.Args = append(config.Args, job.Config.Cmd...)
+		initConfig.Args = job.Config.Entrypoint
+		initConfig.Args = append(initConfig.Args, job.Config.Cmd...)
 	} else {
-		config.Args = imageConfig.Entrypoint
+		initConfig.Args = imageConfig.Entrypoint
 		if len(job.Config.Cmd) > 0 {
-			config.Args = append(config.Args, job.Config.Cmd...)
+			initConfig.Args = append(initConfig.Args, job.Config.Cmd...)
 		} else {
-			config.Args = append(config.Args, imageConfig.Cmd...)
+			initConfig.Args = append(initConfig.Args, imageConfig.Cmd...)
 		}
 	}
 	for _, port := range job.Config.Ports {
-		config.Ports = append(config.Ports, port)
+		initConfig.Ports = append(initConfig.Ports, port)
 	}
 
 	log.Info("writing config")
 	l.envMtx.RLock()
-	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), config,
+	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), initConfig,
 		map[string]string{
 			"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 			"TERM": "xterm",
@@ -602,85 +554,159 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBu
 		return err
 	}
 
-	domain := &lt.Domain{
-		Type:   "lxc",
-		Name:   job.ID,
-		Memory: lt.UnitInt{Value: 1, Unit: "GiB"},
-		OS: lt.OS{
-			Type: lt.OSType{Value: "exe"},
-			Init: "/.containerinit",
+	config := &configs.Config{
+		Rootfs: rootPath,
+		Capabilities: []string{
+			"CAP_CHOWN",
+			"CAP_DAC_OVERRIDE",
+			"CAP_DAC_READ_SEARCH",
+			"CAP_FOWNER",
+			"CAP_FSETID",
+			"CAP_KILL",
+			"CAP_SETGID",
+			"CAP_SETUID",
+			"CAP_SETPCAP",
+			"CAP_LINUX_IMMUTABLE",
+			"CAP_NET_BIND_SERVICE",
+			"CAP_NET_BROADCAST",
+			"CAP_NET_ADMIN",
+			"CAP_NET_RAW",
+			"CAP_IPC_LOCK",
+			"CAP_IPC_OWNER",
+			"CAP_SYS_MODULE",
+			"CAP_SYS_RAWIO",
+			"CAP_SYS_CHROOT",
+			"CAP_SYS_PTRACE",
+			"CAP_SYS_PACCT",
+			"CAP_SYS_ADMIN",
+			"CAP_SYS_BOOT",
+			"CAP_SYS_NICE",
+			"CAP_SYS_RESOURCE",
+			"CAP_SYS_TIME",
+			"CAP_SYS_TTY_CONFIG",
+			"CAP_MKNOD",
+			"CAP_LEASE",
+			"CAP_AUDIT_WRITE",
+			"CAP_AUDIT_CONTROL",
+			"CAP_SETFCAP",
+			"CAP_MAC_OVERRIDE",
+			"CAP_MAC_ADMIN",
+			"CAP_SYSLOG",
+			"CAP_WAKE_ALARM",
+			"CAP_BLOCK_SUSPEND",
 		},
-		Devices: lt.Devices{
-			Filesystems: []lt.Filesystem{
-				{
-					Type:   "mount",
-					Source: lt.FSRef{Dir: rootPath},
-					Target: lt.FSRef{Dir: "/"},
-				},
-				{
-					Type:   "ram",
-					Source: lt.FSRef{Usage: "65535"}, // 64MiB
-					Target: lt.FSRef{Dir: "/dev/shm"},
-				},
+		Namespaces: configs.Namespaces([]configs.Namespace{
+			{Type: configs.NEWNS},
+			{Type: configs.NEWUTS},
+			{Type: configs.NEWIPC},
+			{Type: configs.NEWPID},
+		}),
+		Cgroups: &configs.Cgroup{
+			Path: filepath.Join("/flynn", job.Partition, job.ID),
+			Resources: &configs.Resources{
+				AllowedDevices: configs.DefaultAllowedDevices,
+				Memory:         1 * units.GiB,
 			},
-			Consoles: []lt.Console{{Type: "pty"}},
 		},
-		Resource: &lt.Resource{
-			Partition: "/machine/" + job.Partition,
+		MaskPaths: []string{
+			"/proc/kcore",
 		},
-		OnPoweroff: "preserve",
-		OnCrash:    "preserve",
+		ReadonlyPaths: []string{
+			"/proc/sys", "/proc/sysrq-trigger", "/proc/irq", "/proc/bus",
+		},
+		Devices: configs.DefaultAutoCreatedDevices,
+		Mounts: []*configs.Mount{
+			{
+				Source:      "proc",
+				Destination: "/proc",
+				Device:      "proc",
+				Flags:       defaultMountFlags,
+			},
+			{
+				Source:      "sysfs",
+				Destination: "/sys",
+				Device:      "sysfs",
+				Flags:       defaultMountFlags | syscall.MS_RDONLY,
+			},
+			{
+				Source:      "tmpfs",
+				Destination: "/dev",
+				Device:      "tmpfs",
+				Flags:       syscall.MS_NOSUID | syscall.MS_STRICTATIME,
+				Data:        "mode=755",
+			},
+			{
+				Source:      "devpts",
+				Destination: "/dev/pts",
+				Device:      "devpts",
+				Flags:       syscall.MS_NOSUID | syscall.MS_NOEXEC,
+				Data:        "newinstance,ptmxmode=0666,mode=0620,gid=5",
+			},
+			{
+				Device:      "tmpfs",
+				Source:      "shm",
+				Destination: "/dev/shm",
+				Data:        "mode=1777,size=65536k",
+				Flags:       defaultMountFlags,
+			},
+		},
+	}
+	if !job.Config.HostNetwork {
+		config.Hostname = hostname
+		config.Namespaces = append(config.Namespaces, configs.Namespace{Type: configs.NEWNET})
+		config.Networks = []*configs.Network{
+			{
+				Type:    "loopback",
+				Address: "127.0.0.1/0",
+				Gateway: "localhost",
+			},
+			{
+				Type:              "veth",
+				Name:              "eth0",
+				Bridge:            l.bridgeName,
+				Address:           initConfig.IP,
+				Gateway:           initConfig.Gateway,
+				Mtu:               1500,
+				HostInterfaceName: "veth" + random.String(4),
+			},
+		}
 	}
 	if spec, ok := job.Resources[resource.TypeMemory]; ok && spec.Limit != nil {
-		domain.Memory = lt.UnitInt{Value: *spec.Limit, Unit: "bytes"}
+		config.Cgroups.Resources.Memory = *spec.Limit
 	}
 	if spec, ok := job.Resources[resource.TypeCPU]; ok && spec.Limit != nil {
-		domain.CPUTune = &lt.CPUTune{Shares: milliCPUToShares(*spec.Limit)}
+		config.Cgroups.Resources.CpuShares = milliCPUToShares(*spec.Limit)
 	}
+	// TODO: assign a console
 
-	if !job.Config.HostNetwork {
-		domain.Devices.Interfaces = []lt.Interface{{
-			Type:   "network",
-			Source: lt.InterfaceSrc{Network: l.bridgeName},
-		}}
-	}
-
-	// attempt to run libvirt commands multiple times in case the libvirt daemon is
-	// temporarily unavailable (e.g. it has restarted, which sometimes happens in CI)
-	log.Info("defining domain")
-	var vd libvirt.VirDomain
-	if err := l.withConnRetries(func() (err error) {
-		vd, err = l.libvirt.DomainDefineXML(string(domain.XML()))
-		return
-	}); err != nil {
-		log.Error("error defining domain", "err", err)
-		return err
-	}
-	defer vd.Free()
-
-	log.Info("creating domain")
-	if err := l.withConnRetries(vd.Create); err != nil {
-		log.Error("error creating domain", "err", err)
-		return err
-	}
-	log.Info("getting domain uuid")
-	uuid, err := vd.GetUUIDString()
+	c, err := l.factory.Create(job.ID, config)
 	if err != nil {
-		log.Error("error getting domain uuid", "err", err)
 		return err
 	}
-	l.state.SetContainerID(job.ID, uuid)
 
-	domainXML, err := vd.GetXMLDesc(0)
+	process := &libcontainer.Process{
+		Args:   []string{"/.containerinit"},
+		User:   "root",
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+	}
+	if err := c.Run(process); err != nil {
+		c.Destroy()
+		return err
+	}
+	// TODO: detach? an update will detach all container anyway
+	go process.Wait()
+
+	pid, err := process.Pid()
 	if err != nil {
-		log.Error("error getting domain xml", "err", err)
 		return err
 	}
-	container.Domain = &lt.Domain{}
-	if err := xml.Unmarshal([]byte(domainXML), container.Domain); err != nil {
-		log.Error("error unmarshalling domain xml", "err", err)
-		return err
-	}
+	container.Pid = pid
+	container.container = c
+
+	// TODO: still necessary?
+	l.state.SetContainerID(job.ID, job.ID)
 
 	go container.watch(nil, nil)
 
@@ -691,7 +717,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBu
 // resolveDiscoverdURI resolves a discoverd host in the given URI to an address
 // using the configured discoverd URL as the host is likely not using discoverd
 // to resolve DNS queries
-func (l *LibvirtLXCBackend) resolveDiscoverdURI(uri string) (string, error) {
+func (l *LibcontainerBackend) resolveDiscoverdURI(uri string) (string, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return "", err
@@ -718,15 +744,15 @@ func (l *LibvirtLXCBackend) resolveDiscoverdURI(uri string) (string, error) {
 	return u.String(), nil
 }
 
-func (c *libvirtContainer) cleanupMounts(pid int) error {
-	list, err := mounts.ParseFile(fmt.Sprintf("/proc/%d/mounts", pid))
+func (c *Container) cleanupMounts() error {
+	list, err := mounts.ParseFile(fmt.Sprintf("/proc/%d/mounts", c.Pid))
 	if err != nil {
 		return err
 	}
 	sort.Sort(mounts.ByDepth(list))
 
 	args := make([]string, 1, len(list)+1)
-	args[0] = strconv.Itoa(pid)
+	args[0] = strconv.Itoa(c.Pid)
 	for _, m := range list {
 		if strings.HasPrefix(m.Mountpoint, imageRoot) || strings.HasPrefix(m.Mountpoint, flynnRoot) {
 			args = append(args, m.Mountpoint)
@@ -743,51 +769,17 @@ func (c *libvirtContainer) cleanupMounts(pid int) error {
 		if len(out) > 0 {
 			desc = string(out)
 		}
-		return fmt.Errorf("host: error running nsumount %d: %s", pid, desc)
+		return fmt.Errorf("host: error running nsumount %d: %s", c.Pid, desc)
 	}
 	return nil
 }
 
-// waitExit waits for the libvirt domain to be marked as done or five seconds to
-// elapse
-func (c *libvirtContainer) waitExit() {
-	log := c.l.logger.New("fn", "waitExit", "job.id", c.job.ID)
-	log.Info("waiting for domain to exit")
-	domain, err := c.l.libvirt.LookupDomainByName(c.job.ID)
-	if err != nil {
-		log.Error("error looking up domain", "err", err)
-		return
-	}
-	defer domain.Free()
-
-	maxWait := time.After(5 * time.Second)
-	for {
-		state, err := domain.GetState()
-		if err != nil {
-			log.Error("error getting domain state", "err", err)
-			return
-		}
-		if state[0] != libvirt.VIR_DOMAIN_RUNNING && state[0] != libvirt.VIR_DOMAIN_SHUTDOWN {
-			log.Info("finished waiting for domain")
-			return
-		}
-		select {
-		case <-maxWait:
-			log.Info("reached max wait")
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-}
-
-func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) error {
+func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	log := c.l.logger.New("fn", "watch", "job.id", c.job.ID)
 	log.Info("start watching container")
 
 	defer func() {
-		c.waitExit()
-		// TODO: kill containerinit/domain if it is still running
+		c.container.Destroy()
 		c.l.containersMtx.Lock()
 		delete(c.l.containers, c.job.ID)
 		c.l.containersMtx.Unlock()
@@ -823,15 +815,6 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 	if err != nil {
 		log.Error("error connecting to container", "err", err)
 		c.l.state.SetStatusFailed(c.job.ID, errors.New("failed to connect to container"))
-
-		d, e := c.l.libvirt.LookupDomainByName(c.job.ID)
-		if e != nil {
-			return e
-		}
-		defer d.Free()
-		if err := d.Destroy(); err != nil {
-			log.Error("error destroying domain", "err", err)
-		}
 		return err
 	}
 	defer c.Client.Close()
@@ -841,7 +824,7 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 		// see https://github.com/flynn/flynn/issues/1125 for details. Remove
 		// nsumount from the tree when deleting.
 		log.Info("cleaning up mounts")
-		if err := c.cleanupMounts(c.Domain.ID); err != nil {
+		if err := c.cleanupMounts(); err != nil {
 			log.Error("error cleaning up mounts", "err", err)
 		}
 
@@ -904,7 +887,7 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 	return nil
 }
 
-func (c *libvirtContainer) followLogs(log log15.Logger, buffer host.LogBuffer) error {
+func (c *Container) followLogs(log log15.Logger, buffer host.LogBuffer) error {
 	c.l.logStreamMtx.Lock()
 	defer c.l.logStreamMtx.Unlock()
 	if _, ok := c.l.logStreams[c.job.ID]; ok {
@@ -960,7 +943,7 @@ func (c *libvirtContainer) followLogs(log log15.Logger, buffer host.LogBuffer) e
 	return nil
 }
 
-func (c *libvirtContainer) unbindMounts() {
+func (c *Container) unbindMounts() {
 	log := c.l.logger.New("fn", "unbindMounts", "job.id", c.job.ID)
 	log.Info("unbinding mounts")
 
@@ -983,7 +966,7 @@ func (c *libvirtContainer) unbindMounts() {
 	log.Info("finishing unbinding mounts")
 }
 
-func (c *libvirtContainer) cleanup() error {
+func (c *Container) cleanup() error {
 	log := c.l.logger.New("fn", "cleanup", "job.id", c.job.ID)
 	log.Info("starting cleanup")
 
@@ -1005,7 +988,7 @@ func (c *libvirtContainer) cleanup() error {
 	return nil
 }
 
-func (c *libvirtContainer) WaitStop(timeout time.Duration) error {
+func (c *Container) WaitStop(timeout time.Duration) error {
 	job := c.l.state.GetJob(c.job.ID)
 	if job.Status == host.StatusDone || job.Status == host.StatusFailed {
 		return nil
@@ -1018,7 +1001,7 @@ func (c *libvirtContainer) WaitStop(timeout time.Duration) error {
 	}
 }
 
-func (c *libvirtContainer) Stop() error {
+func (c *Container) Stop() error {
 	if err := c.Signal(int(syscall.SIGTERM)); err != nil {
 		return err
 	}
@@ -1028,7 +1011,7 @@ func (c *libvirtContainer) Stop() error {
 	return nil
 }
 
-func (l *LibvirtLXCBackend) Stop(id string) error {
+func (l *LibcontainerBackend) Stop(id string) error {
 	c, err := l.getContainer(id)
 	if err != nil {
 		return err
@@ -1041,24 +1024,24 @@ func (l *LibvirtLXCBackend) Stop(id string) error {
 	return err
 }
 
-func (l *LibvirtLXCBackend) JobExists(id string) bool {
+func (l *LibcontainerBackend) JobExists(id string) bool {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	_, ok := l.containers[id]
 	return ok
 }
 
-func (l *LibvirtLXCBackend) getContainer(id string) (*libvirtContainer, error) {
+func (l *LibcontainerBackend) getContainer(id string) (*Container, error) {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	c := l.containers[id]
 	if c == nil {
-		return nil, errors.New("libvirt: unknown container")
+		return nil, errors.New("unknown container")
 	}
 	return c, nil
 }
 
-func (l *LibvirtLXCBackend) ResizeTTY(id string, height, width uint16) error {
+func (l *LibcontainerBackend) ResizeTTY(id string, height, width uint16) error {
 	container, err := l.getContainer(id)
 	if err != nil {
 		return err
@@ -1073,7 +1056,7 @@ func (l *LibvirtLXCBackend) ResizeTTY(id string, height, width uint16) error {
 	return term.SetWinsize(pty.Fd(), &term.Winsize{Height: height, Width: width})
 }
 
-func (l *LibvirtLXCBackend) Signal(id string, sig int) error {
+func (l *LibcontainerBackend) Signal(id string, sig int) error {
 	container, err := l.getContainer(id)
 	if err != nil {
 		return err
@@ -1081,7 +1064,7 @@ func (l *LibvirtLXCBackend) Signal(id string, sig int) error {
 	return container.Signal(sig)
 }
 
-func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
+func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 	client, err := l.getContainer(req.Job.Job.ID)
 	if err != nil {
 		if req.Job.Job.Config.TTY || req.Stdin != nil {
@@ -1200,7 +1183,7 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 	return io.EOF
 }
 
-func (l *LibvirtLXCBackend) Cleanup(except []string) error {
+func (l *LibcontainerBackend) Cleanup(except []string) error {
 	log := l.logger.New("fn", "Cleanup")
 	shouldSkip := func(id string) bool {
 		for _, s := range except {
@@ -1248,10 +1231,10 @@ func (l *LibvirtLXCBackend) Cleanup(except []string) error {
 	This may include reconnecting rpc systems and communicating with containers
 	(thus this may take a significant moment; it's not just deserializing).
 */
-func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobBackendStates map[string][]byte, backendGlobalState []byte, buffers host.LogBuffers) error {
-	containers := make(map[string]*libvirtContainer)
+func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobBackendStates map[string][]byte, backendGlobalState []byte, buffers host.LogBuffers) error {
+	containers := make(map[string]*Container)
 	for k, v := range jobBackendStates {
-		container := &libvirtContainer{}
+		container := &Container{}
 		if err := json.Unmarshal(v, container); err != nil {
 			return fmt.Errorf("failed to deserialize backed container state: %s", err)
 		}
@@ -1286,7 +1269,7 @@ func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobB
 	return nil
 }
 
-func (l *LibvirtLXCBackend) MarshalJobState(jobID string) ([]byte, error) {
+func (l *LibcontainerBackend) MarshalJobState(jobID string) ([]byte, error) {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	if associatedState, exists := l.containers[jobID]; exists {
@@ -1295,7 +1278,7 @@ func (l *LibvirtLXCBackend) MarshalJobState(jobID string) ([]byte, error) {
 	return nil, nil
 }
 
-func (l *LibvirtLXCBackend) OpenLogs(buffers host.LogBuffers) error {
+func (l *LibcontainerBackend) OpenLogs(buffers host.LogBuffers) error {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	for id, c := range l.containers {
@@ -1306,7 +1289,7 @@ func (l *LibvirtLXCBackend) OpenLogs(buffers host.LogBuffers) error {
 	return nil
 }
 
-func (l *LibvirtLXCBackend) CloseLogs() (host.LogBuffers, error) {
+func (l *LibcontainerBackend) CloseLogs() (host.LogBuffers, error) {
 	log := l.logger.New("fn", "CloseLogs")
 	l.logStreamMtx.Lock()
 	defer l.logStreamMtx.Unlock()
@@ -1386,14 +1369,13 @@ func milliCPUToShares(milliCPU int64) int64 {
 }
 
 func createCGroupPartition(name string, cpuShares int64) error {
-	name = name + ".partition"
 	for _, group := range []string{"blkio", "cpu", "cpuacct", "cpuset", "devices", "freezer", "memory", "net_cls", "perf_event"} {
-		if err := os.MkdirAll(filepath.Join("/sys/fs/cgroup/", group, "machine", name), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join("/sys/fs/cgroup/", group, "flynn", name), 0755); err != nil {
 			return fmt.Errorf("error creating partition cgroup: %s", err)
 		}
 	}
 	for _, param := range []string{"cpuset.cpus", "cpuset.mems"} {
-		data, err := ioutil.ReadFile(filepath.Join("/sys/fs/cgroup/cpuset/machine", param))
+		data, err := ioutil.ReadFile(filepath.Join("/sys/fs/cgroup/cpuset/flynn", param))
 		if err != nil {
 			return fmt.Errorf("error reading cgroup param: %s", err)
 		}
@@ -1403,15 +1385,15 @@ func createCGroupPartition(name string, cpuShares int64) error {
 			if err != nil {
 				return fmt.Errorf("error reading cgroup param: %s", err)
 			}
-			if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpuset/machine", param), data, 0644); err != nil {
+			if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpuset/flynn", param), data, 0644); err != nil {
 				return fmt.Errorf("error writing cgroup param: %s", err)
 			}
 		}
-		if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpuset/machine", name, param), data, 0644); err != nil {
+		if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpuset/flynn", name, param), data, 0644); err != nil {
 			return fmt.Errorf("error writing cgroup param: %s", err)
 		}
 	}
-	if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpu/machine", name, "cpu.shares"), strconv.AppendInt(nil, cpuShares, 10), 0644); err != nil {
+	if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpu/flynn", name, "cpu.shares"), strconv.AppendInt(nil, cpuShares, 10), 0644); err != nil {
 		return fmt.Errorf("error writing cgroup param: %s", err)
 	}
 	return nil
