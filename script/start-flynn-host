@@ -124,7 +124,6 @@ main() {
     --volpath "${vol_path}" \
     --log-dir "${log_dir}" \
     --flynn-init "${bin_dir}/flynn-init" \
-    --nsumount "${bin_dir}/flynn-nsumount" \
     ${peer_ips} \
     &>"${log}"
 

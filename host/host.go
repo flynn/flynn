@@ -44,7 +44,6 @@ options:
   --vol-provider=VOL         volume provider [default: zfs]
   --backend=BACKEND          runner backend [default: libcontainer]
   --flynn-init=PATH          path to flynn-init binary [default: /usr/local/bin/flynn-init]
-  --nsumount=PATH            path to flynn-nsumount binary [default: /usr/local/bin/flynn-nsumount]
   --log-dir=DIR              directory to store job logs [default: /var/log/flynn]
   --discovery=TOKEN          join cluster with discovery token
   --peer-ips=IPLIST          join existing cluster using IPs
@@ -151,7 +150,6 @@ func runDaemon(args *docopt.Args) {
 	volProvider := args.String["--vol-provider"]
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
-	nsumount := args.String["--nsumount"]
 	logDir := args.String["--log-dir"]
 	discoveryToken := args.String["--discovery"]
 	bridgeName := args.String["--bridge-name"]
@@ -273,7 +271,7 @@ func runDaemon(args *docopt.Args) {
 	var backend Backend
 	switch backendName {
 	case "libcontainer":
-		backend, err = NewLibcontainerBackend(state, vman, bridgeName, flynnInit, nsumount, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"))
+		backend, err = NewLibcontainerBackend(state, vman, bridgeName, flynnInit, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"))
 	case "mock":
 		backend = MockBackend{}
 	default:

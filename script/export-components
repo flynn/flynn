@@ -74,7 +74,6 @@ main() {
   cp "${ROOT}/host/bin/flynn-host.gz"                      "staged/targets/${version}/flynn-host.gz"
   gzip -9 --stdout "${ROOT}/cli/bin/flynn-linux-amd64"   > "staged/targets/${version}/flynn-linux-amd64.gz"
   gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/${version}/flynn-init.gz"
-  gzip -9 --stdout "${ROOT}/host/bin/flynn-nsumount"     > "staged/targets/${version}/flynn-nsumount.gz"
   gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/${version}/upstart.conf.gz"
   gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/${version}/bootstrap-manifest.json.gz"
   gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/${version}/version.json.gz"

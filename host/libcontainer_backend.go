@@ -10,10 +10,8 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,7 +31,6 @@ import (
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iptables"
-	"github.com/flynn/flynn/pkg/mounts"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
@@ -51,7 +48,7 @@ const (
 	defaultPartition  = "user"
 )
 
-func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath, umountPath string, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
+func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath string, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
 	factory, err := libcontainer.New(
 		containerRoot,
 		libcontainer.Cgroupfs,
@@ -71,7 +68,6 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 
 	return &LibcontainerBackend{
 		InitPath:            initPath,
-		UmountPath:          umountPath,
 		factory:             factory,
 		state:               state,
 		vman:                vman,
@@ -91,13 +87,12 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 }
 
 type LibcontainerBackend struct {
-	InitPath   string
-	UmountPath string
-	factory    libcontainer.Factory
-	state      *State
-	vman       *volumemanager.Manager
-	pinkerton  *pinkerton.Context
-	ipalloc    *ipallocator.IPAllocator
+	InitPath  string
+	factory   libcontainer.Factory
+	state     *State
+	vman      *volumemanager.Manager
+	pinkerton *pinkerton.Context
+	ipalloc   *ipallocator.IPAllocator
 
 	ifaceMTU   int
 	bridgeName string
@@ -126,7 +121,6 @@ type LibcontainerBackend struct {
 type Container struct {
 	RootPath  string
 	IP        net.IP
-	Pid       int
 	container libcontainer.Container
 	job       *host.Job
 	l         *LibcontainerBackend
@@ -680,11 +674,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	// TODO: detach? an update will detach all container anyway
 	go process.Wait()
 
-	pid, err := process.Pid()
-	if err != nil {
-		return err
-	}
-	container.Pid = pid
 	container.container = c
 
 	// TODO: still necessary?
@@ -724,36 +713,6 @@ func (l *LibcontainerBackend) resolveDiscoverdURI(uri string) (string, error) {
 	}
 	u.Host = addrs[random.Math.Intn(len(addrs))]
 	return u.String(), nil
-}
-
-func (c *Container) cleanupMounts() error {
-	list, err := mounts.ParseFile(fmt.Sprintf("/proc/%d/mounts", c.Pid))
-	if err != nil {
-		return err
-	}
-	sort.Sort(mounts.ByDepth(list))
-
-	args := make([]string, 1, len(list)+1)
-	args[0] = strconv.Itoa(c.Pid)
-	for _, m := range list {
-		if strings.HasPrefix(m.Mountpoint, imageRoot) || strings.HasPrefix(m.Mountpoint, flynnRoot) {
-			args = append(args, m.Mountpoint)
-		}
-	}
-	if len(args) <= 1 {
-		// no mountpoints to clean up
-		return nil
-	}
-
-	out, err := exec.Command(c.l.UmountPath, args...).CombinedOutput()
-	if err != nil {
-		desc := err.Error()
-		if len(out) > 0 {
-			desc = string(out)
-		}
-		return fmt.Errorf("host: error running nsumount %d: %s", c.Pid, desc)
-	}
-	return nil
 }
 
 func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
