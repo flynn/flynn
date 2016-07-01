@@ -3,6 +3,7 @@ import AppsStore from '../stores/apps';
 import AppsListHeader from './apps-list-header';
 import AppsList from './apps-list';
 import App from './app';
+import RouteLink from './route-link';
 
 var Apps = React.createClass({
 	displayName: "Views.Apps",
@@ -16,6 +17,12 @@ var Apps = React.createClass({
 					{React.createElement(AppsList, extend({}, this.props.appsListProps, {
 						apps: this.state.apps
 					}))}
+
+					<section className="system-applications-link">
+						<RouteLink path={"/apps"} params={{system: !this.props.showSystemApps }}>
+							{this.props.showSystemApps ? 'Hide' : 'Show'} System Applications
+						</RouteLink>
+					</section>
 				</section>
 
 				<section className="panel app-panel full-height">
