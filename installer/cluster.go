@@ -674,8 +674,8 @@ func (c *BaseCluster) bootstrapTarget(t *TargetServer) error {
 		if err != nil {
 			return err
 		}
-		if err := c.migrateDomainWorkaroundIssue2987(dm, t); err != nil {
-			c.SendLog(fmt.Sprintf("WARNING: Failed to run workaround for issue #2987: %s", err))
+		if err := c.migrateDomainWorkaroundIssue2987And3035(dm, t); err != nil {
+			c.SendLog(fmt.Sprintf("WARNING: Failed to run workaround for issue #2987 / #3035: %s", err))
 		}
 		c.CACert = dm.TLSCert.CACert
 		c.ControllerPin = dm.TLSCert.Pin
@@ -771,9 +771,9 @@ func (c *BaseCluster) migrateDomain(dm *ct.DomainMigration, t *TargetServer) (*c
 	}
 }
 
-// Workaround for https://github.com/flynn/flynn/issues/2987
+// Workaround for https://github.com/flynn/flynn/issues/2987 and https://github.com/flynn/flynn/issues/3035
 // Make sure system apps are using correct cert
-func (c *BaseCluster) migrateDomainWorkaroundIssue2987(dm *ct.DomainMigration, t *TargetServer) error {
+func (c *BaseCluster) migrateDomainWorkaroundIssue2987And3035(dm *ct.DomainMigration, t *TargetServer) error {
 	client, err := cc.NewClientWithHTTP(fmt.Sprintf("http://%s", t.IP), c.ControllerKey, &http.Client{Transport: &http.Transport{Dial: t.SSHClient.Dial}})
 	if err != nil {
 		return fmt.Errorf("Error creating client: %s", err)
@@ -782,7 +782,12 @@ func (c *BaseCluster) migrateDomainWorkaroundIssue2987(dm *ct.DomainMigration, t
 		v1client.Host = fmt.Sprintf("controller.%s", dm.OldDomain)
 	}
 
-	for _, appName := range []string{"controller", "dashboard"} {
+	cert := &router.Certificate{
+		Cert: dm.TLSCert.Cert,
+		Key:  dm.TLSCert.PrivateKey,
+	}
+
+	for _, appName := range []string{"controller", "dashboard", "gitreceive", "status"} {
 		app, err := client.GetApp(appName)
 		if err != nil {
 			return fmt.Errorf("Error fetching app %s: %s", appName, err)
@@ -799,12 +804,31 @@ func (c *BaseCluster) migrateDomainWorkaroundIssue2987(dm *ct.DomainMigration, t
 			}
 		}
 		if route == nil {
-			return fmt.Errorf("couldn't find route for %s matching %s", appName, dm.Domain)
+			// sometimes new routes aren't created
+			for _, r := range routes {
+				if strings.HasSuffix(r.Domain, dm.OldDomain) {
+					route = r
+					break
+				}
+			}
+			if route == nil {
+				continue
+			}
+			route = &router.Route{
+				ParentRef:   route.ParentRef,
+				Service:     route.Service,
+				Leader:      route.Leader,
+				Domain:      strings.Replace(route.Domain, dm.OldDomain, dm.Domain, 1),
+				Certificate: cert,
+				Sticky:      route.Sticky,
+				Path:        route.Path,
+			}
+			if err := client.CreateRoute(app.ID, route); err != nil {
+				return fmt.Errorf("Error creating route for app %s: %s", appName, err)
+			}
+			return nil
 		}
-		route.Certificate = &router.Certificate{
-			Cert: dm.TLSCert.Cert,
-			Key:  dm.TLSCert.PrivateKey,
-		}
+		route.Certificate = cert
 		if err := client.UpdateRoute(app.ID, route.FormattedID(), route); err != nil {
 			return fmt.Errorf("Error updating route for app %s: %s", appName, err)
 		}
