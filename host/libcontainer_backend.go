@@ -677,7 +677,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	if spec, ok := job.Resources[resource.TypeCPU]; ok && spec.Limit != nil {
 		config.Cgroups.Resources.CpuShares = milliCPUToShares(*spec.Limit)
 	}
-	// TODO: assign a console
 
 	c, err := l.factory.Create(job.ID, config)
 	if err != nil {
@@ -685,12 +684,16 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	}
 
 	process := &libcontainer.Process{
-		Args:   []string{"/.containerinit"},
-		User:   "root",
-		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
+		Args: []string{"/.containerinit"},
+		User: "root",
 	}
+	console, err := process.NewConsole(0, 0)
+	if err != nil {
+		return err
+	}
+	process.Stdin = console
+	process.Stdout = console
+	process.Stderr = console
 	if err := c.Run(process); err != nil {
 		c.Destroy()
 		return err
