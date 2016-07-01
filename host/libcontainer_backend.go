@@ -407,153 +407,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	}
 	container.RootPath = rootPath
 
-	log.Info("mounting container directories and files")
-	if err := bindMount(l.InitPath, filepath.Join(rootPath, ".containerinit"), false, true); err != nil {
-		log.Error("error bind mounting .containerinit", "err", err)
-		return err
-	}
-	if err := os.MkdirAll(filepath.Join(rootPath, "etc"), 0755); err != nil {
-		log.Error("error creating /etc in container root", "err", err)
-		return err
-	}
-
-	if err := bindMount(l.resolvConf, filepath.Join(rootPath, "etc/resolv.conf"), false, true); err != nil {
-		log.Error("error bind mounting resolv.conf", "err", err)
-		return err
-	}
-
-	jobIDParts := strings.SplitN(job.ID, "-", 2)
-	var hostname string
-	if len(jobIDParts) == 1 {
-		hostname = jobIDParts[0]
-	} else {
-		hostname = jobIDParts[1]
-	}
-	if len(hostname) > 64 {
-		hostname = hostname[:64]
-	}
-
-	if err := writeHostname(filepath.Join(rootPath, "etc/hosts"), hostname); err != nil {
-		log.Error("error writing hosts file", "err", err)
-		return err
-	}
-	if err := os.MkdirAll(filepath.Join(rootPath, ".container-shared"), 0700); err != nil {
-		log.Error("error createing .container-shared", "err", err)
-		return err
-	}
-	for _, m := range job.Config.Mounts {
-		if err := os.MkdirAll(filepath.Join(rootPath, m.Location), 0755); err != nil {
-			log.Error("error creating directory for mount point", "dir", m.Location, "err", err)
-			return err
-		}
-		if m.Target == "" {
-			return errors.New("host: invalid empty mount target")
-		}
-		if err := bindMount(m.Target, filepath.Join(rootPath, m.Location), m.Writeable, true); err != nil {
-			log.Error("error bind mounting", "target", m.Target, "location", m.Location, "err", err)
-			return err
-		}
-	}
-
-	// apply volumes
-	for _, v := range job.Config.Volumes {
-		vol := l.vman.GetVolume(v.VolumeID)
-		if vol == nil {
-			err := fmt.Errorf("job %s required volume %s, but that volume does not exist", job.ID, v.VolumeID)
-			log.Error("missing required volume", "volumeID", v.VolumeID, "err", err)
-			return err
-		}
-		if err := os.MkdirAll(filepath.Join(rootPath, v.Target), 0755); err != nil {
-			log.Error("error creating mount point for volume", "dir", v.Target, "err", err)
-			return err
-		}
-		if err := bindMount(vol.Location(), filepath.Join(rootPath, v.Target), v.Writeable, true); err != nil {
-			log.Error("error bind mounting volume", "target", v.Target, "volumeID", v.VolumeID, "err", err)
-			return err
-		}
-	}
-
-	// mutating job state, take state write lock
-	l.state.mtx.Lock()
-	if job.Config.Env == nil {
-		job.Config.Env = make(map[string]string)
-	}
-	for i, p := range job.Config.Ports {
-		if p.Proto != "tcp" && p.Proto != "udp" {
-			err := fmt.Errorf("unknown port proto %q", p.Proto)
-			log.Error("error allocating port", "proto", p.Proto, "err", err)
-			return err
-		}
-
-		if p.Port == 0 {
-			job.Config.Ports[i].Port = 5000 + i
-		}
-		if i == 0 {
-			job.Config.Env["PORT"] = strconv.Itoa(job.Config.Ports[i].Port)
-		}
-		job.Config.Env[fmt.Sprintf("PORT_%d", i)] = strconv.Itoa(job.Config.Ports[i].Port)
-	}
-
-	if !job.Config.HostNetwork {
-		job.Config.Env["EXTERNAL_IP"] = container.IP.String()
-	}
-	// release the write lock, we won't mutate global structures from here on out
-	l.state.mtx.Unlock()
-
-	initConfig := &containerinit.Config{
-		TTY:           job.Config.TTY,
-		OpenStdin:     job.Config.Stdin,
-		WorkDir:       job.Config.WorkingDir,
-		Resources:     job.Resources,
-		FileArtifacts: job.FileArtifacts,
-	}
-	if !job.Config.HostNetwork {
-		initConfig.IP = container.IP.String() + "/24"
-		initConfig.Gateway = l.bridgeAddr.String()
-	}
-	if initConfig.WorkDir == "" {
-		initConfig.WorkDir = imageConfig.WorkingDir
-	}
-	if job.Config.Uid > 0 {
-		initConfig.User = strconv.Itoa(job.Config.Uid)
-	} else if imageConfig.User != "" {
-		// TODO: check and lookup user from image config
-	}
-	if len(job.Config.Entrypoint) > 0 {
-		initConfig.Args = job.Config.Entrypoint
-		initConfig.Args = append(initConfig.Args, job.Config.Cmd...)
-	} else {
-		initConfig.Args = imageConfig.Entrypoint
-		if len(job.Config.Cmd) > 0 {
-			initConfig.Args = append(initConfig.Args, job.Config.Cmd...)
-		} else {
-			initConfig.Args = append(initConfig.Args, imageConfig.Cmd...)
-		}
-	}
-	for _, port := range job.Config.Ports {
-		initConfig.Ports = append(initConfig.Ports, port)
-	}
-
-	log.Info("writing config")
-	l.envMtx.RLock()
-	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), initConfig,
-		map[string]string{
-			"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-			"TERM": "xterm",
-			"HOME": "/",
-		},
-		l.defaultEnv,
-		job.Config.Env,
-		map[string]string{
-			"HOSTNAME": hostname,
-		},
-	)
-	l.envMtx.RUnlock()
-	if err != nil {
-		log.Error("error writing config", "err", err)
-		return err
-	}
-
 	config := &configs.Config{
 		Rootfs: rootPath,
 		Capabilities: []string{
@@ -651,6 +504,132 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			},
 		},
 	}
+
+	log.Info("mounting container directories and files")
+	jobIDParts := strings.SplitN(job.ID, "-", 2)
+	var hostname string
+	if len(jobIDParts) == 1 {
+		hostname = jobIDParts[0]
+	} else {
+		hostname = jobIDParts[1]
+	}
+	if len(hostname) > 64 {
+		hostname = hostname[:64]
+	}
+	if err := os.MkdirAll(filepath.Join(rootPath, "etc"), 0755); err != nil {
+		log.Error("error creating /etc in container root", "err", err)
+		return err
+	}
+	if err := writeHostname(filepath.Join(rootPath, "etc/hosts"), hostname); err != nil {
+		log.Error("error writing hosts file", "err", err)
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(rootPath, ".container-shared"), 0700); err != nil {
+		log.Error("error createing .container-shared", "err", err)
+		return err
+	}
+
+	addBindMount(config, l.InitPath, "/.containerinit", false)
+	addBindMount(config, l.resolvConf, "/etc/resolv.conf", false)
+	for _, m := range job.Config.Mounts {
+		if m.Target == "" {
+			return errors.New("host: invalid empty mount target")
+		}
+		addBindMount(config, m.Target, m.Location, m.Writeable)
+	}
+
+	// apply volumes
+	for _, v := range job.Config.Volumes {
+		vol := l.vman.GetVolume(v.VolumeID)
+		if vol == nil {
+			err := fmt.Errorf("job %s required volume %s, but that volume does not exist", job.ID, v.VolumeID)
+			log.Error("missing required volume", "volumeID", v.VolumeID, "err", err)
+			return err
+		}
+		addBindMount(config, vol.Location(), v.Target, v.Writeable)
+	}
+
+	// mutating job state, take state write lock
+	l.state.mtx.Lock()
+	if job.Config.Env == nil {
+		job.Config.Env = make(map[string]string)
+	}
+	for i, p := range job.Config.Ports {
+		if p.Proto != "tcp" && p.Proto != "udp" {
+			err := fmt.Errorf("unknown port proto %q", p.Proto)
+			log.Error("error allocating port", "proto", p.Proto, "err", err)
+			return err
+		}
+
+		if p.Port == 0 {
+			job.Config.Ports[i].Port = 5000 + i
+		}
+		if i == 0 {
+			job.Config.Env["PORT"] = strconv.Itoa(job.Config.Ports[i].Port)
+		}
+		job.Config.Env[fmt.Sprintf("PORT_%d", i)] = strconv.Itoa(job.Config.Ports[i].Port)
+	}
+
+	if !job.Config.HostNetwork {
+		job.Config.Env["EXTERNAL_IP"] = container.IP.String()
+	}
+	// release the write lock, we won't mutate global structures from here on out
+	l.state.mtx.Unlock()
+
+	initConfig := &containerinit.Config{
+		TTY:           job.Config.TTY,
+		OpenStdin:     job.Config.Stdin,
+		WorkDir:       job.Config.WorkingDir,
+		Resources:     job.Resources,
+		FileArtifacts: job.FileArtifacts,
+	}
+	if !job.Config.HostNetwork {
+		initConfig.IP = container.IP.String() + "/24"
+		initConfig.Gateway = l.bridgeAddr.String()
+	}
+	if initConfig.WorkDir == "" {
+		initConfig.WorkDir = imageConfig.WorkingDir
+	}
+	if job.Config.Uid > 0 {
+		initConfig.User = strconv.Itoa(job.Config.Uid)
+	} else if imageConfig.User != "" {
+		// TODO: check and lookup user from image config
+	}
+	if len(job.Config.Entrypoint) > 0 {
+		initConfig.Args = job.Config.Entrypoint
+		initConfig.Args = append(initConfig.Args, job.Config.Cmd...)
+	} else {
+		initConfig.Args = imageConfig.Entrypoint
+		if len(job.Config.Cmd) > 0 {
+			initConfig.Args = append(initConfig.Args, job.Config.Cmd...)
+		} else {
+			initConfig.Args = append(initConfig.Args, imageConfig.Cmd...)
+		}
+	}
+	for _, port := range job.Config.Ports {
+		initConfig.Ports = append(initConfig.Ports, port)
+	}
+
+	log.Info("writing config")
+	l.envMtx.RLock()
+	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), initConfig,
+		map[string]string{
+			"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			"TERM": "xterm",
+			"HOME": "/",
+		},
+		l.defaultEnv,
+		job.Config.Env,
+		map[string]string{
+			"HOSTNAME": hostname,
+		},
+	)
+	l.envMtx.RUnlock()
+	if err != nil {
+		log.Error("error writing config", "err", err)
+		return err
+	}
+
 	if !job.Config.HostNetwork {
 		config.Hostname = hostname
 		config.Namespaces = append(config.Namespaces, configs.Namespace{Type: configs.NEWNET})
@@ -822,21 +801,6 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	}
 	defer c.Client.Close()
 
-	go func() {
-		// Workaround for mounts leaking into the libvirt_lxc supervisor process,
-		// see https://github.com/flynn/flynn/issues/1125 for details. Remove
-		// nsumount from the tree when deleting.
-		log.Info("cleaning up mounts")
-		if err := c.cleanupMounts(); err != nil {
-			log.Error("error cleaning up mounts", "err", err)
-		}
-
-		// The bind mounts are copied when we spin up the container, we don't
-		// need them in the root mount namespace any more.
-		c.unbindMounts()
-		log.Info("finished cleaning up mounts")
-	}()
-
 	c.l.containersMtx.Lock()
 	c.l.containers[c.job.ID] = c
 	c.l.containersMtx.Unlock()
@@ -946,29 +910,6 @@ func (c *Container) followLogs(log log15.Logger, buffer host.LogBuffer) error {
 	return nil
 }
 
-func (c *Container) unbindMounts() {
-	log := c.l.logger.New("fn", "unbindMounts", "job.id", c.job.ID)
-	log.Info("unbinding mounts")
-
-	if err := syscall.Unmount(filepath.Join(c.RootPath, ".containerinit"), 0); err != nil {
-		log.Error("error umounting .containerinit", "err", err)
-	}
-	if err := syscall.Unmount(filepath.Join(c.RootPath, "etc/resolv.conf"), 0); err != nil {
-		log.Error("error umounting resolv.conf", "err", err)
-	}
-	for _, m := range c.job.Config.Mounts {
-		if err := syscall.Unmount(filepath.Join(c.RootPath, m.Location), 0); err != nil {
-			log.Error("error umounting mount point", "location", m.Location, "err", err)
-		}
-	}
-	for _, v := range c.job.Config.Volumes {
-		if err := syscall.Unmount(filepath.Join(c.RootPath, v.Target), 0); err != nil {
-			log.Error("error umounting volume", "target", v.Target, "volumeID", v.VolumeID, "err", err)
-		}
-	}
-	log.Info("finishing unbinding mounts")
-}
-
 func (c *Container) cleanup() error {
 	log := c.l.logger.New("fn", "cleanup", "job.id", c.job.ID)
 	log.Info("starting cleanup")
@@ -980,7 +921,6 @@ func (c *Container) cleanup() error {
 	delete(c.l.logStreams, c.job.ID)
 	c.l.logStreamMtx.Unlock()
 
-	c.unbindMounts()
 	if err := c.l.pinkerton.Cleanup(c.job.ID); err != nil {
 		log.Error("error running pinkerton cleanup", "err", err)
 	}
@@ -1309,44 +1249,17 @@ func (l *LibcontainerBackend) CloseLogs() (host.LogBuffers, error) {
 	return buffers, nil
 }
 
-func bindMount(src, dest string, writeable, private bool) error {
-	srcStat, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(dest); os.IsNotExist(err) {
-		if srcStat.IsDir() {
-			if err := os.MkdirAll(dest, 0755); err != nil {
-				return err
-			}
-		} else {
-			if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
-				return err
-			}
-			f, err := os.OpenFile(dest, os.O_CREATE, 0755)
-			if err != nil {
-				return err
-			}
-			f.Close()
-		}
-	} else if err != nil {
-		return err
-	}
-
+func addBindMount(config *configs.Config, src, dest string, writeable bool) {
 	flags := syscall.MS_BIND | syscall.MS_REC
 	if !writeable {
 		flags |= syscall.MS_RDONLY
 	}
-
-	if err := syscall.Mount(src, dest, "bind", uintptr(flags), ""); err != nil {
-		return err
-	}
-	if private {
-		if err := syscall.Mount("", dest, "none", uintptr(syscall.MS_PRIVATE), ""); err != nil {
-			return err
-		}
-	}
-	return nil
+	config.Mounts = append(config.Mounts, &configs.Mount{
+		Source:      src,
+		Destination: dest,
+		Device:      "bind",
+		Flags:       flags,
+	})
 }
 
 // Taken from Kubernetes:
