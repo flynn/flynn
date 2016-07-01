@@ -153,7 +153,8 @@ apt-get install -y \
   libvirt-dev \
   libvirt-bin \
   inotify-tools \
-  libsasl2-dev
+  libsasl2-dev \
+  libseccomp-dev
 
 # install flynn test dependencies: postgres, redis, mariadb
 # (normally these are used via appliances; install locally for unit tests)
