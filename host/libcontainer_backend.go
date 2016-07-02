@@ -496,6 +496,11 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 				Data:        "mode=1777,size=65536k",
 				Flags:       defaultMountFlags,
 			},
+			{
+				Destination: "/sys/fs/cgroup",
+				Device:      "cgroup",
+				Flags:       defaultMountFlags | syscall.MS_RDONLY,
+			},
 		},
 	}
 
