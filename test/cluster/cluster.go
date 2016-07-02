@@ -33,7 +33,6 @@ type BootConfig struct {
 	Kernel   string
 	Network  string
 	NatIface string
-	Backend  string
 }
 
 type Cluster struct {
@@ -250,12 +249,7 @@ func (c *Cluster) RemoveHost(id string) error {
 	c.log("removing host", id)
 
 	// ssh into the host and tell the flynn-host daemon to stop
-	var cmd string
-	switch c.bc.Backend {
-	case "libvirt-lxc":
-		// manually kill containers after stopping flynn-host due to https://github.com/flynn/flynn/issues/1177
-		cmd = "sudo start-stop-daemon --stop --pidfile /var/run/flynn-host.pid --retry 15 && (virsh -c lxc:/// list --name | xargs -L 1 virsh -c lxc:/// destroy || true)"
-	}
+	cmd := "sudo start-stop-daemon --stop --pidfile /var/run/flynn-host.pid --retry 15"
 	return inst.Run(cmd, nil)
 }
 
@@ -307,10 +301,6 @@ func (c *Cluster) startVMs(typ ClusterType, rootFS string, count int, initial bo
 }
 
 func (c *Cluster) startFlynnHost(inst *Instance, peerInstances []*Instance) error {
-	tmpl, ok := flynnHostScripts[c.bc.Backend]
-	if !ok {
-		return fmt.Errorf("unknown host backend: %s", c.bc.Backend)
-	}
 	peers := make([]string, 0, len(peerInstances))
 	for _, inst := range peerInstances {
 		if !inst.initial {
@@ -324,7 +314,7 @@ func (c *Cluster) startFlynnHost(inst *Instance, peerInstances []*Instance) erro
 		IP:    inst.IP,
 		Peers: strings.Join(peers, ","),
 	}
-	tmpl.Execute(&script, data)
+	flynnHostScript.Execute(&script, data)
 	c.logf("Starting flynn-host on %s [id: %s]\n", inst.IP, inst.ID)
 	return inst.Run("bash", &Streams{Stdin: &script, Stdout: c.out, Stderr: os.Stderr})
 }
@@ -471,8 +461,7 @@ type hostScriptData struct {
 	Peers string
 }
 
-var flynnHostScripts = map[string]*template.Template{
-	"libvirt-lxc": template.Must(template.New("flynn-host-libvirt").Parse(`
+var flynnHostScript = template.Must(template.New("flynn-host").Parse(`
 if [[ -f /usr/local/bin/debug-info.sh ]]; then
   /usr/local/bin/debug-info.sh &>/tmp/debug-info.log &
 fi
@@ -490,12 +479,10 @@ sudo start-stop-daemon \
   --id {{ .ID }} \
   --external-ip {{ .IP }} \
   --force \
-  --backend libvirt-lxc \
   --peer-ips {{ .Peers }} \
   --max-job-concurrency 8 \
   &>/tmp/flynn-host.log
-`[1:])),
-}
+`[1:]))
 
 type bootstrapMsg struct {
 	Id    string          `json:"id"`
@@ -600,7 +587,6 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 			"ps faux",
 			"cat /var/log/flynn/flynn-host.log",
 			"cat /tmp/debug-info.log",
-			"sudo cat /var/log/libvirt/libvirtd.log",
 		)
 	}
 
