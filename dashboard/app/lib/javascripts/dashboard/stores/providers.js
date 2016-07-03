@@ -343,6 +343,7 @@ var Providers = Store.createClass({
 	__fetchProviders: function () {
 		Config.client.listProviders().then(function (args) {
 			var res = args[0];
+			var providers = {};
 			var providerApps = {};
 			var resourceApps = {};
 			Promise.all(res.map(function (provider) {
@@ -351,6 +352,7 @@ var Providers = Store.createClass({
 					window.console.error('No provider config found for '+ provider.name);
 					return;
 				}
+				providers[provider.name] = provider;
 				return Promise.all([
 					Config.client.getApp(pAttrs.appName).then(function (args) {
 						providerApps[provider.id] = args[0];
@@ -372,7 +374,9 @@ var Providers = Store.createClass({
 			}, this)).then(function () {
 				this.setState({
 					fetched: true,
-					providers: res,
+					providers: Config.PROVIDER_ORDER.map(function (name) {
+						return providers[name];
+					}),
 					providerApps: providerApps,
 					resourceApps: resourceApps
 				});
