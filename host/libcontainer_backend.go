@@ -22,6 +22,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libnetwork/ipallocator"
+	"github.com/docker/libnetwork/netutils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/containerinit"
 	"github.com/flynn/flynn/host/logmux"
@@ -629,6 +630,10 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		return err
 	}
 
+	ifaceName, err := netutils.GenerateIfaceName("veth", 4)
+	if err != nil {
+		return err
+	}
 	if !job.Config.HostNetwork {
 		config.Hostname = hostname
 		config.Namespaces = append(config.Namespaces, configs.Namespace{Type: configs.NEWNET})
@@ -645,7 +650,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 				Address:           initConfig.IP,
 				Gateway:           initConfig.Gateway,
 				Mtu:               1500,
-				HostInterfaceName: "veth" + random.String(4),
+				HostInterfaceName: ifaceName,
 			},
 		}
 	}
