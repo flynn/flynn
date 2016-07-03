@@ -47,6 +47,7 @@ const (
 	containerRoot     = "/var/lib/flynn/container"
 	defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 	defaultPartition  = "user"
+	defaultMemory     = 1 * units.GiB
 )
 
 func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath string, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
@@ -453,7 +454,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			Path: filepath.Join("/flynn", job.Partition, job.ID),
 			Resources: &configs.Resources{
 				AllowedDevices: configs.DefaultAllowedDevices,
-				Memory:         1 * units.GiB,
+				Memory:         defaultMemory,
 			},
 		},
 		MaskPaths: []string{
