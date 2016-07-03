@@ -121,6 +121,8 @@ StaticConfig.PROVIDER_ATTRS = {
 	}
 };
 
+StaticConfig.PROVIDER_ORDER = ['postgres', 'mysql', 'mongodb', 'redis'];
+
 StaticConfig.expandTemplateStr = function (templateStr, vars) {
   return templateStr.replace(/{([^}]+)}/g, function (m, k) {
     return vars[k];
