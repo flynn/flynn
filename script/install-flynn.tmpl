@@ -127,7 +127,6 @@ main() {
   local packages=(
     "aufs-tools"
     "iptables"
-    "libvirt-bin"
     "ubuntu-zfs"
   )
   if ! modprobe aufs &>/dev/null; then
@@ -166,13 +165,6 @@ main() {
     --tuf-db     "/etc/flynn/tuf.db" \
     --config-dir "/etc/flynn" \
     --bin-dir    "/usr/local/bin"
-
-  info "setting libvirt defaults"
-  if grep -q "^libvirt_uris=" /etc/default/libvirt-bin; then
-    sed "s|^libvirt_uris=.*|libvirt_uris='qemu:///system'|" -i /etc/default/libvirt-bin
-  else
-    echo "libvirt_uris='qemu:///system'" >> /etc/default/libvirt-bin
-  fi
 
   info "installing Upstart job"
   cp /etc/flynn/upstart.conf /etc/init/flynn-host.conf
@@ -217,9 +209,11 @@ do_remove() {
   fi
 
   info "killing old containers"
-  for name in $(virsh -c lxc:/// list --name); do
-    run virsh -c lxc:/// destroy "${name}"
-  done
+  sudo start-stop-daemon \
+    --stop \
+    --oknodo \
+    --retry 5 \
+    --name ".containerinit"
 
   info "destroying ZFS volumes"
   for path in $(grep zfs /proc/mounts | cut -d ' ' -f2); do

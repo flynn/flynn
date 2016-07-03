@@ -913,11 +913,6 @@ if [ ! -f "${FIRST_BOOT}" ]; then
   zpool create -f flynn-default {{.DataDisk}}
   {{end}}
 
-  # wait for libvirt
-  while ! [ -e /var/run/libvirt/libvirt-sock ]; do
-    sleep 0.1
-  done
-
   flynn-host init --discovery={{.DiscoveryToken}}
   start flynn-host
   sed -i 's/#start on/start on/' /etc/init/flynn-host.conf
