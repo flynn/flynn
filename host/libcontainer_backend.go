@@ -53,6 +53,27 @@ const (
 	defaultMemory     = 1 * units.GiB
 )
 
+// defaultCapabilities is a list of capabilities which are set inside a
+// container, taken from:
+// https://github.com/opencontainers/runc/blob/v1.0.0-rc1/libcontainer/SPEC.md#security
+var defaultCapabilities = []string{
+	"CAP_NET_RAW",
+	"CAP_NET_BIND_SERVICE",
+	"CAP_AUDIT_READ",
+	"CAP_AUDIT_WRITE",
+	"CAP_DAC_OVERRIDE",
+	"CAP_SETFCAP",
+	"CAP_SETPCAP",
+	"CAP_SETGID",
+	"CAP_SETUID",
+	"CAP_MKNOD",
+	"CAP_CHOWN",
+	"CAP_FOWNER",
+	"CAP_FSETID",
+	"CAP_KILL",
+	"CAP_SYS_CHROOT",
+}
+
 func init() {
 	// when starting a container with libcontainer, we first exec the
 	// current binary with libcontainer-init as the first argument,
@@ -423,46 +444,8 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	container.RootPath = rootPath
 
 	config := &configs.Config{
-		Rootfs: rootPath,
-		Capabilities: []string{
-			"CAP_CHOWN",
-			"CAP_DAC_OVERRIDE",
-			"CAP_DAC_READ_SEARCH",
-			"CAP_FOWNER",
-			"CAP_FSETID",
-			"CAP_KILL",
-			"CAP_SETGID",
-			"CAP_SETUID",
-			"CAP_SETPCAP",
-			"CAP_LINUX_IMMUTABLE",
-			"CAP_NET_BIND_SERVICE",
-			"CAP_NET_BROADCAST",
-			"CAP_NET_ADMIN",
-			"CAP_NET_RAW",
-			"CAP_IPC_LOCK",
-			"CAP_IPC_OWNER",
-			"CAP_SYS_MODULE",
-			"CAP_SYS_RAWIO",
-			"CAP_SYS_CHROOT",
-			"CAP_SYS_PTRACE",
-			"CAP_SYS_PACCT",
-			"CAP_SYS_ADMIN",
-			"CAP_SYS_BOOT",
-			"CAP_SYS_NICE",
-			"CAP_SYS_RESOURCE",
-			"CAP_SYS_TIME",
-			"CAP_SYS_TTY_CONFIG",
-			"CAP_MKNOD",
-			"CAP_LEASE",
-			"CAP_AUDIT_WRITE",
-			"CAP_AUDIT_CONTROL",
-			"CAP_SETFCAP",
-			"CAP_MAC_OVERRIDE",
-			"CAP_MAC_ADMIN",
-			"CAP_SYSLOG",
-			"CAP_WAKE_ALARM",
-			"CAP_BLOCK_SUSPEND",
-		},
+		Rootfs:       rootPath,
+		Capabilities: defaultCapabilities,
 		Namespaces: configs.Namespaces([]configs.Namespace{
 			{Type: configs.NEWNS},
 			{Type: configs.NEWUTS},
