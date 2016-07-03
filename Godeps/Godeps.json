@@ -33,11 +33,6 @@
 			"Rev": "d2b94fd789ea21d12fac1a4443dd3a3f79cda72c"
 		},
 		{
-			"ImportPath": "github.com/alexzorin/libvirt-go",
-			"Comment": "v2.9.0",
-			"Rev": "b9951d11774a62fbdfb340eeff70c1935d8e531e"
-		},
-		{
 			"ImportPath": "github.com/armon/go-metrics",
 			"Rev": "b2d95e5291cdbc26997d1301a5e467ecbb240e25"
 		},
