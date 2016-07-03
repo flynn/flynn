@@ -725,6 +725,10 @@ func (p *databaseSimulatorClient) Reconfigure(conf *state.Config) error {
 		panic("attempted to configure database with no cluster state")
 	}
 
+	if p.Config.Equal(conf) {
+		return nil // nothing to apply, Upstream/Downstreams match - just state update
+	}
+
 	p.XLogWaiting = ""
 	p.p.log.Info("reconfiguring database")
 	time.Sleep(opLag)
