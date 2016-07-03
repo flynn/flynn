@@ -99,7 +99,6 @@ func runMongo(args *docopt.Args, client controller.Client, config *runConfig) er
 		"--host", config.Env["MONGO_HOST"],
 		"-u", config.Env["MONGO_USER"],
 		"-p", config.Env["MONGO_PWD"],
-		"--authenticationDatabase", "admin",
 		config.Env["MONGO_DATABASE"],
 	}, args.All["<argument>"].([]string)...)
 
@@ -135,7 +134,6 @@ func configMongodbDump(config *runConfig) {
 		"--host", config.Env["MONGO_HOST"],
 		"-u", config.Env["MONGO_USER"],
 		"-p", config.Env["MONGO_PWD"],
-		"--authenticationDatabase", "admin",
 		"--db", config.Env["MONGO_DATABASE"],
 	}
 }
@@ -184,7 +182,6 @@ func mongodbRestore(client controller.Client, config *runConfig) error {
 		"--host", config.Env["MONGO_HOST"],
 		"-u", config.Env["MONGO_USER"],
 		"-p", config.Env["MONGO_PWD"],
-		"--authenticationDatabase", "admin",
 		"--db", config.Env["MONGO_DATABASE"],
 	}
 	err := runJob(client, *config)
