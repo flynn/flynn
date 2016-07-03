@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,6 +40,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	_ "github.com/opencontainers/runc/libcontainer/nsenter"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -50,11 +53,27 @@ const (
 	defaultMemory     = 1 * units.GiB
 )
 
+func init() {
+	// when starting a container with libcontainer, we first exec the
+	// current binary with libcontainer-init as the first argument,
+	// which triggers the following code to initialise the container
+	// environment (namespaces, network etc.) then exec containerinit
+	if len(os.Args) > 1 && os.Args[1] == "libcontainer-init" {
+		runtime.GOMAXPROCS(1)
+		runtime.LockOSThread()
+		factory, _ := libcontainer.New("")
+		if err := factory.StartInitialization(); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+}
+
 func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath string, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
 	factory, err := libcontainer.New(
 		containerRoot,
 		libcontainer.Cgroupfs,
-		libcontainer.InitPath(initPath, initPath, "libcontainer-init"),
+		libcontainer.InitArgs(os.Args[0], "libcontainer-init"),
 	)
 
 	pinkertonCtx, err := pinkerton.BuildContext("aufs", imageRoot)
