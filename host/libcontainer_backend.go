@@ -142,8 +142,10 @@ type LibcontainerBackend struct {
 }
 
 type Container struct {
-	RootPath  string
-	IP        net.IP
+	ID       string `json:"id"`
+	RootPath string `json:"root_path"`
+	IP       net.IP `json:"ip"`
+
 	container libcontainer.Container
 	job       *host.Job
 	l         *LibcontainerBackend
@@ -369,6 +371,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		runConfig = &RunConfig{}
 	}
 	container := &Container{
+		ID:   job.ID,
 		l:    l,
 		job:  job,
 		done: make(chan struct{}),
@@ -1134,6 +1137,11 @@ func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jo
 		if err := json.Unmarshal(v, container); err != nil {
 			return fmt.Errorf("failed to deserialize backed container state: %s", err)
 		}
+		c, err := l.factory.Load(container.ID)
+		if err != nil {
+			return fmt.Errorf("error loading container state: %s", err)
+		}
+		container.container = c
 		containers[k] = container
 	}
 	readySignals := make(map[string]chan error)
