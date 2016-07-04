@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -23,6 +25,8 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
+	"github.com/opencontainers/runc/libcontainer"
+	_ "github.com/opencontainers/runc/libcontainer/nsenter"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -55,6 +59,19 @@ options:
 }
 
 func main() {
+	// when starting a container with libcontainer, we first exec the
+	// current binary with libcontainer-init as the first argument,
+	// which triggers the following code to initialise the container
+	// environment (namespaces, network etc.) then exec containerinit
+	if len(os.Args) > 1 && os.Args[1] == "libcontainer-init" {
+		runtime.GOMAXPROCS(1)
+		runtime.LockOSThread()
+		factory, _ := libcontainer.New("")
+		if err := factory.StartInitialization(); err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	defer shutdown.Exit()
 
 	usage := `usage: flynn-host [-h|--help] [--version] <command> [<args>...]
