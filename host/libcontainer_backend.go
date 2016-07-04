@@ -654,7 +654,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	}
 
 	process := &libcontainer.Process{
-		Args: []string{"/.containerinit"},
+		Args: []string{"/.containerinit", job.ID},
 		User: "root",
 	}
 	console, err := process.NewConsole(0, 0)
