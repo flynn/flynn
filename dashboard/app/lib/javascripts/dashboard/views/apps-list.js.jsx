@@ -17,8 +17,15 @@ var AppsList = React.createClass({
 		return (
 			<ul className="items-list">
 				{apps.map(function (app) {
+					var classes = [];
+					if (assertEqual(app.id, selectedAppId)) {
+						classes.push("selected");
+					}
+					if (assertEqual(app.meta["flynn-system-app"], "true")) {
+						classes.push("system-application");
+					}
 					return (
-						<li key={app.id} className={assertEqual(app.id, selectedAppId) ? "selected" : ""}>
+						<li key={app.id} className={ classes.join(" ") }>
 							<RouteLink path={getAppPath(app.id)}>
 								{app.name}
 							</RouteLink>
