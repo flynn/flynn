@@ -21,7 +21,8 @@ usage: $0 [options]
 
 OPTIONS:
   -h, --help            Show this message
-  -c, --commit COMMIT   The git commit to build [default: the master branch of https://github.com/flynn/flynn.git]
+  -c, --commit COMMIT   The git commit to build (takes precedence over the --branch flag)
+  -b, --branch BRANCH   The git branch to build [default: master]
   -b, --bucket BUCKET   The S3 bucket to upload packages to [default: flynn]
   -d, --domain DOMAIN   The CloudFront domain [default: dl.flynn.io]
   -t, --tuf-dir DIR     Path to the local TUF repository [default: /etc/flynn/tuf]
@@ -33,6 +34,7 @@ USAGE
 
 main() {
   local commit=""
+  local branch="master"
   local bucket="flynn"
   local domain="dl.flynn.io"
   local tuf_dir="/etc/flynn/tuf"
@@ -51,7 +53,14 @@ main() {
         commit="$2"
         shift 2
         ;;
-      -b | --bucket)
+      -b | --branch)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        fi
+        branch="$2"
+        shift 2
+        ;;
+      -k | --bucket)
         if [[ -z "$2" ]]; then
           fail "$1 requires an argument"
         fi
@@ -100,11 +109,12 @@ main() {
   dir="${dir:-$(mktemp --directory)}"
 
   if [[ -z "${commit}" ]]; then
-    info "determining commit"
-    commit=$(curl --fail --silent https://api.github.com/repos/flynn/flynn/git/refs/heads/master | jq --raw-output .object.sha)
+    info "determining commit of ${branch} branch"
+    commit="$(curl --fail --silent "https://api.github.com/repos/flynn/flynn/git/refs/heads/${branch}" | jq --raw-output .object.sha)"
     if [[ -z "${commit}" ]]; then
       fail "could not determine commit"
     fi
+    info "using commit ${commit}"
   fi
 
   info "checking script is from commit being released"
