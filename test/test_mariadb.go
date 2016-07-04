@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/flynn/flynn/appliance/mariadb"
 	ct "github.com/flynn/flynn/controller/types"
@@ -80,7 +81,9 @@ func (s *MariaDBSuite) TestDumpRestore(t *c.C) {
 	r := s.newGitRepo(t, "empty")
 	t.Assert(r.flynn("create"), Succeeds)
 
-	t.Assert(r.flynn("resource", "add", "mysql"), Succeeds)
+	res := r.flynn("resource", "add", "mysql")
+	t.Assert(res, Succeeds)
+	id := strings.Split(res.Output, " ")[2]
 
 	t.Assert(r.flynn("mysql", "console", "--", "-e",
 		"CREATE TABLE T (F text); INSERT INTO T (F) VALUES ('abc')"), Succeeds)
@@ -93,4 +96,6 @@ func (s *MariaDBSuite) TestDumpRestore(t *c.C) {
 
 	query := r.flynn("mysql", "console", "--", "-e", "SELECT * FROM T")
 	t.Assert(query, SuccessfulOutputContains, "abc")
+
+	t.Assert(r.flynn("resource", "remove", "mysql", id), Succeeds)
 }

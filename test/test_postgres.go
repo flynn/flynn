@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -25,7 +26,9 @@ func (s *PostgresSuite) TestDumpRestore(t *c.C) {
 	r := s.newGitRepo(t, "empty")
 	t.Assert(r.flynn("create"), Succeeds)
 
-	t.Assert(r.flynn("resource", "add", "postgres"), Succeeds)
+	res := r.flynn("resource", "add", "postgres")
+	t.Assert(res, Succeeds)
+	id := strings.Split(res.Output, " ")[2]
 
 	t.Assert(r.flynn("pg", "psql", "--", "-c",
 		"CREATE table foos (data text); INSERT INTO foos (data) VALUES ('foobar')"), Succeeds)
@@ -38,6 +41,8 @@ func (s *PostgresSuite) TestDumpRestore(t *c.C) {
 
 	query := r.flynn("pg", "psql", "--", "-c", "SELECT * FROM foos")
 	t.Assert(query, SuccessfulOutputContains, "foobar")
+
+	t.Assert(r.flynn("resource", "remove", "postgres", id), Succeeds)
 }
 
 var sireniaPostgres = sireniaDatabase{

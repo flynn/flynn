@@ -71,7 +71,7 @@ func (a *API) createDatabase(w http.ResponseWriter, req *http.Request, _ httprou
 	defer session.Close()
 
 	// Create a user
-	if err := session.DB("admin").Run(bson.D{
+	if err := session.DB(database).Run(bson.D{
 		{"createUser", username},
 		{"pwd", password},
 		{"roles", []bson.M{
@@ -108,7 +108,7 @@ func (a *API) dropDatabase(w http.ResponseWriter, req *http.Request, _ httproute
 		Addrs:    []string{net.JoinHostPort(serviceHost, "27017")},
 		Username: "flynn",
 		Password: os.Getenv("MONGO_PWD"),
-		Database: database,
+		Database: "admin",
 	})
 	if err != nil {
 		httphelper.Error(w, err)
