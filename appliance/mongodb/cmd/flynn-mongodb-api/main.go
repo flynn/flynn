@@ -82,7 +82,7 @@ func (a *API) createDatabase(w http.ResponseWriter, req *http.Request, _ httprou
 		return
 	}
 
-	url := fmt.Sprintf("mongo://%s:%s@%s:27017/%s", username, password, serviceHost, database)
+	url := fmt.Sprintf("mongodb://%s:%s@%s:27017/%s", username, password, serviceHost, database)
 	httphelper.JSON(w, 200, resource.Resource{
 		ID: fmt.Sprintf("/databases/%s:%s", username, database),
 		Env: map[string]string{
