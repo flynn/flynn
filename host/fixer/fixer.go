@@ -115,7 +115,7 @@ func (f *ClusterFixer) Run(args *docopt.Args, c *cluster.Client) error {
 	}
 
 	f.l.Info("checking status of sirenia databases")
-	for _, db := range []string{"postgres", "mariadb"} {
+	for _, db := range []string{"postgres", "mariadb", "mongodb"} {
 		f.l.Info("checking for database state", "db", db)
 		if _, err := discoverd.NewService(db).GetMeta(); err != nil {
 			if discoverd.IsNotFound(err) {
