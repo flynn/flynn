@@ -1,5 +1,5 @@
 import { assertEqual } from 'marbles/utils';
-import AppRoutesStore from '../stores/app-routes';
+import { default as AppRoutesStore, shouldHTTPS } from '../stores/app-routes';
 import ExternalLink from './external-link';
 import RouteLink from './route-link';
 
@@ -35,7 +35,9 @@ var AppRoutes = React.createClass({
 					{this.state.routes.map(function (route) {
 						return (
 							<li key={route.id || route.domain}>
-								<ExternalLink href={"http://"+ route.domain}>{route.domain}{route.path}</ExternalLink>
+								<ExternalLink href={(shouldHTTPS(route) ? 'https://' : 'http://') + route.domain + route.path}>
+									{route.domain}{route.path}
+								</ExternalLink>
 								{route.id ? (
 									<RouteLink path={getAppPath("/routes/:type/:route/delete", {route: route.id, type: route.type, domain: route.domain})}>
 										<i className="icn-trash" />

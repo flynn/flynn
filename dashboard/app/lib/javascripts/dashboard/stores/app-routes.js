@@ -1,3 +1,4 @@
+import { extend } from 'marbles/utils';
 import State from 'marbles/state';
 import Store from '../store';
 import Config from '../config';
@@ -95,4 +96,9 @@ AppRoutes.isValidId = function (id) {
 
 AppRoutes.registerWithDispatcher(Dispatcher);
 
+var shouldHTTPS = function (route) {
+	return !!route.certificate || !!route.domain.match(new RegExp('^[^.]+\\.'+ Config.default_route_domain.replace('.', '\\.') +'$'))
+};
+
+export { shouldHTTPS };
 export default AppRoutes;
