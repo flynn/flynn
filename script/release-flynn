@@ -14,19 +14,21 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/release.sh"
+source "${ROOT}/script/lib/tuf.sh"
 
 usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
 OPTIONS:
-  -h, --help            Show this message
-  -c, --commit COMMIT   The git commit to build (takes precedence over the --branch flag)
-  -b, --branch BRANCH   The git branch to build [default: master]
-  -b, --bucket BUCKET   The S3 bucket to upload packages to [default: flynn]
-  -d, --domain DOMAIN   The CloudFront domain [default: dl.flynn.io]
-  -t, --tuf-dir DIR     Path to the local TUF repository [default: /etc/flynn/tuf]
-  --resume DIR          Resume the release using DIR
+  -h, --help              Show this message
+  -c, --commit COMMIT     The git commit to build (takes precedence over the --branch flag)
+  -b, --branch BRANCH     The git branch to build [default: master]
+  -v, --version VERSION   Version to use [default: vYYYYMMDD.N]
+  -b, --bucket BUCKET     The S3 bucket to upload packages to [default: flynn]
+  -d, --domain DOMAIN     The CloudFront domain [default: dl.flynn.io]
+  -t, --tuf-dir DIR       Path to the local TUF repository [default: /etc/flynn/tuf]
+  --resume DIR            Resume the release using DIR
 
 Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and GITHUB_TOKEN to be set.
 USAGE
@@ -35,6 +37,7 @@ USAGE
 main() {
   local commit=""
   local branch="master"
+  local version=""
   local bucket="flynn"
   local domain="dl.flynn.io"
   local tuf_dir="/etc/flynn/tuf"
@@ -58,6 +61,13 @@ main() {
           fail "$1 requires an argument"
         fi
         branch="$2"
+        shift 2
+        ;;
+      -v | --version)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        fi
+        version="$2"
         shift 2
         ;;
       -k | --bucket)
@@ -135,10 +145,18 @@ main() {
 
     exec "${src}/script/release-flynn" \
       --commit  "${commit}" \
+      --version "${version}" \
       --bucket  "${bucket}" \
       --domain  "${domain}" \
       --tuf-dir "${tuf_dir}" \
       --resume  "${dir}"
+  fi
+
+  if [[ -n "${version}" ]]; then
+    info "verifying that version ${version} does not already exist"
+    if release_exists "${tuf_dir}" "${version}"; then
+      fail "version ${version} already exists"
+    fi
   fi
 
   info "checking status of commit ${commit}"
@@ -148,11 +166,13 @@ main() {
 
   info "starting release of commit ${commit}"
 
-  info "getting previous release tag"
-  local previous=$(git tag --list "v*" --sort "v:refname" | tail -n 1)
+  if [[ -z "${version}" ]]; then
+    info "getting previous release tag"
+    local previous=$(git tag --list "v*" --sort "v:refname" | tail -n 1)
 
-  info "determining version"
-  local version="$(next_release_version ${previous})"
+    info "determining version"
+    version="$(next_release_version ${previous})"
+  fi
   info "using version ${version}"
 
   info "tagging release"
