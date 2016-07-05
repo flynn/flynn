@@ -122,6 +122,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     grep ^cd ~/.bashrc || echo cd ~/go/src/github.com/flynn/flynn >> ~/.bashrc
     sudo chown -R vagrant:vagrant ~/go
+
+    # enable docker
+    sudo rm -f /etc/init/docker.override
+    sudo start docker
   SCRIPT
 
   if File.exists?("script/custom-vagrant")

@@ -34,7 +34,7 @@ main() {
   add_apt_sources
   install_packages
   install_flynn
-  disable_docker_auto_restart
+  disable_docker_start
   bump_libvirt_start_timeout
   apt_cleanup
 
@@ -208,8 +208,8 @@ install_flynn() {
   sed -i 's/start on/#start on/' /etc/init/flynn-host.conf
 }
 
-disable_docker_auto_restart() {
-  sed -i 's/^#DOCKER_OPTS=.*/DOCKER_OPTS="-r=false"/' /etc/default/docker
+disable_docker_start() {
+  echo manual > /etc/init/docker.override
 }
 
 bump_libvirt_start_timeout() {
