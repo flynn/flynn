@@ -104,8 +104,7 @@ than that of the `eth0` device, the script provides some options for doing so.
 See `script/bootstrap-flynn -h` for a full list of supported options.
 
 Once Flynn is running, you can add the cluster to the `flynn` CLI tool using the
-bootstrap output, and then try out your changes (e.g. by following [this guide]
-(https://github.com/flynn/flynn#trying-it-out)).
+bootstrap output, and then try out your changes.
 
 ## Debugging
 
