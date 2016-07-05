@@ -735,7 +735,14 @@ func (TestSuite) TestJobPlacementTags(c *C) {
 	} {
 		hosts := make(map[string]int, 3)
 		for i := 0; i < t.count; i++ {
-			job := s.jobs.Add(&Job{ID: fmt.Sprintf("job-%s-%d", t.typ, i), Formation: formation, Type: t.typ, State: JobStatePending})
+			job := s.jobs.Add(&Job{
+				ID:        fmt.Sprintf("job-%s-%d", t.typ, i),
+				AppID:     formation.App.ID,
+				ReleaseID: formation.Release.ID,
+				Formation: formation,
+				Type:      t.typ,
+				State:     JobStatePending,
+			})
 			req := &PlacementRequest{Job: job, Err: make(chan error, 1)}
 			s.HandlePlacementRequest(req)
 			c.Assert(<-req.Err, IsNil, Commentf("placing %s job %d", t.typ, i))

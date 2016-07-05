@@ -67,7 +67,7 @@ func (t *TarWriter) WriteJSON(name string, v interface{}) error {
 	return err
 }
 
-func (t *TarWriter) WriteCommandOutput(client controller.Client, name string, app string, newJob *ct.NewJob) error {
+func (t *TarWriter) WriteCommandOutput(client controller.Client, name string, app string, req *ct.JobRequest) error {
 	f, err := ioutil.TempFile("", name)
 	if err != nil {
 		return fmt.Errorf("error creating temp file: %s", err)
@@ -79,7 +79,7 @@ func (t *TarWriter) WriteCommandOutput(client controller.Client, name string, ap
 	if t.progress != nil {
 		dest = io.MultiWriter(f, t.progress)
 	}
-	if err := t.runJob(client, app, newJob, dest); err != nil {
+	if err := t.runJob(client, app, req, dest); err != nil {
 		return fmt.Errorf("error running %s export: %s", app, err)
 	}
 
@@ -99,7 +99,7 @@ func (t *TarWriter) WriteCommandOutput(client controller.Client, name string, ap
 	return nil
 }
 
-func (t *TarWriter) runJob(client controller.Client, app string, req *ct.NewJob, out io.Writer) error {
+func (t *TarWriter) runJob(client controller.Client, app string, req *ct.JobRequest, out io.Writer) error {
 	rwc, err := client.RunJobAttached(app, req)
 	if err != nil {
 		return err

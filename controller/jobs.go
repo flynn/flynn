@@ -23,11 +23,12 @@ import (
 
 /* Job Stuff */
 type JobRepo struct {
-	db *postgres.DB
+	db        *postgres.DB
+	artifacts *ArtifactRepo
 }
 
-func NewJobRepo(db *postgres.DB) *JobRepo {
-	return &JobRepo{db}
+func NewJobRepo(db *postgres.DB, artifacts *ArtifactRepo) *JobRepo {
+	return &JobRepo{db, artifacts}
 }
 
 func (r *JobRepo) Get(id string) (*ct.Job, error) {
@@ -84,8 +85,126 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	err = r.db.Exec("event_insert_unique", job.AppID, job.UUID, uniqueID, string(ct.EventTypeJob), job)
 	if postgres.IsUniquenessError(err, "") {
 		return nil
+	} else if err != nil {
+		return err
+	}
+
+	if job.JobRequestID == "" {
+		return nil
+	}
+
+	// update the job request
+	req, err := r.GetJobRequest(job.JobRequestID)
+	if err != nil {
+		return err
+	}
+	req.JobID = job.UUID
+	req.Error = job.HostError
+
+	switch job.State {
+	case ct.JobStatePending:
+		req.State = ct.JobRequestStatePending
+	case ct.JobStateStarting:
+		req.State = ct.JobRequestStateStarting
+	case ct.JobStateUp, ct.JobStateStopping:
+		req.State = ct.JobRequestStateRunning
+	case ct.JobStateDown:
+		if job.HostError != nil {
+			req.State = ct.JobRequestStateFailed
+		} else {
+			req.State = ct.JobRequestStateSucceeded
+		}
+	}
+	if err := r.db.Exec("job_request_update", req.ID, req.JobID, string(req.State), req.Error); err != nil {
+		return err
+	}
+
+	// create a job request event, ignoring possible duplications
+	uniqueID = strings.Join([]string{req.ID, req.JobID, string(req.State)}, "|")
+	err = r.db.Exec("event_insert_unique", job.AppID, req.ID, uniqueID, string(ct.EventTypeJobRequest), req)
+	if postgres.IsUniquenessError(err, "") {
+		return nil
 	}
 	return err
+}
+
+func (r *JobRepo) AddJobRequest(req *ct.JobRequest) error {
+	if req.ID == "" {
+		req.ID = random.UUID()
+	}
+	if req.Config == nil {
+		req.Config = &ct.JobConfig{}
+	}
+	if req.Config.Type == "" {
+		req.Config.Type = "run"
+	}
+	req.State = ct.JobRequestStatePending
+	resource.SetDefaults(&req.Config.Resources)
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	err = tx.QueryRow(
+		"job_request_insert",
+		req.ID,
+		req.AppID,
+		req.ReleaseID,
+		string(req.State),
+		req.Config,
+	).Scan(&req.CreatedAt)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	for _, artifactID := range req.ArtifactIDs {
+		if err := tx.Exec("job_request_artifacts_insert", req.ID, artifactID); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      req.AppID,
+		ObjectID:   req.ID,
+		ObjectType: ct.EventTypeJobRequest,
+	}, req); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (r *JobRepo) GetJobRequest(id string) (*ct.JobRequest, error) {
+	var req ct.JobRequest
+	var jobID *string
+	var artifactIDs string
+	var state string
+	err := r.db.QueryRow("job_request_select", id).Scan(
+		&req.ID,
+		&jobID,
+		&req.AppID,
+		&req.ReleaseID,
+		&artifactIDs,
+		&state,
+		&req.Config,
+		&req.Error,
+		&req.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if jobID != nil {
+		req.JobID = *jobID
+	}
+	if artifactIDs != "" {
+		req.ArtifactIDs = split(artifactIDs[1:len(artifactIDs)-1], ",")
+	}
+	req.State = ct.JobRequestState(state)
+	return &req, nil
 }
 
 func scanJob(s postgres.Scanner) (*ct.Job, error) {
@@ -115,6 +234,44 @@ func scanJob(s postgres.Scanner) (*ct.Job, error) {
 	}
 	job.State = ct.JobState(state)
 	return job, nil
+}
+
+func scanExpandedJobRequest(s postgres.Scanner) (*ct.ExpandedJobRequest, []string, error) {
+	req := &ct.ExpandedJobRequest{
+		App:     &ct.App{},
+		Release: &ct.Release{},
+	}
+	var jobID *string
+	var artifacts string
+	var state string
+	err := s.Scan(
+		&req.ID,
+		&jobID,
+		&state,
+		&req.Config,
+		&req.App.ID,
+		&req.App.Name,
+		&req.App.Meta,
+		&req.Release.ID,
+		&req.Release.Env,
+		&req.Release.Meta,
+		&artifacts,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = ErrNotFound
+		}
+		return nil, nil, err
+	}
+	if jobID != nil {
+		req.JobID = *jobID
+	}
+	var artifactIDs []string
+	if artifacts != "" {
+		artifactIDs = split(artifacts[1:len(artifacts)-1], ",")
+	}
+	req.State = ct.JobRequestState(state)
+	return req, artifactIDs, nil
 }
 
 func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
@@ -151,6 +308,31 @@ func (r *JobRepo) ListActive() ([]*ct.Job, error) {
 	return jobs, nil
 }
 
+func (r *JobRepo) ListRequests(state string) ([]*ct.ExpandedJobRequest, error) {
+	rows, err := r.db.Query("job_request_list", state)
+	if err != nil {
+		return nil, err
+	}
+	var reqs []*ct.ExpandedJobRequest
+	for rows.Next() {
+		req, artifactIDs, err := scanExpandedJobRequest(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		artifacts, err := r.artifacts.ListIDs(artifactIDs...)
+		if err != nil {
+			return nil, err
+		}
+		req.Artifacts = make([]*ct.Artifact, len(artifacts))
+		for i, id := range artifactIDs {
+			req.Artifacts[i] = artifacts[id]
+		}
+		reqs = append(reqs, req)
+	}
+	return reqs, rows.Err()
+}
+
 func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, *ct.Job, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	job, err := c.jobRepo.Get(params.ByName("jobs_id"))
@@ -175,6 +357,15 @@ func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req
 
 func (c *controllerAPI) ListActiveJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	list, err := c.jobRepo.ListActive()
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, list)
+}
+
+func (c *controllerAPI) ListJobRequests(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	list, err := c.jobRepo.ListRequests(req.URL.Query().Get("state"))
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -231,6 +422,87 @@ func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req 
 	}
 }
 
+func (c *controllerAPI) AttachJob(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	client, job, err := c.connectHost(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	var req ct.JobRequest
+	if err := httphelper.DecodeJSON(r, &req); err != nil {
+		respondWithError(w, err)
+		return
+	}
+	attachReq := &host.AttachReq{
+		JobID:  job.ID,
+		Flags:  host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagStream,
+		Height: uint16(req.Config.Lines),
+		Width:  uint16(req.Config.Columns),
+	}
+	attachClient, err := client.Attach(attachReq, true)
+	if err != nil {
+		respondWithError(w, fmt.Errorf("attach failed: %s", err.Error()))
+		return
+	}
+	defer attachClient.Close()
+	if err := attachClient.Wait(); err != nil {
+		respondWithError(w, fmt.Errorf("attach wait failed: %s", err.Error()))
+		return
+	}
+	w.Header().Set("Connection", "upgrade")
+	w.Header().Set("Upgrade", "flynn-attach/0")
+	w.WriteHeader(http.StatusSwitchingProtocols)
+	conn, _, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	done := make(chan struct{}, 2)
+	cp := func(to io.Writer, from io.Reader) {
+		io.Copy(to, from)
+		done <- struct{}{}
+	}
+	go cp(conn, attachClient.Conn())
+	go cp(attachClient.Conn(), conn)
+	<-done
+	<-done
+}
+
+func (c *controllerAPI) AddJobRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	var req ct.JobRequest
+	if err := httphelper.DecodeJSON(r, &req); err != nil {
+		respondWithError(w, err)
+		return
+	}
+	req.AppID = c.getApp(ctx).ID
+
+	// check the release exists and set the artifact if necessary
+	releaseData, err := c.releaseRepo.Get(req.ReleaseID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	release := releaseData.(*ct.Release)
+	if len(req.ArtifactIDs) == 0 {
+		req.ArtifactIDs = release.ArtifactIDs
+	}
+
+	if err := schema.Validate(req); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	if err := c.jobRepo.AddJobRequest(&req); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	httphelper.JSON(w, 200, &req)
+}
+
+// RunJob is DEPRECATED, clients should create a job request and wait for it to be scheduled
+// by the scheduler (see client.RunJobDetached / client.RunJobAttached)
 func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	var newJob ct.NewJob
 	if err := httphelper.DecodeJSON(req, &newJob); err != nil {

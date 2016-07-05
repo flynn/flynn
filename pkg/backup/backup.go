@@ -23,16 +23,18 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 	}
 
 	pgRelease := data["postgres"].Release
-	pgJob := &ct.NewJob{
-		ReleaseID:  pgRelease.ID,
-		Entrypoint: []string{"bash"},
-		Cmd:        []string{"-c", "set -o pipefail; pg_dumpall --clean --if-exists | gzip -9"},
-		Env: map[string]string{
-			"PGHOST":     pgRelease.Env["PGHOST"],
-			"PGUSER":     pgRelease.Env["PGUSER"],
-			"PGPASSWORD": pgRelease.Env["PGPASSWORD"],
+	pgJob := &ct.JobRequest{
+		ReleaseID: pgRelease.ID,
+		Config: &ct.JobConfig{
+			Entrypoint: []string{"bash"},
+			Cmd:        []string{"-c", "set -o pipefail; pg_dumpall --clean --if-exists | gzip -9"},
+			Env: map[string]string{
+				"PGHOST":     pgRelease.Env["PGHOST"],
+				"PGUSER":     pgRelease.Env["PGUSER"],
+				"PGPASSWORD": pgRelease.Env["PGPASSWORD"],
+			},
+			DisableLog: true,
 		},
-		DisableLog: true,
 	}
 	if err := tw.WriteCommandOutput(client, "postgres.sql.gz", "postgres", pgJob); err != nil {
 		return fmt.Errorf("error dumping postgres database: %s", err)
@@ -41,14 +43,16 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 	// If mariadb is not present skip attempting to store the backup in the archive
 	if mariadb, ok := data["mariadb"]; ok && mariadb.Processes["mariadb"] > 0 {
 		mysqlRelease := mariadb.Release
-		mysqlJob := &ct.NewJob{
-			ReleaseID:  mysqlRelease.ID,
-			Entrypoint: []string{"bash"},
-			Cmd:        []string{"-c", fmt.Sprintf("set -o pipefail; /usr/bin/mysqldump -h %s -u %s --all-databases | gzip -9", mysqlRelease.Env["MYSQL_HOST"], mysqlRelease.Env["MYSQL_USER"])},
-			Env: map[string]string{
-				"MYSQL_PWD": mysqlRelease.Env["MYSQL_PWD"],
+		mysqlJob := &ct.JobRequest{
+			ReleaseID: mysqlRelease.ID,
+			Config: &ct.JobConfig{
+				Entrypoint: []string{"bash"},
+				Cmd:        []string{"-c", fmt.Sprintf("set -o pipefail; /usr/bin/mysqldump -h %s -u %s --all-databases | gzip -9", mysqlRelease.Env["MYSQL_HOST"], mysqlRelease.Env["MYSQL_USER"])},
+				Env: map[string]string{
+					"MYSQL_PWD": mysqlRelease.Env["MYSQL_PWD"],
+				},
+				DisableLog: true,
 			},
-			DisableLog: true,
 		}
 		if err := tw.WriteCommandOutput(client, "mysql.sql.gz", "mariadb", mysqlJob); err != nil {
 			return fmt.Errorf("error dumping mariadb database: %s", err)

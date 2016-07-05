@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/new_job#",
   "title": "New Job",
-  "description": "A new job describes a desired process configuration.",
+  "description": "DEPRECATED (use job_request): A new job describes a desired process configuration.",
   "sortIndex": 5,
   "type": "object",
   "examples": [

@@ -82,14 +82,16 @@ type runConfig struct {
 }
 
 func runJob(client controller.Client, config runConfig) error {
-	req := &ct.NewJob{
-		Cmd:        config.Args,
-		TTY:        config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
-		ReleaseID:  config.Release,
-		Entrypoint: config.Entrypoint,
-		Env:        config.Env,
-		ReleaseEnv: config.ReleaseEnv,
-		DisableLog: config.DisableLog,
+	req := &ct.JobRequest{
+		ReleaseID: config.Release,
+		Config: &ct.JobConfig{
+			Cmd:        config.Args,
+			TTY:        config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
+			Entrypoint: config.Entrypoint,
+			Env:        config.Env,
+			ReleaseEnv: config.ReleaseEnv,
+			DisableLog: config.DisableLog,
+		},
 	}
 	if config.Stdin == nil {
 		config.Stdin = os.Stdin
@@ -100,19 +102,19 @@ func runJob(client controller.Client, config runConfig) error {
 	if config.Stderr == nil {
 		config.Stderr = os.Stderr
 	}
-	if req.TTY {
-		if req.Env == nil {
-			req.Env = make(map[string]string)
+	if req.Config.TTY {
+		if req.Config.Env == nil {
+			req.Config.Env = make(map[string]string)
 		}
 		ws, err := term.GetWinsize(os.Stdin.Fd())
 		if err != nil {
 			return err
 		}
-		req.Columns = int(ws.Width)
-		req.Lines = int(ws.Height)
-		req.Env["COLUMNS"] = strconv.Itoa(int(ws.Width))
-		req.Env["LINES"] = strconv.Itoa(int(ws.Height))
-		req.Env["TERM"] = os.Getenv("TERM")
+		req.Config.Columns = int(ws.Width)
+		req.Config.Lines = int(ws.Height)
+		req.Config.Env["COLUMNS"] = strconv.Itoa(int(ws.Width))
+		req.Config.Env["LINES"] = strconv.Itoa(int(ws.Height))
+		req.Config.Env["TERM"] = os.Getenv("TERM")
 	}
 
 	if config.Detached {
@@ -132,7 +134,7 @@ func runJob(client controller.Client, config runConfig) error {
 	attachClient := cluster.NewAttachClient(rwc)
 
 	var termState *term.State
-	if req.TTY {
+	if req.Config.TTY {
 		termState, err = term.MakeRaw(os.Stdin.Fd())
 		if err != nil {
 			return err
@@ -176,7 +178,7 @@ func runJob(client controller.Client, config runConfig) error {
 	if err != nil {
 		return err
 	}
-	if req.TTY {
+	if req.Config.TTY {
 		term.RestoreTerminal(os.Stdin.Fd(), termState)
 	}
 	if config.Exit {

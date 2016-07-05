@@ -34,6 +34,12 @@ type State struct {
 	listenMtx  sync.RWMutex
 	attachers  map[string]map[chan struct{}]struct{}
 
+	// attachWaiters is a map of job IDs to channels which receive an
+	// attacher channel when a client attaches to the job, and is used
+	// for jobs which require an attacher to wait for a client to attach
+	// before resuming
+	attachWaiters map[string]chan chan struct{}
+
 	stateFilePath string
 	stateDB       *bolt.DB
 	dbUsers       int
@@ -50,6 +56,7 @@ func NewState(id string, stateFilePath string) *State {
 		containers:    make(map[string]*host.ActiveJob),
 		listeners:     make(map[string]map[chan host.Event]struct{}),
 		attachers:     make(map[string]map[chan struct{}]struct{}),
+		attachWaiters: make(map[string]chan chan struct{}),
 		dbCond:        sync.NewCond(&sync.Mutex{}),
 	}
 }
@@ -293,6 +300,13 @@ func (s *State) AddJob(j *host.Job) error {
 		CreatedAt: time.Now(),
 	}
 	s.jobs[j.ID] = job
+
+	// if the job requires an attacher, set an attachWaiter channel so that
+	// WaitAttach and AddAttacher will be sychronised before the job starts
+	if j.Config.RequireAttach {
+		s.attachWaiters[j.ID] = make(chan chan struct{})
+	}
+
 	s.sendEvent(job, host.JobEventCreate)
 	s.persist(j.ID)
 	return nil
@@ -444,6 +458,19 @@ func (s *State) SetStatusFailed(jobID string, err error) {
 func (s *State) AddAttacher(jobID string, ch chan struct{}) *host.ActiveJob {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+
+	// if there is an attachWaiter (i.e. the job requires an attacher) then
+	// send the given attacher channel to synchronise with WaitAttach
+	attachWaiter, ok := s.attachWaiters[jobID]
+	if ok {
+		// release the mutex in case WaitAttach has not yet been
+		// called (so sending the attacher channel blocks until
+		// it is called)
+		s.mtx.Unlock()
+		attachWaiter <- ch
+		s.mtx.Lock()
+	}
+
 	if job, ok := s.jobs[jobID]; ok {
 		jobCopy := *job
 		return &jobCopy
@@ -470,7 +497,20 @@ func (s *State) WaitAttach(jobID string) {
 	s.mtx.Lock()
 	a := s.attachers[jobID]
 	delete(s.attachers, jobID)
+	wait := s.attachWaiters[jobID]
+	delete(s.attachWaiters, jobID)
 	s.mtx.Unlock()
+
+	// if there is an attachWaiter (i.e. the job requires an attacher) then
+	// first wait for a client attacher channel (see AddAttacher), then
+	// receive on the attacher channel to wait for the client to actually
+	// attach to the job
+	if wait != nil {
+		attacher := <-wait
+		<-attacher
+		return
+	}
+
 	for ch := range a {
 		// signal attach
 		ch <- struct{}{}

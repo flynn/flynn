@@ -2,13 +2,16 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/jackc/pgx"
+	"golang.org/x/net/context"
 )
 
 type ArtifactRepo struct {
@@ -80,7 +83,7 @@ func (r *ArtifactRepo) Get(id string) (interface{}, error) {
 	return scanArtifact(row)
 }
 
-func (r *ArtifactRepo) List() (interface{}, error) {
+func (r *ArtifactRepo) List() ([]*ct.Artifact, error) {
 	rows, err := r.db.Query("artifact_list")
 	if err != nil {
 		return nil, err
@@ -128,4 +131,26 @@ func scanArtifacts(rows *pgx.Rows) (interface{}, error) {
 		artifacts = append(artifacts, artifact)
 	}
 	return artifacts, rows.Err()
+}
+
+func (c *controllerAPI) ListArtifacts(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	var list []*ct.Artifact
+	var err error
+	if ids := req.URL.Query().Get("ids"); ids != "" {
+		artifacts, err := c.artifactRepo.ListIDs(strings.Split(ids, ",")...)
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		for _, artifact := range artifacts {
+			list = append(list, artifact)
+		}
+	} else {
+		list, err = c.artifactRepo.List()
+	}
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, list)
 }

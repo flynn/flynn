@@ -381,14 +381,16 @@ func (e *generator) deleteFormation() {
 }
 
 func (e *generator) runJob() {
-	new_job := &ct.NewJob{
+	req := &ct.JobRequest{
 		ReleaseID: e.resourceIds["release"],
-		Env: map[string]string{
-			"BODY": "Hello!",
+		Config: &ct.JobConfig{
+			Env: map[string]string{
+				"BODY": "Hello!",
+			},
+			Cmd: []string{"echo", "$BODY"},
 		},
-		Cmd: []string{"echo", "$BODY"},
 	}
-	job, err := e.client.RunJobDetached(e.resourceIds["app"], new_job)
+	job, err := e.client.RunJobDetached(e.resourceIds["app"], req)
 	if err == nil {
 		e.resourceIds["job"] = job.UUID
 	}

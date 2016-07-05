@@ -54,13 +54,14 @@ func Load(schemaRoot string) error {
 
 func schemaForType(thing interface{}) *jsonschema.Schema {
 	name := strings.ToLower(reflect.Indirect(reflect.ValueOf(thing)).Type().Name())
-	if name == "newjob" {
+	switch name {
+	case "newjob":
 		name = "new_job"
-	}
-	if name == "appupdate" {
+	case "appupdate":
 		name = "app"
-	}
-	if name == "route" {
+	case "jobrequest":
+		name = "job_request"
+	case "route":
 		return schemaCache["https://flynn.io/schema/router/route"]
 	}
 	cacheKey := "https://flynn.io/schema/controller/" + name

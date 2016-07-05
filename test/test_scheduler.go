@@ -306,11 +306,13 @@ func (s *SchedulerSuite) TestJobMeta(t *c.C) {
 	defer watcher.Close()
 
 	// start 1 one-off job
-	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.NewJob{
+	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.JobRequest{
 		ReleaseID: release.ID,
-		Cmd:       []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
-		Meta: map[string]string{
-			"foo": "baz",
+		Config: &ct.JobConfig{
+			Cmd: []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
+			Meta: map[string]string{
+				"foo": "baz",
+			},
 		},
 	})
 	t.Assert(err, c.IsNil)
@@ -338,9 +340,11 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"printer": 1, "crasher": 1},
 	}), c.IsNil)
-	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.NewJob{
+	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.JobRequest{
 		ReleaseID: release.ID,
-		Cmd:       []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
+		Config: &ct.JobConfig{
+			Cmd: []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
+		},
 	})
 	t.Assert(err, c.IsNil)
 	err = watcher.WaitFor(ct.JobEvents{"printer": {ct.JobStateUp: 1}, "crasher": {ct.JobStateUp: 1}, "": {ct.JobStateUp: 1}}, scaleTimeout, nil)

@@ -58,6 +58,11 @@ var preparedStatements = map[string]string{
 	"job_select":                            jobSelectQuery,
 	"job_insert":                            jobInsertQuery,
 	"job_update":                            jobUpdateQuery,
+	"job_request_select":                    jobRequestSelectQuery,
+	"job_request_insert":                    jobRequestInsertQuery,
+	"job_request_artifacts_insert":          jobRequestArtifactsInsertQuery,
+	"job_request_list":                      jobRequestListQuery,
+	"job_request_update":                    jobRequestUpdateQuery,
 	"provider_list":                         providerListQuery,
 	"provider_select_by_name":               providerSelectByNameQuery,
 	"provider_select_by_name_or_id":         providerSelectByNameOrIDQuery,
@@ -306,6 +311,38 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING created_at,
 	jobUpdateQuery = `
 UPDATE job_cache SET cluster_id = $2, host_id = $3, state = $4, exit_status = $5, host_error = $6, run_at = $7, restarts = $8, updated_at = now()
 WHERE job_id = $1 RETURNING created_at, updated_at`
+	jobRequestSelectQuery = `
+SELECT j.job_request_id, j.job_id, j.app_id, j.release_id,
+  ARRAY(
+	SELECT a.artifact_id
+	FROM job_request_artifacts a
+	WHERE a.job_request_id = j.job_request_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at
+  ), j.state, j.config, j.error, j.created_at
+FROM job_requests j WHERE j.job_request_id = $1`
+	jobRequestInsertQuery = `
+INSERT INTO job_requests (job_request_id, app_id, release_id, state, config)
+VALUES ($1, $2, $3, $4, $5) RETURNING created_at`
+	jobRequestArtifactsInsertQuery = `
+INSERT INTO job_request_artifacts (job_request_id, artifact_id) VALUES ($1, $2)`
+	jobRequestListQuery = `
+SELECT
+  job_requests.job_request_id, job_requests.job_id, job_requests.state, job_requests.config,
+  apps.app_id, apps.name, apps.meta,
+  releases.release_id, releases.env, releases.meta,
+  ARRAY(
+	SELECT a.artifact_id
+	FROM job_request_artifacts a
+	WHERE a.job_request_id = job_requests.job_request_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at
+  )
+FROM job_requests
+JOIN apps USING (app_id)
+JOIN releases ON releases.release_id = job_requests.release_id
+WHERE job_requests.state = $1 ORDER BY job_requests.updated_at`
+	jobRequestUpdateQuery = `
+UPDATE job_requests SET job_id = $2, state = $3, error = $4, updated_at = now()
+WHERE job_request_id = $1`
 	providerListQuery = `
 SELECT provider_id, name, url, created_at, updated_at
 FROM providers WHERE deleted_at IS NULL ORDER BY created_at DESC`

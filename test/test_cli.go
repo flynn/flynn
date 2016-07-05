@@ -251,18 +251,18 @@ func (s *CLISuite) TestRun(t *c.C) {
 	// this shouldn't be logged
 	t.Assert(app.sh("echo foo"), Outputs, "foo\n")
 	// drain the events
-	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	app.waitFor(ct.JobEvents{"run": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 
 	// this should be logged due to the --enable-log flag
 	t.Assert(app.flynn("run", "--enable-log", "echo", "hello"), Outputs, "hello\n")
-	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	app.waitFor(ct.JobEvents{"run": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 
 	detached := app.flynn("run", "-d", "echo", "world")
 	t.Assert(detached, Succeeds)
 	t.Assert(detached, c.Not(Outputs), "world\n")
 
 	id := strings.TrimSpace(detached.Output)
-	jobID := app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	jobID := app.waitFor(ct.JobEvents{"run": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 	t.Assert(jobID, c.Equals, id)
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello\nworld\n")
 
@@ -646,7 +646,7 @@ func (s *CLISuite) TestLog(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
 	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
-	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	app.waitFor(ct.JobEvents{"run": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello world\n")
 }
 
@@ -658,7 +658,7 @@ func (s *CLISuite) TestLogFilter(t *c.C) {
 		t.Assert(app.flynn("scale", "crasher=0"), Succeeds)
 	}
 	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
-	jobID := app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	jobID := app.waitFor(ct.JobEvents{"run": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 
 	tests := []struct {
 		args     []string
@@ -669,7 +669,7 @@ func (s *CLISuite) TestLogFilter(t *c.C) {
 			expected: "hello world\n",
 		},
 		{
-			args:     []string{"-t", "", "--raw-output"},
+			args:     []string{"-t", "run", "--raw-output"},
 			expected: "hello world\n",
 		},
 		{
@@ -688,7 +688,7 @@ func (s *CLISuite) TestLogStderr(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "echo hello && echo world >&2"), Succeeds)
-	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	app.waitFor(ct.JobEvents{"run": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 	runLog := func(split bool) (stdout, stderr bytes.Buffer) {
 		args := []string{"log", "--raw-output"}
 		if split {
@@ -716,7 +716,7 @@ func (s *CLISuite) TestLogFollow(t *c.C) {
 	defer app.cleanup()
 
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "sleep 2 && for i in 1 2 3 4 5; do echo \"line $i\"; done"), Succeeds)
-	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1}})
+	app.waitFor(ct.JobEvents{"run": {ct.JobStateUp: 1}})
 
 	log := app.flynnCmd("log", "--raw-output", "--follow")
 	logStdout, err := log.StdoutPipe()
