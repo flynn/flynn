@@ -6,6 +6,7 @@
 #
 # - Install go-tuf
 #   go get github.com/flynn/go-tuf/cmd/tuf
+#   go get github.com/flynn/go-tuf/cmd/tuf-client
 #
 # - Set the TUF passphrases
 #   export TUF_TARGETS_PASSPHRASE=xxxxxx
@@ -27,6 +28,7 @@ OPTIONS:
   -h, --help            Show this message
   -b, --bucket BUCKET   The S3 bucket to sync with [default: flynn]
   -d, --tuf-dir DIR     Path to the local TUF repository [default: /etc/flynn/tuf]
+  -e, --edit            Edit the changelog before committing the channel update
   --no-sync             Don't sync files with S3
 USAGE
 }
@@ -34,6 +36,7 @@ USAGE
 main() {
   local bucket="flynn"
   local tuf_dir="/etc/flynn/tuf"
+  local edit=false
   local sync=true
 
   while true; do
@@ -44,19 +47,21 @@ main() {
         ;;
       -b | --bucket)
         if [[ -z "$2" ]]; then
-          usage
-          exit 1
+          fail "$1 requires an argument"
         fi
         bucket="$2"
         shift 2
         ;;
       -d | --tuf-dir)
         if [[ -z "$2" ]]; then
-          usage
-          exit 1
+          fail "$1 requires an argument"
         fi
         tuf_dir="$2"
         shift 2
+        ;;
+      -e | --edit)
+        edit=true
+        shift
         ;;
       --no-sync)
         sync=false
@@ -98,6 +103,16 @@ main() {
   cd "${tuf_dir}"
   tuf clean
 
+  info "generating changelog"
+  local changelog="${tuf_dir}/staged/targets/channel/${channel}/${version}/CHANGELOG.md"
+  mkdir -p "$(dirname "${changelog}")"
+  generate_changelog
+
+  if $edit; then
+    info "starting vim to edit the changelog"
+    edit_changelog
+  fi
+
   info "staging updated channel file"
   mkdir -p "staged/targets/channels"
   echo "${version}" > "staged/targets/channels/${channel}"
@@ -117,6 +132,76 @@ main() {
   fi
 
   info "successfully set ${channel} release channel to ${version}"
+}
+
+# generate_changelog gets the current channel version from the TUF repository
+# then creates a changelog using the commit message of each merge commit (which
+# are expected to all be pull request merges) from the current version to the
+# version being released.
+#
+# Changelog entries are formatted like:
+#
+#   * DATE: MESSAGE (LINK TO PR)
+#
+# For example:
+#
+#   * 2016-06-27: script: Add --version and --channel flags to install-flynn ([#3003](https://github.com/flynn/flynn/pull/3003))
+generate_changelog() {
+  local repo_url="https://s3.amazonaws.com/${bucket}/tuf"
+  info "getting current ${channel} version from ${repo_url}"
+  local tmp="$(mktemp --directory)"
+  trap "rm -rf ${tmp}" EXIT
+  tuf-client init --store "${tmp}/tuf.db" "${repo_url}" <<< "$(tuf -d "${tuf_dir}" root-keys)"
+  local current="$(tuf-client get --store "${tmp}/tuf.db" "${repo_url}" "/channels/${channel}")"
+  if [[ -z "${current}" ]]; then
+    warn "could not determine current ${channel} version, using empty changelog"
+    echo "n/a" > "${changelog}"
+    return
+  fi
+
+  pushd "${ROOT}" >/dev/null
+
+  info "fetching git tags"
+  git fetch --tags
+
+  info "formatting changes between ${current} and ${version}"
+  git log \
+    --merges \
+    --reverse \
+    --date=short \
+    --pretty=format:'* %ad: %b %s%n' \
+    "${current}...${version}" \
+    | sed 's|Merge pull request #\([0-9]\+\) from \S\+|([#\1](https://github.com/flynn/flynn/pull/\1))|' \
+    > "${changelog}"
+
+  popd >/dev/null
+}
+
+edit_changelog() {
+  local tmpdir="$(mktemp --directory)"
+  trap "rm -rf ${tmpdir}" EXIT
+  local tmp="${tmpdir}/CHANGELOG.md"
+
+  cat <<EOF > "${tmp}"
+# You are currently editing the generated changelog for releasing the
+# ${channel} channel.
+#
+# Lines starting with '#' will be ignored, and an empty changelog aborts the
+# release.
+# -----------------------------------------------------------------------------
+EOF
+  cat "${changelog}" >> "${tmp}"
+
+  vim "${tmp}"
+
+  sed -i '/^#/d' "${tmp}"
+
+  if [[ ! -s "${tmp}" ]]; then
+    warn "aborting release due to empty changelog"
+    exit 0
+  fi
+
+  mv "${tmp}" "${changelog}"
 }
 
 main $@

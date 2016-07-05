@@ -22,6 +22,9 @@ say() {
       green)
         echo -e "\e[1;32m${msg}\e[0m"
         ;;
+      yellow)
+        echo -e "\e[1;33m${msg}\e[0m"
+        ;;
       *)
         echo "${msg}"
         ;;
@@ -35,6 +38,12 @@ info() {
   local msg=$1
   local timestamp=$(date +%H:%M:%S.%3N)
   say "===> ${timestamp} ${msg}" "green"
+}
+
+warn() {
+  local msg=$1
+  local timestamp=$(date +%H:%M:%S.%3N)
+  say "===> ${timestamp} WARN: ${msg}" "yellow" >&2
 }
 
 fail() {
