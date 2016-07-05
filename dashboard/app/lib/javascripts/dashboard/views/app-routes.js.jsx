@@ -35,7 +35,7 @@ var AppRoutes = React.createClass({
 					{this.state.routes.map(function (route) {
 						return (
 							<li key={route.id || route.domain}>
-								<ExternalLink href={"http://"+ route.domain}>{route.domain}{route.path}</ExternalLink>
+								<ExternalLink href={"http://"+ route.domain + route.path}>{route.domain}{route.path}</ExternalLink>
 								{route.id ? (
 									<RouteLink path={getAppPath("/routes/:type/:route/delete", {route: route.id, type: route.type, domain: route.domain})}>
 										<i className="icn-trash" />
