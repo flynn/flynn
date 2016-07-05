@@ -158,14 +158,17 @@ main() {
   info "tagging release"
   tag_release "${commit}" "${version}"
 
+  local flags=(
+    "--bucket"  "${bucket}"
+    "--tuf-dir" "${tuf_dir}"
+    "--resume"  "${dir}"
+    "--keep"
+  )
+  if [[ "${branch}" = "master" ]]; then
+    flags+=("--channel" "nightly")
+  fi
   info "releasing components"
-  "${ROOT}/script/release-components" \
-    --bucket  "${bucket}" \
-    --tuf-dir "${tuf_dir}" \
-    --resume  "${dir}" \
-    --keep \
-    "${commit}" \
-    "${version}"
+  "${ROOT}/script/release-components" ${flags[@]} "${commit}" "${version}"
 
   info "successfully released Flynn version ${version}"
 
