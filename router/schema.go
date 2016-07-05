@@ -173,20 +173,20 @@ CREATE TRIGGER check_http_route_update
 		`DO $$
 		DECLARE
 			http_route RECORD;
-			certificate_id uuid;
-			certsha256 bytea;
+			cert RECORD;
+			certdigest bytea;
 		BEGIN
 			FOR http_route IN SELECT * FROM http_routes WHERE tls_key IS NOT NULL LOOP
-				SELECT INTO certsha256 digest(ltrim(' \n', rtrim(' \n', http_route.tls_cert)), 'sha256');
-				SELECT INTO certificate_id id FROM certificates WHERE cert_sha256 = certsha256;
+				SELECT INTO certdigest digest(regexp_replace(regexp_replace(http_route.tls_cert, E'^[ \\n]+', '', ''), E'[ \\n]+$', '', ''), 'sha256');
+				SELECT INTO cert * FROM certificates WHERE cert_sha256 = certdigest;
 
 				IF NOT FOUND THEN
 					INSERT INTO certificates (cert, key, cert_sha256)
-					VALUES (http_route.tls_cert, http_route.tls_key, certsha256)
-					RETURNING id INTO certificate_id;
+					VALUES (http_route.tls_cert, http_route.tls_key, certdigest)
+					RETURNING * INTO cert;
 				END IF;
 
-				INSERT INTO route_certificates (http_route_id, certificate_id) VALUES(http_route.id, certificate_id);
+				INSERT INTO route_certificates (http_route_id, certificate_id) VALUES(http_route.id, cert.id);
 			END LOOP;
 		END $$`,
 		`ALTER TABLE http_routes DROP COLUMN tls_cert`,

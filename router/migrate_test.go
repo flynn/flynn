@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
+	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
 	"github.com/jackc/pgx"
 
@@ -52,15 +54,16 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 	// start from ID 4
 	m.migrateTo(4)
 
-	nRoutes := 3
+	nRoutes := 5
 	routes := make([]*router.Route, nRoutes)
-	cert := tlsConfigForDomain("migrationtest.example.com")
-	for i := 0; i < nRoutes-1; i++ {
+	certs := make([]*tlscert.Cert, nRoutes)
+	for i := 0; i < len(routes)-2; i++ {
+		cert := tlsConfigForDomain(fmt.Sprintf("migrationtest%d.example.org", i))
 		r := &router.Route{
-			ParentRef:     fmt.Sprintf("some/parent/ref/%d", i+1),
-			Service:       fmt.Sprintf("migrationtest%d.example.com", i+1),
-			Domain:        fmt.Sprintf("migrationtest%d.example.com", i+1),
-			LegacyTLSCert: cert.Cert,
+			ParentRef:     fmt.Sprintf("some/parent/ref/%d", i),
+			Service:       fmt.Sprintf("migrationtest%d.example.org", i),
+			Domain:        fmt.Sprintf("migrationtest%d.example.org", i),
+			LegacyTLSCert: cert.CACert,
 			LegacyTLSKey:  cert.PrivateKey,
 		}
 		err := db.QueryRow(`
@@ -73,16 +76,18 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 			r.LegacyTLSKey).Scan(&r.ID)
 		c.Assert(err, IsNil)
 		routes[i] = r
+		certs[i] = cert
 	}
 
 	{
 		// Add route with leading and trailing whitespace on cert and key
-		i := len(routes) - 1
+		i := len(routes) - 2
+		cert := certs[i-1] // use the same cert as the previous route
 		r := &router.Route{
-			ParentRef:     fmt.Sprintf("some/parent/ref/%d", i+1),
-			Service:       fmt.Sprintf("migrationtest%d.example.com", i+1),
-			Domain:        fmt.Sprintf("migrationtest%d.example.com", i+1),
-			LegacyTLSCert: "  \n\n  \n " + cert.Cert + "   \n   \n   ",
+			ParentRef:     fmt.Sprintf("some/parent/ref/%d", i),
+			Service:       fmt.Sprintf("migrationtest%d.example.org", i),
+			Domain:        fmt.Sprintf("migrationtest%d.example.org", i),
+			LegacyTLSCert: "  \n\n  \n " + cert.CACert + "   \n   \n   ",
 			LegacyTLSKey:  "    \n   " + cert.PrivateKey + "   \n   \n  ",
 		}
 		err := db.QueryRow(`
@@ -95,39 +100,83 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 			r.LegacyTLSKey).Scan(&r.ID)
 		c.Assert(err, IsNil)
 		routes[i] = r
+		certs[i] = cert
+	}
+
+	{
+		// Add route without cert
+		i := len(routes) - 1
+		r := &router.Route{
+			ParentRef: fmt.Sprintf("some/parent/ref/%d", i),
+			Service:   fmt.Sprintf("migrationtest%d.example.org", i),
+			Domain:    fmt.Sprintf("migrationtest%d.example.org", i),
+		}
+		err := db.QueryRow(`
+			INSERT INTO http_routes (parent_ref, service, domain)
+			VALUES ($1, $2, $3) RETURNING id`,
+			r.ParentRef,
+			r.Service,
+			r.Domain).Scan(&r.ID)
+		c.Assert(err, IsNil)
+		routes[i] = r
+	}
+
+	for i, cert := range certs {
+		if i == 0 || i >= len(certs)-2 {
+			continue
+		}
+		c.Assert(cert.CACert, Not(Equals), certs[i-1].CACert)
 	}
 
 	// run TLS object migration
 	m.migrateTo(5)
 
-	certSHA256 := hex.EncodeToString(sha256.New().Sum([]byte(cert.Cert)))
-
-	for _, r := range routes {
+	for i, r := range routes {
+		cert := certs[i]
 		fetchedRoute := &router.Route{}
-		fetchedCert := &router.Certificate{}
-		var fetchedCertSHA256 string
+		var fetchedCert *string
+		var fetchedCertKey *string
+		var fetchedCertSHA256 *string
 		err := db.QueryRow(`
 			SELECT r.parent_ref, r.service, r.domain, c.cert, c.key, encode(c.cert_sha256, 'hex') FROM http_routes AS r
-			INNER JOIN route_certificates AS rc ON rc.http_route_id = r.id
-			INNER JOIN certificates AS c ON rc.certificate_id = c.id
+			LEFT OUTER JOIN route_certificates AS rc ON rc.http_route_id = r.id
+			LEFT OUTER JOIN certificates AS c ON rc.certificate_id = c.id
 			WHERE r.id = $1
-		`, r.ID).Scan(&fetchedRoute.ParentRef, &fetchedRoute.Service, &fetchedRoute.Domain, &fetchedCert.Cert, &fetchedCert.Key, &fetchedCertSHA256)
+		`, r.ID).Scan(&fetchedRoute.ParentRef, &fetchedRoute.Service, &fetchedRoute.Domain, &fetchedCert, &fetchedCertKey, &fetchedCertSHA256)
 		c.Assert(err, IsNil)
 
 		c.Assert(fetchedRoute.ParentRef, Equals, r.ParentRef)
 		c.Assert(fetchedRoute.Service, Equals, r.Service)
 		c.Assert(fetchedRoute.Domain, Equals, r.Domain)
-		c.Assert(fetchedCert.Cert, Equals, cert.Cert)
-		c.Assert(fetchedCert.Key, Equals, cert.PrivateKey)
-		c.Assert(fetchedCertSHA256, Equals, certSHA256)
+
+		if cert == nil {
+			// the last route doesn't have a cert
+			c.Assert(fetchedCert, IsNil)
+			c.Assert(fetchedCertKey, IsNil)
+			c.Assert(fetchedCertSHA256, IsNil)
+		} else {
+			sum := sha256.Sum256([]byte(strings.TrimSpace(cert.CACert)))
+			certSHA256 := hex.EncodeToString(sum[:])
+			c.Assert(fetchedCert, Not(IsNil))
+			c.Assert(fetchedCertKey, Not(IsNil))
+			c.Assert(fetchedCertSHA256, Not(IsNil))
+			c.Assert(strings.TrimSpace(*fetchedCert), Equals, strings.TrimSpace(cert.CACert))
+			c.Assert(strings.TrimSpace(*fetchedCertKey), Equals, strings.TrimSpace(cert.PrivateKey))
+			c.Assert(*fetchedCertSHA256, Equals, certSHA256)
+		}
 	}
 
 	var count int64
 	err := db.QueryRow(`SELECT COUNT(*) FROM certificates`).Scan(&count)
 	c.Assert(err, IsNil)
-	c.Assert(count, Equals, int64(1))
+	// the last two certs are the same and there's one nil after them
+	c.Assert(count, Equals, int64(len(certs)-2))
+
+	err = db.QueryRow(`SELECT COUNT(*) FROM http_routes`).Scan(&count)
+	c.Assert(err, IsNil)
+	c.Assert(count, Equals, int64(nRoutes))
 
 	err = db.QueryRow(`SELECT COUNT(*) FROM route_certificates`).Scan(&count)
 	c.Assert(err, IsNil)
-	c.Assert(count, Equals, int64(nRoutes))
+	c.Assert(count, Equals, int64(nRoutes-1)) // the last route doesn't have a cert
 }
