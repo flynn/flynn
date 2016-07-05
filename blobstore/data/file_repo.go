@@ -60,6 +60,9 @@ func NewFileRepoFromEnv(db *postgres.DB) (*FileRepo, error) {
 func parseBackendInfo(s string) (map[string]string, error) {
 	info := make(map[string]string)
 	for _, token := range strings.Split(s, " ") {
+		if token == "" {
+			continue
+		}
 		kv := strings.SplitN(token, "=", 2)
 		if len(kv) < 2 {
 			return nil, fmt.Errorf("blobstore: error parsing backend kv pair %q", token)

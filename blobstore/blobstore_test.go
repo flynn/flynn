@@ -69,6 +69,9 @@ func TestPostgresFilesystem(t *testing.T) {
 func parseBackendEnv(s string) map[string]string {
 	info := make(map[string]string)
 	for _, token := range strings.Split(s, " ") {
+		if token == "" {
+			continue
+		}
 		kv := strings.SplitN(token, "=", 2)
 		info[kv[0]] = kv[1]
 	}
