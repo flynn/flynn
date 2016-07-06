@@ -34,3 +34,14 @@ check_tuf_keys() {
     fi
   done
 }
+
+release_exists() {
+  local tuf_dir=$1
+  local version=$2
+
+  if jq --exit-status ".signed.targets.\"/${version}/flynn-host.gz\"" "${tuf_dir}/repository/targets.json" &>/dev/null; then
+    return 0
+  else
+    return 1
+  fi
+}

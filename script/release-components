@@ -33,45 +33,69 @@ usage() {
 usage: $0 [options] COMMIT VERSION
 
 OPTIONS:
-  -h            Show this message
-  -k            Keep release directory
-  -b BUCKET     The S3 bucket to sync with [default: flynn]
-  -r DIR        Resume the release using DIR
-  -t DIR        Path to the local TUF repository [default: /etc/flynn/tuf]
+  -h, --help              Show this message
+  -c, --channel CHANNEL   Point channel at VERSION once released
+  -b, --bucket BUCKET     The S3 bucket to sync with [default: flynn]
+  -t, --tuf-dir DIR       Path to the local TUF repository [default: /etc/flynn/tuf]
+  -k, --keep              Keep release directory
+  -r, --resume DIR        Resume the release using DIR
 USAGE
 }
 
 main() {
-  local bucket dir tuf_dir
+  local channel=""
+  local bucket="flynn"
+  local tuf_dir="/etc/flynn/tuf"
+  local dir=""
   local keep=false
 
-  while getopts "hkb:r:t:" opt; do
-    case $opt in
-      h)
+  while true; do
+    case "$1" in
+      -h | --help)
         usage
-        exit 1
+        exit 0
         ;;
-      k) keep=true ;;
-      b) bucket=${OPTARG} ;;
-      r)
-        dir=${OPTARG}
-        if [[ ! -d "${dir}" ]]; then
-          fail "No such directory: ${dir}"
+      -c | --channel)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
         fi
+        channel="$2"
+        shift 2
         ;;
-      t)
-        tuf_dir=${OPTARG}
-        if [[ ! -d "${tuf_dir}" ]]; then
-          fail "No such directory: ${tuf_dir}"
+      -b | --bucket)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
         fi
+        bucket="$2"
+        shift 2
         ;;
-      ?)
-        usage
-        exit 1
+      -t | --tuf-dir)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        elif [[ ! -d "$2" ]]; then
+          fail "No such directory: $2"
+        fi
+        tuf_dir="$2"
+        shift 2
+        ;;
+      -k | --keep)
+        keep=true
+        shift
+        ;;
+      -r | --resume)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        elif [[ ! -d "$2" ]]; then
+          fail "No such directory: $2"
+        fi
+        dir="$2"
+        shift 2
+        ;;
+      *)
+        break
         ;;
     esac
   done
-  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 2 ]]; then
     usage
@@ -87,9 +111,7 @@ main() {
     fail "commit has not passed CI"
   fi
 
-  bucket="${bucket:-"flynn"}"
-  dir="${dir:-$(mktemp -d)}"
-  tuf_dir="${tuf_dir:="/etc/flynn/tuf"}"
+  dir="${dir:-$(mktemp --directory)}"
   info "using base dir: ${dir}"
 
   check_tuf_keys "${tuf_dir}"
@@ -113,7 +135,7 @@ main() {
     | xargs -L 1 docker pull
 
   info "building flynn"
-  git checkout --force --quiet $commit
+  git checkout --force --quiet "${commit}"
 
   make release
 
@@ -125,12 +147,14 @@ main() {
   info "adding components to the TUF repository"
   "${src}/script/export-components" "${tuf_dir}"
 
-  "${src}/script/release-channel" \
-    --bucket "${bucket}" \
-    --tuf-dir "${tuf_dir}" \
-    --no-sync \
-    "nightly" \
-    "${version}"
+  if [[ -n "${channel}" ]]; then
+    "${src}/script/release-channel" \
+      --bucket "${bucket}" \
+      --tuf-dir "${tuf_dir}" \
+      --no-sync \
+      "${channel}" \
+      "${version}"
+  fi
 
   info "uploading files to S3"
   mkdir -p "${dir}/upload"

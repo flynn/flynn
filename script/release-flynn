@@ -14,54 +14,99 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/release.sh"
+source "${ROOT}/script/lib/tuf.sh"
 
 usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
 OPTIONS:
-  -h            Show this message
-  -b BUCKET     The S3 bucket to upload packages to [default: flynn]
-  -c COMMIT     The commit to build [default: the master branch of https://github.com/flynn/flynn.git]
-  -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
-  -r DIR        Resume the release using DIR
-  -t DIR        Path to the local TUF repository [default: /etc/flynn/tuf]
+  -h, --help              Show this message
+  -c, --commit COMMIT     The git commit to build (takes precedence over the --branch flag)
+  -b, --branch BRANCH     The git branch to build [default: master]
+  -v, --version VERSION   Version to use [default: vYYYYMMDD.N]
+  -b, --bucket BUCKET     The S3 bucket to upload packages to [default: flynn]
+  -d, --domain DOMAIN     The CloudFront domain [default: dl.flynn.io]
+  -t, --tuf-dir DIR       Path to the local TUF repository [default: /etc/flynn/tuf]
+  --resume DIR            Resume the release using DIR
 
-Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and GITHUB_TOKEN to be set
+Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and GITHUB_TOKEN to be set.
 USAGE
 }
 
 main() {
-  local bucket commit dir domain tuf_dir
+  local commit=""
+  local branch="master"
+  local version=""
+  local bucket="flynn"
+  local domain="dl.flynn.io"
+  local tuf_dir="/etc/flynn/tuf"
+  local dir=""
 
-  while getopts "hb:c:d:r:t:" opt; do
-    case $opt in
-      h)
+  while true; do
+    case "$1" in
+      -h | --help)
         usage
-        exit 1
+        exit 0
         ;;
-      b) bucket=${OPTARG} ;;
-      c) commit=${OPTARG} ;;
-      d) domain=${OPTARG} ;;
-      r)
-        dir=${OPTARG}
-        if [[ ! -d "${dir}" ]]; then
-          fail "No such directory: ${dir}"
+      -c | --commit)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
         fi
+        commit="$2"
+        shift 2
         ;;
-      t)
-        tuf_dir=${OPTARG}
-        if [[ ! -d "${tuf_dir}" ]]; then
-          fail "No such directory: ${tuf_dir}"
+      -b | --branch)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
         fi
+        branch="$2"
+        shift 2
         ;;
-      ?)
-        usage
-        exit 1
+      -v | --version)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        fi
+        version="$2"
+        shift 2
+        ;;
+      -k | --bucket)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        fi
+        bucket="$2"
+        shift 2
+        ;;
+      -d | --domain)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        fi
+        domain="$2"
+        shift 2
+        ;;
+      -t | --tuf-dir)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        elif [[ ! -d "$2" ]]; then
+          fail "No such directory: $2"
+        fi
+        tuf_dir="$2"
+        shift 2
+        ;;
+      --resume)
+        if [[ -z "$2" ]]; then
+          fail "$1 requires an argument"
+        elif [[ ! -d "$2" ]]; then
+          fail "No such directory: $2"
+        fi
+        dir="$2"
+        shift 2
+        ;;
+      *)
+        break
         ;;
     esac
   done
-  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 0 ]]; then
     usage
@@ -71,17 +116,15 @@ main() {
   check_aws_keys
   check_github_token
 
-  bucket="${bucket:-"flynn"}"
-  dir="${dir:-$(mktemp -d)}"
-  tuf_dir="${tuf_dir:="/etc/flynn/tuf"}"
-  domain="${domain:-"dl.flynn.io"}"
+  dir="${dir:-$(mktemp --directory)}"
 
   if [[ -z "${commit}" ]]; then
-    info "determining commit"
-    commit=$(curl --fail --silent https://api.github.com/repos/flynn/flynn/git/refs/heads/master | jq --raw-output .object.sha)
+    info "determining commit of ${branch} branch"
+    commit="$(curl --fail --silent "https://api.github.com/repos/flynn/flynn/git/refs/heads/${branch}" | jq --raw-output .object.sha)"
     if [[ -z "${commit}" ]]; then
       fail "could not determine commit"
     fi
+    info "using commit ${commit}"
   fi
 
   info "checking script is from commit being released"
@@ -89,7 +132,7 @@ main() {
   if [[ "${src_commit}" != "${commit}" ]]; then
     info "re-executing using scripts from commit ${commit}"
 
-    export GOPATH="$(mktemp -d)"
+    export GOPATH="$(mktemp --directory)"
     trap "rm -rf ${GOPATH}" EXIT
     local src="${GOPATH}/src/github.com/flynn/flynn"
 
@@ -100,40 +143,52 @@ main() {
     info "building flynn-release binary"
     go build -o util/release/flynn-release ./util/release
 
-    "${src}/script/release-flynn" \
-      -b "${bucket}" \
-      -c "${commit}" \
-      -d "${domain}" \
-      -r "${dir}"
+    exec "${src}/script/release-flynn" \
+      --commit  "${commit}" \
+      --version "${version}" \
+      --bucket  "${bucket}" \
+      --domain  "${domain}" \
+      --tuf-dir "${tuf_dir}" \
+      --resume  "${dir}"
+  fi
 
-    exit 0
+  if [[ -n "${version}" ]]; then
+    info "verifying that version ${version} does not already exist"
+    if release_exists "${tuf_dir}" "${version}"; then
+      fail "version ${version} already exists"
+    fi
   fi
 
   info "checking status of commit ${commit}"
-  if ! "${ROOT}/util/release/flynn-release" status ${commit}; then
+  if ! "${ROOT}/util/release/flynn-release" status "${commit}"; then
     fail "commit has not passed CI"
   fi
 
   info "starting release of commit ${commit}"
 
-  info "getting previous release tag"
-  local previous=$(git tag --list "v*" --sort "v:refname" | tail -n 1)
+  if [[ -z "${version}" ]]; then
+    info "getting previous release tag"
+    local previous=$(git tag --list "v*" --sort "v:refname" | tail -n 1)
 
-  info "determining version"
-  local version="$(next_release_version ${previous})"
+    info "determining version"
+    version="$(next_release_version ${previous})"
+  fi
   info "using version ${version}"
 
   info "tagging release"
   tag_release "${commit}" "${version}"
 
+  local flags=(
+    "--bucket"  "${bucket}"
+    "--tuf-dir" "${tuf_dir}"
+    "--resume"  "${dir}"
+    "--keep"
+  )
+  if [[ "${branch}" = "master" ]]; then
+    flags+=("--channel" "nightly")
+  fi
   info "releasing components"
-  "${ROOT}/script/release-components" \
-    -k \
-    -b "${bucket}" \
-    -r "${dir}" \
-    -t "${tuf_dir}" \
-    "${commit}" \
-    "${version}"
+  "${ROOT}/script/release-components" ${flags[@]} "${commit}" "${version}"
 
   info "successfully released Flynn version ${version}"
 
