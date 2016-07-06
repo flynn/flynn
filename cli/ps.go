@@ -10,6 +10,7 @@ import (
 	"github.com/flynn/go-docopt"
 )
 
+// TODO(jpg): Update example output with pending reason
 func init() {
 	register("ps", runPs, `
 usage: flynn ps [-a]
@@ -51,7 +52,7 @@ func runPs(args *docopt.Args, client controller.Client) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	listRec(w, "ID", "TYPE", "STATE", "CREATED", "RELEASE")
+	listRec(w, "ID", "TYPE", "STATE", "CREATED", "RELEASE", "DESCRIPTION")
 	for _, j := range jobs {
 		if j.Type == "" {
 			j.Type = "run"
@@ -67,7 +68,11 @@ func runPs(args *docopt.Args, client controller.Client) error {
 		if j.CreatedAt != nil {
 			created = units.HumanDuration(time.Now().UTC().Sub(*j.CreatedAt)) + " ago"
 		}
-		listRec(w, id, j.Type, j.State, created, j.ReleaseID)
+		var desc string
+		if j.StatusDescription != nil {
+			desc = *j.StatusDescription
+		}
+		listRec(w, id, j.Type, j.State, created, j.ReleaseID, desc)
 	}
 
 	return nil
