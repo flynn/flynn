@@ -16,10 +16,13 @@ var ClusterStatus = React.createClass({
 	displayName: 'Views.ClusterStatus',
 
 	render: function () {
-		var lines = [[{
-			name: 'cluster ('+ this.state.version +')',
-			healthy: this.state.healthy
-		}]];
+		var lines = [];
+		if (this.state.lastFetchedAt !== null) {
+			lines.push([{
+				name: 'cluster ('+ this.state.version +')',
+				healthy: this.state.healthy
+			}]);
+		}
 
 		var services = this.state.services;
 		var perLine = 4;
