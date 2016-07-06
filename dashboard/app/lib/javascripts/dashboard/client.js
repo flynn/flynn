@@ -118,6 +118,11 @@ var Client = createClass({
 			url: this.endpoints.cluster_status
 		}).then(function (args) {
 			return args[0];
+		}).catch(function (args) {
+			if (args[1] && args[1].status === 500) {
+				return args[0];
+			}
+			return Promise.reject(args);
 		});
 	},
 
