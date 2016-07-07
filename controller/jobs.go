@@ -59,21 +59,8 @@ func (r *JobRepo) Add(job *ct.Job) error {
 		job.RunAt,
 		job.Restarts,
 	).Scan(&job.CreatedAt, &job.UpdatedAt)
-	if postgres.IsUniquenessError(err, "") {
-		err = r.db.QueryRow(
-			"job_update",
-			job.UUID,
-			job.ID,
-			job.HostID,
-			string(job.State),
-			job.ExitStatus,
-			job.HostError,
-			job.RunAt,
-			job.Restarts,
-		).Scan(&job.CreatedAt, &job.UpdatedAt)
-		if postgres.IsPostgresCode(err, postgres.CheckViolation) {
-			return ct.ValidationError{Field: "state", Message: err.Error()}
-		}
+	if postgres.IsPostgresCode(err, postgres.CheckViolation) {
+		return ct.ValidationError{Field: "state", Message: err.Error()}
 	}
 	if err != nil {
 		return err
@@ -82,9 +69,6 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	// create a job event, ignoring possible duplications
 	uniqueID := strings.Join([]string{job.UUID, string(job.State)}, "|")
 	err = r.db.Exec("event_insert_unique", job.AppID, job.UUID, uniqueID, string(ct.EventTypeJob), job)
-	if postgres.IsUniquenessError(err, "") {
-		return nil
-	}
 	return err
 }
 

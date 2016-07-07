@@ -110,7 +110,7 @@ func NewPostgres(c Config) state.Database {
 		p.port = "5432"
 	}
 	if p.binDir == "" {
-		p.binDir = "/usr/lib/postgresql/9.4/bin/"
+		p.binDir = "/usr/lib/postgresql/9.5/bin/"
 	}
 	if p.dataDir == "" {
 		p.dataDir = "/data"
@@ -895,15 +895,12 @@ unix_socket_directories = ''
 listen_addresses = '0.0.0.0'
 port = {{.Port}}
 ssl = off
-ssl_renegotiation_limit = 0 # fix for https://github.com/flynn/flynn/issues/101
 max_connections = 400
 shared_buffers = 32MB
 wal_level = hot_standby
 fsync = on
 max_wal_senders = 15
-wal_keep_segments = 1000
-checkpoint_completion_target = 0.9
-checkpoint_segments = 64
+wal_keep_segments = 128
 synchronous_commit = remote_write
 synchronous_standby_names = '{{.Sync}}'
 {{if .ReadOnly}}

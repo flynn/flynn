@@ -50,14 +50,12 @@ var preparedStatements = map[string]string{
 	"formation_select":                      formationSelectQuery,
 	"formation_select_expanded":             formationSelectExpandedQuery,
 	"formation_insert":                      formationInsertQuery,
-	"formation_update":                      formationUpdateQuery,
 	"formation_delete":                      formationDeleteQuery,
 	"formation_delete_by_app":               formationDeleteByAppQuery,
 	"job_list":                              jobListQuery,
 	"job_list_active":                       jobListActiveQuery,
 	"job_select":                            jobSelectQuery,
 	"job_insert":                            jobInsertQuery,
-	"job_update":                            jobUpdateQuery,
 	"provider_list":                         providerListQuery,
 	"provider_select_by_name":               providerSelectByNameQuery,
 	"provider_select_by_name_or_id":         providerSelectByNameOrIDQuery,
@@ -226,7 +224,7 @@ INSERT INTO events (app_id, object_id, object_type, data)
 VALUES ($1, $2, $3, $4)`
 	eventInsertUniqueQuery = `
 INSERT INTO events (app_id, object_id, unique_id, object_type, data)
-VALUES ($1, $2, $3, $4, $5)`
+VALUES ($1, $2, $3, $4, $5) ON CONFLICT (unique_id) DO NOTHING`
 	formationListByAppQuery = `
 SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`
@@ -281,10 +279,10 @@ JOIN releases ON releases.release_id = formations.release_id
 WHERE formations.app_id = $1 AND formations.release_id = $2 AND formations.deleted_at IS NULL`
 	formationInsertQuery = `
 INSERT INTO formations (app_id, release_id, processes, tags)
-VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at`
-	formationUpdateQuery = `
-UPDATE formations SET processes = $3, tags = $4, updated_at = now(), deleted_at = NULL
-WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at`
+VALUES ($1, $2, $3, $4)
+ON CONFLICT ON CONSTRAINT formations_pkey DO UPDATE
+SET processes = $3, tags = $4, updated_at = now(), deleted_at = NULL
+RETURNING created_at, updated_at`
 	formationDeleteQuery = `
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
 WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
@@ -302,10 +300,9 @@ SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, met
 FROM job_cache WHERE job_id = $1`
 	jobInsertQuery = `
 INSERT INTO job_cache (cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING created_at, updated_at`
-	jobUpdateQuery = `
-UPDATE job_cache SET cluster_id = $2, host_id = $3, state = $4, exit_status = $5, host_error = $6, run_at = $7, restarts = $8, updated_at = now()
-WHERE job_id = $1 RETURNING created_at, updated_at`
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (job_id) DO UPDATE
+SET cluster_id = $1, host_id = $3, state = $7, exit_status = $9, host_error = $10, run_at = $11, restarts = $12, updated_at = now()
+RETURNING created_at, updated_at`
 	providerListQuery = `
 SELECT provider_id, name, url, created_at, updated_at
 FROM providers WHERE deleted_at IS NULL ORDER BY created_at DESC`

@@ -13,12 +13,12 @@ RUN apt-get update &&\
     apt-get update &&\
     apt-get install -y -q \
       less \
-      postgresql-9.4 \
-      postgresql-contrib-9.4 \
-      postgresql-9.4-pgextwlist \
-      postgresql-9.4-plv8 \
-      postgresql-9.4-postgis \
-      postgresql-9.4-pgrouting &&\
+      postgresql-9.5 \
+      postgresql-contrib-9.5 \
+      postgresql-9.5-pgextwlist \
+      postgresql-9.5-plv8 \
+      postgresql-9.5-postgis \
+      postgresql-9.5-pgrouting &&\
     apt-get clean &&\
     apt-get autoremove -y &&\
     echo "\set HISTFILE /dev/null" > /root/.psqlrc

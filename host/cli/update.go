@@ -41,8 +41,17 @@ Options:
 Update Flynn components`)
 }
 
+// minimum version that we can update from
+// versions prior to this are running postgres 9.4 which requires an export/import to
+// upgrade the database format.
+var minVersion = "v20160707.0"
+
 func runUpdate(args *docopt.Args) error {
 	log := log15.New()
+	v := version.Parse(version.String())
+	if v.Before(version.Parse(minVersion)) && !v.Dev {
+		return fmt.Errorf("Versions prior to %s cannot be updated in-place to this version of Flynn.\nIn order to update to this version a cluster export/import is required.\nPlease see the updating documentation at https://flynn.io/docs/operating#backup/restore.", minVersion)
+	}
 
 	// create and update a TUF client
 	log.Info("initializing TUF client")
