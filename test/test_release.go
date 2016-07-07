@@ -66,7 +66,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   popd >/dev/null
 
   "${src}/script/export-components" --no-compress "${src}/test/release"
-  "${src}/script/release-channel" --tuf-dir "${src}/test/release" --no-sync "stable" "v20150131.0-test"
+  "${src}/script/release-channel" --tuf-dir "${src}/test/release" --no-sync --no-changelog "stable" "v20150131.0-test"
 
   dir=$(mktemp --directory)
   ln -s "${src}/test/release/repository" "${dir}/tuf"
