@@ -143,13 +143,17 @@ main() {
     info "building flynn-release binary"
     go build -o util/release/flynn-release ./util/release
 
-    exec "${src}/script/release-flynn" \
-      --commit  "${commit}" \
-      --version "${version}" \
-      --bucket  "${bucket}" \
-      --domain  "${domain}" \
-      --tuf-dir "${tuf_dir}" \
-      --resume  "${dir}"
+    local args=(
+      "--commit"  "${commit}"
+      "--bucket"  "${bucket}"
+      "--domain"  "${domain}"
+      "--tuf-dir" "${tuf_dir}"
+      "--resume"  "${dir}"
+    )
+    if [[ -n "${version}" ]]; then
+      args+=("--version" "${version}")
+    fi
+    exec "${src}/script/release-flynn" ${args[@]}
   fi
 
   if [[ -n "${version}" ]]; then
