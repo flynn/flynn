@@ -48,6 +48,7 @@ const (
 	defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 	defaultPartition  = "user"
 	defaultMemory     = 1 * units.GiB
+	RLIMIT_NPROC      = 6
 )
 
 // defaultCapabilities is a list of capabilities which are set inside a
@@ -490,6 +491,24 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 				Flags:       defaultMountFlags | syscall.MS_RDONLY,
 			},
 		},
+	}
+
+	if spec, ok := job.Resources[resource.TypeMaxFD]; ok && spec.Limit != nil && spec.Request != nil {
+		log.Info(fmt.Sprintf("setting max fd limit to %d / %d", *spec.Request, *spec.Limit))
+		config.Rlimits = append(config.Rlimits, configs.Rlimit{
+			Type: syscall.RLIMIT_NOFILE,
+			Hard: uint64(*spec.Limit),
+			Soft: uint64(*spec.Request),
+		})
+	}
+
+	if spec, ok := job.Resources[resource.TypeMaxProcs]; ok && spec.Limit != nil && spec.Request != nil {
+		log.Info(fmt.Sprintf("setting max processes limit to %d / %d", *spec.Request, *spec.Limit))
+		config.Rlimits = append(config.Rlimits, configs.Rlimit{
+			Type: RLIMIT_NPROC,
+			Hard: uint64(*spec.Limit),
+			Soft: uint64(*spec.Request),
+		})
 	}
 
 	log.Info("mounting container directories and files")

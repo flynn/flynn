@@ -375,29 +375,7 @@ func setupCommon(c *Config, log log15.Logger) error {
 		}
 	}
 
-	setupLimits(c, log)
-
 	return nil
-}
-
-const RLIMIT_NPROC = 6
-
-func setupLimits(c *Config, log log15.Logger) {
-	setrlimit := func(resource int, soft, hard int64) {
-		if err := syscall.Setrlimit(resource, &syscall.Rlimit{Max: uint64(hard), Cur: uint64(soft)}); err != nil {
-			log.Error("error setting rlimit", "err", err)
-		}
-	}
-
-	if spec, ok := c.Resources[resource.TypeMaxFD]; ok && spec.Limit != nil && spec.Request != nil {
-		log.Info(fmt.Sprintf("setting max fd limit to %d / %d", *spec.Request, *spec.Limit))
-		setrlimit(syscall.RLIMIT_NOFILE, *spec.Request, *spec.Limit)
-	}
-
-	if spec, ok := c.Resources[resource.TypeMaxProcs]; ok && spec.Limit != nil && spec.Request != nil {
-		log.Info(fmt.Sprintf("setting max processes limit to %d / %d", *spec.Request, *spec.Limit))
-		setrlimit(RLIMIT_NPROC, *spec.Request, *spec.Limit)
-	}
 }
 
 func getCmdPath(c *Config) (string, error) {
