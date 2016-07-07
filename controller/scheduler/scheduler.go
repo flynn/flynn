@@ -29,6 +29,15 @@ import (
 const (
 	eventBufferSize      = 1000
 	defaultMaxHostChecks = 10
+
+	// defaultBackoffPeriod is the period to wait between restarting jobs,
+	// and is multiplied by 2^(restarts-1) for each successive restart
+	// (with restarts==0 being special cased to restart immediately)
+	defaultBackoffPeriod = 10 * time.Second
+
+	// maxBackoffMulitplier is the maximum multiplier when calculating the
+	// backoff before restarting a job
+	maxBackoffMultiplier = 32
 )
 
 var (
@@ -1510,8 +1519,8 @@ func (s *Scheduler) RunningJobs() map[string]*Job {
 func (s *Scheduler) restartJob(job *Job) {
 	restarts := job.Restarts
 	// reset the restart count if it has been running for longer than the
-	// back off period
-	if !job.StartedAt.IsZero() && job.StartedAt.Before(time.Now().Add(-s.backoffPeriod)) {
+	// maximum back off duration
+	if !job.StartedAt.IsZero() && job.StartedAt.Before(time.Now().Add(-s.maxBackoffDuration())) {
 		restarts = 0
 	}
 	backoff := s.getBackoffDuration(restarts)
@@ -1539,12 +1548,16 @@ func (s *Scheduler) restartJob(job *Job) {
 }
 
 func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
-	multiplier := 32 // max multiplier
+	multiplier := maxBackoffMultiplier
 	if restarts < 6 {
 		// 2^(restarts - 1), or 0 if restarts == 0
 		multiplier = (1 << restarts) >> 1
 	}
 	return s.backoffPeriod * time.Duration(multiplier)
+}
+
+func (s *Scheduler) maxBackoffDuration() time.Duration {
+	return s.backoffPeriod * maxBackoffMultiplier
 }
 
 func (s *Scheduler) startHTTPServer(port string) {
@@ -1626,7 +1639,7 @@ func (s *Scheduler) triggerHostChecks() {
 }
 
 func getBackoffPeriod() time.Duration {
-	backoffPeriod := 10 * time.Minute
+	backoffPeriod := defaultBackoffPeriod
 
 	if period := os.Getenv("BACKOFF_PERIOD"); period != "" {
 		p, err := time.ParseDuration(period)
