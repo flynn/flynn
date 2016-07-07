@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -77,6 +78,15 @@ func (s *BlobstoreSuite) TestBlobstoreBackendSwitching(t *c.C) {
 
 	// test that downloading blob from s3 still works
 	t.Assert(r.flynn("run", "echo", "1"), Succeeds)
+
+	// test a docker push
+	repo := "s3-test"
+	s.buildDockerImage(t, repo, "RUN echo foo > /foo.txt")
+	u, err = url.Parse(s.clusterConf(t).DockerPushURL)
+	t.Assert(err, c.IsNil)
+	tag := fmt.Sprintf("%s/%s:latest", u.Host, repo)
+	t.Assert(run(t, exec.Command("docker", "tag", "--force", repo, tag)), Succeeds)
+	t.Assert(run(t, exec.Command("docker", "push", tag)), Succeeds)
 
 	// migrate blobs back to postgres
 	migration = flynn(t, "/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore-migrate", "--", "-delete")
