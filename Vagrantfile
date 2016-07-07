@@ -113,6 +113,14 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo -u postgres createuser --superuser vagrant
     grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
 
+    # Database unit tests - mariadb + percona xtrabackup, mongodb, redis
+    sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 1BB943DB CD2EFD2A EA312927 C7917B12
+    sudo sh -c 'echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu trusty main" >> /etc/apt/sources.list.d/mariadb.list'
+    sudo sh -c 'echo "deb http://repo.percona.com/apt trusty main" >> /etc/apt/sources.list.d/percona.list'
+    sudo sh -c 'echo "deb http://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.2 multiverse" >> /etc/apt/sources.list.d/mongodb.list'
+    sudo sh -c 'echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu trusty main" >> /etc/apt/sources.list.d/redis.list'
+    sudo apt-get install -y mariadb-server percona-xtrabackup mongodb-org redis-server
+
     # For integration tests.
     #
     # Override these in script/custom-vagrant if you use git to make
