@@ -196,7 +196,7 @@ func (s *S) TestFormationStreamingInterrupted(c *C) {
 	ch := make(chan *ct.ExpandedFormation)
 	updated := make(chan struct{})
 
-	_, err := formationRepo.Subscribe(ch, before, updated)
+	_, err := formationRepo.Subscribe(nil, ch, before, updated)
 	c.Assert(err, IsNil)
 
 	// simulate scenario where we have not completed `sendUpdatedSince` but the channel for a subscription
