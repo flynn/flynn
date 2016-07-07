@@ -30,12 +30,14 @@ OPTIONS:
   -d, --tuf-dir DIR     Path to the local TUF repository [default: /etc/flynn/tuf]
   -e, --edit            Edit the changelog before committing the channel update
   --no-sync             Don't sync files with S3
+  --no-changelog        Don't create a changelog
 USAGE
 }
 
 main() {
   local bucket="flynn"
   local tuf_dir="/etc/flynn/tuf"
+  local changelog=true
   local edit=false
   local sync=true
 
@@ -65,6 +67,10 @@ main() {
         ;;
       --no-sync)
         sync=false
+        shift
+        ;;
+      --no-changelog)
+        changelog=false
         shift
         ;;
       *)
@@ -103,14 +109,16 @@ main() {
   cd "${tuf_dir}"
   tuf clean
 
-  info "generating changelog"
-  local changelog="${tuf_dir}/staged/targets/channel/${channel}/${version}/CHANGELOG.md"
-  mkdir -p "$(dirname "${changelog}")"
-  generate_changelog
+  if $changelog; then
+    info "generating changelog"
+    local changelog_path="${tuf_dir}/staged/targets/channel/${channel}/${version}/CHANGELOG.md"
+    mkdir -p "$(dirname "${changelog_path}")"
+    generate_changelog
 
-  if $edit; then
-    info "starting vim to edit the changelog"
-    edit_changelog
+    if $edit; then
+      info "starting vim to edit the changelog"
+      edit_changelog
+    fi
   fi
 
   info "staging updated channel file"
@@ -155,7 +163,7 @@ generate_changelog() {
   local current="$(tuf-client get --store "${tmp}/tuf.db" "${repo_url}" "/channels/${channel}")"
   if [[ -z "${current}" ]]; then
     warn "could not determine current ${channel} version, using empty changelog"
-    echo "n/a" > "${changelog}"
+    echo "n/a" > "${changelog_path}"
     return
   fi
 
@@ -172,7 +180,7 @@ generate_changelog() {
     --pretty=format:'* %ad: %b %s%n' \
     "${current}...${version}" \
     | sed 's|Merge pull request #\([0-9]\+\) from \S\+|([#\1](https://github.com/flynn/flynn/pull/\1))|' \
-    > "${changelog}"
+    > "${changelog_path}"
 
   popd >/dev/null
 }
@@ -190,7 +198,7 @@ edit_changelog() {
 # release.
 # -----------------------------------------------------------------------------
 EOF
-  cat "${changelog}" >> "${tmp}"
+  cat "${changelog_path}" >> "${tmp}"
 
   vim "${tmp}"
 
@@ -201,7 +209,7 @@ EOF
     exit 0
   fi
 
-  mv "${tmp}" "${changelog}"
+  mv "${tmp}" "${changelog_path}"
 }
 
 main $@
