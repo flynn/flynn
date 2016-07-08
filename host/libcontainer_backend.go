@@ -742,6 +742,12 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	log := c.l.logger.New("fn", "watch", "job.id", c.job.ID)
 	log.Info("start watching container")
 
+	readyErr := func(err error) {
+		if ready != nil {
+			ready <- err
+		}
+	}
+
 	defer func() {
 		c.container.Destroy()
 		c.l.containersMtx.Lock()
@@ -773,12 +779,10 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 			break
 		}
 	}
-	if ready != nil {
-		ready <- err
-	}
 	if err != nil {
 		log.Error("error connecting to container", "err", err)
 		c.l.state.SetStatusFailed(c.job.ID, errors.New("failed to connect to container"))
+		readyErr(err)
 		return err
 	}
 	defer c.Client.Close()
@@ -786,6 +790,8 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	c.l.containersMtx.Lock()
 	c.l.containers[c.job.ID] = c
 	c.l.containersMtx.Unlock()
+
+	readyErr(nil)
 
 	if !c.job.Config.DisableLog && !c.job.Config.TTY {
 		if err := c.followLogs(log, buffer); err != nil {
@@ -1194,7 +1200,6 @@ func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jo
 			container.cleanup()
 			continue
 		}
-		l.containers[j.Job.ID] = container
 	}
 	return nil
 }
