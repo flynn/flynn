@@ -58,6 +58,10 @@ func (d *DeployJob) deployAllAtOnce() error {
 		}
 	}
 
+	// the new jobs have now started and they are up, so return
+	// ErrSkipRollback from here on out if an error occurs (rolling
+	// back doesn't make a ton of sense because it involves
+	// stopping the new working jobs).
 	log = log.New("release_id", d.OldReleaseID)
 	log.Info("scaling old formation to zero")
 	if err := d.client.PutFormation(&ct.Formation{
@@ -65,16 +69,13 @@ func (d *DeployJob) deployAllAtOnce() error {
 		ReleaseID: d.OldReleaseID,
 	}); err != nil {
 		log.Error("error scaling old formation to zero", "err", err)
-		return err
+		return ErrSkipRollback{err.Error()}
 	}
 
 	if expected.Count() > 0 {
 		log.Info("waiting for job events", "expected", expected)
 		if err := d.waitForJobEvents(d.OldReleaseID, expected, log); err != nil {
 			log.Error("error waiting for job events", "err", err)
-			// we have started the new jobs (and they are up) and requested that the old jobs stop. at this point
-			// there's not much more we can do. Rolling back doesn't make a ton of sense because it involves
-			// stopping the new (working) jobs.
 			return ErrSkipRollback{err.Error()}
 		}
 	}

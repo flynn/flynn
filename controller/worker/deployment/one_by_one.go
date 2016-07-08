@@ -101,7 +101,9 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 
 	// ensure any old leftover jobs are stopped (this can happen when new
 	// workers continue deployments from old workers and still see the
-	// old worker running even though it has been scaled down).
+	// old worker running even though it has been scaled down), returning
+	// ErrSkipRollback if an error occurs (rolling back doesn't make a ton
+	// of sense because it involves stopping the new working jobs).
 	log.Info("ensuring old formation is scaled down to zero")
 	diff := make(ct.JobEvents, len(oldScale))
 	for typ, count := range oldScale {
@@ -112,13 +114,13 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 		ReleaseID: d.OldReleaseID,
 	}); err != nil {
 		log.Error("error scaling old formation down to zero", "err", err)
-		return err
+		return ErrSkipRollback{err.Error()}
 	}
 	if diff.Count() > 0 {
 		log.Info(fmt.Sprintf("waiting for %d job down event(s)", diff.Count()))
 		if err := d.waitForJobEvents(d.OldReleaseID, diff, log); err != nil {
 			log.Error("error waiting for job down events", "err", err)
-			return err
+			return ErrSkipRollback{err.Error()}
 		}
 	}
 
