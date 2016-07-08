@@ -47,7 +47,6 @@ type Scheduler struct {
 
 	logger log15.Logger
 
-	backoffPeriod time.Duration
 	maxHostChecks int
 
 	formations Formations
@@ -99,7 +98,6 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		ClusterClient:         cluster,
 		discoverd:             disc,
 		logger:                l,
-		backoffPeriod:         getBackoffPeriod(),
 		maxHostChecks:         defaultMaxHostChecks,
 		hosts:                 make(map[string]*Host),
 		jobs:                  make(map[string]*Job),
@@ -146,7 +144,7 @@ func main() {
 	}
 
 	s := NewScheduler(clusterClient, controllerClient, newDiscoverdWrapper(logger), logger)
-	log.Info("started scheduler", "backoffPeriod", s.backoffPeriod)
+	log.Info("started scheduler")
 
 	go s.startHTTPServer(os.Getenv("PORT"))
 
@@ -1509,9 +1507,8 @@ func (s *Scheduler) RunningJobs() map[string]*Job {
 
 func (s *Scheduler) restartJob(job *Job) {
 	restarts := job.Restarts
-	// reset the restart count if it has been running for longer than the
-	// back off period
-	if !job.StartedAt.IsZero() && job.StartedAt.Before(time.Now().Add(-s.backoffPeriod)) {
+	// reset the restart count if it has been running for more than 5 minutes
+	if !job.StartedAt.IsZero() && job.StartedAt.Before(time.Now().Add(-5*time.Minute)) {
 		restarts = 0
 	}
 	backoff := s.getBackoffDuration(restarts)
@@ -1539,12 +1536,14 @@ func (s *Scheduler) restartJob(job *Job) {
 }
 
 func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
-	multiplier := 32 // max multiplier
-	if restarts < 6 {
-		// 2^(restarts - 1), or 0 if restarts == 0
-		multiplier = (1 << restarts) >> 1
+	switch {
+	case restarts < 5:
+		return 0
+	case restarts < 15:
+		return 10 * time.Second
+	default:
+		return 30 * time.Second
 	}
-	return s.backoffPeriod * time.Duration(multiplier)
 }
 
 func (s *Scheduler) startHTTPServer(port string) {
@@ -1623,17 +1622,4 @@ func (s *Scheduler) triggerHostChecks() {
 	case s.hostChecks <- struct{}{}:
 	default:
 	}
-}
-
-func getBackoffPeriod() time.Duration {
-	backoffPeriod := 10 * time.Minute
-
-	if period := os.Getenv("BACKOFF_PERIOD"); period != "" {
-		p, err := time.ParseDuration(period)
-		if err == nil {
-			backoffPeriod = p
-		}
-	}
-
-	return backoffPeriod
 }

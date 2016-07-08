@@ -36,13 +36,12 @@ type BootConfig struct {
 }
 
 type Cluster struct {
-	ID            string        `json:"id"`
-	Instances     instances     `json:"instances"`
-	BackoffPeriod time.Duration `json:"backoff_period"`
-	ClusterDomain string        `json:"cluster_domain"`
-	ControllerPin string        `json:"controller_pin"`
-	ControllerKey string        `json:"controller_key"`
-	RouterIP      string        `json:"router_ip"`
+	ID            string    `json:"id"`
+	Instances     instances `json:"instances"`
+	ClusterDomain string    `json:"cluster_domain"`
+	ControllerPin string    `json:"controller_pin"`
+	ControllerKey string    `json:"controller_key"`
+	RouterIP      string    `json:"router_ip"`
 
 	defaultInstances []*Instance
 	releaseInstances []*Instance
@@ -499,7 +498,6 @@ func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 	inst := instances[0]
 	c.ClusterDomain = fmt.Sprintf("flynn-%s.local", random.String(16))
 	c.ControllerKey = random.String(16)
-	c.BackoffPeriod = 5 * time.Second
 	rd, wr := io.Pipe()
 
 	ips := make([]string, len(instances))
@@ -510,8 +508,8 @@ func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 	var cmdErr error
 	go func() {
 		command := fmt.Sprintf(
-			"CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d --peer-ips=%s /etc/flynn-bootstrap.json",
-			c.ClusterDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(instances), strings.Join(ips, ","),
+			"CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s flynn-host bootstrap --json --min-hosts=%d --peer-ips=%s /etc/flynn-bootstrap.json",
+			c.ClusterDomain, c.ControllerKey, len(instances), strings.Join(ips, ","),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: c.out})
 		wr.Close()
