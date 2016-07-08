@@ -10,10 +10,10 @@ import (
 	"os"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/router/types"
-	"github.com/vanillahsu/go_reuseport"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -66,7 +66,7 @@ func (s *Router) Close() {
 	s.TCP.Close()
 }
 
-var listenFunc = reuseport.NewReusablePortListener
+var listenFunc = keepalive.ReusableListen
 
 func main() {
 	defer shutdown.Exit()

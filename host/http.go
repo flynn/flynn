@@ -23,6 +23,7 @@ import (
 	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/version"
@@ -575,7 +576,11 @@ func (h *Host) Close() error {
 func newHTTPListener(addr string) (net.Listener, error) {
 	fdEnv := os.Getenv("FLYNN_HTTP_FD")
 	if fdEnv == "" {
-		return net.Listen("tcp", addr)
+		l, err := net.Listen("tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return keepalive.Listener(l), nil
 	}
 	fd, err := strconv.Atoi(fdEnv)
 	if err != nil {

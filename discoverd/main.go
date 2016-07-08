@@ -21,6 +21,7 @@ import (
 	dt "github.com/flynn/flynn/discoverd/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/mux"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
@@ -156,7 +157,7 @@ func (m *Main) Run(args ...string) error {
 	if err != nil {
 		return err
 	}
-	m.ln = ln
+	m.ln = keepalive.Listener(ln)
 
 	// Open mux
 	m.mux = mux.New(m.ln)

@@ -25,6 +25,7 @@ import (
 	"github.com/flynn/flynn/flannel/pkg/ip"
 	"github.com/flynn/flynn/flannel/pkg/task"
 	"github.com/flynn/flynn/flannel/subnet"
+	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
 	log "github.com/golang/glog"
@@ -221,8 +222,8 @@ func httpServer(sn *subnet.SubnetManager, publicIP, port string) error {
 	status.AddHandler(status.SimpleHandler(func() error {
 		return pingLeases(sn.Leases())
 	}))
-	go http.Serve(overlayListener, nil)
-	go http.Serve(publicListener, nil)
+	go http.Serve(keepalive.Listener(overlayListener), nil)
+	go http.Serve(keepalive.Listener(publicListener), nil)
 	return nil
 }
 
