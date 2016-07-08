@@ -487,12 +487,14 @@ func runDaemon(args *docopt.Args) {
 		log.Info("got cluster peer IPs", "peers", peerIPs)
 	}
 	log.Info("connecting to cluster peers")
-	if err := discoverdManager.ConnectPeer(peerIPs); err != nil && !args.Bool["--no-resurrect"] {
+	if err := discoverdManager.ConnectPeer(peerIPs); err != nil {
 		log.Info("no cluster peers available")
 	}
 
-	log.Info("resurrecting jobs")
-	resurrect()
+	if !args.Bool["--no-resurrect"] {
+		log.Info("resurrecting jobs")
+		resurrect()
+	}
 
 	monitor := NewMonitor(host.discMan, externalIP, logger)
 	shutdown.BeforeExit(func() { monitor.Shutdown() })
