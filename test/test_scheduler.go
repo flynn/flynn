@@ -2,7 +2,6 @@ package main
 
 import (
 	"net"
-	"os"
 	"strings"
 	"time"
 
@@ -435,19 +434,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
-	// To run this test on local, set BACKOFF_PERIOD on the flynn host machine
-	var backoffPeriod time.Duration
-	var err error
-	if testCluster == nil {
-		backoffPeriod, err = time.ParseDuration(os.Getenv("BACKOFF_PERIOD"))
-		if err != nil {
-			t.Skip("cannot determine backoff period")
-		}
-	} else {
-		backoffPeriod = testCluster.BackoffPeriod()
-	}
 	startTimeout := 20 * time.Second
-	debugf(t, "job restart backoff period: %s", backoffPeriod)
 
 	app, release := s.createApp(t)
 
@@ -482,10 +469,8 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	}
 
 	waitForRestart(0)
-	waitForRestart(backoffPeriod)
-	waitForRestart(2 * backoffPeriod)
-	debug(t, "waiting for backoff period to expire")
-	time.Sleep(backoffPeriod)
+	waitForRestart(0)
+	waitForRestart(0)
 	waitForRestart(0)
 }
 

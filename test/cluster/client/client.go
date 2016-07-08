@@ -48,10 +48,6 @@ func (c *Client) Size() int {
 	return c.size
 }
 
-func (c *Client) BackoffPeriod() time.Duration {
-	return c.cluster.BackoffPeriod
-}
-
 func (c *Client) AddHost(ch chan *discoverd.Event, vanilla bool) (*tc.Instance, error) {
 	path := ""
 	if vanilla {
