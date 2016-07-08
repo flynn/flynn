@@ -306,13 +306,13 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 		updated_at := time.Now()
 		formation = &ct.Formation{AppID: appID, ReleaseID: releaseID, UpdatedAt: &updated_at}
 	} else if err != nil {
-		// TODO: log error
+		logger.Error("error getting formation", "fn", "FormationRepo.publish", "app", appID, "release", releaseID, "err", err)
 		return
 	}
 
 	f, err := r.expandFormation(formation)
 	if err != nil {
-		// TODO: log error
+		logger.Error("error expanding formation", "fn", "FormationRepo.publish", "app", appID, "release", releaseID, "err", err)
 		return
 	}
 	r.subMtx.RLock()
@@ -385,7 +385,7 @@ func (r *FormationRepo) unsubscribeAll() {
 	}
 }
 
-func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, since time.Time, updated chan<- struct{}) (*FormationSubscription, error) {
+func (r *FormationRepo) Subscribe(ctx context.Context, ch chan *ct.ExpandedFormation, since time.Time, updated chan<- struct{}) (*FormationSubscription, error) {
 	// we need to keep the mutex locked whilst calling startListener
 	// to avoid a race where multiple subscribers can get added to
 	// r.subscriptions before a potentially failed listener start,
@@ -403,7 +403,7 @@ func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, since time.Time
 	r.subscriptions[sub] = struct{}{}
 
 	go func() {
-		if err := r.sendUpdatedSince(sub, since, updated); err != nil {
+		if err := r.sendUpdatedSince(ctx, sub, since, updated); err != nil {
 			sub.CloseWithError(err)
 		}
 	}()
@@ -411,7 +411,7 @@ func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, since time.Time
 	return sub, nil
 }
 
-func (r *FormationRepo) sendUpdatedSince(sub *FormationSubscription, since time.Time, updated chan<- struct{}) error {
+func (r *FormationRepo) sendUpdatedSince(ctx context.Context, sub *FormationSubscription, since time.Time, updated chan<- struct{}) error {
 	if updated != nil {
 		defer close(updated)
 	}
@@ -428,7 +428,9 @@ func (r *FormationRepo) sendUpdatedSince(sub *FormationSubscription, since time.
 		}
 		ef, err := r.expandFormation(formation)
 		if err != nil {
-			return err
+			l, _ := ctxhelper.LoggerFromContext(ctx)
+			l.Error("error expanding formation", "fn", "FormationRepo.sendUpdatedSince", "app", formation.AppID, "release", formation.ReleaseID, "err", err)
+			continue
 		}
 		// return if Notify returns false (which indicates that the
 		// subscriber channel is closed)
@@ -577,7 +579,7 @@ func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWri
 		respondWithError(w, err)
 		return
 	}
-	sub, err := c.formationRepo.Subscribe(ch, since, nil)
+	sub, err := c.formationRepo.Subscribe(ctx, ch, since, nil)
 	if err != nil {
 		respondWithError(w, err)
 		return
