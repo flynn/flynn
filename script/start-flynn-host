@@ -107,9 +107,6 @@ main() {
   # ensure log dir exists
   sudo mkdir -p $log_dir
 
-  # don't create unnecessary vxlan devices
-  export FLANNEL_BACKEND="alloc"
-
   sudo start-stop-daemon \
     --start \
     --background \

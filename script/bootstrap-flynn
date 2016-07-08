@@ -100,6 +100,9 @@ main() {
   local ips=()
   info "starting ${size} node cluster"
 
+  # don't create unnecessary vxlan devices
+  export FLANNEL_BACKEND="alloc"
+
   for index in $(seq 0 $((size - 1))); do
     # An RFC 5737 TEST-NET IP
     local ip="192.0.2.20$(($index))"
