@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/appliance/redis"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -153,7 +154,7 @@ func (m *Main) Run() error {
 		m.Logger.Error("error opening port", "err", err)
 		return err
 	}
-	m.ln = ln
+	m.ln = keepalive.Listener(ln)
 
 	// Initialize and server handler.
 	m.Logger.Info("serving http api")

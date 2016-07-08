@@ -66,7 +66,9 @@ func (h *Host) Update(cmd *host.Command) error {
 	// able continue serving requests if the child exits by using the dup'd
 	// listener.
 	log.Info("duplicating HTTP listener")
-	file, err := h.listener.(*net.TCPListener).File()
+	file, err := h.listener.(interface {
+		File() (*os.File, error)
+	}).File()
 	if err != nil {
 		log.Error("error duplicating HTTP listener", "err", err)
 		return err

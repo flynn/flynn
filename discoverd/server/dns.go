@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/miekg/dns"
 	"github.com/vanillahsu/go_reuseport"
@@ -79,7 +80,7 @@ func (srv *DNSServer) ListenAndServe() error {
 	}
 
 	if srv.TCPAddr != "" {
-		l, err := reuseport.NewReusablePortListener("tcp4", srv.TCPAddr)
+		l, err := keepalive.ReusableListen("tcp4", srv.TCPAddr)
 		if err != nil {
 			return err
 		}
