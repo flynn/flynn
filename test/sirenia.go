@@ -316,8 +316,6 @@ loop:
 					newWebJobs++
 				}
 			}
-		case <-time.After(time.Duration(app.DeployTimeout) * time.Second):
-			t.Fatal("timed out waiting for deployment")
 		}
 	}
 
