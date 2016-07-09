@@ -679,17 +679,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		Args: []string{"/.containerinit", job.ID},
 		User: "root",
 	}
-	if job.Config.TTY {
-		console, err := process.NewConsole(0, 0)
-		if err != nil {
-			return err
-		}
-		// copy the console to /dev/null because if we don't
-		// do anything with the console, it will be destroyed
-		// by the garbage collector and the job will get a
-		// tty hangup.
-		go io.Copy(ioutil.Discard, console)
-	}
 	if err := c.Run(process); err != nil {
 		c.Destroy()
 		return err
