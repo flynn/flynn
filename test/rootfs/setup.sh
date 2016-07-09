@@ -150,7 +150,6 @@ apt-get install -y \
   build-essential \
   ubuntu-zfs \
   btrfs-tools \
-  cgroup-lite \
   inotify-tools \
   libsasl2-dev \
   libseccomp-dev

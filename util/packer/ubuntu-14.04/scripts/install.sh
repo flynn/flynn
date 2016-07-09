@@ -166,7 +166,6 @@ install_packages() {
   local packages=(
     "aufs-tools"
     "btrfs-tools"
-    "cgroup-lite"
     "bzr"
     "curl"
     "git"

@@ -37,6 +37,7 @@ import (
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/miekg/dns"
 	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"gopkg.in/inconshreveable/log15.v2"
 )
@@ -84,10 +85,8 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		return nil, err
 	}
 
-	for name, shares := range partitionCGroups {
-		if err := createCGroupPartition(name, shares); err != nil {
-			return nil, err
-		}
+	if err := setupCGroups(partitionCGroups); err != nil {
+		return nil, err
 	}
 
 	return &LibcontainerBackend{
@@ -1265,32 +1264,64 @@ func milliCPUToShares(milliCPU int64) int64 {
 	return shares
 }
 
+const cgroupRoot = "/sys/fs/cgroup"
+
+func setupCGroups(partitions map[string]int64) error {
+	subsystems, err := cgroups.GetAllSubsystems()
+	if err != nil {
+		return fmt.Errorf("error getting cgroup subsystems: %s", err)
+	} else if len(subsystems) == 0 {
+		return fmt.Errorf("failed to detect any cgroup subsystems")
+	}
+
+	for _, subsystem := range subsystems {
+		if _, err := cgroups.FindCgroupMountpoint(subsystem); err == nil {
+			// subsystem already mounted
+			continue
+		}
+		path := filepath.Join(cgroupRoot, subsystem)
+		if err := os.Mkdir(path, 0755); err != nil && !os.IsExist(err) {
+			return fmt.Errorf("error creating %s cgroup directory: %s", subsystem, err)
+		}
+		if err := syscall.Mount("cgroup", path, "cgroup", 0, subsystem); err != nil {
+			return fmt.Errorf("error mounting %s cgroup: %s", subsystem, err)
+		}
+	}
+
+	for name, shares := range partitions {
+		if err := createCGroupPartition(name, shares); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func createCGroupPartition(name string, cpuShares int64) error {
 	for _, group := range []string{"blkio", "cpu", "cpuacct", "cpuset", "devices", "freezer", "memory", "net_cls", "perf_event"} {
-		if err := os.MkdirAll(filepath.Join("/sys/fs/cgroup/", group, "flynn", name), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(cgroupRoot, group, "flynn", name), 0755); err != nil {
 			return fmt.Errorf("error creating partition cgroup: %s", err)
 		}
 	}
 	for _, param := range []string{"cpuset.cpus", "cpuset.mems"} {
-		data, err := ioutil.ReadFile(filepath.Join("/sys/fs/cgroup/cpuset/flynn", param))
+		data, err := ioutil.ReadFile(filepath.Join(cgroupRoot, "cpuset", "flynn", param))
 		if err != nil {
 			return fmt.Errorf("error reading cgroup param: %s", err)
 		}
 		if len(bytes.TrimSpace(data)) == 0 {
 			// Populate our parent cgroup to avoid ENOSPC when creating containers
-			data, err = ioutil.ReadFile(filepath.Join("/sys/fs/cgroup/cpuset", param))
+			data, err = ioutil.ReadFile(filepath.Join(cgroupRoot, "cpuset", param))
 			if err != nil {
 				return fmt.Errorf("error reading cgroup param: %s", err)
 			}
-			if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpuset/flynn", param), data, 0644); err != nil {
+			if err := ioutil.WriteFile(filepath.Join(cgroupRoot, "cpuset", "flynn", param), data, 0644); err != nil {
 				return fmt.Errorf("error writing cgroup param: %s", err)
 			}
 		}
-		if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpuset/flynn", name, param), data, 0644); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(cgroupRoot, "cpuset", "flynn", name, param), data, 0644); err != nil {
 			return fmt.Errorf("error writing cgroup param: %s", err)
 		}
 	}
-	if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpu/flynn", name, "cpu.shares"), strconv.AppendInt(nil, cpuShares, 10), 0644); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(cgroupRoot, "cpu", "flynn", name, "cpu.shares"), strconv.AppendInt(nil, cpuShares, 10), 0644); err != nil {
 		return fmt.Errorf("error writing cgroup param: %s", err)
 	}
 	return nil
