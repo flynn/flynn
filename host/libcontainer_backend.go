@@ -635,14 +635,14 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		return err
 	}
 
-	ifaceName, err := netutils.GenerateIfaceName("veth", 4)
-	if err != nil {
-		return err
-	}
 	if job.Config.HostNetwork {
 		// allow host network jobs to configure the network
 		config.Capabilities = append(config.Capabilities, "CAP_NET_ADMIN")
 	} else {
+		ifaceName, err := netutils.GenerateIfaceName("veth", 4)
+		if err != nil {
+			return err
+		}
 		config.Hostname = hostname
 		config.Namespaces = append(config.Namespaces, configs.Namespace{Type: configs.NEWNET})
 		config.Networks = []*configs.Network{
