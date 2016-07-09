@@ -926,8 +926,8 @@
 		},
 		{
 			"ImportPath": "github.com/kr/pty",
-			"Comment": "release.r56-11-gc46bdbf",
-			"Rev": "c46bdbf4af2e43e5f163092037ec27e9e9aee1f3"
+			"Comment": "release.r56-14-g3b1f648",
+			"Rev": "3b1f6487b7fc649d5f146df04e623bd55ba1bf7f"
 		},
 		{
 			"ImportPath": "github.com/kylelemons/godebug/diff",
