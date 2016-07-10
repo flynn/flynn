@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flynn/flynn/discoverd/cache"
@@ -244,7 +245,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	} else {
 		bf = service.sc.Addrs
 	}
-	r.rp = proxy.NewReverseProxy(bf, nil, false, logger)
+	r.rp.Store(proxy.NewReverseProxy(bf, nil, false, logger))
 	if listener, ok := h.l.listeners[r.Port]; ok {
 		r.l = listener
 		delete(h.l.listeners, r.Port)
@@ -295,7 +296,7 @@ type tcpRoute struct {
 	l       net.Listener
 	addr    string
 	service *tcpService
-	rp      *proxy.ReverseProxy
+	rp      atomic.Value // *proxy.ReverseProxy
 	mtx     sync.RWMutex
 }
 
@@ -317,9 +318,7 @@ func (r *tcpRoute) Serve(started chan<- error) {
 		if err != nil {
 			break
 		}
-		r.mtx.RLock()
 		go r.ServeConn(conn)
-		r.mtx.RUnlock()
 	}
 }
 
@@ -348,5 +347,5 @@ type tcpService struct {
 }
 
 func (r *tcpRoute) ServeConn(conn net.Conn) {
-	r.rp.ServeConn(context.Background(), connutil.CloseNotifyConn(conn))
+	r.rp.Load().(*proxy.ReverseProxy).ServeConn(context.Background(), connutil.CloseNotifyConn(conn))
 }
