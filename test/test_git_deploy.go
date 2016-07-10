@@ -359,3 +359,11 @@ func (s *GitDeploySuite) TestSlugignore(t *c.C) {
 	t.Assert(run, Succeeds)
 	t.Assert(run, Outputs, "existing\n")
 }
+
+func (s *GitDeploySuite) TestNonMasterPush(t *c.C) {
+	r := s.newGitRepo(t, "empty")
+	t.Assert(r.flynn("create"), Succeeds)
+	push := r.git("push", "flynn", "master:foo")
+	t.Assert(push, c.Not(Succeeds))
+	t.Assert(push, OutputContains, "push must include a change to the master branch")
+}
