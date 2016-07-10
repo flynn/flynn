@@ -143,6 +143,7 @@ func (c *attachClient) Wait() error {
 func (c *attachClient) Receive(stdout, stderr io.Writer) (int, error) {
 	if c.wait != nil {
 		if err := c.wait(); err != nil {
+			c.mtx.Unlock()
 			return -1, err
 		}
 		c.mtx.Unlock()
