@@ -85,7 +85,7 @@ prune_slugignore() {
     paths=("${paths[@]}" ${build_root}/${glob})
   done
   echo_title "Deleting ${#paths[@]} files matching .slugignore patterns."
-  rm -f ${paths[@]}
+  rm -rf ${paths[@]}
   shopt -u nullglob
 }
 

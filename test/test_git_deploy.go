@@ -349,3 +349,13 @@ func (s *GitDeploySuite) TestCrashingApp(t *c.C) {
 	t.Assert(err, c.IsNil)
 	t.Assert(formation.Processes["web"], c.Equals, 0)
 }
+
+func (s *GitDeploySuite) TestSlugignore(t *c.C) {
+	r := s.newGitRepo(t, "slugignore")
+	t.Assert(r.flynn("create", "slugignore"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	run := r.flynn("run", "ls")
+	t.Assert(run, Succeeds)
+	t.Assert(run, Outputs, "existing\n")
+}
