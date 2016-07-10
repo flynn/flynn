@@ -43,7 +43,7 @@ starting and managing containers on a single host.
 
 Flynn runs everything else in containers provided by flynn-host. The container
 image and running systems are implementation details. Currently flynn-host
-uses `libvirt-lxc` to run containers and a custom system for container images.
+uses `libcontainer` to run containers and a custom system for container images.
 
 The APIs that flynn-host provides are not specific to Linux containers, so we
 call a running unit of work a *job*.

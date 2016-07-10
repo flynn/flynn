@@ -10,8 +10,7 @@ import (
 // see ioccom.h
 const sys_IOCPARM_MASK = 0x1fff
 
-// Opens a pty and its corresponding tty.
-func Open() (pty, tty *os.File, err error) {
+func open() (pty, tty *os.File, err error) {
 	p, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
 	if err != nil {
 		return nil, nil, err

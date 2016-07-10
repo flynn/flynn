@@ -150,8 +150,6 @@ apt-get install -y \
   build-essential \
   ubuntu-zfs \
   btrfs-tools \
-  libvirt-dev \
-  libvirt-bin \
   inotify-tools \
   libsasl2-dev \
   libseccomp-dev

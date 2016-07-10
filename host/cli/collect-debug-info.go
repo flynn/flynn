@@ -32,10 +32,7 @@ var debugCmds = [][]string{
 	{"date"},
 	{"free", "-m"},
 	{"df", "-h"},
-	{"dpkg-query", "-W", "-f", "${Package}: ${Version}\n", "libvirt-bin"},
 	{os.Args[0], "version"},
-	{"virsh", "-c", "lxc:///", "list"},
-	{"virsh", "-c", "lxc:///", "net-list"},
 	{"route", "-n"},
 	{"iptables", "-L", "-v", "-n", "--line-numbers"},
 }

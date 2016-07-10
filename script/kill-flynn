@@ -35,7 +35,11 @@ main() {
     --name "flynn-host"
 
   # force kill any remaining containers
-  virsh -c lxc:/// list --name | xargs -L 1 virsh -c lxc:/// destroy || true
+  sudo start-stop-daemon \
+    --stop \
+    --oknodo \
+    --retry 15 \
+    --name ".containerinit"
 
   info "done!"
 }

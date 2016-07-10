@@ -16,7 +16,6 @@ var binaries = []string{
 	"flynn-host",
 	"flynn-linux-amd64",
 	"flynn-init",
-	"flynn-nsumount",
 }
 
 var config = []string{

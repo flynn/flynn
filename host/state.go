@@ -92,17 +92,6 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 			return err
 		}
 
-		if err := persistentBucket.ForEach(func(k, v []byte) error {
-			for _, job := range s.jobs {
-				if job.Job.ID == string(v) {
-					resurrect = append(resurrect, job.Job)
-				}
-			}
-			return nil
-		}); err != nil {
-			return err
-		}
-
 		// hand opaque blobs back to backend so it can do its restore
 		backendJobsBlobs := make(map[string][]byte)
 		if err := backendJobsBucket.ForEach(func(k, v []byte) error {
@@ -116,12 +105,27 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 			return err
 		}
 
+		// resurrect any persistent jobs which are not running
+		if err := persistentBucket.ForEach(func(k, v []byte) error {
+			for _, job := range s.jobs {
+				if job.Job.ID == string(v) && !backend.JobExists(job.Job.ID) {
+					resurrect = append(resurrect, job.Job)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	}); err != nil && err != io.EOF {
 		return nil, fmt.Errorf("could not restore from host persistence db: %s", err)
 	}
 
 	return func() {
+		if len(resurrect) == 0 {
+			return
+		}
 		var wg sync.WaitGroup
 		wg.Add(len(resurrect))
 		for _, job := range resurrect {

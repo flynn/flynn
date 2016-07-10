@@ -35,7 +35,6 @@ main() {
   install_packages
   install_flynn
   disable_docker_start
-  bump_libvirt_start_timeout
   apt_cleanup
 
   if vagrant_build; then
@@ -138,8 +137,7 @@ enable_cgroups() {
 create_groups() {
   groupadd docker
   groupadd fuse || true
-  groupadd libvirtd || true
-  usermod -a -G docker,fuse,libvirtd "${SUDO_USER}"
+  usermod -a -G docker,fuse "${SUDO_USER}"
 }
 
 add_apt_sources() {
@@ -172,8 +170,6 @@ install_packages() {
     "curl"
     "git"
     "iptables"
-    "libvirt-bin"
-    "libvirt-dev"
     "linux-image-extra-$(uname -r)"
     "docker-engine=1.9.1-0~trusty"
     "make"
@@ -210,11 +206,6 @@ install_flynn() {
 
 disable_docker_start() {
   echo manual > /etc/init/docker.override
-}
-
-bump_libvirt_start_timeout() {
-  # on EC2 libvirt can take longer to come up than the default timeout allows
-  sed -i 's/sockfile_check_retries=5/sockfile_check_retries=10/' /etc/init/libvirt-bin.conf
 }
 
 apt_cleanup() {

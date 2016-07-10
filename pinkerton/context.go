@@ -181,7 +181,11 @@ func (c *Context) Checkout(id, imageID string) (string, error) {
 }
 
 func (c *Context) Cleanup(id string) error {
-	return c.driver.Remove("tmp-" + id)
+	id = "tmp-" + id
+	if err := c.driver.Put(id); err != nil {
+		return err
+	}
+	return c.driver.Remove(id)
 }
 
 func InfoPrinter(jsonOut bool) chan<- layer.PullInfo {

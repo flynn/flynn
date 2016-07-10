@@ -186,10 +186,6 @@ func runUpdate(args *docopt.Args) error {
 	if !ok {
 		return fmt.Errorf("missing flynn-init binary")
 	}
-	flynnNSUmount, ok := binaries["flynn-nsumount"]
-	if !ok {
-		return fmt.Errorf("missing flynn-nsumount binary")
-	}
 
 	log.Info("updating flynn-host daemon on all hosts")
 	if err := eachHost(func(host *cluster.Host, log log15.Logger) error {
@@ -199,7 +195,6 @@ func runUpdate(args *docopt.Args) error {
 			"daemon",
 			"--id", host.ID(),
 			"--flynn-init", flynnInit,
-			"--nsumount", flynnNSUmount,
 		)
 		if err != nil {
 			log.Error("error updating binaries", "err", err)

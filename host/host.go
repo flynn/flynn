@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -23,6 +25,8 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
+	"github.com/opencontainers/runc/libcontainer"
+	_ "github.com/opencontainers/runc/libcontainer/nsenter"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -42,9 +46,8 @@ options:
   --force                    kill all containers booted by flynn-host before starting
   --volpath=PATH             directory to create volumes in [default: /var/lib/flynn/volumes]
   --vol-provider=VOL         volume provider [default: zfs]
-  --backend=BACKEND          runner backend [default: libvirt-lxc]
+  --backend=BACKEND          runner backend [default: libcontainer]
   --flynn-init=PATH          path to flynn-init binary [default: /usr/local/bin/flynn-init]
-  --nsumount=PATH            path to flynn-nsumount binary [default: /usr/local/bin/flynn-nsumount]
   --log-dir=DIR              directory to store job logs [default: /var/log/flynn]
   --discovery=TOKEN          join cluster with discovery token
   --peer-ips=IPLIST          join existing cluster using IPs
@@ -56,6 +59,19 @@ options:
 }
 
 func main() {
+	// when starting a container with libcontainer, we first exec the
+	// current binary with libcontainer-init as the first argument,
+	// which triggers the following code to initialise the container
+	// environment (namespaces, network etc.) then exec containerinit
+	if len(os.Args) > 1 && os.Args[1] == "libcontainer-init" {
+		runtime.GOMAXPROCS(1)
+		runtime.LockOSThread()
+		factory, _ := libcontainer.New("")
+		if err := factory.StartInitialization(); err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	defer shutdown.Exit()
 
 	usage := `usage: flynn-host [-h|--help] [--version] <command> [<args>...]
@@ -151,7 +167,6 @@ func runDaemon(args *docopt.Args) {
 	volProvider := args.String["--vol-provider"]
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
-	nsumount := args.String["--nsumount"]
 	logDir := args.String["--log-dir"]
 	discoveryToken := args.String["--discovery"]
 	bridgeName := args.String["--bridge-name"]
@@ -272,8 +287,8 @@ func runDaemon(args *docopt.Args) {
 	log.Info("initializing job backend", "type", backendName)
 	var backend Backend
 	switch backendName {
-	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, bridgeName, flynnInit, nsumount, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libvirt-lxc"))
+	case "libcontainer":
+		backend, err = NewLibcontainerBackend(state, vman, bridgeName, flynnInit, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"))
 	case "mock":
 		backend = MockBackend{}
 	default:
@@ -472,12 +487,14 @@ func runDaemon(args *docopt.Args) {
 		log.Info("got cluster peer IPs", "peers", peerIPs)
 	}
 	log.Info("connecting to cluster peers")
-	if err := discoverdManager.ConnectPeer(peerIPs); err != nil && !args.Bool["--no-resurrect"] {
+	if err := discoverdManager.ConnectPeer(peerIPs); err != nil {
 		log.Info("no cluster peers available")
 	}
 
-	log.Info("resurrecting jobs")
-	resurrect()
+	if !args.Bool["--no-resurrect"] {
+		log.Info("resurrecting jobs")
+		resurrect()
+	}
 
 	monitor := NewMonitor(host.discMan, externalIP, logger)
 	shutdown.BeforeExit(func() { monitor.Shutdown() })
