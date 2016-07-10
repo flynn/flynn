@@ -317,9 +317,7 @@ func (r *tcpRoute) Serve(started chan<- error) {
 		if err != nil {
 			break
 		}
-		r.mtx.RLock()
 		go r.ServeConn(conn)
-		r.mtx.RUnlock()
 	}
 }
 
