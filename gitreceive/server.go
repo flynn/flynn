@@ -294,6 +294,7 @@ func (w writeFlusher) Write(p []byte) (int, error) {
 
 var prereceiveHook = []byte(`#!/bin/bash
 set -eo pipefail;
+
 git-archive-all() {
 	GIT_DIR="$(pwd)"
 	cd ..
@@ -301,9 +302,19 @@ git-archive-all() {
 	git submodule --quiet update --init --recursive
 	tar --create --exclude-vcs .
 }
+
 while read oldrev newrev refname; do
-	[[ $refname = "refs/heads/master" ]] && git-archive-all $newrev | /bin/flynn-receiver "$RECEIVE_APP" "$newrev" --meta git=true | sed -u "s/^/"$'\e[1G\e[K'"/"
+	if [[ $refname = "refs/heads/master" ]]; then
+		git-archive-all $newrev | /bin/flynn-receiver "$RECEIVE_APP" "$newrev" --meta git=true | sed -u "s/^/"$'\e[1G\e[K'"/"
+		master_pushed=1
+		break
+	fi
 done
+
+if [[ -z "${master_pushed}" ]]; then
+  echo "The push must include a change to the master branch to be deployed."
+  exit 1
+fi
 `)
 
 func blobstoreCacheURL(cacheKey string) string {
