@@ -887,6 +887,65 @@
 			"Rev": "aa5e036e6c44aec69a32eb41097001978b29ad31"
 		},
 		{
+			"ImportPath": "github.com/graphql-go/graphql",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/gqlerrors",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/ast",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/kinds",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/lexer",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/location",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/parser",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/printer",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/source",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/typeInfo",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/graphql/language/visitor",
+			"Comment": "v0.4.18-42-g491504a",
+			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
+		},
+		{
+			"ImportPath": "github.com/graphql-go/handler",
+			"Rev": "52e6de4fccd785952dce42265f316acd43a3053f"
+		},
+		{
 			"ImportPath": "github.com/hashicorp/go-msgpack/codec",
 			"Rev": "fa3f63826f7c23912c15263591e65d54d080b458"
 		},
