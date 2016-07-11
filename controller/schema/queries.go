@@ -294,7 +294,7 @@ SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, met
 FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC`
 	jobListActiveQuery = `
 SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
-FROM job_cache WHERE state = 'starting' OR state = 'up' ORDER BY updated_at DESC`
+FROM job_cache WHERE state = 'pending' OR state = 'starting' OR state = 'up' ORDER BY updated_at DESC`
 	jobSelectQuery = `
 SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
 FROM job_cache WHERE job_id = $1`
