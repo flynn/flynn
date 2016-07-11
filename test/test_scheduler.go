@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net"
 	"strings"
 	"time"
@@ -8,7 +9,9 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/typeconv"
 	c "github.com/flynn/go-check"
 )
 
@@ -82,6 +85,40 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 		t.Skip("not enough hosts to test tagged based scheduling")
 	}
 
+	// stream the scheduler leader log so we can synchronize tag changes
+	leader, err := s.discoverdClient(t).Service("controller-scheduler").Leader()
+	t.Assert(err, c.IsNil)
+	client := s.controllerClient(t)
+	res, err := client.GetAppLog("controller", &ct.LogOpts{
+		Follow:      true,
+		JobID:       leader.Meta["FLYNN_JOB_ID"],
+		ProcessType: typeconv.StringPtr("scheduler"),
+		Lines:       typeconv.IntPtr(0),
+	})
+	t.Assert(err, c.IsNil)
+	defer res.Close()
+	tagChange := make(chan struct{})
+	go func() {
+		dec := json.NewDecoder(res)
+		for {
+			var msg logaggc.Message
+			if err := dec.Decode(&msg); err != nil {
+				return
+			}
+			if strings.Contains(msg.Msg, "host tags changed") {
+				tagChange <- struct{}{}
+			}
+		}
+	}()
+	waitSchedulerTagChange := func() {
+		select {
+		case <-tagChange:
+			return
+		case <-time.After(10 * time.Second):
+			t.Fatalf("timed out waiting for scheduler leader to see tag change")
+		}
+	}
+
 	// watch service events so we can wait for tag changes
 	events := make(chan *discoverd.Event)
 	stream, err := s.discoverdClient(t).Service("flynn-host").Watch(events)
@@ -114,6 +151,7 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 		for key, val := range tags {
 			t.Assert(event.Instance.Meta["tag:"+key], c.Equals, val)
 		}
+		waitSchedulerTagChange()
 	}
 
 	// create an app with a tagged process and watch job events
@@ -123,7 +161,6 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 		ReleaseID: release.ID,
 		Tags:      map[string]map[string]string{"printer": {"active": "true"}},
 	}
-	client := s.controllerClient(t)
 	watcher, err := client.WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
