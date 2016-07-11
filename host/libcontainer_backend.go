@@ -58,8 +58,6 @@ const (
 var defaultCapabilities = []string{
 	"CAP_NET_RAW",
 	"CAP_NET_BIND_SERVICE",
-	"CAP_AUDIT_READ",
-	"CAP_AUDIT_WRITE",
 	"CAP_DAC_OVERRIDE",
 	"CAP_SETFCAP",
 	"CAP_SETPCAP",
