@@ -36,6 +36,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.vbguest.auto_update = false
   end
 
+  # Override locale settings. Avoids host locale settings being sent via SSH
+  ENV['LC_ALL']="en_US.UTF-8"
+  ENV['LANG']="en_US.UTF-8"
+  ENV['LANGUAGE']="en_US.UTF-8"
+
   # VAGRANT_MEMORY          - instance memory, in MB
   # VAGRANT_CPUS            - instance virtual CPUs
   config.vm.provider "virtualbox" do |v, override|
@@ -105,21 +110,19 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo curl -sLo "/usr/local/bin/jq" "http://stedolan.github.io/jq/download/linux64/jq"
     sudo chmod +x "/usr/local/bin/jq"
 
-    # For controller tests
-    curl --fail --silent https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
-    sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list'
+    # Database dependencies - postgres, mariadb + percona xtrabackup, mongodb, redis
+    sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 ACCC4CF8 1BB943DB CD2EFD2A EA312927 C7917B12
+    sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" > /etc/apt/sources.list.d/postgresql.list'
+    sudo sh -c 'echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu trusty main" > /etc/apt/sources.list.d/mariadb.list'
+    sudo sh -c 'echo "deb http://repo.percona.com/apt trusty main" > /etc/apt/sources.list.d/percona.list'
+    sudo sh -c 'echo "deb http://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb.list'
+    sudo sh -c 'echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu trusty main" > /etc/apt/sources.list.d/redis.list'
     sudo apt-get update
-    sudo apt-get install -y postgresql-9.5 postgresql-contrib-9.5
-    sudo -u postgres createuser --superuser vagrant
-    grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
+    sudo sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-9.5 postgresql-contrib-9.5 mariadb-server percona-xtrabackup mongodb-org redis-server'
 
-    # Database unit tests - mariadb + percona xtrabackup, mongodb, redis
-    sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 1BB943DB CD2EFD2A EA312927 C7917B12
-    sudo sh -c 'echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu trusty main" >> /etc/apt/sources.list.d/mariadb.list'
-    sudo sh -c 'echo "deb http://repo.percona.com/apt trusty main" >> /etc/apt/sources.list.d/percona.list'
-    sudo sh -c 'echo "deb http://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.2 multiverse" >> /etc/apt/sources.list.d/mongodb.list'
-    sudo sh -c 'echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu trusty main" >> /etc/apt/sources.list.d/redis.list'
-    sudo apt-get install -y mariadb-server percona-xtrabackup mongodb-org redis-server
+    # Setup postgres for controller unit tests
+    sudo -u postgres createuser --superuser vagrant || true
+    grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
 
     # For integration tests.
     #
@@ -133,7 +136,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     # enable docker
     sudo rm -f /etc/init/docker.override
-    sudo start docker
+    sudo start docker || true
   SCRIPT
 
   if File.exists?("script/custom-vagrant")
