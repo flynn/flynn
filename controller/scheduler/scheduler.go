@@ -415,8 +415,8 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 	}
 
-	// ensure that all starting or up jobs in the controller are still in
-	// those states
+	// ensure that all pending / starting / up jobs in the controller are
+	// still in those states
 	jobs, err := s.JobListActive()
 	if err != nil {
 		if err == controller.ErrNotFound {
@@ -440,7 +440,9 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 
 		// persist the job if it has a different in-memory state
-		if job.State == ct.JobStateStarting && j.State != JobStateStarting || job.State == ct.JobStateUp && j.State != JobStateRunning {
+		if job.State == ct.JobStatePending && j.State != JobStatePending ||
+			job.State == ct.JobStateStarting && j.State != JobStateStarting ||
+			job.State == ct.JobStateUp && j.State != JobStateRunning {
 			s.persistJob(j)
 		}
 	}
