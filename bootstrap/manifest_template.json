@@ -405,7 +405,10 @@
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["api"]
+          "cmd": ["api"],
+          "env": {
+            "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}"
+          }
         }
       }
     },
@@ -414,7 +417,7 @@
       "uri": "$image_repository?name=flynn/mongodb&id=$image_id[mongodb]"
     },
     "processes": {
-      "mongodb": 3,
+      "mongodb": 0,
       "web": 2
     }
   },

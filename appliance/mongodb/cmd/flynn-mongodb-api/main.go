@@ -6,17 +6,24 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
+	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
+	"github.com/flynn/flynn/pkg/sirenia/scale"
 	"github.com/julienschmidt/httprouter"
+	"gopkg.in/inconshreveable/log15.v2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
+var app = os.Getenv("FLYNN_APP_ID")
+var controllerKey = os.Getenv("CONTROLLER_KEY")
+var singleton = os.Getenv("SINGLETON")
 var serviceName = os.Getenv("FLYNN_MONGO")
 var serviceHost string
 
@@ -53,10 +60,21 @@ func main() {
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
 
-type API struct{}
+type API struct {
+	mtx      sync.Mutex
+	scaledUp bool
+}
+
+func (a *API) logger() log15.Logger {
+	return log15.New("app", "mongodb-web")
+}
 
 func (a *API) createDatabase(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
+	// Ensure the cluster has been scaled up before attempting to create a database.
+	if err := a.scaleUp(); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
 
 	session, err := mgo.DialWithInfo(&mgo.DialInfo{
 		Addrs:    []string{net.JoinHostPort(serviceHost, "27017")},
@@ -69,6 +87,8 @@ func (a *API) createDatabase(w http.ResponseWriter, req *http.Request, _ httprou
 		return
 	}
 	defer session.Close()
+
+	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
 
 	// Create a user
 	if err := session.DB(database).Run(bson.D{
@@ -132,6 +152,25 @@ func (a *API) dropDatabase(w http.ResponseWriter, req *http.Request, _ httproute
 }
 
 func (a *API) ping(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	logger := a.logger().New("fn", "ping")
+
+	logger.Info("checking status", "host", serviceHost)
+	if status, err := sirenia.NewClient(serviceHost + ":3306").Status(); err == nil && status.Database != nil && status.Database.ReadWrite {
+		logger.Info("database is up, skipping scale check")
+	} else {
+		scaled, err := scale.CheckScale(app, controllerKey, "mongodb", a.logger())
+		if err != nil {
+			httphelper.Error(w, err)
+			return
+		}
+
+		// Cluster has yet to be scaled, return healthy
+		if !scaled {
+			w.WriteHeader(200)
+			return
+		}
+	}
+
 	session, err := mgo.DialWithInfo(&mgo.DialInfo{
 		Addrs:    []string{net.JoinHostPort(serviceHost, "27017")},
 		Username: "flynn",
@@ -145,4 +184,24 @@ func (a *API) ping(w http.ResponseWriter, req *http.Request, _ httprouter.Params
 	defer session.Close()
 
 	w.WriteHeader(200)
+}
+
+func (a *API) scaleUp() error {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	// Ignore if already scaled up.
+	if a.scaledUp {
+		return nil
+	}
+
+	serviceAddr := serviceHost + ":27017"
+	err := scale.ScaleUp(app, controllerKey, serviceAddr, "mongodb", singleton, a.logger())
+	if err != nil {
+		return err
+	}
+
+	// Mark as successfully scaled up.
+	a.scaledUp = true
+	return nil
 }
