@@ -166,6 +166,24 @@ main() {
     --config-dir "/etc/flynn" \
     --bin-dir    "/usr/local/bin"
 
+  # install libvirt dependencies for versions before v20160711.0.
+  #
+  # NOTE: Uses a negative assertion so we only skip installing if we know the
+  #       installed Flynn version is definitely greater than or equal to
+  #       v20160711.0.
+  local version="$(/usr/local/bin/flynn-host version)"
+  if ! [[ "${version:1:8}" -ge "20160711" ]]; then
+    info "installing extra runtime dependencies"
+    run apt-get install --yes "libvirt-bin"
+
+    info "setting libvirt defaults"
+    if grep -q "^libvirt_uris=" /etc/default/libvirt-bin; then
+      sed "s|^libvirt_uris=.*|libvirt_uris='qemu:///system'|" -i /etc/default/libvirt-bin
+    else
+      echo "libvirt_uris='qemu:///system'" >> /etc/default/libvirt-bin
+    fi
+  fi
+
   info "installing Upstart job"
   cp /etc/flynn/upstart.conf /etc/init/flynn-host.conf
   initctl reload-configuration
