@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
+	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
 	"github.com/flynn/flynn/pkg/sirenia/scale"
 	"github.com/julienschmidt/httprouter"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -20,6 +21,9 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+var app = os.Getenv("FLYNN_APP_ID")
+var controllerKey = os.Getenv("CONTROLLER_KEY")
+var singleton = os.Getenv("SINGLETON")
 var serviceName = os.Getenv("FLYNN_MONGO")
 var serviceHost string
 
@@ -148,6 +152,25 @@ func (a *API) dropDatabase(w http.ResponseWriter, req *http.Request, _ httproute
 }
 
 func (a *API) ping(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	logger := a.logger().New("fn", "ping")
+
+	logger.Info("checking status", "host", serviceHost)
+	if status, err := sirenia.NewClient(serviceHost + ":3306").Status(); err == nil && status.Database != nil && status.Database.ReadWrite {
+		logger.Info("database is up, skipping scale check")
+	} else {
+		scaled, err := scale.CheckScale(app, controllerKey, "mongodb", a.logger())
+		if err != nil {
+			httphelper.Error(w, err)
+			return
+		}
+
+		// Cluster has yet to be scaled, return healthy
+		if !scaled {
+			w.WriteHeader(200)
+			return
+		}
+	}
+
 	session, err := mgo.DialWithInfo(&mgo.DialInfo{
 		Addrs:    []string{net.JoinHostPort(serviceHost, "27017")},
 		Username: "flynn",
@@ -172,9 +195,6 @@ func (a *API) scaleUp() error {
 		return nil
 	}
 
-	app := os.Getenv("FLYNN_APP_ID")
-	controllerKey := os.Getenv("CONTROLLER_KEY")
-	singleton := os.Getenv("SINGLETON")
 	serviceAddr := serviceHost + ":27017"
 	err := scale.ScaleUp(app, controllerKey, serviceAddr, "mongodb", singleton, a.logger())
 	if err != nil {
