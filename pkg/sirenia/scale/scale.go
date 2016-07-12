@@ -38,7 +38,7 @@ func ScaleUp(app, controllerKey, serviceAddr, procName, singleton string, logger
 	release, err := client.GetAppRelease(app)
 	if err == controller.ErrNotFound {
 		logger.Error("release not found", "app", app)
-		return errors.New("mariadb release not found")
+		return errors.New("release not found")
 	} else if err != nil {
 		logger.Error("get release error", "app", app, "err", err)
 		return err
@@ -49,7 +49,7 @@ func ScaleUp(app, controllerKey, serviceAddr, procName, singleton string, logger
 	formation, err := client.GetFormation(app, release.ID)
 	if err == controller.ErrNotFound {
 		logger.Error("formation not found", "app", app, "release_id", release.ID)
-		return errors.New("mariadb formation not found")
+		return errors.New("formation not found")
 	} else if err != nil {
 		logger.Error("formation error", "app", app, "release_id", release.ID, "err", err)
 		return err
@@ -88,4 +88,48 @@ func ScaleUp(app, controllerKey, serviceAddr, procName, singleton string, logger
 
 	logger.Info("scaling complete")
 	return nil
+}
+
+// CheckScale examines sirenia cluster formation to check if cluster
+// has been scaled up yet.
+// Returns true if scaled, false if not.
+func CheckScale(app, controllerKey, procName string, logger log15.Logger) (bool, error) {
+	logger = logger.New("fn", "CheckScale")
+	// Connect to controller.
+	logger.Info("connecting to controller")
+	client, err := controller.NewClient("", controllerKey)
+	if err != nil {
+		logger.Error("controller client error", "err", err)
+		return false, err
+	}
+
+	// Retrieve app release.
+	logger.Info("retrieving app release", "app", app)
+	release, err := client.GetAppRelease(app)
+	if err == controller.ErrNotFound {
+		logger.Error("release not found", "app", app)
+		return false, err
+	} else if err != nil {
+		logger.Error("get release error", "app", app, "err", err)
+		return false, err
+	}
+
+	// Retrieve current formation.
+	logger.Info("retrieving formation", "app", app, "release_id", release.ID)
+	formation, err := client.GetFormation(app, release.ID)
+	if err == controller.ErrNotFound {
+		logger.Error("formation not found", "app", app, "release_id", release.ID)
+		return false, err
+	} else if err != nil {
+		logger.Error("formation error", "app", app, "release_id", release.ID, "err", err)
+		return false, err
+	}
+
+	// Database hasn't been scaled up yet
+	if formation.Processes[procName] == 0 {
+		return false, nil
+	}
+
+	return true, nil
+
 }

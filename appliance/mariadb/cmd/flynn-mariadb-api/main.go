@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/flynn/flynn/appliance/mariadb"
-	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
@@ -24,6 +23,9 @@ import (
 )
 
 var serviceName = os.Getenv("FLYNN_MYSQL")
+var app = os.Getenv("FLYNN_APP_ID")
+var controllerKey = os.Getenv("CONTROLLER_KEY")
+var singleton = os.Getenv("SINGLETON")
 var serviceHost string
 
 func init() {
@@ -137,50 +139,20 @@ func (a *API) dropDatabase(ctx context.Context, w http.ResponseWriter, req *http
 }
 
 func (a *API) ping(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app := os.Getenv("FLYNN_APP_ID")
 	logger := a.logger().New("fn", "ping")
 
 	logger.Info("checking status", "host", serviceHost)
 	if status, err := sirenia.NewClient(serviceHost + ":3306").Status(); err == nil && status.Database != nil && status.Database.ReadWrite {
 		logger.Info("database is up, skipping scale check")
 	} else {
-		// Connect to controller.
-		logger.Info("connecting to controller")
-		client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
+		scaled, err := scale.CheckScale(app, controllerKey, "mariadb", a.logger())
 		if err != nil {
-			logger.Error("controller client error", "err", err)
 			httphelper.Error(w, err)
 			return
 		}
 
-		// Retrieve mariadb release.
-		logger.Info("retrieving app release", "app", app)
-		release, err := client.GetAppRelease(app)
-		if err == controller.ErrNotFound {
-			logger.Error("release not found", "app", app)
-			httphelper.Error(w, err)
-			return
-		} else if err != nil {
-			logger.Error("get release error", "app", app, "err", err)
-			httphelper.Error(w, err)
-			return
-		}
-
-		// Retrieve current formation.
-		logger.Info("retrieving formation", "app", app, "release_id", release.ID)
-		formation, err := client.GetFormation(app, release.ID)
-		if err == controller.ErrNotFound {
-			logger.Error("formation not found", "app", app, "release_id", release.ID)
-			httphelper.Error(w, err)
-			return
-		} else if err != nil {
-			logger.Error("formation error", "app", app, "release_id", release.ID, "err", err)
-			httphelper.Error(w, err)
-			return
-		}
-
-		// MariaDB isn't running, just return healthy
-		if formation.Processes["mariadb"] == 0 {
+		// Cluster has yet to be scaled, return healthy
+		if !scaled {
 			w.WriteHeader(200)
 			return
 		}
@@ -219,9 +191,6 @@ func (a *API) scaleUp() error {
 		return nil
 	}
 
-	app := os.Getenv("FLYNN_APP_ID")
-	controllerKey := os.Getenv("CONTROLLER_KEY")
-	singleton := os.Getenv("SINGLETON")
 	serviceAddr := serviceHost + ":3306"
 	err := scale.ScaleUp(app, controllerKey, serviceAddr, "mariadb", singleton, a.logger())
 	if err != nil {
