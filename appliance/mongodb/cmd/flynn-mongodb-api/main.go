@@ -6,13 +6,16 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/sirenia/scale"
 	"github.com/julienschmidt/httprouter"
+	"gopkg.in/inconshreveable/log15.v2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -53,10 +56,21 @@ func main() {
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
 
-type API struct{}
+type API struct {
+	mtx      sync.Mutex
+	scaledUp bool
+}
+
+func (a *API) logger() log15.Logger {
+	return log15.New("app", "mongodb-web")
+}
 
 func (a *API) createDatabase(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
+	// Ensure the cluster has been scaled up before attempting to create a database.
+	if err := a.scaleUp(); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
 
 	session, err := mgo.DialWithInfo(&mgo.DialInfo{
 		Addrs:    []string{net.JoinHostPort(serviceHost, "27017")},
@@ -69,6 +83,8 @@ func (a *API) createDatabase(w http.ResponseWriter, req *http.Request, _ httprou
 		return
 	}
 	defer session.Close()
+
+	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
 
 	// Create a user
 	if err := session.DB(database).Run(bson.D{
@@ -145,4 +161,27 @@ func (a *API) ping(w http.ResponseWriter, req *http.Request, _ httprouter.Params
 	defer session.Close()
 
 	w.WriteHeader(200)
+}
+
+func (a *API) scaleUp() error {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	// Ignore if already scaled up.
+	if a.scaledUp {
+		return nil
+	}
+
+	app := os.Getenv("FLYNN_APP_ID")
+	controllerKey := os.Getenv("CONTROLLER_KEY")
+	singleton := os.Getenv("SINGLETON")
+	serviceAddr := serviceHost + ":27017"
+	err := scale.ScaleUp(app, controllerKey, serviceAddr, "mongodb", singleton, a.logger())
+	if err != nil {
+		return err
+	}
+
+	// Mark as successfully scaled up.
+	a.scaledUp = true
+	return nil
 }
