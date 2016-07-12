@@ -9,7 +9,6 @@ import (
 
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -135,18 +134,6 @@ func (r *JobRepo) ListActive() ([]*ct.Job, error) {
 	return jobs, nil
 }
 
-func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, *ct.Job, error) {
-	params, _ := ctxhelper.ParamsFromContext(ctx)
-	job, err := c.jobRepo.Get(params.ByName("jobs_id"))
-	if err != nil {
-		return nil, nil, err
-	} else if job.HostID == "" {
-		return nil, nil, errors.New("controller: cannot connect host, job has not been placed in the cluster")
-	}
-	host, err := c.clusterClient.Host(job.HostID)
-	return host, job, err
-}
-
 func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	app := c.getApp(ctx)
 	list, err := c.jobRepo.List(app.ID)
@@ -200,7 +187,17 @@ func (c *controllerAPI) PutJob(ctx context.Context, w http.ResponseWriter, req *
 }
 
 func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	client, job, err := c.connectHost(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	job, err := c.jobRepo.Get(params.ByName("jobs_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	} else if job.HostID == "" {
+		httphelper.ValidationError(w, "", "cannot kill a job which has not been placed on a host")
+		return
+	}
+
+	client, err := c.clusterClient.Host(job.HostID)
 	if err != nil {
 		respondWithError(w, err)
 		return
