@@ -35,8 +35,7 @@ if [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-ovf" ]]; then
   apt-get remove --purge -y virtualbox-guest-dkms virtualbox-guest-utils virtualbox-guest-x11
 fi
 
-# install backported kernel, pin version to 3.19.0-39 to work around https://github.com/docker/docker/issues/18180 / https://github.com/flynn/flynn/issues/2365
-apt-get install --install-recommends linux-headers-3.19.0-39 linux-headers-3.19.0-39-generic linux-image-3.19.0-39-generic linux-image-extra-3.19.0-39-generic \
+apt-get install --install-recommends linux-generic-lts-xenial \
   -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
