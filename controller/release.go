@@ -63,6 +63,13 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		release.ArtifactIDs = []string{release.LegacyArtifactID}
 	}
 
+	if value, ok := release.Env[""]; ok {
+		return ct.ValidationError{
+			Field:   "env",
+			Message: fmt.Sprintf("you can't create an env var with an empty key (tried to set \"\"=%q)", value),
+		}
+	}
+
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
