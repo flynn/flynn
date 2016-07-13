@@ -148,6 +148,7 @@ func insertRow(c *C, db *sql.DB, n int) {
 }
 
 func waitReadWrite(c *C, db *sql.DB) {
+	// Check if the master has transitioned the database into read/write
 	var readOnly string
 	err := queryAttempts.Run(func() error {
 		if err := db.QueryRow("SELECT @@read_only").Scan(&readOnly); err != nil {
@@ -156,7 +157,26 @@ func waitReadWrite(c *C, db *sql.DB) {
 		if readOnly == "0" {
 			return nil
 		}
-		return fmt.Errorf("transaction readonly is %q", readOnly)
+		return fmt.Errorf("database is read_only")
+	})
+	c.Assert(err, IsNil)
+
+	// Even if the database is read/write a slave must be connected
+	// for writes to be allowed.
+	err = queryAttempts.Run(func() error {
+		rows, err := db.Query("SHOW SLAVE HOSTS")
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			// We have a connected slave, thus the database should be writeable
+			return nil
+		}
+		err = rows.Err()
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("no connected slave")
 	})
 	c.Assert(err, IsNil)
 }
