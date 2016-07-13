@@ -281,6 +281,8 @@ func (s *Scheduler) Run() error {
 	log.Info("starting scheduler loop")
 	defer log.Info("scheduler loop exited")
 
+	go s.RunPutJobs()
+
 	// stream host events (which will start watching job events on
 	// all current hosts before returning) *before* registering in
 	// service discovery so that there is always at least one scheduler
@@ -303,8 +305,6 @@ func (s *Scheduler) Run() error {
 	s.tickSyncJobs(30 * time.Second)
 	s.tickSyncFormations(time.Minute)
 	s.tickSyncHosts(10 * time.Second)
-
-	go s.RunPutJobs()
 
 	for {
 		select {
