@@ -118,13 +118,15 @@ func assertDownstream(c *C, db *sql.DB, n int) {
 		Port     int64
 		MasterID int64
 	}
-	err := db.QueryRow("SHOW SLAVE HOSTS").Scan(
-		&row.ServerID,
-		&row.Host,
-		&row.Port,
-		&row.MasterID,
-	)
-	c.Assert(err, IsNil)
+	err := queryAttempts.Run(func() error {
+		return db.QueryRow("SHOW SLAVE HOSTS").Scan(
+			&row.ServerID,
+			&row.Host,
+			&row.Port,
+			&row.MasterID,
+		)
+	})
+	c.Assert(err, IsNil, Commentf("node%d", n))
 	c.Assert(row.Host, Equals, fmt.Sprintf("node%d", n))
 }
 
@@ -245,6 +247,7 @@ func (MariaDBSuite) TestIntegration_FourNode(c *C) {
 	node4 := NewTestProcess(c, 4)
 
 	// Start a primary
+	c.Log("starting primary (node1)")
 	err := node1.Reconfigure(Config(state.RolePrimary, nil, node2))
 	c.Assert(err, IsNil)
 	c.Assert(node1.Start(), IsNil)
@@ -253,11 +256,25 @@ func (MariaDBSuite) TestIntegration_FourNode(c *C) {
 	srv1 := NewHTTPServer(c, node1)
 	defer srv1.Close()
 
-	// try to write to primary and make sure it's read-only
+	// Connect to the primary and make sure it's read-only
+	c.Log("checking primary (node1) is read-only")
 	db1 := connect(c, node1, "mysql")
 	defer db1.Close()
 
+	// There should currently be no connected semi-sync peers
+	var discard interface{}
+	var masterClients int
+	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &masterClients)
+	c.Assert(err, IsNil)
+	c.Assert(masterClients, Equals, 0)
+
+	var masterStatus string
+	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_status'").Scan(&discard, &masterStatus)
+	c.Assert(err, IsNil)
+	c.Assert(masterStatus, Equals, "ON")
+
 	// Start a sync
+	c.Log("starting sync (node2)")
 	err = node2.Reconfigure(Config(state.RoleSync, node1, node3))
 	c.Assert(err, IsNil)
 	c.Assert(node2.Start(), IsNil)
@@ -267,9 +284,11 @@ func (MariaDBSuite) TestIntegration_FourNode(c *C) {
 	defer srv2.Close()
 
 	// check it catches up
+	c.Log("waiting for primary (node1) to indicate downstream is sync (node2)")
 	waitReplSync(c, node1, 2)
 
 	// try to query primary until it comes up as read-write
+	c.Log("waiting for primary (node1) to become read-write")
 	waitReadWrite(c, db1)
 
 	for _, n := range []*Process{node1, node2} {
@@ -279,30 +298,31 @@ func (MariaDBSuite) TestIntegration_FourNode(c *C) {
 		c.Assert(pos, Not(Equals), "master-bin.000000/0")
 	}
 
-	// make sure the sync is listed as sync and remote_write is enabled
+	// make sure the sync is listed as sync and semi-sync is configured
+	c.Log("assert primary (node1) downstream is sync (node2)")
 	assertDownstream(c, db1, 2)
 
-	var discard interface{}
-	var masterClients int
 	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &masterClients)
 	c.Assert(err, IsNil)
 	c.Assert(masterClients, Equals, 1)
 
-	var masterStatus string
 	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_status'").Scan(&discard, &masterStatus)
 	c.Assert(err, IsNil)
 	c.Assert(masterStatus, Equals, "ON")
 
 	// create a table and a row
+	c.Log("write to primary (node1)")
 	createTable(c, db1)
 	db1.Close()
 
 	// query the sync and see the database
+	c.Log("read from sync (node2)")
 	db2 := connect(c, node2, "mysql")
 	defer db2.Close()
 	waitRow(c, db2, 1)
 
 	// Start an async
+	c.Log("starting async (node3)")
 	err = node3.Reconfigure(Config(state.RoleAsync, node2, node4))
 	c.Assert(err, IsNil)
 	c.Assert(node3.Start(), IsNil)
@@ -312,16 +332,21 @@ func (MariaDBSuite) TestIntegration_FourNode(c *C) {
 	defer srv3.Close()
 
 	// check it catches up
+	c.Log("wait for sync (node2) to indicate downstream is async (node3)")
 	waitReplSync(c, node2, 3)
 
 	db3 := connect(c, node3, "mysql")
 	defer db3.Close()
 
 	// check that data replicated successfully
+	c.Log("read from async (node3)")
 	waitRow(c, db3, 1)
+
+	c.Log("assert sync (node2) lists async (node3) as downstream")
 	assertDownstream(c, db2, 3)
 
 	// Start a second async
+	c.Log("start second async (node4)")
 	err = node4.Reconfigure(Config(state.RoleAsync, node3, nil))
 	c.Assert(err, IsNil)
 	c.Assert(node4.Start(), IsNil)
@@ -331,45 +356,66 @@ func (MariaDBSuite) TestIntegration_FourNode(c *C) {
 	defer srv4.Close()
 
 	// check it catches up
+	c.Log("waiting for async (node3) to indicate downstream is second async (node4)")
 	waitReplSync(c, node3, 4)
 
 	db4 := connect(c, node4, "mysql")
 	defer db4.Close()
 
 	// check that data replicated successfully
+	c.Log("read from second async (node4)")
 	waitRow(c, db4, 1)
+
+	c.Log("assert async (node3) lists second async (node4) as downstream")
 	assertDownstream(c, db3, 4)
 
 	// promote node2 to primary
+	c.Log("stop primary (node1)")
 	c.Assert(node1.Stop(), IsNil)
+	c.Log("promote sync (node2) to primary")
 	err = node2.Reconfigure(Config(state.RolePrimary, nil, node3))
 	c.Assert(err, IsNil)
+	c.Log("promote async (node3) to sync")
 	err = node3.Reconfigure(Config(state.RoleSync, node2, node4))
 	c.Assert(err, IsNil)
 
-	// wait for recovery and read-write transactions to come up
+	// wait for read-write transactions to come up
+	c.Log("waiting for primary (node2) to indicate downstream is sync (node3)")
 	waitReplSync(c, node2, 3)
+	c.Log("waiting for primary (node2) to become read/write")
 	waitReadWrite(c, db2)
 
 	// check replication of each node
+	c.Log("assert primary (node2) lists sync (node3) as downstream")
 	assertDownstream(c, db2, 3)
+	c.Log("assert primary (node2) lists sync (node3) as downstream")
 	assertDownstream(c, db3, 4)
 
 	// write to primary and ensure data propagates to followers
+	c.Log("write to primary (node2)")
 	insertRow(c, db2, 2)
 	db2.Close()
+	c.Log("read from sync (node3)")
 	waitRow(c, db3, 2)
+	c.Log("read from async (node4)")
 	waitRow(c, db4, 2)
 
-	//  promote node3 to primary
+	// promote node3 to primary
+	c.Log("stop primary (node2)")
 	c.Assert(node2.Stop(), IsNil)
+	c.Log("promote sync (node3) to primary")
 	err = node3.Reconfigure(Config(state.RolePrimary, nil, node4))
 	c.Assert(err, IsNil)
+	c.Log("promote async (node4) to sync")
 	err = node4.Reconfigure(Config(state.RoleSync, node3, nil))
+	c.Assert(err, IsNil)
 
 	// check replication
+	c.Log("waiting for primary (node3) to indicate downstream is sync (node4)")
 	waitReplSync(c, node3, 4)
+	c.Log("waiting for primary (node3) to become read/write")
 	waitReadWrite(c, db3)
+	c.Log("assert primary (node4) lists sync (node4) as downstream")
 	assertDownstream(c, db3, 4)
 	insertRow(c, db3, 3)
 }
