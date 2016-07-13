@@ -152,7 +152,8 @@ apt-get install -y \
   btrfs-tools \
   inotify-tools \
   libsasl2-dev \
-  libseccomp-dev
+  libseccomp-dev \
+  squashfs-tools
 
 # install flynn test dependencies: postgres, redis, mariadb
 # (normally these are used via appliances; install locally for unit tests)
