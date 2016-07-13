@@ -153,7 +153,8 @@ apt-get install -y \
   inotify-tools \
   libsasl2-dev \
   libseccomp-dev \
-  squashfs-tools
+  squashfs-tools \
+  pkg-config
 
 # install flynn test dependencies: postgres, redis, mariadb
 # (normally these are used via appliances; install locally for unit tests)
