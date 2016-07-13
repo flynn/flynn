@@ -221,6 +221,19 @@ func writeCACert(c controller.Client, name string) (string, error) {
 func runClusterRemove(args *docopt.Args) error {
 	name := args.String["<cluster-name>"]
 
+	fmt.Printf("To confirm cluster deletion, please type the name of the cluster (%q).", name)
+
+	var confirmation string
+	_, err := fmt.Scanln(&confirmation)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if confirmation != name {
+		fmt.Println("Aborted")
+		return nil
+	}
+
 	if c := config.Remove(name); c != nil {
 		msg := fmt.Sprintf("Cluster %q removed.", name)
 
