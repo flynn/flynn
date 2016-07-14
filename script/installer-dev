@@ -1,0 +1,84 @@
+#!/bin/bash
+
+set -e
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [-h|--help] <command>
+
+COMMANDS:
+  compile       Compile the installer assets
+
+  run           Build and run the installer
+
+OPTIONS:
+  -h, --help    Show this message
+USAGE
+}
+
+main() {
+  if [[ "$1" = "-h" ]] || [[ "$1" = "--help" ]]; then
+    usage
+    exit
+  fi
+
+  case "$1" in
+    compile)
+      compile
+      ;;
+    run)
+      run
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+compile() {
+  docker run \
+    --volume "${ROOT}/installer/app:/build" \
+    --workdir /build \
+    flynn/installer-builder \
+    bash -c "cp --recursive /app/.bundle . && cp --recursive /app/vendor/bundle vendor/ && cp --recursive /app/node_modules . && ./compiler && chown -R $(id -u):$(id -g) ."
+}
+
+run() {
+  cd "${ROOT}/installer"
+
+  info "updating installer to read assets from the filesystem"
+  cat <<BINDATA > bindata.go
+package installer
+
+import (
+  "bytes"
+  "io"
+  "os"
+)
+
+func Asset(path string) ([]byte, error) {
+  file, err := os.Open(path)
+  if err != nil {
+    return nil, err
+  }
+  var buf bytes.Buffer
+  _, err = io.Copy(&buf, file)
+  return buf.Bytes(), err
+}
+BINDATA
+
+  info "building installer"
+  go build ../cli
+
+  info "setting environment variables"
+  export PORT="4455"
+
+  info "running installer on installer.1.localflynn.com:${PORT}"
+  ./cli install
+}
+
+main $@
