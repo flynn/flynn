@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -100,7 +101,13 @@ func ServeHTTP() error {
 	httpRouter.GET("/regions", api.GetCloudRegions)
 	httpRouter.GET("/azure/subscriptions", api.GetAzureSubscriptions)
 
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	port := os.Getenv("PORT")
+	if port == "" {
+		// if no port is given, use a random one
+		port = "0"
+	}
+
+	l, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
 		return err
 	}
