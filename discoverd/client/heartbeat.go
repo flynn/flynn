@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/flynn/flynn/pkg/attempt"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -28,13 +29,22 @@ type Heartbeater interface {
 	SetClient(*Client)
 }
 
+var runAttempts = attempt.Strategy{
+	Min:   5,
+	Total: 60 * time.Second,
+	Delay: 200 * time.Millisecond,
+}
+
 func (c *Client) maybeAddService(service string) error {
-	if err := c.AddService(service, nil); err != nil {
-		if !hh.IsObjectExistsError(err) {
-			return err
+	return runAttempts.Run(func() error {
+		if err := c.AddService(service, nil); err != nil {
+			if !hh.IsObjectExistsError(err) {
+				return err
+			}
+			return nil
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (c *Client) AddServiceAndRegister(service, addr string) (Heartbeater, error) {
@@ -73,11 +83,15 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 		inst.Meta[kv[0]] = kv[1]
 	}
 	h := newHeartbeater(c, service, inst)
-	firstErr := make(chan error)
-	go h.run(firstErr)
-	if err := <-firstErr; err != nil {
+	err := runAttempts.Run(func() error {
+		firstErr := make(chan error)
+		go h.run(firstErr)
+		return <-firstErr
+	})
+	if err != nil {
 		return nil, err
 	}
+
 	return h, nil
 }
 
