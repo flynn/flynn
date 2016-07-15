@@ -249,3 +249,22 @@ all hosts. The installed version of Flynn can be checked with `flynn-host
 version`, and the version to install can be specified by setting the
 `FLYNN_VERSION` environment variable to the desired version when running the
 install script.
+
+# Replacing Hosts
+
+If a member of the cluster that is participating in the consensus set becomes permanently unavailable it must be replaced in order to restore fault tolerance.
+If you have already added additional hosts to your cluster beyond the members of the consensus set then you can promote one of these peers to the consensus set.
+Otherwise you will first need to start a new host and join it to the cluster as described in the Adding Hosts section.
+You can check the Raft consensus status of your cluster hosts by running `flynn-host list`, if the host is a member its status will be displayed as `peer`, conversely it will be listed as `proxy`.
+
+From this point you must first demote the old peer from the consensus set.
+If the peer is already unavailable the use of the `--force` flag is necessary, if however you are preemptively replacing the peer it can be omitted for a more graceful stepdown.
+The command to do so is `flynn-host demote --force $PEER_IP`.
+
+Once the old peer is removed you can add the new peer to the consensus set with `flynn-host promote $PEER_IP`.
+This may take a short time as the new peer replicates data from the Raft leader before starting to service operations.
+
+When the process is complete a `discoverd` deployment should be run to update the `DISCOVERD_PEERS` environment variable.
+You can retrieve the current value with `flynn -a discoverd env get DISCOVERD_PEERS`. Replace the address of the old peer with the new one and update the value with `flynn -a discoverd env set DISCOVERD_PEERS=$PEER_IPS`
+
+At this point the host has been replaced successfully and the cluster has regained full fault tolerance.
