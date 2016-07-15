@@ -649,12 +649,6 @@ func (c *Client) AppList() ([]*ct.App, error) {
 	return apps, c.Get("/apps", &apps)
 }
 
-// KeyList returns a list of all ssh public keys added.
-func (c *Client) KeyList() ([]*ct.Key, error) {
-	var keys []*ct.Key
-	return keys, c.Get("/keys", &keys)
-}
-
 // ArtifactList returns a list of all artifacts
 func (c *Client) ArtifactList() ([]*ct.Artifact, error) {
 	var artifacts []*ct.Artifact
@@ -671,23 +665,6 @@ func (c *Client) ReleaseList() ([]*ct.Release, error) {
 func (c *Client) AppReleaseList(appID string) ([]*ct.Release, error) {
 	var releases []*ct.Release
 	return releases, c.Get(fmt.Sprintf("/apps/%s/releases", appID), &releases)
-}
-
-// CreateKey uploads pubKey as the ssh public key.
-func (c *Client) CreateKey(pubKey string) (*ct.Key, error) {
-	key := &ct.Key{}
-	return key, c.Post("/keys", &ct.Key{Key: pubKey}, key)
-}
-
-// GetKey returns details for the keyID.
-func (c *Client) GetKey(keyID string) (*ct.Key, error) {
-	key := &ct.Key{}
-	return key, c.Get(fmt.Sprintf("/keys/%s", keyID), key)
-}
-
-// DeleteKey deletes a key with the specified id.
-func (c *Client) DeleteKey(id string) error {
-	return c.Delete("/keys/"+strings.Replace(id, ":", "", -1), nil)
 }
 
 // ProviderList returns a list of all providers.
