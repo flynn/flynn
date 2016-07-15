@@ -151,13 +151,6 @@ type Formation struct {
 	UpdatedAt *time.Time                   `json:"updated_at,omitempty"`
 }
 
-type Key struct {
-	ID        string     `json:"fingerprint,omitempty"`
-	Key       string     `json:"key,omitempty"`
-	Comment   string     `json:"comment,omitempty"`
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-}
-
 type Job struct {
 	// ID is the job's full cluster ID (i.e. hostID-UUID) and can be empty
 	// if the job is pending

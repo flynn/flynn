@@ -78,13 +78,9 @@ type Client interface {
 	JobList(appID string) ([]*ct.Job, error)
 	JobListActive() ([]*ct.Job, error)
 	AppList() ([]*ct.App, error)
-	KeyList() ([]*ct.Key, error)
 	ArtifactList() ([]*ct.Artifact, error)
 	ReleaseList() ([]*ct.Release, error)
 	AppReleaseList(appID string) ([]*ct.Release, error)
-	CreateKey(pubKey string) (*ct.Key, error)
-	GetKey(keyID string) (*ct.Key, error)
-	DeleteKey(id string) error
 	ProviderList() ([]*ct.Provider, error)
 	Backup() (io.ReadCloser, error)
 	GetBackupMeta() (*ct.ClusterBackup, error)
