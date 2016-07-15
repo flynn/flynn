@@ -321,6 +321,7 @@ func runDaemon(args *docopt.Args) {
 
 		maxJobConcurrency: maxJobConcurrency,
 	}
+	backend.SetHost(host)
 
 	// restore the host status if set in the environment
 	if statusEnv := os.Getenv("FLYNN_HOST_STATUS"); statusEnv != "" {
@@ -420,24 +421,6 @@ func runDaemon(args *docopt.Args) {
 		}
 		stopJobs()
 	})
-
-	// configure network and discoverd if config set in host status
-	if config := host.status.Network; config != nil {
-		host.networkOnce.Do(func() {})
-		log.Info("configuring network", "subnet", config.Subnet, "mtu", config.MTU, "resolvers", config.Resolvers)
-		if err := backend.ConfigureNetworking(config); err != nil {
-			log.Error("error configuring network", "err", err)
-			shutdown.Fatal(err)
-		}
-	}
-	if config := host.status.Discoverd; config != nil && config.URL != "" {
-		host.discoverdOnce.Do(func() {})
-		log.Info("connecting to service discovery", "url", config.URL)
-		if err := discoverdManager.ConnectLocal(config.URL); err != nil {
-			log.Error("error connecting to service discovery", "err", err)
-			shutdown.Fatal(err)
-		}
-	}
 
 	log.Info("serving HTTP requests")
 	host.ServeHTTP()

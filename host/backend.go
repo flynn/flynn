@@ -32,7 +32,10 @@ type Backend interface {
 	Cleanup([]string) error
 	UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte, host.LogBuffers) error
 	ConfigureNetworking(config *host.NetworkConfig) error
+	SetHost(*Host)
 	SetDefaultEnv(k, v string)
+	SetDiscoverdConfig(*host.DiscoverdConfig)
+	SetNetworkConfig(*host.NetworkConfig)
 	OpenLogs(host.LogBuffers) error
 	CloseLogs() (host.LogBuffers, error)
 }
@@ -63,6 +66,9 @@ func (MockBackend) SetDefaultEnv(k, v string)                         {}
 func (MockBackend) ConfigureNetworking(*host.NetworkConfig) error     { return nil }
 func (MockBackend) OpenLogs(host.LogBuffers) error                    { return nil }
 func (MockBackend) CloseLogs() (host.LogBuffers, error)               { return nil, nil }
+func (MockBackend) SetDiscoverdConfig(*host.DiscoverdConfig)          {}
+func (MockBackend) SetNetworkConfig(*host.NetworkConfig)              {}
+func (MockBackend) SetHost(*Host)                                     {}
 func (MockBackend) UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte, host.LogBuffers) error {
 	return nil
 }

@@ -110,6 +110,58 @@ func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 	return nil
 }
 
+func (h *Host) ConfigureNetworking(config *host.NetworkConfig) {
+	log := h.log.New("fn", "ConfigureNetworking")
+
+	if config.JobID != "" {
+		log.Info("persisting flannel job_id")
+		if err := h.state.SetPersistentSlot("flannel", config.JobID); err != nil {
+			log.Error("error assigning flannel to persistent slot")
+		}
+	}
+	h.networkOnce.Do(func() {
+		log.Info("configuring network", "subnet", config.Subnet, "mtu", config.MTU, "resolvers", config.Resolvers)
+		if err := h.backend.ConfigureNetworking(config); err != nil {
+			log.Error("error configuring network", "err", err)
+			shutdown.Fatal(err)
+		}
+
+		h.statusMtx.Lock()
+		h.status.Network = config
+		h.statusMtx.Unlock()
+	})
+	h.statusMtx.Lock()
+	h.status.Network.JobID = config.JobID
+	h.backend.SetNetworkConfig(h.status.Network)
+	h.statusMtx.Unlock()
+}
+
+func (h *Host) ConfigureDiscoverd(config *host.DiscoverdConfig) {
+	log := h.log.New("fn", "ConfigureDiscoverd")
+
+	if config.JobID != "" {
+		log.Info("persisting discoverd job_id")
+		if err := h.state.SetPersistentSlot("discoverd", config.JobID); err != nil {
+			log.Error("error assigning discoverd to persistent slot")
+		}
+	}
+
+	if config.URL != "" && config.DNS != "" {
+		go h.discoverdOnce.Do(func() {
+			log.Info("connecting to service discovery", "url", config.URL)
+			if err := h.discMan.ConnectLocal(config.URL); err != nil {
+				log.Error("error connecting to service discovery", "err", err)
+				shutdown.Fatal(err)
+			}
+		})
+	}
+
+	h.statusMtx.Lock()
+	h.status.Discoverd = config
+	h.backend.SetDiscoverdConfig(h.status.Discoverd)
+	h.statusMtx.Unlock()
+}
+
 type jobAPI struct {
 	host                  *Host
 	addJobRateLimitBucket *RateLimitBucket
@@ -337,34 +389,15 @@ func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ ht
 	log := h.host.log.New("fn", "ConfigureDiscoverd")
 
 	log.Info("decoding config")
-	var config host.DiscoverdConfig
-	if err := httphelper.DecodeJSON(r, &config); err != nil {
+	config := &host.DiscoverdConfig{}
+	if err := httphelper.DecodeJSON(r, config); err != nil {
 		log.Error("error decoding config", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
 	log.Info("config decoded", "url", config.URL, "dns", config.DNS)
 
-	h.host.statusMtx.Lock()
-	h.host.status.Discoverd = &config
-	h.host.statusMtx.Unlock()
-
-	if config.JobID != "" {
-		log.Info("persisting discoverd job_id")
-		if err := h.host.state.SetPersistentSlot("discoverd", config.JobID); err != nil {
-			log.Error("error assigning discoverd to persistent slot")
-		}
-	}
-
-	if config.URL != "" && config.DNS != "" {
-		go h.host.discoverdOnce.Do(func() {
-			log.Info("connecting to service discovery", "url", config.URL)
-			if err := h.host.discMan.ConnectLocal(config.URL); err != nil {
-				log.Error("error connecting to service discovery", "err", err)
-				shutdown.Fatal(err)
-			}
-		})
-	}
+	h.host.ConfigureDiscoverd(config)
 }
 
 func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -376,27 +409,11 @@ func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ h
 		log.Error("error decoding config", "err", err)
 		shutdown.Fatal(err)
 	}
-	if config.JobID != "" {
-		log.Info("persisting flannel job_id")
-		if err := h.host.state.SetPersistentSlot("flannel", config.JobID); err != nil {
-			log.Error("error assigning flannel to persistent slot")
-		}
-	}
 
 	// configure the network before returning a response in case the
 	// network coordinator requires the bridge to be created (e.g.
 	// when using flannel with the "alloc" backend)
-	h.host.networkOnce.Do(func() {
-		log.Info("configuring network", "subnet", config.Subnet, "mtu", config.MTU, "resolvers", config.Resolvers)
-		if err := h.host.backend.ConfigureNetworking(config); err != nil {
-			log.Error("error configuring network", "err", err)
-			shutdown.Fatal(err)
-		}
-
-		h.host.statusMtx.Lock()
-		h.host.status.Network = config
-		h.host.statusMtx.Unlock()
-	})
+	h.host.ConfigureNetworking(config)
 }
 
 func (h *jobAPI) GetStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
