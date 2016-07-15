@@ -27,9 +27,8 @@ USAGE
 
 main() {
   local size="1"
-  local destroy_vols=true
   local version=""
-  local host_flags=""
+  local host_flags=()
   local backup=""
 
   while true; do
@@ -47,8 +46,7 @@ main() {
         shift 2
         ;;
       -z | --no-destroy-vols)
-        destroy_vols=false
-        host_flags+="-z"
+        host_flags+=("--no-destroy-vols")
         shift
         ;;
       -v | --version)
@@ -91,6 +89,7 @@ main() {
     flynn_host="${dir}/flynn-host"
     bin_dir="${dir}"
     manifest="${dir}/bootstrap-manifest.json"
+    host_flags+=("--bin-dir" "${bin_dir}")
   fi
 
   # kill flynn first
@@ -107,7 +106,7 @@ main() {
     # An RFC 5737 TEST-NET IP
     local ip="192.0.2.20$(($index))"
     ips+=("${ip}")
-    "${ROOT}/script/start-flynn-host" "${host_flags}" "${index}"
+    "${ROOT}/script/start-flynn-host" ${host_flags[@]} "${index}"
   done
 
   info "bootstrapping Flynn"

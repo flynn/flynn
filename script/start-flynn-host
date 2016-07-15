@@ -14,6 +14,8 @@ Start a flynn node with specific binary, ip and index.
 
 Options:
 
+  -b, --bin-dir=DIR        Host binary dir [default: ROOT/host/bin]
+
   -k, --no-destroy-state   Don't destroy job state
 
   -z, --no-destroy-vols    Don't destroy volumes
@@ -26,6 +28,7 @@ USAGE
 }
 
 main() {
+  local bin_dir="${ROOT}/host/bin"
   local destroy_vols=true
   local destroy_state=true
   local peers=()
@@ -35,6 +38,15 @@ main() {
       -h | --help)
         usage
         exit
+        ;;
+      -b | --bin-dir)
+        if [[ -z "$2" ]]; then
+          fail "--bin-dir requires an argument"
+        elif [[ ! -d "$2" ]]; then
+          fail "no such directory: ${bin_dir}"
+        fi
+        bin_dir="$2"
+        shift 2
         ;;
       -k | --no-destroy-state)
         destroy_state=false
@@ -67,8 +79,6 @@ main() {
 
   # An RFC 5737 TEST-NET IP
   local ip="192.0.2.20$(($index))"
-
-  local bin_dir="${ROOT}/host/bin"
   local flynn_host="${bin_dir}/flynn-host"
 
   local id="host${index}"
