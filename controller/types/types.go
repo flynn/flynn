@@ -89,8 +89,7 @@ func (r *Release) IsDockerReceiveDeploy() bool {
 }
 
 type ProcessType struct {
-	Cmd         []string           `json:"cmd,omitempty"`
-	Entrypoint  []string           `json:"entrypoint,omitempty"`
+	Args        []string           `json:"args,omitempty"`
 	Env         map[string]string  `json:"env,omitempty"`
 	Ports       []Port             `json:"ports,omitempty"`
 	Data        bool               `json:"data,omitempty"`
@@ -99,6 +98,10 @@ type ProcessType struct {
 	Service     string             `json:"service,omitempty"`
 	Resurrect   bool               `json:"resurrect,omitempty"`
 	Resources   resource.Resources `json:"resources,omitempty"`
+
+	// Entrypoint and Cmd are DEPRECATED: use Args instead
+	DeprecatedCmd        []string `json:"cmd,omitempty"`
+	DeprecatedEntrypoint []string `json:"entrypoint,omitempty"`
 }
 
 type Port struct {
@@ -159,7 +162,7 @@ type Job struct {
 	ReleaseID  string            `json:"release,omitempty"`
 	Type       string            `json:"type,omitempty"`
 	State      JobState          `json:"state,omitempty"`
-	Cmd        []string          `json:"cmd,omitempty"`
+	Args       []string          `json:"args,omitempty"`
 	Meta       map[string]string `json:"meta,omitempty"`
 	ExitStatus *int32            `json:"exit_status,omitempty"`
 	HostError  *string           `json:"host_error,omitempty"`
@@ -237,8 +240,7 @@ func JobDownEvents(count int) map[JobState]int {
 type NewJob struct {
 	ReleaseID  string             `json:"release,omitempty"`
 	ReleaseEnv bool               `json:"release_env,omitempty"`
-	Cmd        []string           `json:"cmd,omitempty"`
-	Entrypoint []string           `json:"entrypoint,omitempty"`
+	Args       []string           `json:"args,omitempty"`
 	Env        map[string]string  `json:"env,omitempty"`
 	Meta       map[string]string  `json:"meta,omitempty"`
 	TTY        bool               `json:"tty,omitempty"`

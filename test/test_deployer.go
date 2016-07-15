@@ -210,7 +210,7 @@ func (s *DeployerSuite) TestRollbackFailedJob(t *c.C) {
 	client := s.controllerClient(t)
 	release.ID = ""
 	printer := release.Processes["printer"]
-	printer.Cmd = []string{"this-is-gonna-fail"}
+	printer.Args = []string{"this-is-gonna-fail"}
 	release.Processes["printer"] = printer
 	t.Assert(client.CreateRelease(release), c.IsNil)
 	deployment, err := client.CreateDeployment(app.ID, release.ID)

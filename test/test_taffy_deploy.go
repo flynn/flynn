@@ -22,6 +22,7 @@ func (s *TaffyDeploySuite) deployWithTaffy(t *c.C, app *ct.App, env, meta, githu
 	t.Assert(err, c.IsNil)
 
 	args := []string{
+		"/bin/taffy",
 		app.Name,
 		github["clone_url"],
 		github["branch"],
@@ -38,7 +39,7 @@ func (s *TaffyDeploySuite) deployWithTaffy(t *c.C, app *ct.App, env, meta, githu
 	rwc, err := client.RunJobAttached("taffy", &ct.NewJob{
 		ReleaseID:  taffyRelease.ID,
 		ReleaseEnv: true,
-		Cmd:        args,
+		Args:       args,
 		Meta: map[string]string{
 			"github":      "true",
 			"github_user": github["user"],

@@ -305,7 +305,7 @@ func (e *generator) createRelease() {
 		},
 		Processes: map[string]ct.ProcessType{
 			"foo": {
-				Cmd: []string{"ls", "-l"},
+				Args: []string{"ls", "-l"},
 				Env: map[string]string{
 					"BAR": "baz",
 				},
@@ -386,7 +386,7 @@ func (e *generator) runJob() {
 		Env: map[string]string{
 			"BODY": "Hello!",
 		},
-		Cmd: []string{"echo", "$BODY"},
+		Args: []string{"echo", "$BODY"},
 	}
 	job, err := e.client.RunJobDetached(e.resourceIds["app"], new_job)
 	if err == nil {

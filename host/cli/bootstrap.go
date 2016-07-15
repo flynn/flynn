@@ -207,20 +207,44 @@ AS $function$
 $function$;
 `)
 
-	var manifestSteps []struct {
+	type manifestStep struct {
 		ID       string
 		Artifact struct {
 			URI string
 		}
 		Release struct {
-			Env map[string]string
+			Env       map[string]string
+			Processes map[string]ct.ProcessType
 		}
 	}
+	var manifestSteps []*manifestStep
 	if err := json.Unmarshal(manifest, &manifestSteps); err != nil {
 		return fmt.Errorf("error decoding manifest json: %s", err)
 	}
+
 	artifactURIs := make(map[string]string)
+	updateProcArgs := func(f *ct.ExpandedFormation, step *manifestStep) {
+		for typ, proc := range step.Release.Processes {
+			p := f.Release.Processes[typ]
+			p.Args = proc.Args
+			f.Release.Processes[typ] = p
+		}
+	}
 	for _, step := range manifestSteps {
+		switch step.ID {
+		case "postgres":
+			updateProcArgs(data.Postgres, step)
+		case "controller":
+			updateProcArgs(data.Controller, step)
+		case "mariadb":
+			if data.MariaDB != nil {
+				updateProcArgs(data.MariaDB, step)
+			}
+		case "mongodb":
+			if data.MongoDB != nil {
+				updateProcArgs(data.MongoDB, step)
+			}
+		}
 		if step.Artifact.URI != "" {
 			artifactURIs[step.ID] = step.Artifact.URI
 			if step.ID == "gitreceive" {
@@ -346,7 +370,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	// load data into postgres
 	cmd := exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.Postgres.ImageArtifact.Type, URI: data.Postgres.ImageArtifact.URI}, nil)
-	cmd.Entrypoint = []string{"psql"}
+	cmd.Args = []string{"psql"}
 	cmd.Env = map[string]string{
 		"PGHOST":     "leader.postgres.discoverd",
 		"PGUSER":     "flynn",
@@ -383,8 +407,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 	// load data into mariadb if it was present in the backup.
 	if mysqldb != nil && data.MariaDB != nil {
 		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MariaDB.ImageArtifact.Type, URI: data.MariaDB.ImageArtifact.URI}, nil)
-		cmd.Entrypoint = []string{"mysql"}
-		cmd.Cmd = []string{"-u", "flynn", "-h", "leader.mariadb.discoverd"}
+		cmd.Args = []string{"mysql", "-u", "flynn", "-h", "leader.mariadb.discoverd"}
 		cmd.Env = map[string]string{
 			"MYSQL_PWD": data.MariaDB.Release.Env["MYSQL_PWD"],
 		}
@@ -419,8 +442,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 	// load data into mongodb if it was present in the backup.
 	if mongodb != nil && data.MongoDB != nil {
 		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MongoDB.ImageArtifact.Type, URI: data.MongoDB.ImageArtifact.URI}, nil)
-		cmd.Entrypoint = []string{"mongorestore"}
-		cmd.Cmd = []string{"-h", "leader.mongodb.discoverd", "-u", "flynn", "-p", data.MongoDB.Release.Env["MONGO_PWD"], "--archive"}
+		cmd.Args = []string{"mongorestore", "-h", "leader.mongodb.discoverd", "-u", "flynn", "-p", data.MongoDB.Release.Env["MONGO_PWD"], "--archive"}
 		cmd.Stdin = mongodb
 		meta = bootstrap.StepMeta{ID: "restore", Action: "restore-mongodb"}
 		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}

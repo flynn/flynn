@@ -28,7 +28,7 @@ Run a job.
 Options:
 	-d, --detached    run job without connecting io streams (implies --enable-log)
 	-r <release>      id of release to run (defaults to current app release)
-	-e <entrypoint>   overwrite the default entrypoint of the release's image
+	-e <entrypoint>   [DEPRECATED] overwrite the default entrypoint of the release's image
 	-l, --enable-log  send output to log streams
 `)
 	cmd.optsFirst = true
@@ -61,7 +61,8 @@ func runRun(args *docopt.Args, client controller.Client) error {
 		config.Release = release.ID
 	}
 	if e := args.String["-e"]; e != "" {
-		config.Entrypoint = []string{e}
+		fmt.Println("WARN: The -e flag is deprecated and will be removed in future versions, use <command> as the entrypoint")
+		config.Args = append([]string{e}, config.Args...)
 	}
 	return runJob(client, config)
 }
@@ -71,7 +72,6 @@ type runConfig struct {
 	Detached   bool
 	Release    string
 	ReleaseEnv bool
-	Entrypoint []string
 	Args       []string
 	Env        map[string]string
 	Stdin      io.Reader
@@ -83,10 +83,9 @@ type runConfig struct {
 
 func runJob(client controller.Client, config runConfig) error {
 	req := &ct.NewJob{
-		Cmd:        config.Args,
+		Args:       config.Args,
 		TTY:        config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
 		ReleaseID:  config.Release,
-		Entrypoint: config.Entrypoint,
 		Env:        config.Env,
 		ReleaseEnv: config.ReleaseEnv,
 		DisableLog: config.DisableLog,

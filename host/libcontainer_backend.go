@@ -343,7 +343,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		return nil
 	}
 
-	log.Info("starting job", "job.artifact.uri", job.ImageArtifact.URI, "job.cmd", job.Config.Cmd)
+	log.Info("starting job", "job.artifact.uri", job.ImageArtifact.URI, "job.args", job.Config.Args)
 
 	defer func() {
 		if err != nil {
@@ -588,6 +588,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	l.state.mtx.Unlock()
 
 	initConfig := &containerinit.Config{
+		Args:          job.Config.Args,
 		TTY:           job.Config.TTY,
 		OpenStdin:     job.Config.Stdin,
 		WorkDir:       job.Config.WorkingDir,
@@ -606,16 +607,8 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	} else if imageConfig.User != "" {
 		// TODO: check and lookup user from image config
 	}
-	if len(job.Config.Entrypoint) > 0 {
-		initConfig.Args = job.Config.Entrypoint
-		initConfig.Args = append(initConfig.Args, job.Config.Cmd...)
-	} else {
-		initConfig.Args = imageConfig.Entrypoint
-		if len(job.Config.Cmd) > 0 {
-			initConfig.Args = append(initConfig.Args, job.Config.Cmd...)
-		} else {
-			initConfig.Args = append(initConfig.Args, imageConfig.Cmd...)
-		}
+	if len(job.Config.Args) == 0 {
+		initConfig.Args = append(imageConfig.Entrypoint, imageConfig.Cmd...)
 	}
 	for _, port := range job.Config.Ports {
 		initConfig.Ports = append(initConfig.Ports, port)

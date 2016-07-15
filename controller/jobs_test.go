@@ -162,11 +162,11 @@ func (s *S) TestRunJobDetached(c *C) {
 		Env:         map[string]string{"RELEASE": "true", "FOO": "bar"},
 	})
 
-	cmd := []string{"foo", "bar"}
+	args := []string{"foo", "bar"}
 	req := &ct.NewJob{
 		ReleaseID:  release.ID,
 		ReleaseEnv: true,
-		Cmd:        cmd,
+		Args:       args,
 		Env:        map[string]string{"JOB": "true", "FOO": "baz"},
 		Meta:       map[string]string{"foo": "baz"},
 	}
@@ -175,7 +175,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	c.Assert(res.ID, Not(Equals), "")
 	c.Assert(res.ReleaseID, Equals, release.ID)
 	c.Assert(res.Type, Equals, "")
-	c.Assert(res.Cmd, DeepEquals, cmd)
+	c.Assert(res.Args, DeepEquals, args)
 
 	jobs, err := host.ListJobs()
 	c.Assert(err, IsNil)
@@ -188,7 +188,7 @@ func (s *S) TestRunJobDetached(c *C) {
 			"flynn-controller.release":  release.ID,
 			"foo": "baz",
 		})
-		c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
+		c.Assert(job.Config.Args, DeepEquals, []string{"foo", "bar"})
 		c.Assert(job.Config.Env, DeepEquals, map[string]string{
 			"FLYNN_APP_ID":       app.ID,
 			"FLYNN_RELEASE_ID":   release.ID,
@@ -242,7 +242,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	data := &ct.NewJob{
 		ReleaseID:  release.ID,
 		ReleaseEnv: true,
-		Cmd:        []string{"foo", "bar"},
+		Args:       []string{"foo", "bar"},
 		Env:        map[string]string{"JOB": "true", "FOO": "baz"},
 		Meta:       map[string]string{"foo": "baz"},
 		TTY:        true,
@@ -271,7 +271,7 @@ func (s *S) TestRunJobAttached(c *C) {
 			"flynn-controller.release":  release.ID,
 			"foo": "baz",
 		})
-		c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
+		c.Assert(job.Config.Args, DeepEquals, []string{"foo", "bar"})
 		c.Assert(job.Config.Env, DeepEquals, map[string]string{
 			"FLYNN_APP_ID":       app.ID,
 			"FLYNN_RELEASE_ID":   release.ID,

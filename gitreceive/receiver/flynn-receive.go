@@ -110,7 +110,7 @@ Options:
 
 	job := &host.Job{
 		Config: host.ContainerConfig{
-			Cmd:        []string{slugURL},
+			Args:       []string{"/tmp/builder/build.sh", slugURL},
 			Env:        jobEnv,
 			Stdin:      true,
 			DisableLog: true,
@@ -192,7 +192,7 @@ Options:
 	procs := make(map[string]ct.ProcessType)
 	for _, t := range types {
 		proc := prevRelease.Processes[t]
-		proc.Cmd = []string{"start", t}
+		proc.Args = []string{"/runner/init", "start", t}
 		if t == "web" || strings.HasSuffix(t, "-web") {
 			proc.Service = app.Name + "-" + t
 			proc.Ports = []ct.Port{{

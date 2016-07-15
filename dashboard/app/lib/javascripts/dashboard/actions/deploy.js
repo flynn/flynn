@@ -4,7 +4,7 @@ import Config from 'dashboard/config';
 
 var createTaffyJob = function (taffyReleaseId, appID, appName, meta, env) {
 	env = env || {};
-	var args = [appName, meta.clone_url, meta.branch, meta.rev];
+	var args = ["/bin/taffy", appName, meta.clone_url, meta.branch, meta.rev];
 	[{ arg: '--meta', data: meta }, { arg: '--env', data: env }].forEach(function (item) {
 		Object.keys(item.data).forEach(function (k) {
 			var v = item.data[k];
@@ -15,7 +15,7 @@ var createTaffyJob = function (taffyReleaseId, appID, appName, meta, env) {
 	return Config.client.createTaffyJob({
 		release: taffyReleaseId,
 		release_env: true,
-		cmd: args,
+		args: args,
 		meta: extend({}, meta, {
 			app: appID
 		})

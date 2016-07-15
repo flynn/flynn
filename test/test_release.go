@@ -177,7 +177,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(client.CreateArtifact(slugArtifact), c.IsNil)
 	release := &ct.Release{
 		ArtifactIDs: []string{imageArtifact.ID, slugArtifact.ID},
-		Processes:   map[string]ct.ProcessType{"web": {Cmd: []string{"bin/http"}}},
+		Processes:   map[string]ct.ProcessType{"web": {Args: []string{"bin/http"}}},
 	}
 	t.Assert(client.CreateRelease(release), c.IsNil)
 	t.Assert(client.SetAppRelease(slugApp.ID, release.ID), c.IsNil)

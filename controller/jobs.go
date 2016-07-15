@@ -275,7 +275,6 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		ID:       id,
 		Metadata: metadata,
 		Config: host.ContainerConfig{
-			Cmd:        newJob.Cmd,
 			Env:        env,
 			TTY:        newJob.TTY,
 			Stdin:      attach,
@@ -284,8 +283,8 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		Resources: newJob.Resources,
 	}
 	resource.SetDefaults(&job.Resources)
-	if len(newJob.Entrypoint) > 0 {
-		job.Config.Entrypoint = newJob.Entrypoint
+	if len(newJob.Args) > 0 {
+		job.Config.Args = newJob.Args
 	}
 	if len(release.ArtifactIDs) > 0 {
 		artifacts, err := c.artifactRepo.ListIDs(release.ArtifactIDs...)
@@ -352,7 +351,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 			UUID:      uuid,
 			HostID:    hostID,
 			ReleaseID: newJob.ReleaseID,
-			Cmd:       newJob.Cmd,
+			Args:      newJob.Args,
 		})
 	}
 }

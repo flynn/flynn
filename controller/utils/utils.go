@@ -42,18 +42,22 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		ID:       id,
 		Metadata: metadata,
 		Config: host.ContainerConfig{
-			Cmd:         t.Cmd,
+			Args:        t.Args,
 			Env:         env,
 			HostNetwork: t.HostNetwork,
 		},
 		Resurrect: t.Resurrect,
 		Resources: t.Resources,
 	}
+
+	// job.Config.Args may be empty if restoring from an old backup which
+	// still uses the deprecated Entrypoint / Cmd fields
+	if len(job.Config.Args) == 0 {
+		job.Config.Args = append(t.DeprecatedEntrypoint, t.DeprecatedCmd...)
+	}
+
 	if f.App.Meta["flynn-system-app"] == "true" {
 		job.Partition = "system"
-	}
-	if len(t.Entrypoint) > 0 {
-		job.Config.Entrypoint = t.Entrypoint
 	}
 	if f.ImageArtifact != nil {
 		job.ImageArtifact = f.ImageArtifact.HostArtifact()

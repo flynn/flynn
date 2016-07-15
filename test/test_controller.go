@@ -213,7 +213,7 @@ func (s *ControllerSuite) TestResourceLimitsOneOffJob(t *c.C) {
 
 	rwc, err := s.controllerClient(t).RunJobAttached(app.ID, &ct.NewJob{
 		ReleaseID: release.ID,
-		Cmd:       []string{"sh", "-c", resourceCmd},
+		Args:      []string{"sh", "-c", resourceCmd},
 		Resources: testResources(),
 	})
 	t.Assert(err, c.IsNil)
@@ -501,7 +501,7 @@ func (s *ControllerSuite) TestAppEvents(t *c.C) {
 	runJob := func(appID, releaseID string) {
 		rwc, err := client.RunJobAttached(appID, &ct.NewJob{
 			ReleaseID:  releaseID,
-			Cmd:        []string{"/bin/true"},
+			Args:       []string{"/bin/true"},
 			DisableLog: true,
 		})
 		t.Assert(err, c.IsNil)

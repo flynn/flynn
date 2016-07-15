@@ -344,7 +344,7 @@ func (s *SchedulerSuite) TestJobMeta(t *c.C) {
 	// start 1 one-off job
 	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.NewJob{
 		ReleaseID: release.ID,
-		Cmd:       []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
+		Args:      []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
 		Meta: map[string]string{
 			"foo": "baz",
 		},
@@ -376,7 +376,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	}), c.IsNil)
 	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.NewJob{
 		ReleaseID: release.ID,
-		Cmd:       []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
+		Args:      []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
 	})
 	t.Assert(err, c.IsNil)
 	err = watcher.WaitFor(ct.JobEvents{"printer": {ct.JobStateUp: 1}, "crasher": {ct.JobStateUp: 1}, "": {ct.JobStateUp: 1}}, scaleTimeout, nil)
@@ -568,7 +568,7 @@ func (s *SchedulerSuite) TestRollbackController(t *c.C) {
 	// create a controller deployment that will fail
 	release.ID = ""
 	worker := release.Processes["worker"]
-	worker.Entrypoint = []string{"/i/dont/exist"}
+	worker.Args = []string{"/i/dont/exist"}
 	release.Processes["worker"] = worker
 	t.Assert(client.CreateRelease(release), c.IsNil)
 	deployment, err := client.CreateDeployment(app.ID, release.ID)

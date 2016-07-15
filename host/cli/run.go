@@ -32,8 +32,7 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 		ImageArtifact: exec.DockerImage(args.String["<image>"]),
 		Job: &host.Job{
 			Config: host.ContainerConfig{
-				Entrypoint: []string{args.String["<command>"]},
-				Cmd:        args.All["<argument>"].([]string),
+				Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
 				TTY:        term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()),
 				Stdin:      true,
 				DisableLog: true,

@@ -209,8 +209,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 			App:        mustApp(),
 			Release:    release.ID,
 			DisableLog: true,
-			Entrypoint: []string{"curl"},
-			Args:       []string{"--include", "--location", "--raw", slugURL},
+			Args:       []string{"curl", "--include", "--location", "--raw", slugURL},
 			Stdout:     reqW,
 			Stderr:     ioutil.Discard,
 		}
@@ -255,8 +254,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		configPgDump(pgConfig)
 		if err := tw.WriteCommandOutput(client, "postgres.dump", pgConfig.App, &ct.NewJob{
 			ReleaseID:  pgConfig.Release,
-			Entrypoint: pgConfig.Entrypoint,
-			Cmd:        pgConfig.Args,
+			Args:       pgConfig.Args,
 			Env:        pgConfig.Env,
 			DisableLog: pgConfig.DisableLog,
 		}); err != nil {
@@ -268,8 +266,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		configMysqlDump(mysqlConfig)
 		if err := tw.WriteCommandOutput(client, "mysql.dump", mysqlConfig.App, &ct.NewJob{
 			ReleaseID:  mysqlConfig.Release,
-			Entrypoint: mysqlConfig.Entrypoint,
-			Cmd:        mysqlConfig.Args,
+			Args:       mysqlConfig.Args,
 			Env:        mysqlConfig.Env,
 			DisableLog: mysqlConfig.DisableLog,
 		}); err != nil {
@@ -600,8 +597,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			App:        app.ID,
 			Release:    release.ID,
 			DisableLog: true,
-			Entrypoint: []string{"curl"},
-			Args:       []string{"--request", "PUT", "--upload-file", "-", slugURI},
+			Args:       []string{"curl", "--request", "PUT", "--upload-file", "-", slugURI},
 			Stdin:      slug,
 			Stdout:     ioutil.Discard,
 			Stderr:     ioutil.Discard,

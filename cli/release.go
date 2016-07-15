@@ -74,8 +74,7 @@ Examples:
 		"env": {"MY_VAR": "Hello World, this will be available in all process types."},
 		"processes": {
 			"echo": {
-				"cmd": ["socat -v tcp-l:$PORT,fork exec:/bin/cat"],
-				"entrypoint": ["sh", "-c"],
+				"args": ["sh", "-c", "socat -v tcp-l:$PORT,fork exec:/bin/cat"],
 				"env": {"ECHO": "This var is specific to the echo process type."},
 				"ports": [{"proto": "tcp"}]
 			}
@@ -271,11 +270,8 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 				continue
 			}
 
-			if len(procUpdate.Cmd) > 0 {
-				procRelease.Cmd = procUpdate.Cmd
-			}
-			if len(procUpdate.Entrypoint) > 0 {
-				procRelease.Entrypoint = procUpdate.Entrypoint
+			if len(procUpdate.Args) > 0 {
+				procRelease.Args = procUpdate.Args
 			}
 			for key, value := range procUpdate.Env {
 				procRelease.Env[key] = value

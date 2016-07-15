@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/flynn/flynn/pkg/postgres"
 )
 
@@ -384,8 +386,96 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(18,
 		`INSERT INTO event_types (name) VALUES ('app_garbage_collection')`,
 	)
+	migrations.AddSteps(19,
+		migrateProcessArgs,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
 	return migrations.Migrate(db)
+}
+
+// migrateProcessArgs sets ProcessType.Args from Entrypoint / Cmd for every
+// release, and also prepends an explicit entrypoint for system and slug apps
+// (they will no longer use the Dockerfile Entrypoint as they have some args
+// like `scheduler` for the controller scheduler and `start web` for slugs).
+func migrateProcessArgs(tx *postgres.DBTx) error {
+	type Release struct {
+		ID      string
+		AppName *string
+		AppMeta map[string]string
+		Meta    map[string]string
+
+		// use map[string]interface{} for process types so we can
+		// just update Args and leave other fields untouched
+		Processes map[string]map[string]interface{}
+	}
+
+	// get all the releases with the associated app name if set
+	var releases []Release
+	rows, err := tx.Query("SELECT r.release_id, r.meta, r.processes, a.name, a.meta FROM releases r LEFT JOIN apps a ON a.release_id = r.release_id")
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var release Release
+		if err := rows.Scan(&release.ID, &release.Meta, &release.Processes, &release.AppName, &release.AppMeta); err != nil {
+			rows.Close()
+			return err
+		}
+		releases = append(releases, release)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, release := range releases {
+		for typ, proc := range release.Processes {
+			// if the release is for a system app which has a Cmd,
+			// explicitly set the Entrypoint
+			var cmd []interface{}
+			if v, ok := proc["cmd"]; ok {
+				cmd = v.([]interface{})
+			}
+			if release.AppName != nil && release.AppMeta["flynn-system-app"] == "true" && len(cmd) > 0 {
+				switch *release.AppName {
+				case "postgres":
+					proc["entrypoint"] = []interface{}{"/bin/start-flynn-postgres"}
+				case "controller":
+					proc["entrypoint"] = []interface{}{"/bin/start-flynn-controller"}
+				case "redis":
+					proc["entrypoint"] = []interface{}{"/bin/start-flynn-redis"}
+				case "mariadb":
+					proc["entrypoint"] = []interface{}{"/bin/start-flynn-mariadb"}
+				case "mongodb":
+					proc["entrypoint"] = []interface{}{"/bin/start-flynn-mongodb"}
+				case "router":
+					proc["entrypoint"] = []interface{}{"/bin/flynn-router"}
+				case "logaggregator":
+					proc["entrypoint"] = []interface{}{"/bin/logaggregator"}
+				default:
+					panic(fmt.Sprintf("migration failed to set entrypoint for system app %s", *release.AppName))
+				}
+			}
+
+			// git releases use the slugrunner which need an Entrypoint
+			if release.Meta["git"] == "true" {
+				proc["entrypoint"] = []interface{}{"/runner/init"}
+			}
+
+			// construct Args by appending Cmd to Entrypoint
+			var args []interface{}
+			if v, ok := proc["entrypoint"]; ok {
+				args = v.([]interface{})
+			}
+			proc["args"] = append(args, cmd...)
+			release.Processes[typ] = proc
+		}
+
+		// save the processes back to the db
+		if err := tx.Exec("UPDATE releases SET processes = $1 WHERE release_id = $2", release.Processes, release.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }

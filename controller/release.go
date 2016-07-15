@@ -52,6 +52,13 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	release := data.(*ct.Release)
 
 	for typ, proc := range release.Processes {
+		// handle deprecated Entrypoint and Cmd
+		if len(proc.DeprecatedEntrypoint) > 0 {
+			proc.Args = proc.DeprecatedEntrypoint
+		}
+		if len(proc.DeprecatedCmd) > 0 {
+			proc.Args = append(proc.Args, proc.DeprecatedCmd...)
+		}
 		resource.SetDefaults(&proc.Resources)
 		release.Processes[typ] = proc
 	}

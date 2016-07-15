@@ -24,9 +24,8 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 
 	pgRelease := data["postgres"].Release
 	pgJob := &ct.NewJob{
-		ReleaseID:  pgRelease.ID,
-		Entrypoint: []string{"bash"},
-		Cmd:        []string{"-c", "set -o pipefail; pg_dumpall --clean --if-exists | gzip -9"},
+		ReleaseID: pgRelease.ID,
+		Args:      []string{"bash", "-c", "set -o pipefail; pg_dumpall --clean --if-exists | gzip -9"},
 		Env: map[string]string{
 			"PGHOST":     pgRelease.Env["PGHOST"],
 			"PGUSER":     pgRelease.Env["PGUSER"],
@@ -42,9 +41,12 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 	if mariadb, ok := data["mariadb"]; ok && mariadb.Processes["mariadb"] > 0 {
 		mysqlRelease := mariadb.Release
 		mysqlJob := &ct.NewJob{
-			ReleaseID:  mysqlRelease.ID,
-			Entrypoint: []string{"bash"},
-			Cmd:        []string{"-c", fmt.Sprintf("set -o pipefail; /usr/bin/mysqldump -h %s -u %s --all-databases | gzip -9", mysqlRelease.Env["MYSQL_HOST"], mysqlRelease.Env["MYSQL_USER"])},
+			ReleaseID: mysqlRelease.ID,
+			Args: []string{
+				"bash",
+				"-c",
+				fmt.Sprintf("set -o pipefail; /usr/bin/mysqldump -h %s -u %s --all-databases | gzip -9", mysqlRelease.Env["MYSQL_HOST"], mysqlRelease.Env["MYSQL_USER"]),
+			},
 			Env: map[string]string{
 				"MYSQL_PWD": mysqlRelease.Env["MYSQL_PWD"],
 			},
@@ -59,9 +61,12 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 	if mongodb, ok := data["mongodb"]; ok && mongodb.Processes["mongodb"] > 0 {
 		mongodbRelease := mongodb.Release
 		mongodbJob := &ct.NewJob{
-			ReleaseID:  mongodbRelease.ID,
-			Entrypoint: []string{"bash"},
-			Cmd:        []string{"-c", fmt.Sprintf("set -o pipefail; /usr/bin/mongodump --host %s -u %s -p $MONGO_PWD --authenticationDatabase admin --archive | gzip -9", mongodbRelease.Env["MONGO_HOST"], mongodbRelease.Env["MONGO_USER"])},
+			ReleaseID: mongodbRelease.ID,
+			Args: []string{
+				"bash",
+				"-c",
+				fmt.Sprintf("set -o pipefail; /usr/bin/mongodump --host %s -u %s -p $MONGO_PWD --authenticationDatabase admin --archive | gzip -9", mongodbRelease.Env["MONGO_HOST"], mongodbRelease.Env["MONGO_USER"]),
+			},
 			Env: map[string]string{
 				"MONGO_PWD": mongodbRelease.Env["MONGO_PWD"],
 			},

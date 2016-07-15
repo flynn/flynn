@@ -92,10 +92,9 @@ func getPgRunConfig(client controller.Client, app string, appRelease *ct.Release
 }
 
 func runPsql(args *docopt.Args, client controller.Client, config *runConfig) error {
-	config.Entrypoint = []string{"psql"}
 	config.Env["PAGER"] = "less"
 	config.Env["LESS"] = "--ignore-case --LONG-PROMPT --SILENT --tabs=4 --quit-if-one-screen --no-init --quit-at-eof"
-	config.Args = args.All["<argument>"].([]string)
+	config.Args = append([]string{"psql"}, args.All["<argument>"].([]string)...)
 	return runJob(client, *config)
 }
 
@@ -123,8 +122,7 @@ func runPgDump(args *docopt.Args, client controller.Client, config *runConfig) e
 }
 
 func configPgDump(config *runConfig) {
-	config.Entrypoint = []string{"pg_dump"}
-	config.Args = []string{"--format=custom", "--no-owner", "--no-acl"}
+	config.Args = []string{"pg_dump", "--format=custom", "--no-owner", "--no-acl"}
 }
 
 func pgDump(client controller.Client, config *runConfig) error {
@@ -166,8 +164,7 @@ func runPgRestore(args *docopt.Args, client controller.Client, config *runConfig
 }
 
 func pgRestore(client controller.Client, config *runConfig) error {
-	config.Entrypoint = []string{"pg_restore"}
-	config.Args = []string{"-d", config.Env["PGDATABASE"], "--clean", "--if-exists", "--no-owner", "--no-acl"}
+	config.Args = []string{"pg_restore", "-d", config.Env["PGDATABASE"], "--clean", "--if-exists", "--no-owner", "--no-acl"}
 	err := runJob(client, *config)
 	if exit, ok := err.(RunExitError); ok && exit == 1 {
 		// pg_restore exits with zero if there are warnings
