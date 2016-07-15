@@ -6,3 +6,5 @@
 /erb.rb
 /scss.js
 /transformer.js
+/.bundle
+/vendor/bundle
