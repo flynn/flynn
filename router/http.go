@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flynn/flynn/discoverd/cache"
@@ -316,7 +317,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	} else {
 		bf = service.sc.Addrs
 	}
-	r.rp = proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky, logger)
+	r.rp.Store(proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky, logger))
 	r.service = service
 	h.l.routes[data.ID] = r
 	if data.Path == "/" {
@@ -488,7 +489,7 @@ type httpRoute struct {
 
 	keypair *tls.Certificate
 	service *httpService
-	rp      *proxy.ReverseProxy
+	rp      atomic.Value // *proxy.ReverseProxy
 }
 
 // A service definition: name, and set of backends.
@@ -503,7 +504,7 @@ func (r *httpRoute) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *h
 	req.Header.Set("X-Request-Start", strconv.FormatInt(start.UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	r.rp.ServeHTTP(ctx, w, req)
+	r.rp.Load().(*proxy.ReverseProxy).ServeHTTP(ctx, w, req)
 }
 
 func mustPortFromAddr(addr string) string {
