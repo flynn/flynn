@@ -345,6 +345,8 @@ func (rows *Rows) Values() ([]interface{}, error) {
 			values = append(values, vr.ReadString(vr.Len()))
 		case BinaryFormatCode:
 			switch vr.Type().DataType {
+			case TextOid, VarcharOid:
+				values = append(values, decodeText(vr))
 			case BoolOid:
 				values = append(values, decodeBool(vr))
 			case ByteaOid:
@@ -449,7 +451,7 @@ func (c *Conn) Query(sql string, args ...interface{}) (*Rows, error) {
 			return rows, rows.err
 		}
 	}
-
+	rows.sql = ps.SQL
 	rows.fields = ps.FieldDescriptions
 	err := c.sendPreparedQuery(ps, args...)
 	if err != nil {

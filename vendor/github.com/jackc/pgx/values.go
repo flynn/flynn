@@ -27,6 +27,7 @@ const (
 	CidrArrayOid        = 651
 	Float4Oid           = 700
 	Float8Oid           = 701
+	UnknownOid          = 705
 	InetOid             = 869
 	BoolArrayOid        = 1000
 	Int2ArrayOid        = 1005
@@ -44,6 +45,7 @@ const (
 	TimestampArrayOid   = 1115
 	TimestampTzOid      = 1184
 	TimestampTzArrayOid = 1185
+	RecordOid           = 2249
 	UuidOid             = 2950
 	JsonbOid            = 3802
 )
@@ -91,8 +93,11 @@ func init() {
 		"int4":         BinaryFormatCode,
 		"int8":         BinaryFormatCode,
 		"oid":          BinaryFormatCode,
+		"record":       BinaryFormatCode,
+		"text":         BinaryFormatCode,
 		"timestamp":    BinaryFormatCode,
 		"timestamptz":  BinaryFormatCode,
+		"varchar":      BinaryFormatCode,
 	}
 }
 
@@ -610,12 +615,14 @@ func Encode(wbuf *WriteBuf, oid Oid, arg interface{}) error {
 		return encodeByteSliceSlice(wbuf, oid, arg)
 	}
 
-	if v := reflect.ValueOf(arg); v.Kind() == reflect.Ptr {
-		if v.IsNil() {
+	refVal := reflect.ValueOf(arg)
+
+	if refVal.Kind() == reflect.Ptr {
+		if refVal.IsNil() {
 			wbuf.WriteInt32(-1)
 			return nil
 		} else {
-			arg = v.Elem().Interface()
+			arg = refVal.Elem().Interface()
 			return Encode(wbuf, oid, arg)
 		}
 	}
@@ -686,8 +693,40 @@ func Encode(wbuf *WriteBuf, oid Oid, arg interface{}) error {
 	case Oid:
 		return encodeOid(wbuf, oid, arg)
 	default:
+		if strippedArg, ok := stripNamedType(&refVal); ok {
+			return Encode(wbuf, oid, strippedArg)
+		}
 		return SerializationError(fmt.Sprintf("Cannot encode %T into oid %v - %T must implement Encoder or be converted to a string", arg, oid, arg))
 	}
+}
+
+func stripNamedType(val *reflect.Value) (interface{}, bool) {
+	switch val.Kind() {
+	case reflect.Int:
+		return int(val.Int()), true
+	case reflect.Int8:
+		return int8(val.Int()), true
+	case reflect.Int16:
+		return int16(val.Int()), true
+	case reflect.Int32:
+		return int32(val.Int()), true
+	case reflect.Int64:
+		return int64(val.Int()), true
+	case reflect.Uint:
+		return uint(val.Uint()), true
+	case reflect.Uint8:
+		return uint8(val.Uint()), true
+	case reflect.Uint16:
+		return uint16(val.Uint()), true
+	case reflect.Uint32:
+		return uint32(val.Uint()), true
+	case reflect.Uint64:
+		return uint64(val.Uint()), true
+	case reflect.String:
+		return val.String(), true
+	}
+
+	return nil, false
 }
 
 // Decode decodes from vr into d. d must be a pointer. This allows
@@ -807,6 +846,8 @@ func Decode(vr *ValueReader, d interface{}) error {
 		*v = decodeTimestampArray(vr)
 	case *[][]byte:
 		*v = decodeByteaArray(vr)
+	case *[]interface{}:
+		*v = decodeRecord(vr)
 	case *time.Time:
 		switch vr.Type().DataType {
 		case DateOid:
@@ -839,9 +880,11 @@ func Decode(vr *ValueReader, d interface{}) error {
 	case *[]net.IPNet:
 		*v = decodeInetArray(vr)
 	default:
-		// if d is a pointer to pointer, strip the pointer and try again
 		if v := reflect.ValueOf(d); v.Kind() == reflect.Ptr {
-			if el := v.Elem(); el.Kind() == reflect.Ptr {
+			el := v.Elem()
+			switch el.Kind() {
+			// if d is a pointer to pointer, strip the pointer and try again
+			case reflect.Ptr:
 				// -1 is a null value
 				if vr.Len() == -1 {
 					if !el.IsNil() {
@@ -857,6 +900,26 @@ func Decode(vr *ValueReader, d interface{}) error {
 					d = el.Interface()
 					return Decode(vr, d)
 				}
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				n := decodeInt(vr)
+				if el.OverflowInt(n) {
+					return fmt.Errorf("Scan cannot decode %d into %T", n, d)
+				}
+				el.SetInt(n)
+				return nil
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				n := decodeInt(vr)
+				if n < 0 {
+					return fmt.Errorf("%d is less than zero for %T", n, d)
+				}
+				if el.OverflowUint(uint64(n)) {
+					return fmt.Errorf("Scan cannot decode %d into %T", n, d)
+				}
+				el.SetUint(uint64(n))
+				return nil
+			case reflect.String:
+				el.SetString(decodeText(vr))
+				return nil
 			}
 		}
 		return fmt.Errorf("Scan cannot decode into %T", d)
@@ -1611,6 +1674,77 @@ func encodeIP(w *WriteBuf, oid Oid, value net.IP) error {
 	bitCount := len(value) * 8
 	ipnet.Mask = net.CIDRMask(bitCount, bitCount)
 	return encodeIPNet(w, oid, ipnet)
+}
+
+func decodeRecord(vr *ValueReader) []interface{} {
+	if vr.Len() == -1 {
+		return nil
+	}
+
+	if vr.Type().FormatCode != BinaryFormatCode {
+		vr.Fatal(ProtocolError(fmt.Sprintf("Unknown field description format code: %v", vr.Type().FormatCode)))
+		return nil
+	}
+
+	if vr.Type().DataType != RecordOid {
+		vr.Fatal(ProtocolError(fmt.Sprintf("Cannot decode oid %v into []interface{}", vr.Type().DataType)))
+		return nil
+	}
+
+	valueCount := vr.ReadInt32()
+	record := make([]interface{}, 0, int(valueCount))
+
+	for i := int32(0); i < valueCount; i++ {
+		fd := FieldDescription{FormatCode: BinaryFormatCode}
+		fieldVR := ValueReader{mr: vr.mr, fd: &fd}
+		fd.DataType = vr.ReadOid()
+		fieldVR.valueBytesRemaining = vr.ReadInt32()
+		vr.valueBytesRemaining -= fieldVR.valueBytesRemaining
+
+		switch fd.DataType {
+		case BoolOid:
+			record = append(record, decodeBool(&fieldVR))
+		case ByteaOid:
+			record = append(record, decodeBytea(&fieldVR))
+		case Int8Oid:
+			record = append(record, decodeInt8(&fieldVR))
+		case Int2Oid:
+			record = append(record, decodeInt2(&fieldVR))
+		case Int4Oid:
+			record = append(record, decodeInt4(&fieldVR))
+		case OidOid:
+			record = append(record, decodeOid(&fieldVR))
+		case Float4Oid:
+			record = append(record, decodeFloat4(&fieldVR))
+		case Float8Oid:
+			record = append(record, decodeFloat8(&fieldVR))
+		case DateOid:
+			record = append(record, decodeDate(&fieldVR))
+		case TimestampTzOid:
+			record = append(record, decodeTimestampTz(&fieldVR))
+		case TimestampOid:
+			record = append(record, decodeTimestamp(&fieldVR))
+		case InetOid, CidrOid:
+			record = append(record, decodeInet(&fieldVR))
+		case TextOid, VarcharOid, UnknownOid:
+			record = append(record, decodeText(&fieldVR))
+		default:
+			vr.Fatal(fmt.Errorf("decodeRecord cannot decode oid %d", fd.DataType))
+			return nil
+		}
+
+		// Consume any remaining data
+		if fieldVR.Len() > 0 {
+			fieldVR.ReadBytes(fieldVR.Len())
+		}
+
+		if fieldVR.Err() != nil {
+			vr.Fatal(fieldVR.Err())
+			return nil
+		}
+	}
+
+	return record
 }
 
 func decode1dArrayHeader(vr *ValueReader) (length int32, err error) {

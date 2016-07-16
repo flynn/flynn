@@ -889,8 +889,8 @@
 		},
 		{
 			"ImportPath": "github.com/jackc/pgx",
-			"Comment": "v2.8.1-38-g9d284da",
-			"Rev": "9d284da48e2ab972078a7e28ee2cdccc8fe77d61"
+			"Comment": "v2.8.1-53-g558d555",
+			"Rev": "558d5550cf5c08e7192eb2eb8635f21f4b700ff5"
 		},
 		{
 			"ImportPath": "github.com/jmespath/go-jmespath",

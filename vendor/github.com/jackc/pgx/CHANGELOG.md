@@ -1,18 +1,20 @@
 # Unreleased
 
-## Features
-
-* Add PrepareEx
-
 ## Fixes
 
 * Fix *ConnPool.Deallocate() not deleting prepared statement from map
+* Fix stdlib not logging unprepared query SQL (Krzysztof Dryś)
+* Fix Rows.Values() with varchar binary format
+* Concurrent ConnPool.Acquire calls with Dialer timeouts now timeout in the expected amount of time (Konstantin Dzreev)
 
 ## Features
 
+* Add PrepareEx
+* Add basic record to []interface{} decoding
 * Encode and decode between all Go and PostgreSQL integer types with bounds checking
 * Decode inet/cidr to net.IP
 * Encode/decode [][]byte to/from bytea[]
+* Encode/decode named types whoses underlying types are string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64
 
 ## Performance
 
