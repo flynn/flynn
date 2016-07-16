@@ -82,11 +82,11 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter, req *http.Request, _ ht
 
 // handlePostStop handles request to POST /stop.
 func (h *Handler) handlePostStop(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	if err := h.Heartbeater.Close(); err != nil {
+	if err := h.Peer.Stop(); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
-	if err := h.Peer.Stop(); err != nil {
+	if err := h.Heartbeater.Close(); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
