@@ -61,7 +61,7 @@ func runRun(args *docopt.Args, client controller.Client) error {
 		config.Release = release.ID
 	}
 	if e := args.String["-e"]; e != "" {
-		fmt.Println("WARN: The -e flag is deprecated and will be removed in future versions, use <command> as the entrypoint")
+		fmt.Fprintln(os.Stderr, "WARN: The -e flag is deprecated and will be removed in future versions, use <command> as the entrypoint")
 		config.Args = append([]string{e}, config.Args...)
 	}
 	return runJob(client, config)
