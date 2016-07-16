@@ -104,6 +104,7 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		networkConfigured:   make(chan struct{}),
 		partitionCGroups:    partitionCGroups,
 		logger:              logger,
+		globalState:         &libcontainerGlobalState{},
 	}, nil
 }
 
@@ -112,6 +113,7 @@ type LibcontainerBackend struct {
 	factory   libcontainer.Factory
 	state     *State
 	vman      *volumemanager.Manager
+	host      *Host
 	pinkerton *pinkerton.Context
 	ipalloc   *ipallocator.IPAllocator
 
@@ -137,6 +139,9 @@ type LibcontainerBackend struct {
 	partitionCGroups map[string]int64 // name -> cpu shares
 
 	logger log15.Logger
+
+	globalStateMtx sync.Mutex
+	globalState    *libcontainerGlobalState
 }
 
 type Container struct {
@@ -214,9 +219,8 @@ var networkConfigAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-// ConfigureNetworking is called once during host startup and passed the
-// strategy and identifier of the networking coordinatior job. Currently the
-// only strategy implemented uses flannel.
+// ConfigureNetworking is called once during host startup and sets up the local
+// bridge and forwarding rules for containers.
 func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) error {
 	log := l.logger.New("fn", "ConfigureNetworking")
 	var err error
@@ -302,11 +306,11 @@ func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) er
 	l.resolvConf = "/etc/flynn/resolv.conf"
 
 	// Allocate IPs for running jobs
-	for i, container := range l.containers {
+	l.containersMtx.Lock()
+	defer l.containersMtx.Unlock()
+	for _, container := range l.containers {
 		if !container.job.Config.HostNetwork {
-			var err error
-			l.containers[i].IP, err = l.ipalloc.RequestIP(l.bridgeNet, container.IP)
-			if err != nil {
+			if _, err := l.ipalloc.RequestIP(l.bridgeNet, container.IP); err != nil {
 				log.Error("error requesting ip", "job.id", container.job.ID, "err", err)
 			}
 		}
@@ -324,6 +328,10 @@ func (l *LibcontainerBackend) SetDefaultEnv(k, v string) {
 	if k == "DISCOVERD" {
 		close(l.discoverdConfigured)
 	}
+}
+
+func (l *LibcontainerBackend) SetHost(h *Host) {
+	l.host = h
 }
 
 func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBucket *RateLimitBucket) (err error) {
@@ -1142,6 +1150,16 @@ func (l *LibcontainerBackend) Cleanup(except []string) error {
 	return err
 }
 
+type libcontainerGlobalState struct {
+	NetworkConfig   *host.NetworkConfig
+	DiscoverdConfig *host.DiscoverdConfig
+}
+
+func (l *LibcontainerBackend) persistGlobalState() error {
+	data, _ := json.Marshal(l.globalState)
+	return l.state.PersistBackendGlobalState(data)
+}
+
 /*
 	Loads a series of jobs, and reconstructs whatever additional backend state was saved.
 
@@ -1149,6 +1167,7 @@ func (l *LibcontainerBackend) Cleanup(except []string) error {
 	(thus this may take a significant moment; it's not just deserializing).
 */
 func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobBackendStates map[string][]byte, backendGlobalState []byte, buffers host.LogBuffers) error {
+	log := l.logger.New("fn", "UnmarshalState")
 	containers := make(map[string]*Container)
 	for k, v := range jobBackendStates {
 		container := &Container{}
@@ -1184,10 +1203,54 @@ func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jo
 		if err := <-readySignals[j.Job.ID]; err != nil {
 			// log error
 			container.cleanup()
+			delete(readySignals, j.Job.ID)
 			continue
 		}
+		log.Info("reconnected to running container", "job.id", j.Job.ID)
+	}
+	if len(backendGlobalState) > 0 {
+		state := &libcontainerGlobalState{}
+		if err := json.Unmarshal(backendGlobalState, state); err != nil {
+			return err
+		}
+		log.Info("using stored global backend config")
+
+		if state.NetworkConfig != nil && state.NetworkConfig.JobID != "" {
+			if _, ok := readySignals[state.NetworkConfig.JobID]; ok {
+				log.Info("using stored network config", "job.id", state.NetworkConfig.JobID)
+				l.host.ConfigureNetworking(state.NetworkConfig)
+			} else {
+				log.Info("got stored network config, but associated job isn't running", "job.id", state.NetworkConfig.JobID)
+			}
+		}
+
+		if state.DiscoverdConfig != nil && state.DiscoverdConfig.JobID != "" {
+			if _, ok := readySignals[state.DiscoverdConfig.JobID]; ok {
+				log.Info("using stored discoverd config", "job.id", state.DiscoverdConfig.JobID)
+				l.host.ConfigureDiscoverd(state.DiscoverdConfig)
+			} else {
+				log.Info("got stored discoverd config, but associated job isn't running", "job.id", state.DiscoverdConfig.JobID)
+			}
+		}
+	} else {
+		log.Info("no stored global backend config")
+
 	}
 	return nil
+}
+
+func (l *LibcontainerBackend) SetDiscoverdConfig(config *host.DiscoverdConfig) {
+	l.globalStateMtx.Lock()
+	l.globalState.DiscoverdConfig = config
+	l.persistGlobalState()
+	l.globalStateMtx.Unlock()
+}
+
+func (l *LibcontainerBackend) SetNetworkConfig(config *host.NetworkConfig) {
+	l.globalStateMtx.Lock()
+	l.globalState.NetworkConfig = config
+	l.persistGlobalState()
+	l.globalStateMtx.Unlock()
 }
 
 func (l *LibcontainerBackend) MarshalJobState(jobID string) ([]byte, error) {

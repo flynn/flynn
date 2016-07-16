@@ -225,6 +225,12 @@ func (s *State) Release() {
 	}
 }
 
+func (s *State) PersistBackendGlobalState(data []byte) error {
+	return s.stateDB.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket([]byte("backend-global")).Put([]byte("backend"), data)
+	})
+}
+
 func (s *State) persist(jobID string) {
 	// s.mtx.RLock() should already be covered by caller
 

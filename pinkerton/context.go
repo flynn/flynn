@@ -42,6 +42,7 @@ type Context struct {
 	store  *graph.TagStore
 	graph  *graph.Graph
 	driver graphdriver.Driver
+	mtx    sync.Mutex
 }
 
 func BuildContext(driver, root string) (*Context, error) {
@@ -76,6 +77,9 @@ func NewContext(store *graph.TagStore, graph *graph.Graph, driver graphdriver.Dr
 }
 
 func (c *Context) PullDocker(url string, out io.Writer) (string, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	ref, err := NewRef(url)
 	if err != nil {
 		return "", err
@@ -109,6 +113,9 @@ func (c *Context) PullDocker(url string, out io.Writer) (string, error) {
 }
 
 func (c *Context) PullTUF(url string, client *tuf.Client, progress chan<- layer.PullInfo) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	ref, err := NewRef(url)
 	if err != nil {
 		return err
@@ -169,6 +176,9 @@ func (c *Context) PullTUF(url string, client *tuf.Client, progress chan<- layer.
 }
 
 func (c *Context) Checkout(id, imageID string) (string, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	id = "tmp-" + id
 	if err := c.driver.Create(id, imageID); err != nil {
 		return "", err
@@ -181,6 +191,9 @@ func (c *Context) Checkout(id, imageID string) (string, error) {
 }
 
 func (c *Context) Cleanup(id string) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	id = "tmp-" + id
 	if err := c.driver.Put(id); err != nil {
 		return err
