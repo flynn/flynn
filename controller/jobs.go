@@ -299,6 +299,11 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		}
 	}
 
+	// ensure slug apps use /runner/init
+	if release.IsGitDeploy() && (len(job.Config.Args) == 0 || job.Config.Args[0] != "/runner/init") {
+		job.Config.Args = append([]string{"/runner/init"}, job.Config.Args...)
+	}
+
 	var attachClient cluster.AttachClient
 	if attach {
 		attachReq := &host.AttachReq{
