@@ -6,9 +6,11 @@ import (
 	"io/ioutil"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 )
@@ -73,6 +75,12 @@ func assertTCPConn(c *C, addr, prefix string) {
 	c.Assert(string(res), Equals, prefix+"asdf")
 }
 
+var dialAttempts = attempt.Strategy{
+	Min:   5,
+	Total: 1 * time.Second,
+	Delay: 100 * time.Millisecond,
+}
+
 func (s *S) TestAddTCPRoute(c *C) {
 	portInt := allocatePort()
 	port := strconv.Itoa(portInt)
@@ -102,8 +110,18 @@ func (s *S) TestAddTCPRoute(c *C) {
 	c.Assert(err, IsNil)
 	wait()
 
-	_, err = net.Dial("tcp", addr)
-	c.Assert(err, Not(IsNil))
+	var dialErr error
+	err = dialAttempts.Run(func() error {
+		var conn net.Conn
+		conn, dialErr = net.Dial("tcp", addr)
+		if dialErr == nil {
+			conn.Close()
+			return fmt.Errorf("listener still accepting connections on %s", addr)
+		}
+		return nil
+	})
+	c.Assert(err, IsNil)
+	c.Assert(dialErr, Not(IsNil))
 }
 
 func addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
