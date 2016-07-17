@@ -70,11 +70,11 @@ func (h *HTTP) GetStatus(w http.ResponseWriter, req *http.Request, _ httprouter.
 }
 
 func (h *HTTP) Stop(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	if err := h.hb.Close(); err != nil {
+	if err := h.peer.Stop(); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
-	if err := h.peer.Stop(); err != nil {
+	if err := h.hb.Close(); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
