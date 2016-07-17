@@ -21,16 +21,16 @@ OPTIONS:
   -s, --size=SIZE          Cluster size [default: 1]
   -z, --no-destroy-vols    Don't destroy volumes
   -v, --version=VERSION    Boot using the released VERSION (e.g. v20151104.1)
-  --from-backup=FILE       Bootstrap from backup file
+  --from-backup=FILE       Bootstrap from backup file or URL (e.g. https://s3.amazonaws.com/flynn-test/backups/nodejs-v20160624.1.tar)
 USAGE
 }
 
 main() {
   local size="1"
-  local destroy_vols=true
   local version=""
-  local host_flags=""
+  local host_flags=()
   local backup=""
+  local backup_url=""
 
   while true; do
     case "$1" in
@@ -47,8 +47,7 @@ main() {
         shift 2
         ;;
       -z | --no-destroy-vols)
-        destroy_vols=false
-        host_flags+="-z"
+        host_flags+=("--no-destroy-vols")
         shift
         ;;
       -v | --version)
@@ -64,7 +63,11 @@ main() {
           usage
           exit 1
         fi
-        backup="--from-backup=$2"
+        if [[ "${2:0:8}" = "https://" ]]; then
+          backup_url="$2"
+        else
+          backup="$2"
+        fi
         shift 2
         ;;
       *)
@@ -82,6 +85,15 @@ main() {
   local flynn_host="${bin_dir}/flynn-host"
   local manifest="${ROOT}/bootstrap/bin/manifest.json"
 
+  if [[ -n "${backup_url}" ]]; then
+    info "using backup URL ${backup_url}"
+    backup="${ROOT}/tmp/backups/$(basename "${backup_url}")"
+    if [[ ! -s "${backup}" ]]; then
+      mkdir -p "${ROOT}/tmp/backups"
+      curl --fail --location --output "${backup}" "${backup_url}"
+    fi
+  fi
+
   if [[ -n "${version}" ]]; then
     local dir="${ROOT}/tmp/${version}"
     mkdir -p "${dir}"
@@ -91,6 +103,7 @@ main() {
     flynn_host="${dir}/flynn-host"
     bin_dir="${dir}"
     manifest="${dir}/bootstrap-manifest.json"
+    host_flags+=("--bin-dir" "${bin_dir}")
   fi
 
   # kill flynn first
@@ -107,18 +120,20 @@ main() {
     # An RFC 5737 TEST-NET IP
     local ip="192.0.2.20$(($index))"
     ips+=("${ip}")
-    "${ROOT}/script/start-flynn-host" "${host_flags}" "${index}"
+    "${ROOT}/script/start-flynn-host" ${host_flags[@]} "${index}"
   done
 
   info "bootstrapping Flynn"
   export CLUSTER_DOMAIN="${size}.localflynn.com"
   export DISCOVERD="$(join "," ${ips[@]/%/:1111})"
-  "${flynn_host}" \
-    bootstrap \
-    ${backup} \
-    --min-hosts="${size}" \
-    --peer-ips="$(join "," ${ips[@]})" \
-    "${manifest}"
+  local flags=(
+    "--min-hosts=${size}"
+    "--peer-ips=$(join "," ${ips[@]})"
+  )
+  if [[ -n "${backup}" ]]; then
+    flags+=("--from-backup=${backup}")
+  fi
+  "${flynn_host}" bootstrap ${flags[@]} "${manifest}"
 }
 
 main $@

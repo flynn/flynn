@@ -260,7 +260,7 @@ func NewReleaseOmni(id string, artifact *ct.Artifact, processes map[string]int, 
 	processTypes := make(map[string]ct.ProcessType, len(processes))
 	for t := range processes {
 		processTypes[t] = ct.ProcessType{
-			Cmd:  []string{"start", t},
+			Args: []string{"start", t},
 			Omni: omni,
 		}
 	}

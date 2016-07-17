@@ -159,7 +159,7 @@ func makeIshApp(cluster *cluster.Client, h *cluster.Host, dc *discoverd.Client, 
 	// run a job that accepts tcp connections and performs tasks we ask of it in its container
 	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), &host.Job{
 		Config: host.ContainerConfig{
-			Cmd:   []string{"/bin/ish"},
+			Args:  []string{"/bin/ish"},
 			Ports: []host.Port{{Proto: "tcp"}},
 			Env: map[string]string{
 				"NAME": serviceName,
@@ -290,7 +290,7 @@ func (s *HostSuite) TestSignalJob(t *c.C) {
 	// start a signal-service job
 	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), &host.Job{
 		Config: host.ContainerConfig{
-			Cmd:        []string{"/bin/signal"},
+			Args:       []string{"/bin/signal"},
 			DisableLog: true,
 		},
 	})
@@ -325,7 +325,7 @@ func (s *HostSuite) TestResourceLimits(t *c.C) {
 		s.clusterClient(t),
 		exec.DockerImage(imageURIs["test-apps"]),
 		&host.Job{
-			Config:    host.ContainerConfig{Cmd: []string{"sh", "-c", resourceCmd}},
+			Config:    host.ContainerConfig{Args: []string{"sh", "-c", resourceCmd}},
 			Resources: testResources(),
 		},
 	)

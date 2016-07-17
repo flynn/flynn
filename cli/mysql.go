@@ -98,10 +98,10 @@ func getMysqlRunConfig(client controller.Client, appName string, appRelease *ct.
 }
 
 func runMysqlMysql(args *docopt.Args, client controller.Client, config *runConfig) error {
-	config.Entrypoint = []string{"mysql"}
 	config.Env["PAGER"] = "less"
 	config.Env["LESS"] = "--ignore-case --LONG-PROMPT --SILENT --tabs=4 --quit-if-one-screen --no-init --quit-at-eof"
 	config.Args = append([]string{
+		"mysql",
 		"-u", config.Env["MYSQL_USER"],
 		"-D", config.Env["MYSQL_DATABASE"],
 	}, args.All["<argument>"].([]string)...)
@@ -134,8 +134,8 @@ func runMysqlDump(args *docopt.Args, client controller.Client, config *runConfig
 }
 
 func configMysqlDump(config *runConfig) {
-	config.Entrypoint = []string{"mysqldump"}
 	config.Args = []string{
+		"mysqldump",
 		"-h", config.Env["MYSQL_HOST"],
 		"-u", config.Env["MYSQL_USER"],
 		config.Env["MYSQL_DATABASE"],
@@ -176,8 +176,7 @@ func runMysqlRestore(args *docopt.Args, client controller.Client, config *runCon
 }
 
 func mysqlRestore(client controller.Client, config *runConfig) error {
-	config.Entrypoint = []string{"mysql"}
-	config.Args = []string{"-u", config.Env["MYSQL_USER"], "-D", config.Env["MYSQL_DATABASE"]}
+	config.Args = []string{"mysql", "-u", config.Env["MYSQL_USER"], "-D", config.Env["MYSQL_DATABASE"]}
 	err := runJob(client, *config)
 	if exit, ok := err.(RunExitError); ok && exit == 1 {
 		return nil

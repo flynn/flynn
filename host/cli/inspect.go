@@ -66,8 +66,7 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool, redactEnv []stri
 	}
 
 	listRec(w, "ID", job.Job.ID)
-	listRec(w, "Entrypoint", strings.Join(job.Job.Config.Entrypoint, " "))
-	listRec(w, "Cmd", strings.Join(job.Job.Config.Cmd, " "))
+	listRec(w, "Args", strings.Join(job.Job.Config.Args, " "))
 	listRec(w, "Status", job.Status)
 	listRec(w, "CreatedAt", job.CreatedAt)
 	listRec(w, "StartedAt", job.StartedAt)

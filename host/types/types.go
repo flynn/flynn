@@ -49,8 +49,7 @@ func (j *Job) Dup() *Job {
 		return res
 	}
 	job.Metadata = dupMap(j.Metadata)
-	job.Config.Entrypoint = dupSlice(j.Config.Entrypoint)
-	job.Config.Cmd = dupSlice(j.Config.Cmd)
+	job.Config.Args = dupSlice(j.Config.Args)
 	job.Config.Env = dupMap(j.Config.Env)
 	if j.Config.Ports != nil {
 		job.Config.Ports = make([]Port, len(j.Config.Ports))
@@ -73,11 +72,10 @@ type JobResources struct {
 }
 
 type ContainerConfig struct {
+	Args        []string          `json:"args,omitempty"`
 	TTY         bool              `json:"tty,omitempty"`
 	Stdin       bool              `json:"stdin,omitempty"`
 	Data        bool              `json:"data,omitempty"`
-	Entrypoint  []string          `json:"entry_point,omitempty"`
-	Cmd         []string          `json:"cmd,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	Mounts      []Mount           `json:"mounts,omitempty"`
 	Volumes     []VolumeBinding   `json:"volumes,omitempty"`
@@ -93,11 +91,8 @@ func (x ContainerConfig) Merge(y ContainerConfig) ContainerConfig {
 	x.TTY = x.TTY || y.TTY
 	x.Stdin = x.Stdin || y.Stdin
 	x.Data = x.Data || y.Data
-	if y.Entrypoint != nil {
-		x.Entrypoint = y.Entrypoint
-	}
-	if y.Cmd != nil {
-		x.Cmd = y.Cmd
+	if y.Args != nil {
+		x.Args = y.Args
 	}
 	env := make(map[string]string, len(x.Env)+len(y.Env))
 	for k, v := range x.Env {

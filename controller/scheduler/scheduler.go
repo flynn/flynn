@@ -807,10 +807,9 @@ func (s *Scheduler) HandleInternalStateRequest(req *InternalStateRequest) {
 		}
 		for name, proc := range formation.Release.Processes {
 			f.Release.Processes[name] = ct.ProcessType{
-				Cmd:        proc.Cmd,
-				Entrypoint: proc.Entrypoint,
-				Data:       proc.Data,
-				Omni:       proc.Omni,
+				Args: proc.Args,
+				Data: proc.Data,
+				Omni: proc.Omni,
 			}
 		}
 		req.State.Formations[key.String()] = &f

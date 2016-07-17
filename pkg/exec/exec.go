@@ -20,11 +20,10 @@ type Cmd struct {
 	TTY    bool
 	Meta   map[string]string
 
-	Entrypoint []string
+	Args []string
 
 	ImageArtifact host.Artifact
 
-	Cmd []string
 	Env map[string]string
 
 	Stdin io.Reader
@@ -85,8 +84,8 @@ func DockerImage(uri string) host.Artifact {
 	return host.Artifact{Type: host.ArtifactTypeDocker, URI: uri}
 }
 
-func Command(artifact host.Artifact, cmd ...string) *Cmd {
-	return &Cmd{ImageArtifact: artifact, Cmd: cmd}
+func Command(artifact host.Artifact, args ...string) *Cmd {
+	return &Cmd{ImageArtifact: artifact, Args: args}
 }
 
 func Job(artifact host.Artifact, job *host.Job) *Cmd {
@@ -98,8 +97,8 @@ type ClusterClient interface {
 	Host(string) (*cluster.Host, error)
 }
 
-func CommandUsingCluster(c ClusterClient, artifact host.Artifact, cmd ...string) *Cmd {
-	command := Command(artifact, cmd...)
+func CommandUsingCluster(c ClusterClient, artifact host.Artifact, args ...string) *Cmd {
+	command := Command(artifact, args...)
 	command.cluster = c
 	return command
 }
@@ -188,11 +187,10 @@ func (c *Cmd) Start() error {
 		c.Job = &host.Job{
 			ImageArtifact: &c.ImageArtifact,
 			Config: host.ContainerConfig{
-				Entrypoint: c.Entrypoint,
-				Cmd:        c.Cmd,
-				TTY:        c.TTY,
-				Env:        c.Env,
-				Stdin:      c.Stdin != nil || c.stdinPipe != nil,
+				Args:  c.Args,
+				TTY:   c.TTY,
+				Env:   c.Env,
+				Stdin: c.Stdin != nil || c.stdinPipe != nil,
 			},
 			Metadata: c.Meta,
 		}

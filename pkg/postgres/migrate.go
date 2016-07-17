@@ -8,9 +8,11 @@ import (
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
+type Step func(*DBTx) error
+
 type Migration struct {
 	ID    int
-	Stmts []string
+	Steps []Step
 }
 
 func NewMigrations() *Migrations {
@@ -21,7 +23,16 @@ func NewMigrations() *Migrations {
 type Migrations []Migration
 
 func (m *Migrations) Add(id int, stmts ...string) {
-	*m = append(*m, Migration{ID: id, Stmts: stmts})
+	steps := make([]Step, len(stmts))
+	for i := range stmts {
+		stmt := stmts[i]
+		steps[i] = func(tx *DBTx) error { return tx.Exec(stmt) }
+	}
+	m.AddSteps(id, steps...)
+}
+
+func (m *Migrations) AddSteps(id int, steps ...Step) {
+	*m = append(*m, Migration{ID: id, Steps: steps})
 }
 
 func (m Migrations) Migrate(db *DB) error {
@@ -50,9 +61,8 @@ func (m Migrations) Migrate(db *DB) error {
 			return err
 		}
 
-		for _, s := range migration.Stmts {
-			err = tx.Exec(s)
-			if err != nil {
+		for _, step := range migration.Steps {
+			if err := step(tx); err != nil {
 				tx.Rollback()
 				return err
 			}

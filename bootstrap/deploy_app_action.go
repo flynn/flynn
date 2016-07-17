@@ -32,9 +32,6 @@ func interpolateRelease(s *State, r *ct.Release) {
 				delete(proc.Env, k)
 			}
 		}
-		for i, v := range proc.Cmd {
-			proc.Cmd[i] = interpolate(s, v)
-		}
 	}
 }
 

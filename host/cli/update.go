@@ -220,7 +220,7 @@ func runUpdate(args *docopt.Args) error {
 
 	// use a flag to determine whether to use a TTY log formatter because actually
 	// assigning a TTY to the job causes reading images via stdin to fail.
-	cmd := exec.Command(exec.DockerImage(updaterImage), fmt.Sprintf("--tty=%t", term.IsTerminal(os.Stdout.Fd())))
+	cmd := exec.Command(exec.DockerImage(updaterImage), "/bin/updater", fmt.Sprintf("--tty=%t", term.IsTerminal(os.Stdout.Fd())))
 	cmd.Stdin = bytes.NewReader(imageJSON)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

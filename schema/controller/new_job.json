@@ -20,6 +20,9 @@
     "entrypoint": {
       "$ref": "/schema/controller/common#/definitions/entrypoint"
     },
+    "args": {
+      "$ref": "/schema/controller/common#/definitions/args"
+    },
     "env": {
       "$ref": "/schema/controller/common#/definitions/env"
     },

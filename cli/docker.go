@@ -230,8 +230,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	if !ok {
 		proc = ct.ProcessType{}
 	}
-	proc.Cmd = config.Cmd
-	proc.Entrypoint = config.Entrypoint
+	proc.Args = append(config.Entrypoint, config.Cmd...)
 	if len(proc.Ports) == 0 {
 		proc.Ports = []ct.Port{{
 			Port:  8080,

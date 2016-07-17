@@ -7,6 +7,9 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "args": {
+      "$ref": "/schema/controller/common#/definitions/args"
+    },
     "cmd": {
       "$ref": "/schema/controller/common#/definitions/cmd"
     },

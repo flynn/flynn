@@ -21,13 +21,21 @@
       }
     },
     "cmd": {
-      "description": "shell command",
+      "description": "DEPRECATED (use args instead): shell command",
       "type": "array",
       "items": {
         "type": "string"
       }
     },
     "entrypoint": {
+      "description": "DEPRECATED (use args instead)",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "args": {
+      "description": "command line arguments",
       "type": "array",
       "items": {
         "type": "string"

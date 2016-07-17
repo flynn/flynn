@@ -237,3 +237,99 @@ func (MigrateSuite) TestMigrateReleaseArtifactIndex(c *C) {
 		}
 	}
 }
+
+func (MigrateSuite) TestMigrateProcessArgs(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_process_args")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 18
+	m.migrateTo(18)
+
+	// create some process types with entrypoint / cmd
+	type oldProcType struct {
+		Entrypoint []string `json:"entrypoint,omitempty"`
+		Cmd        []string `json:"cmd,omitempty"`
+	}
+	releases := map[string]*oldProcType{
+		random.UUID(): {},
+		random.UUID(): {
+			Entrypoint: []string{"sh"},
+		},
+		random.UUID(): {
+			Entrypoint: []string{"sh", "-c", "date"},
+		},
+		random.UUID(): {
+			Cmd: []string{"sh"},
+		},
+		random.UUID(): {
+			Cmd: []string{"sh", "-c", "date"},
+		},
+		random.UUID(): {
+			Entrypoint: []string{"sh"},
+			Cmd:        []string{"-c", "date"},
+		},
+		random.UUID(): {
+			Entrypoint: []string{"sh", "-c"},
+			Cmd:        []string{"date"},
+		},
+	}
+	for id, proc := range releases {
+		procs := map[string]*oldProcType{"web": proc, "app": proc}
+		c.Assert(db.Exec(`INSERT INTO releases (release_id, processes) VALUES ($1, $2)`, id, procs), IsNil)
+	}
+
+	// create some system apps
+	systemMeta := map[string]string{"flynn-system-app": "true"}
+	controllerID := random.UUID()
+	controllerProcs := map[string]*oldProcType{
+		"scheduler": {Cmd: []string{"scheduler"}},
+		"web":       {Cmd: []string{"controller"}},
+		"worker":    {Cmd: []string{"worker"}},
+	}
+	c.Assert(db.Exec(`INSERT INTO releases (release_id, processes) VALUES ($1, $2)`, controllerID, controllerProcs), IsNil)
+	c.Assert(db.Exec(`INSERT INTO apps (app_id, name, release_id, meta) VALUES ($1, $2, $3, $4)`, random.UUID(), "controller", controllerID, systemMeta), IsNil)
+	routerID := random.UUID()
+	routerProcs := map[string]*oldProcType{
+		"app": {Cmd: []string{"-http-port", "80", "-https-port", "443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"}},
+	}
+	c.Assert(db.Exec(`INSERT INTO releases (release_id, processes) VALUES ($1, $2)`, routerID, routerProcs), IsNil)
+	c.Assert(db.Exec(`INSERT INTO apps (app_id, name, release_id, meta) VALUES ($1, $2, $3, $4)`, random.UUID(), "router", routerID, systemMeta), IsNil)
+
+	// create a slug release
+	slugID := random.UUID()
+	slugProcs := map[string]*oldProcType{
+		"web":    {Cmd: []string{"start web"}},
+		"worker": {Cmd: []string{"start worker"}},
+	}
+	c.Assert(db.Exec(`INSERT INTO releases (release_id, processes, meta) VALUES ($1, $2, $3)`, slugID, slugProcs, map[string]string{"git": "true"}), IsNil)
+
+	// migrate to 19 and check Args was populated correctly
+	m.migrateTo(19)
+	type newProcType struct {
+		Args []string `json:"args,omitempty"`
+	}
+	for id, proc := range releases {
+		var procs map[string]*newProcType
+		c.Assert(db.QueryRow(`SELECT processes FROM releases WHERE release_id = $1`, id).Scan(&procs), IsNil)
+		for _, typ := range []string{"web", "app"} {
+			c.Assert(procs[typ].Args, DeepEquals, append(proc.Entrypoint, proc.Cmd...))
+		}
+	}
+
+	// check the system + slug apps got the correct entrypoint prepended to Args
+	for _, x := range []struct {
+		releaseID  string
+		oldProcs   map[string]*oldProcType
+		entrypoint string
+	}{
+		{controllerID, controllerProcs, "/bin/start-flynn-controller"},
+		{routerID, routerProcs, "/bin/flynn-router"},
+		{slugID, slugProcs, "/runner/init"},
+	} {
+		var procs map[string]*newProcType
+		c.Assert(db.QueryRow(`SELECT processes FROM releases WHERE release_id = $1`, x.releaseID).Scan(&procs), IsNil)
+		for typ, proc := range x.oldProcs {
+			c.Assert(procs[typ].Args, DeepEquals, append([]string{x.entrypoint}, proc.Cmd...))
+		}
+	}
+}

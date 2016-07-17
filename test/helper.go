@@ -145,7 +145,7 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 		ArtifactIDs: []string{artifact.ID},
 		Processes: map[string]ct.ProcessType{
 			"echoer": {
-				Cmd:     []string{"/bin/echoer"},
+				Args:    []string{"/bin/echoer"},
 				Service: "echo-service",
 				Ports: []ct.Port{{
 					Proto: "tcp",
@@ -156,25 +156,25 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 				}},
 			},
 			"ping": {
-				Cmd:   []string{"/bin/pingserv"},
+				Args:  []string{"/bin/pingserv"},
 				Ports: []ct.Port{{Proto: "tcp"}},
 			},
 			"printer": {
-				Cmd: []string{"sh", "-c", "while true; do echo I like to print; sleep 1; done"},
+				Args: []string{"sh", "-c", "while true; do echo I like to print; sleep 1; done"},
 			},
 			"crasher": {
-				Cmd: []string{"sh", "-c", "trap 'exit 1' SIGTERM; while true; do echo I like to crash; sleep 1; done"},
+				Args: []string{"sh", "-c", "trap 'exit 1' SIGTERM; while true; do echo I like to crash; sleep 1; done"},
 			},
 			"omni": {
-				Cmd:  []string{"sh", "-c", "while true; do echo I am everywhere; sleep 1; done"},
+				Args: []string{"sh", "-c", "while true; do echo I am everywhere; sleep 1; done"},
 				Omni: true,
 			},
 			"resources": {
-				Cmd:       []string{"sh", "-c", resourceCmd},
+				Args:      []string{"sh", "-c", resourceCmd},
 				Resources: testResources(),
 			},
 			"ish": {
-				Cmd:   []string{"/bin/ish"},
+				Args:  []string{"/bin/ish"},
 				Ports: []ct.Port{{Proto: "tcp"}},
 				Env: map[string]string{
 					"NAME": app.Name,

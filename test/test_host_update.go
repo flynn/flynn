@@ -36,7 +36,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 		client,
 		exec.DockerImage(imageURIs["test-apps"]),
 		&host.Job{
-			Config: host.ContainerConfig{Cmd: []string{"/bin/partial-logger"}},
+			Config: host.ContainerConfig{Args: []string{"/bin/partial-logger"}},
 			Metadata: map[string]string{
 				"flynn-controller.app": "partial-logger",
 			},

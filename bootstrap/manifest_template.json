@@ -107,7 +107,7 @@
         "postgres": {
           "ports": [{"port": 5432, "proto": "tcp"}],
           "data": true,
-          "cmd": ["postgres"],
+          "args": ["/bin/start-flynn-postgres", "postgres"],
           "service": "postgres",
           "env": {
             "SINGLETON": "{{ .Singleton }}"
@@ -115,7 +115,7 @@
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["api"]
+          "args": ["/bin/start-flynn-postgres", "api"]
         }
       }
     },
@@ -186,17 +186,17 @@
       "processes": {
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["controller"],
+          "args": ["/bin/start-flynn-controller", "controller"],
           "service": "controller"
         },
         "scheduler": {
-          "cmd": ["scheduler"],
+          "args": ["/bin/start-flynn-controller", "scheduler"],
           "omni": true,
           "service": "controller-scheduler",
           "ports": [{ "proto": "tcp" }]
         },
         "worker": {
-          "cmd": ["worker"],
+          "args": ["/bin/start-flynn-controller", "worker"],
           "ports": [{ "proto": "tcp" }]
         }
       }
@@ -299,7 +299,7 @@
       "processes": {
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["api"]
+          "args": ["/bin/start-flynn-redis", "api"]
         }
       }
     },
@@ -341,7 +341,7 @@
       "processes": {
         "mariadb": {
           "ports": [{"port": 3306, "proto": "tcp"}],
-          "cmd": ["mariadb"],
+          "args": ["/bin/start-flynn-mariadb", "mariadb"],
           "service": "mariadb",
           "env": {
             "SINGLETON": "{{ .Singleton }}"
@@ -350,7 +350,7 @@
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["api"],
+          "args": ["/bin/start-flynn-mariadb", "api"],
           "env": {
             "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}"
           }
@@ -396,7 +396,7 @@
       "processes": {
         "mongodb": {
           "ports": [{"port": 27017, "proto": "tcp"}],
-          "cmd": ["mongodb"],
+          "args": ["/bin/start-flynn-mongodb", "mongodb"],
           "service": "mongodb",
           "env": {
             "SINGLETON": "{{ .Singleton }}"
@@ -405,7 +405,7 @@
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["api"],
+          "args": ["/bin/start-flynn-mongodb", "api"],
           "env": {
             "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}"
           }
@@ -471,7 +471,7 @@
       "processes": {
         "app": {
           "host_network": true,
-          "cmd": ["-http-port", "80", "-https-port", "443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
+          "args": ["/bin/flynn-router", "-http-port", "80", "-https-port", "443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
           "omni": true,
           "service": "router-api"
         }
@@ -612,7 +612,7 @@
     "release": {
       "processes": {
         "app": {
-          "cmd": ["-logaddr", ":514", "-apiaddr", ":80"],
+          "args": ["/bin/logaggregator", "-logaddr", ":514", "-apiaddr", ":80"],
           "ports": [
             {"port": 80, "proto": "tcp"},
             {"port": 514, "proto": "tcp"}
