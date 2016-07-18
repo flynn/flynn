@@ -15,6 +15,7 @@ OPTIONS:
   -n, --size=SIZE          Cluster size [default: 1]
   -f, --filter=FILTER      Regular expression selecting which tests and/or suites to run
   -s, --stream             Stream debug output
+  -v, --version=VERSION    Boot using the released VERSION (e.g. v20151104.1)
 USAGE
 }
 
@@ -22,6 +23,7 @@ main() {
   local size="1"
   local filter
   local stream=false
+  local version=""
 
   while true; do
     case "$1" in
@@ -31,16 +33,14 @@ main() {
         ;;
       -n | --size)
         if [[ -z "$2" ]]; then
-          usage
-          exit 1
+          fail "--size flag requires an argument"
         fi
         size="$2"
         shift 2
         ;;
       -f | --filter)
         if [[ -z "$2" ]]; then
-          usage
-          exit 1
+          fail "--filter flag requires an argument"
         fi
         filter="$2"
         shift 2
@@ -48,6 +48,13 @@ main() {
       -s | --stream)
         stream=true
         shift
+        ;;
+      -v | --version)
+        if [[ -z "$2" ]]; then
+          fail "--version flag requires an argument"
+        fi
+        version="$2"
+        shift 2
         ;;
       *)
         break
@@ -69,7 +76,13 @@ main() {
 
   export BACKOFF_PERIOD="5s"
 
-  cluster_add=$("${ROOT}/script/bootstrap-flynn" --size "${size}" &> >(tee /dev/stderr) | tail -3 | head -1)
+  local boot_flags=(
+    "--size" "${size}"
+  )
+  if [[ -n "${version}" ]]; then
+    boot_flags+=("--version" "${version}")
+  fi
+  cluster_add=$("${ROOT}/script/bootstrap-flynn" ${boot_flags[@]} &> >(tee /dev/stderr) | tail -3 | head -1)
 
   if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
     echo Bootstrap failed >&2
