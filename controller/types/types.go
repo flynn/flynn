@@ -248,6 +248,10 @@ type NewJob struct {
 	Lines      int                `json:"tty_lines,omitempty"`
 	DisableLog bool               `json:"disable_log,omitempty"`
 	Resources  resource.Resources `json:"resources,omitempty"`
+
+	// Entrypoint and Cmd are DEPRECATED: use Args instead
+	DeprecatedCmd        []string `json:"cmd,omitempty"`
+	DeprecatedEntrypoint []string `json:"entrypoint,omitempty"`
 }
 
 const DefaultDeployTimeout = 120 // seconds

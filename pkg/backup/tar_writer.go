@@ -100,6 +100,14 @@ func (t *TarWriter) WriteCommandOutput(client controller.Client, name string, ap
 }
 
 func (t *TarWriter) runJob(client controller.Client, app string, req *ct.NewJob, out io.Writer) error {
+	// set deprecated Entrypoint and Cmd for old clusters
+	if len(req.Args) > 0 {
+		req.DeprecatedEntrypoint = []string{req.Args[0]}
+	}
+	if len(req.Args) > 1 {
+		req.DeprecatedCmd = req.Args[1:]
+	}
+
 	rwc, err := client.RunJobAttached(app, req)
 	if err != nil {
 		return err
