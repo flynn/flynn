@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/flynn/flynn/pkg/postgres"
 )
@@ -454,7 +455,11 @@ func migrateProcessArgs(tx *postgres.DBTx) error {
 				case "logaggregator":
 					proc["entrypoint"] = []interface{}{"/bin/logaggregator"}
 				default:
-					panic(fmt.Sprintf("migration failed to set entrypoint for system app %s", *release.AppName))
+					if strings.HasPrefix(*release.AppName, "redis-") {
+						proc["entrypoint"] = []interface{}{"/bin/start-flynn-redis"}
+					} else {
+						panic(fmt.Sprintf("migration failed to set entrypoint for system app %s", *release.AppName))
+					}
 				}
 			}
 
