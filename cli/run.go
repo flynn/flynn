@@ -90,6 +90,15 @@ func runJob(client controller.Client, config runConfig) error {
 		ReleaseEnv: config.ReleaseEnv,
 		DisableLog: config.DisableLog,
 	}
+
+	// set deprecated Entrypoint and Cmd for old clusters
+	if len(req.Args) > 0 {
+		req.DeprecatedEntrypoint = []string{req.Args[0]}
+	}
+	if len(req.Args) > 1 {
+		req.DeprecatedCmd = req.Args[1:]
+	}
+
 	if config.Stdin == nil {
 		config.Stdin = os.Stdin
 	}
