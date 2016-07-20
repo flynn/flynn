@@ -120,6 +120,7 @@ type Artifact struct {
 	Type      host.ArtifactType `json:"type,omitempty"`
 	URI       string            `json:"uri,omitempty"`
 	Meta      map[string]string `json:"meta,omitempty"`
+	Manifest  *ImageManifest    `json:"manifest,omitempty"`
 	CreatedAt *time.Time        `json:"created_at,omitempty"`
 }
 
@@ -470,4 +471,56 @@ type AppGarbageCollection struct {
 type AppGarbageCollectionEvent struct {
 	AppGarbageCollection *AppGarbageCollection `json:"app_garbage_collection"`
 	Error                string                `json:"error"`
+}
+
+type ImageManifestType string
+
+const ImageManifestTypeV1 ImageManifestType = "application/vnd.flynn.image.manifest.v1+json"
+
+type ImageManifest struct {
+	Type        ImageManifestType           `json:"_type"`
+	Meta        map[string]string           `json:"meta,omitempty"`
+	Entrypoints map[string]*ImageEntrypoint `json:"entrypoints,omitempty"`
+	Rootfs      []*ImageRootfs              `json:"rootfs,omitempty"`
+}
+
+func (m *ImageManifest) DefaultEntrypoint() *ImageEntrypoint {
+	return m.Entrypoints["_default"]
+}
+
+type ImageEntrypoint struct {
+	Env               map[string]string `json:"env,omitempty"`
+	WorkingDir        string            `json:"cwd,omitempty"`
+	Args              []string          `json:"args,omitempty"`
+	LinuxCapabilities []string          `json:"linux_capabilities,omitempty"`
+}
+
+type ImageRootfs struct {
+	Platform *ImagePlatform `json:"platform,omitempty"`
+	Layers   []*ImageLayer  `json:"layers,omitempty"`
+}
+
+var DefaultImagePlatform = &ImagePlatform{
+	Architecture: "amd64",
+	OS:           "linux",
+}
+
+type ImagePlatform struct {
+	Architecture string `json:"architecture,omitempty"`
+	OS           string `json:"os,omitempty"`
+}
+
+type ImageLayerType string
+
+const ImageLayerTypeSquashfs ImageLayerType = "application/vnd.flynn.image.squashfs.v1"
+
+type ImageLayer struct {
+	Type       ImageLayerType    `json:"type,omitempty"`
+	Length     int64             `json:"length,omitempty"`
+	Mountpoint string            `json:"mountpoint,omitempty"`
+	Hashes     map[string]string `json:"hashes,omitempty"`
+}
+
+func (l *ImageLayer) ID() string {
+	return l.Hashes["sha512"]
 }
