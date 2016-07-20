@@ -1337,7 +1337,7 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "app=1"), Succeeds)
 
 	// check the job is reachable with the app's name in discoverd
-	instances, err := s.discoverdClient(t).Instances(app.Name, 10*time.Second)
+	instances, err := s.discoverdClient(t).Instances(app.Name+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
 	res, err := http.Get("http://" + instances[0].Addr)
 	t.Assert(err, c.IsNil)
@@ -1383,6 +1383,6 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	defer flynn(t, "/", "-a", importApp, "scale", "app=0")
 
 	// wait for it to start
-	_, err = s.discoverdClient(t).Instances(importApp, 10*time.Second)
+	_, err = s.discoverdClient(t).Instances(importApp+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
 }

@@ -236,7 +236,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 			Port:  8080,
 			Proto: "tcp",
 			Service: &host.Service{
-				Name:   mustApp(),
+				Name:   mustApp() + "-web",
 				Create: true,
 			},
 		}}
