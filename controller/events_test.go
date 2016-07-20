@@ -181,36 +181,39 @@ func (s *S) TestStreamReleaseEvents(c *C) {
 
 	release := s.createTestRelease(c, &ct.Release{})
 
-	select {
-	case e, ok := <-events:
-		if !ok {
-			c.Fatal("unexpected close of event stream")
+	var gotRelease, gotArtifact bool
+	for i := 0; i < 2; i++ {
+		select {
+		case e, ok := <-events:
+			if !ok {
+				c.Fatal("unexpected close of event stream")
+			}
+			switch e.ObjectType {
+			case ct.EventTypeArtifact:
+				var eventArtifact *ct.Artifact
+				c.Assert(json.Unmarshal(e.Data, &eventArtifact), IsNil)
+				c.Assert(e.AppID, Equals, "")
+				c.Assert(e.ObjectID, Equals, release.ImageArtifactID())
+				c.Assert(eventArtifact, NotNil)
+				c.Assert(eventArtifact.ID, Equals, release.ImageArtifactID())
+				gotArtifact = true
+			case ct.EventTypeRelease:
+				var eventRelease *ct.Release
+				c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
+				c.Assert(e.AppID, Equals, "")
+				c.Assert(e.ObjectID, Equals, release.ID)
+				c.Assert(eventRelease, DeepEquals, release)
+				gotRelease = true
+			default:
+				c.Errorf("unexpected event object %s", e.ObjectType)
+			}
+		case <-time.After(10 * time.Second):
+			c.Fatalf("Timed out waiting for event %d", i)
 		}
-		var eventArtifact *ct.Artifact
-		c.Assert(json.Unmarshal(e.Data, &eventArtifact), IsNil)
-		c.Assert(e.AppID, Equals, "")
-		c.Assert(e.ObjectType, Equals, ct.EventTypeArtifact)
-		c.Assert(e.ObjectID, Equals, release.ImageArtifactID())
-		c.Assert(eventArtifact, NotNil)
-		c.Assert(eventArtifact.ID, Equals, release.ImageArtifactID())
-	case <-time.After(10 * time.Second):
-		c.Fatal("Timed out waiting for artifact event")
 	}
 
-	select {
-	case e, ok := <-events:
-		if !ok {
-			c.Fatal("unexpected close of event stream")
-		}
-		var eventRelease *ct.Release
-		c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
-		c.Assert(e.AppID, Equals, "")
-		c.Assert(e.ObjectType, Equals, ct.EventTypeRelease)
-		c.Assert(e.ObjectID, Equals, release.ID)
-		c.Assert(eventRelease, DeepEquals, release)
-	case <-time.After(10 * time.Second):
-		c.Fatal("Timed out waiting for release event")
-	}
+	c.Assert(gotArtifact, Equals, true)
+	c.Assert(gotRelease, Equals, true)
 }
 
 func (s *S) TestStreamFormationEvents(c *C) {
