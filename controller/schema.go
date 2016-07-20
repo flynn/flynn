@@ -403,6 +403,8 @@ $$ LANGUAGE plpgsql`,
 		WHERE release_id = r.id`,
 	)
 	migrations.Add(21,
+		`DROP TRIGGER release_artifacts_trigger ON release_artifacts`,
+		`DROP FUNCTION check_release_artifacts()`,
 		`ALTER TABLE artifacts ADD COLUMN manifest jsonb`,
 	)
 }

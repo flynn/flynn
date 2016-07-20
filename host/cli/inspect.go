@@ -74,7 +74,9 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool, redactEnv []stri
 	listRec(w, "ExitStatus", exitStatus)
 	listRec(w, "Error", jobError)
 	listRec(w, "IP Address", job.InternalIP)
-	listRec(w, "ImageArtifact", job.Job.ImageArtifact.URI)
+	for i, m := range job.Job.Mountspecs {
+		listRec(w, fmt.Sprintf("Mountspec[%d]", i), m)
+	}
 	for i, artifact := range job.Job.FileArtifacts {
 		listRec(w, fmt.Sprintf("FileArtifact[%d]", i), artifact.URI)
 	}

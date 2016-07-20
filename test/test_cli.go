@@ -865,7 +865,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
-	t.Assert(app.flynn("release", "add", "-f", addFile.Name(), imageURIs["test-apps"]), Succeeds)
+	t.Assert(app.flynn("release", "add", "-f", addFile.Name(), s.createArtifact(t, "test-apps").URI), Succeeds)
 
 	r1, err := s.controller.GetAppRelease(app.name)
 	t.Assert(err, c.IsNil)
@@ -1146,8 +1146,7 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	t.Assert(client.CreateApp(app), c.IsNil)
 
 	// create an image artifact
-	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: imageURIs["test-apps"]}
-	t.Assert(client.CreateArtifact(imageArtifact), c.IsNil)
+	imageArtifact := s.createArtifact(t, "test-apps")
 
 	// create 5 slug artifacts
 	var slug bytes.Buffer

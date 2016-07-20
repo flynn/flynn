@@ -28,8 +28,6 @@ func (s *VolumeSuite) TestInterhostVolumeTransmitAPI(t *c.C) {
 }
 
 func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 *cluster.Host, t *c.C) {
-	clus := s.clusterClient(t)
-
 	// create a volume!
 	vol, err := h0.CreateVolume("default")
 	t.Assert(err, c.IsNil)
@@ -37,7 +35,7 @@ func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 *cluster.Host, t *c.C) {
 		t.Assert(h0.DestroyVolume(vol.ID), c.IsNil)
 	}()
 	// create a job and use it to add data to the volume
-	cmd, service, err := makeIshApp(clus, h0, s.discoverdClient(t), host.ContainerConfig{
+	cmd, service, err := s.makeIshApp(t, h0, host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
 			VolumeID:  vol.ID,
@@ -70,7 +68,7 @@ func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 *cluster.Host, t *c.C) {
 	}()
 
 	// start a job on the other host that mounts and inspects the transmitted volume
-	cmd, service, err = makeIshApp(clus, h1, s.discoverdClient(t), host.ContainerConfig{
+	cmd, service, err = s.makeIshApp(t, h1, host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
 			VolumeID:  vol2.ID,

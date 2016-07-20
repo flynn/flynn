@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/controller/client"
@@ -239,7 +240,7 @@ func deployApp(client controller.Client, app *ct.App, uri string, updateFn updat
 		if err != nil {
 			return err
 		}
-		if u.Query().Get("name") != "flynn/slugrunner" {
+		if !strings.HasSuffix(u.Query().Get("target"), "slugrunner.json") {
 			return errDeploySkipped{"app not using slugrunner image"}
 		}
 	}

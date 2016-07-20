@@ -1,9 +1,11 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strings"
+	"text/template"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -16,7 +18,23 @@ import (
 
 func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.Job {
 	t := f.Release.Processes[name]
-	env := make(map[string]string, len(f.Release.Env)+len(t.Env)+4)
+
+	var manifest *ct.ImageManifest
+	var entrypoint ct.ImageEntrypoint
+	// TODO: fetch the manifest if it isn't cached
+	if f.ImageArtifact != nil && f.ImageArtifact.Manifest != nil {
+		manifest = f.ImageArtifact.Manifest
+		if e, ok := manifest.Entrypoints[name]; ok {
+			entrypoint = *e
+		} else if e := manifest.DefaultEntrypoint(); e != nil {
+			entrypoint = *e
+		}
+	}
+
+	env := make(map[string]string, len(entrypoint.Env)+len(f.Release.Env)+len(t.Env)+5)
+	for k, v := range entrypoint.Env {
+		env[k] = v
+	}
 	for k, v := range f.Release.Env {
 		env[k] = v
 	}
@@ -29,7 +47,7 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	env["FLYNN_RELEASE_ID"] = f.Release.ID
 	env["FLYNN_PROCESS_TYPE"] = name
 	env["FLYNN_JOB_ID"] = id
-	metadata := make(map[string]string, len(f.App.Meta)+4)
+	metadata := make(map[string]string, len(f.App.Meta)+5)
 	for k, v := range f.App.Meta {
 		metadata[k] = v
 	}
@@ -42,12 +60,16 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		ID:       id,
 		Metadata: metadata,
 		Config: host.ContainerConfig{
-			Args:        t.Args,
+			Args:        entrypoint.Args,
 			Env:         env,
+			WorkingDir:  entrypoint.WorkingDir,
 			HostNetwork: t.HostNetwork,
 		},
 		Resurrect: t.Resurrect,
 		Resources: t.Resources,
+	}
+	if len(t.Args) > 0 {
+		job.Config.Args = t.Args
 	}
 
 	// job.Config.Args may be empty if restoring from an old backup which
@@ -56,11 +78,11 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		job.Config.Args = append(t.DeprecatedEntrypoint, t.DeprecatedCmd...)
 	}
 
+	if f.ImageArtifact != nil {
+		SetupMountspecs(job, f.ImageArtifact)
+	}
 	if f.App.Meta["flynn-system-app"] == "true" {
 		job.Partition = "system"
-	}
-	if f.ImageArtifact != nil {
-		job.ImageArtifact = f.ImageArtifact.HostArtifact()
 	}
 	if len(f.FileArtifacts) > 0 {
 		job.FileArtifacts = make([]*host.Artifact, len(f.FileArtifacts))
@@ -75,6 +97,41 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		job.Config.Ports[i].Service = p.Service
 	}
 	return job
+}
+
+func SetupMountspecs(job *host.Job, artifact *ct.Artifact) {
+	manifest := artifact.Manifest
+	if manifest == nil {
+		return
+	}
+	if len(manifest.Rootfs) == 0 {
+		return
+	}
+
+	tmpl, _ := template.New("layer_url").Parse(artifact.Meta["layer_url_template"])
+
+	rootfs := manifest.Rootfs[0]
+	job.Mountspecs = make([]*host.Mountspec, len(rootfs.Layers)+1)
+	for i, layer := range rootfs.Layers {
+		spec := &host.Mountspec{
+			Type:       host.MountspecTypeSquashfs,
+			ID:         layer.Hashes["sha512"],
+			Mountpoint: layer.Mountpoint,
+		}
+
+		if tmpl != nil {
+			var url bytes.Buffer
+			tmpl.Execute(&url, layer)
+			spec.URL = url.String()
+		}
+
+		job.Mountspecs[i] = spec
+	}
+	job.Mountspecs[len(rootfs.Layers)] = &host.Mountspec{
+		Type:       host.MountspecTypeTmp,
+		ID:         job.ID,
+		Mountpoint: "/",
+	}
 }
 
 func ProvisionVolume(h VolumeCreator, job *host.Job) error {

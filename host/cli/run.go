@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/term"
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
@@ -28,8 +29,13 @@ Options:
 }
 
 func runRun(args *docopt.Args, client *cluster.Client) error {
+	// TODO: download <image> using temp tuf DB?
 	cmd := exec.Cmd{
-		ImageArtifact: exec.DockerImage(args.String["<image>"]),
+		ImageArtifact: &ct.Artifact{
+			Type:     host.ArtifactTypeFlynn,
+			URI:      args.String["<image>"],
+			Manifest: &ct.ImageManifest{},
+		},
 		Job: &host.Job{
 			Config: host.ContainerConfig{
 				Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),

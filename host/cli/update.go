@@ -14,6 +14,8 @@ import (
 	"syscall"
 
 	"github.com/docker/docker/pkg/term"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
@@ -239,9 +241,15 @@ func runUpdate(args *docopt.Args) error {
 		return err
 	}
 
+	// TODO: get the latest updater image manifest and use here
+	artifact := &ct.Artifact{
+		Type:     host.ArtifactTypeFlynn,
+		URI:      updaterImage,
+		Manifest: &ct.ImageManifest{},
+	}
 	// use a flag to determine whether to use a TTY log formatter because actually
 	// assigning a TTY to the job causes reading images via stdin to fail.
-	cmd := exec.Command(exec.DockerImage(updaterImage), "/bin/updater", fmt.Sprintf("--tty=%t", term.IsTerminal(os.Stdout.Fd())))
+	cmd := exec.Command(artifact, "/bin/updater", fmt.Sprintf("--tty=%t", term.IsTerminal(os.Stdout.Fd())))
 	cmd.Stdin = bytes.NewReader(imageJSON)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

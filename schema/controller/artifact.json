@@ -18,7 +18,7 @@
     "type": {
       "description": "artifact type",
       "type": "string",
-      "enum": ["docker", "file"]
+      "enum": ["docker", "file", "flynn"]
     },
     "uri": {
       "description": "URI used to retrieve the artifact",

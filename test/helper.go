@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -138,11 +139,8 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 	t.Assert(client.CreateApp(app), c.IsNil)
 	debugf(t, "created app %s (%s)", app.Name, app.ID)
 
-	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: imageURIs["test-apps"]}
-	t.Assert(client.CreateArtifact(artifact), c.IsNil)
-
 	release := &ct.Release{
-		ArtifactIDs: []string{artifact.ID},
+		ArtifactIDs: []string{h.createArtifact(t, "test-apps").ID},
 		Processes: map[string]ct.ProcessType{
 			"echoer": {
 				Args:    []string{"/bin/echoer"},
@@ -185,6 +183,20 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 	t.Assert(client.CreateRelease(release), c.IsNil)
 	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
 	return app, release
+}
+
+func (h *Helper) createArtifact(t *c.C, name string) *ct.Artifact {
+	path := fmt.Sprintf("../images/%s.json", name)
+	f, err := os.Open(path)
+	t.Assert(err, c.IsNil)
+	defer f.Close()
+	artifact := &ct.Artifact{
+		Type: host.ArtifactTypeFlynn,
+		URI:  fmt.Sprintf("https://example.com?target=/image/manifests/%s.json", name),
+	}
+	t.Assert(json.NewDecoder(f).Decode(&artifact.Manifest), c.IsNil)
+	t.Assert(h.controllerClient(t).CreateArtifact(artifact), c.IsNil)
+	return artifact
 }
 
 func (h *Helper) stopJob(t *c.C, id string) {

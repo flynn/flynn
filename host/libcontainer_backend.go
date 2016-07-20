@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -28,8 +29,8 @@ import (
 	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
-	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
@@ -76,11 +77,6 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		libcontainer.InitArgs(os.Args[0], "libcontainer-init"),
 	)
 
-	pinkertonCtx, err := pinkerton.BuildContext("aufs", imageRoot)
-	if err != nil {
-		return nil, err
-	}
-
 	if err := setupCGroups(partitionCGroups); err != nil {
 		return nil, err
 	}
@@ -90,7 +86,6 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		factory:             factory,
 		state:               state,
 		vman:                vman,
-		pinkerton:           pinkertonCtx,
 		logStreams:          make(map[string]map[string]*logmux.LogStream),
 		containers:          make(map[string]*Container),
 		defaultEnv:          make(map[string]string),
@@ -107,13 +102,12 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 }
 
 type LibcontainerBackend struct {
-	InitPath  string
-	factory   libcontainer.Factory
-	state     *State
-	vman      *volumemanager.Manager
-	host      *Host
-	pinkerton *pinkerton.Context
-	ipalloc   *ipallocator.IPAllocator
+	InitPath string
+	factory  libcontainer.Factory
+	state    *State
+	vman     *volumemanager.Manager
+	host     *Host
+	ipalloc  *ipallocator.IPAllocator
 
 	bridgeName string
 	bridgeAddr net.IP
@@ -144,6 +138,7 @@ type LibcontainerBackend struct {
 type Container struct {
 	ID       string `json:"id"`
 	RootPath string `json:"root_path"`
+	TmpPath  string `json:"tmp_path"`
 	IP       net.IP `json:"ip"`
 
 	container libcontainer.Container
@@ -335,7 +330,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		return nil
 	}
 
-	log.Info("starting job", "job.artifact.uri", job.ImageArtifact.URI, "job.args", job.Config.Args)
+	log.Info("starting job", "job.args", job.Config.Args)
 
 	defer func() {
 		if err != nil {
@@ -389,41 +384,23 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		}
 	}()
 
-	log.Info("pulling image")
-	artifactURI, err := l.resolveDiscoverdURI(job.ImageArtifact.URI)
-	if err != nil {
-		log.Error("error resolving artifact URI", "err", err)
-		return err
-	}
-	// TODO(lmars): stream pull progress (maybe to the app log?)
-	imageID, err := l.pinkerton.PullDocker(artifactURI, ioutil.Discard)
-	if err != nil {
-		log.Error("error pulling image", "err", err)
-		return err
-	}
-
-	log.Info("reading image config")
-	imageConfig, err := readDockerImageConfig(imageID)
-	if err != nil {
-		log.Error("error reading image config", "err", err)
-		return err
-	}
-
-	log.Info("checking out image")
-	var rootPath string
-	// creating an AUFS mount can fail intermittently with EINVAL, so try a
-	// few times (see https://github.com/flynn/flynn/issues/2044)
-	for start := time.Now(); time.Since(start) < time.Second; time.Sleep(50 * time.Millisecond) {
-		rootPath, err = l.pinkerton.Checkout(job.ID, imageID)
-		if err == nil || !strings.HasSuffix(err.Error(), "invalid argument") {
-			break
+	log.Info("setting up rootfs")
+	rootPath := filepath.Join("/var/lib/flynn/image/mnt", job.ID)
+	tmpPath := filepath.Join("/var/lib/flynn/image/tmp", job.ID)
+	for _, path := range []string{rootPath, tmpPath} {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			log.Error("error setting up rootfs", "err", err)
+			return err
 		}
 	}
+	mounts, err := l.setupMounts(job, tmpPath)
 	if err != nil {
-		log.Error("error checking out image", "err", err)
+		log.Error("error setting up rootfs", "err", err)
 		return err
 	}
+
 	container.RootPath = rootPath
+	container.TmpPath = tmpPath
 
 	config := &configs.Config{
 		Rootfs:       rootPath,
@@ -448,7 +425,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			"/proc/sys", "/proc/sysrq-trigger", "/proc/irq", "/proc/bus",
 		},
 		Devices: configs.DefaultAutoCreatedDevices,
-		Mounts: []*configs.Mount{
+		Mounts: append(mounts, []*configs.Mount{
 			{
 				Source:      "proc",
 				Destination: "/proc",
@@ -487,7 +464,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 				Device:      "cgroup",
 				Flags:       defaultMountFlags | syscall.MS_RDONLY,
 			},
-		},
+		}...),
 	}
 
 	if spec, ok := job.Resources[resource.TypeMaxFD]; ok && spec.Limit != nil && spec.Request != nil {
@@ -519,26 +496,32 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	if len(hostname) > 64 {
 		hostname = hostname[:64]
 	}
-	if err := os.MkdirAll(filepath.Join(rootPath, "etc"), 0755); err != nil {
-		log.Error("error creating /etc in container root", "err", err)
+	if err := os.MkdirAll(filepath.Join(tmpPath, "etc"), 0755); err != nil {
+		log.Error("error creating container /etc", "err", err)
 		return err
 	}
-	if err := writeHostname(filepath.Join(rootPath, "etc/hosts"), hostname); err != nil {
+	etcHosts := filepath.Join(tmpPath, "etc/hosts")
+	if err := writeHostname(etcHosts, hostname); err != nil {
 		log.Error("error writing hosts file", "err", err)
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(rootPath, ".container-shared"), 0700); err != nil {
-		log.Error("error createing .container-shared", "err", err)
+	sharedDir := filepath.Join(tmpPath, ".container-shared")
+	if err := os.MkdirAll(sharedDir, 0700); err != nil {
+		log.Error("error creating .container-shared", "err", err)
 		return err
 	}
 
-	addBindMount(config, l.InitPath, "/.containerinit", false)
-	addBindMount(config, l.resolvConf, "/etc/resolv.conf", false)
+	config.Mounts = append(config.Mounts,
+		bindMount(l.InitPath, "/.containerinit", false),
+		bindMount(l.resolvConf, "/etc/resolv.conf", false),
+		bindMount(etcHosts, "/etc/hosts", true),
+		bindMount(sharedDir, "/.container-shared", true),
+	)
 	for _, m := range job.Config.Mounts {
 		if m.Target == "" {
 			return errors.New("host: invalid empty mount target")
 		}
-		addBindMount(config, m.Target, m.Location, m.Writeable)
+		config.Mounts = append(config.Mounts, bindMount(m.Target, m.Location, m.Writeable))
 	}
 
 	// apply volumes
@@ -549,7 +532,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			log.Error("missing required volume", "volumeID", v.VolumeID, "err", err)
 			return err
 		}
-		addBindMount(config, vol.Location(), v.Target, v.Writeable)
+		config.Mounts = append(config.Mounts, bindMount(vol.Location(), v.Target, v.Writeable))
 	}
 
 	// mutating job state, take state write lock
@@ -591,24 +574,17 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		initConfig.IP = container.IP.String() + "/24"
 		initConfig.Gateway = l.bridgeAddr.String()
 	}
-	if initConfig.WorkDir == "" {
-		initConfig.WorkDir = imageConfig.WorkingDir
-	}
 	if job.Config.Uid > 0 {
 		initConfig.User = strconv.Itoa(job.Config.Uid)
-	} else if imageConfig.User != "" {
-		// TODO: check and lookup user from image config
-	}
-	if len(job.Config.Args) == 0 {
-		initConfig.Args = append(imageConfig.Entrypoint, imageConfig.Cmd...)
 	}
 	for _, port := range job.Config.Ports {
 		initConfig.Ports = append(initConfig.Ports, port)
 	}
 
 	log.Info("writing config")
+	configPath := filepath.Join(tmpPath, ".containerconfig")
 	l.envMtx.RLock()
-	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), initConfig,
+	err = writeContainerConfig(configPath, initConfig,
 		map[string]string{
 			"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 			"TERM": "xterm",
@@ -625,6 +601,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		log.Error("error writing config", "err", err)
 		return err
 	}
+	config.Mounts = append(config.Mounts, bindMount(configPath, "/.containerconfig", false))
 
 	if job.Config.HostNetwork {
 		// allow host network jobs to configure the network
@@ -687,6 +664,125 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	return nil
 }
 
+func (l *LibcontainerBackend) setupMounts(job *host.Job, tmpPath string) ([]*configs.Mount, error) {
+	paths := make(map[string][]string, len(job.Mountspecs))
+	for _, spec := range job.Mountspecs {
+		var path string
+		switch spec.Type {
+		case host.MountspecTypeSquashfs:
+			var err error
+			path, err = l.mountSquashfs(spec)
+			if err != nil {
+				return nil, err
+			}
+		case host.MountspecTypeTmp:
+			// TODO: Use a volume for tmp layers.
+			//
+			//       Cannot be ZFS because it can't be used with OverlayFS:
+			//       http://list.zfsonlinux.org/pipermail/zfs-discuss/2015-September/023094.html
+			path = filepath.Join(tmpPath, "tmp-"+random.UUID())
+			if err := os.MkdirAll(path, 0755); err != nil {
+				return nil, err
+			}
+		}
+		if _, ok := paths[spec.Mountpoint]; ok {
+			paths[spec.Mountpoint] = append(paths[spec.Mountpoint], path)
+		} else {
+			paths[spec.Mountpoint] = []string{path}
+		}
+	}
+
+	mounts := make([]*configs.Mount, 0, len(paths))
+	for path, layers := range paths {
+		if len(layers) == 1 {
+			// TODO: use spec.Writeable?
+			mounts = append(mounts, bindMount(layers[0], path, true))
+			continue
+		}
+		dirs := make([]string, len(layers))
+		for i, layer := range layers {
+			// append mount paths in reverse order as overlay
+			// lower dirs are stacked from right to left
+			dirs[len(layers)-i-1] = layer
+		}
+		workDir := filepath.Join(tmpPath, "overlay-workdir")
+		if err := os.Mkdir(workDir, 0755); err != nil {
+			return nil, err
+		}
+		mounts = append(mounts, &configs.Mount{
+			Source:      "overlay",
+			Destination: path,
+			Device:      "overlay",
+			Data:        fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(dirs[1:], ":"), dirs[0], workDir),
+		})
+	}
+	return mounts, nil
+}
+
+func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
+	volID := path.Join("layer", m.ID)
+	if vol := l.vman.GetVolume(volID); vol != nil {
+		return vol.Location(), nil
+	}
+
+	if m.URL == "" {
+		return "", fmt.Errorf("squashfs layer not found and no URL set: %s", m.ID)
+	}
+
+	u, err := url.Parse(m.URL)
+	if err != nil {
+		return "", err
+	}
+
+	var layer io.ReadCloser
+	var size int64
+	switch u.Scheme {
+	case "file":
+		f, err := os.Open(u.Path)
+		if err != nil {
+			return "", fmt.Errorf("error getting squashfs layer %s: %s", m.URL, err)
+		}
+		stat, err := f.Stat()
+		if err != nil {
+			return "", fmt.Errorf("error getting size of squashfs layer %s: %s", m.URL, err)
+		}
+		layer = f
+		size = stat.Size()
+	case "http", "https":
+		res, err := http.Get(u.String())
+		if err != nil {
+			return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
+		}
+		if res.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("error getting squashfs layer from %s: unexpected HTTP status %s", m.URL, res.Status)
+		}
+		s := res.Header.Get("Content-Length")
+		if s == "" {
+			return "", fmt.Errorf("missing Content-Length header in response from %s", m.URL)
+		}
+		size, err = strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("error parsing Content-Length header from %s: %s", m.URL, err)
+		}
+		layer = res.Body
+	default:
+		return "", fmt.Errorf("unknown layer URI scheme: %s", u.Scheme)
+	}
+	defer layer.Close()
+
+	// TODO: verify layer hashes before importing
+	vol, err := l.vman.ImportVolume("default", layer, &volume.Info{
+		ID:     volID,
+		Size:   size,
+		FSType: "squashfs",
+	})
+	if err != nil {
+		return "", fmt.Errorf("error importing squashfs layer: %s", err)
+	}
+
+	return vol.Location(), nil
+}
+
 // resolveDiscoverdURI resolves a discoverd host in the given URI to an address
 // using the configured discoverd URL as the host is likely not using discoverd
 // to resolve DNS queries
@@ -739,7 +835,7 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	var symlinked bool
 	var err error
 	symlink := "/tmp/containerinit-rpc." + c.job.ID
-	socketPath := path.Join(c.RootPath, containerinit.SocketPath)
+	socketPath := path.Join(c.TmpPath, containerinit.SocketPath)
 	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(time.Millisecond) {
 		if !symlinked {
 			// We can't connect to the socket file directly because
@@ -888,12 +984,10 @@ func (c *Container) cleanup() error {
 	delete(c.l.logStreams, c.job.ID)
 	c.l.logStreamMtx.Unlock()
 
-	if err := c.l.pinkerton.Cleanup(c.job.ID); err != nil {
-		log.Error("error running pinkerton cleanup", "err", err)
-	}
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
 		c.l.ipalloc.ReleaseIP(c.l.bridgeNet, c.IP)
 	}
+	os.RemoveAll(c.TmpPath)
 	log.Info("finished cleanup")
 	return nil
 }
@@ -1289,17 +1383,17 @@ func (l *LibcontainerBackend) CloseLogs() (host.LogBuffers, error) {
 	return buffers, nil
 }
 
-func addBindMount(config *configs.Config, src, dest string, writeable bool) {
+func bindMount(src, dest string, writeable bool) *configs.Mount {
 	flags := syscall.MS_BIND | syscall.MS_REC
 	if !writeable {
 		flags |= syscall.MS_RDONLY
 	}
-	config.Mounts = append(config.Mounts, &configs.Mount{
+	return &configs.Mount{
 		Source:      src,
 		Destination: dest,
 		Device:      "bind",
 		Flags:       flags,
-	})
+	}
 }
 
 // Taken from Kubernetes:

@@ -40,10 +40,7 @@
         }
       }
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/discoverd&id=$image_id[discoverd]"
-    },
+    "artifact": $image_artifact[discoverd],
     "processes": {
       "app": 1
     }
@@ -68,10 +65,7 @@
         }
       }
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/flannel&id=$image_id[flannel]"
-    },
+    "artifact": $image_artifact[flannel],
     "processes": {
       "app": 1
     }
@@ -119,10 +113,7 @@
         }
       }
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/postgresql&id=$image_id[postgresql]"
-    },
+    "artifact": $image_artifact[postgresql],
     "processes": {
       "postgres": 3,
       "web": 2
@@ -201,10 +192,7 @@
         }
       }
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/controller&id=$image_id[controller]"
-    },
+    "artifact": $image_artifact[controller],
     "processes": {
       "web": 1
     },
@@ -286,26 +274,17 @@
   {
     "id": "slugbuilder-image",
     "action": "create-artifact",
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/slugbuilder&id=$image_id[slugbuilder]"
-    }
+    "artifact": $image_artifact[slugbuilder]
   },
   {
     "id": "slugrunner-image",
     "action": "create-artifact",
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/slugrunner&id=$image_id[slugrunner]"
-    }
+    "artifact": $image_artifact[slugrunner]
   },
   {
     "id": "redis-image",
     "action": "create-artifact",
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/redis&id=$image_id[redis]"
-    }
+    "artifact": $image_artifact[redis]
   },
   {
     "id": "redis",
@@ -327,10 +306,7 @@
         }
       }
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/redis&id=$image_id[redis]"
-    },
+    "artifact": $image_artifact[redis],
     "processes": {
       "web": 2
     }
@@ -381,10 +357,7 @@
         }
       }
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/mariadb&id=$image_id[mariadb]"
-    },
+    "artifact": $image_artifact[mariadb],
     "processes": {
       "mariadb": 0,
       "web": 2
@@ -437,10 +410,7 @@
         }
       }
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/mongodb&id=$image_id[mongodb]"
-    },
+    "artifact": $image_artifact[mongodb],
     "processes": {
       "mongodb": 0,
       "web": 2
@@ -459,10 +429,7 @@
       "name": "blobstore",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/blobstore&id=$image_id[blobstore]"
-    },
+    "artifact": $image_artifact[blobstore],
     "release": {
       "processes": {
         "web": {
@@ -483,10 +450,7 @@
       "name": "router",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/router&id=$image_id[router]"
-    },
+    "artifact": $image_artifact[router],
     "release": {
       "env": {
         "TLSCERT": "{{ (index .StepData \"controller-cert\").Cert }}",
@@ -514,10 +478,7 @@
       "name": "gitreceive",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/gitreceive&id=$image_id[gitreceive]"
-    },
+    "artifact": $image_artifact[gitreceive],
     "release": {
       "env": {
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
@@ -553,10 +514,7 @@
       "name": "docker-receive",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/docker-receive&id=$image_id[docker-receive]"
-    },
+    "artifact": $image_artifact[docker-receive],
     "release": {
       "env": {
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
@@ -630,10 +588,7 @@
       "name": "logaggregator",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/logaggregator&id=$image_id[logaggregator]"
-    },
+    "artifact": $image_artifact[logaggregator],
     "release": {
       "processes": {
         "app": {
@@ -656,10 +611,7 @@
       "name": "taffy",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/taffy&id=$image_id[taffy]"
-    },
+    "artifact": $image_artifact[taffy],
     "release": {
       "env": {
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
@@ -680,10 +632,7 @@
       "name": "dashboard",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/dashboard&id=$image_id[dashboard]"
-    },
+    "artifact": $image_artifact[dashboard],
     "release": {
       "env": {
         "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
@@ -730,10 +679,7 @@
       "name": "status",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/status&id=$image_id[status]"
-    },
+    "artifact": $image_artifact[status],
     "release": {
       "env": {
         "AUTH_KEY": "{{ (index .StepData \"status-key\").Data }}"

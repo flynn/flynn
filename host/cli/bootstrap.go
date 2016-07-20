@@ -19,7 +19,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/go-docopt"
@@ -394,7 +393,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 `, state.StepData["discoverd"].(*bootstrap.RunAppState).Release.Env["DISCOVERD_PEERS"]))
 
 	// load data into postgres
-	cmd := exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.Postgres.ImageArtifact.Type, URI: data.Postgres.ImageArtifact.URI}, nil)
+	cmd := exec.JobUsingHost(state.Hosts[0], data.Postgres.ImageArtifact, nil)
 	cmd.Args = []string{"psql"}
 	cmd.Env = map[string]string{
 		"PGHOST":     "leader.postgres.discoverd",
@@ -431,7 +430,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	// load data into mariadb if it was present in the backup.
 	if mysqldb != nil && data.MariaDB != nil {
-		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MariaDB.ImageArtifact.Type, URI: data.MariaDB.ImageArtifact.URI}, nil)
+		cmd = exec.JobUsingHost(state.Hosts[0], data.MariaDB.ImageArtifact, nil)
 		cmd.Args = []string{"mysql", "-u", "flynn", "-h", "leader.mariadb.discoverd"}
 		cmd.Env = map[string]string{
 			"MYSQL_PWD": data.MariaDB.Release.Env["MYSQL_PWD"],
@@ -466,7 +465,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	// load data into mongodb if it was present in the backup.
 	if mongodb != nil && data.MongoDB != nil {
-		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MongoDB.ImageArtifact.Type, URI: data.MongoDB.ImageArtifact.URI}, nil)
+		cmd = exec.JobUsingHost(state.Hosts[0], data.MongoDB.ImageArtifact, nil)
 		cmd.Args = []string{"mongorestore", "-h", "leader.mongodb.discoverd", "-u", "flynn", "-p", data.MongoDB.Release.Env["MONGO_PWD"], "--archive"}
 		cmd.Stdin = mongodb
 		meta = bootstrap.StepMeta{ID: "restore", Action: "restore-mongodb"}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -286,17 +287,22 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Args) > 0 {
 		job.Config.Args = newJob.Args
 	}
+	var imageArtifact *ct.Artifact
 	if len(release.ArtifactIDs) > 0 {
 		artifacts, err := c.artifactRepo.ListIDs(release.ArtifactIDs...)
 		if err != nil {
 			respondWithError(w, err)
 			return
 		}
-		job.ImageArtifact = artifacts[release.ImageArtifactID()].HostArtifact()
+		imageArtifact = artifacts[release.ImageArtifactID()]
 		job.FileArtifacts = make([]*host.Artifact, len(release.FileArtifactIDs()))
 		for i, id := range release.FileArtifactIDs() {
 			job.FileArtifacts[i] = artifacts[id].HostArtifact()
 		}
+	}
+	// TODO: fetch the manifest if it isn't cached
+	if imageArtifact != nil {
+		utils.SetupMountspecs(job, imageArtifact)
 	}
 
 	// ensure slug apps use /runner/init

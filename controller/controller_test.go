@@ -383,63 +383,6 @@ func (s *S) TestReleaseList(c *C) {
 	c.Assert(list[0].ID, Not(Equals), "")
 }
 
-func (s *S) TestReleaseArtifacts(c *C) {
-	// a release with no artifacts is ok
-	release := &ct.Release{}
-	c.Assert(s.c.CreateRelease(release), IsNil)
-	gotRelease, err := s.c.GetRelease(release.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotRelease.ArtifactIDs, IsNil)
-	c.Assert(gotRelease.ImageArtifactID(), Equals, "")
-	c.Assert(gotRelease.FileArtifactIDs(), IsNil)
-
-	// a release with a single "docker" artifact is ok
-	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	release = &ct.Release{ArtifactIDs: []string{imageArtifact.ID}}
-	c.Assert(s.c.CreateRelease(release), IsNil)
-	gotRelease, err = s.c.GetRelease(release.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotRelease.ArtifactIDs, DeepEquals, []string{imageArtifact.ID})
-	c.Assert(gotRelease.ImageArtifactID(), Equals, imageArtifact.ID)
-	c.Assert(gotRelease.FileArtifactIDs(), DeepEquals, []string{})
-
-	// a release with a single "file" artifact is not ok
-	fileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
-	err = s.c.CreateRelease(&ct.Release{ArtifactIDs: []string{fileArtifact.ID}})
-	c.Assert(err, NotNil)
-	e, ok := err.(hh.JSONError)
-	if !ok {
-		c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
-	}
-	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
-	c.Assert(e.Message, Equals, `artifacts must have exactly one artifact of type "docker"`)
-
-	// a release with multiple "docker" artifacts is not ok
-	secondImageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	err = s.c.CreateRelease(&ct.Release{ArtifactIDs: []string{imageArtifact.ID, secondImageArtifact.ID}})
-	c.Assert(err, NotNil)
-	e, ok = err.(hh.JSONError)
-	if !ok {
-		c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
-	}
-	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
-	c.Assert(e.Message, Equals, `artifacts must have exactly one artifact of type "docker"`)
-
-	// a release with a single "docker" artifact and multiple "file" artifacts is ok
-	secondFileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
-	artifactIDs := []string{imageArtifact.ID, fileArtifact.ID, secondFileArtifact.ID}
-	release = &ct.Release{ArtifactIDs: artifactIDs}
-	c.Assert(s.c.CreateRelease(release), IsNil)
-	gotRelease, err = s.c.GetRelease(release.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotRelease.ArtifactIDs, DeepEquals, artifactIDs)
-	c.Assert(gotRelease.ImageArtifactID(), Equals, imageArtifact.ID)
-	fileArtifactIDs := gotRelease.FileArtifactIDs()
-	c.Assert(fileArtifactIDs, HasLen, 2)
-	c.Assert(fileArtifactIDs[0], Equals, fileArtifact.ID)
-	c.Assert(fileArtifactIDs[1], Equals, secondFileArtifact.ID)
-}
-
 func (s *S) TestFileArtifact(c *C) {
 	artifact := &ct.Artifact{
 		Type: host.ArtifactTypeFile,
