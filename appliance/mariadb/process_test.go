@@ -166,17 +166,14 @@ func waitReadWrite(c *C, db *sql.DB) {
 	// Even if the database is read/write a slave must be connected
 	// for writes to be allowed.
 	err = queryAttempts.Run(func() error {
-		rows, err := db.Query("SHOW SLAVE HOSTS")
+		var discard interface{}
+		var masterClients int
+		err = db.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &masterClients)
 		if err != nil {
 			return err
 		}
-		for rows.Next() {
-			// We have a connected slave, thus the database should be writeable
+		if masterClients > 0 {
 			return nil
-		}
-		err = rows.Err()
-		if err != nil {
-			return err
 		}
 		return fmt.Errorf("no connected slave")
 	})
