@@ -31,8 +31,7 @@ type Volume interface {
 	It is a serializable structure intended for API use.
 */
 type Info struct {
-	// Volumes have a unique identifier.
-	// These are guid formatted (v4, random); selected by the server;
-	// and though not globally sync'd, entropy should be high enough to be unique.
-	ID string `json:"id"`
+	ID     string `json:"id"`
+	Size   int64  `json:"size,omitempty"`
+	FSType string `json:"fs_type,omitempty"`
 }

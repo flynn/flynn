@@ -17,6 +17,7 @@ type Provider interface {
 	Kind() string
 
 	NewVolume() (Volume, error)
+	ImportVolume(io.Reader, *Info) (Volume, error)
 	DestroyVolume(Volume) error
 	CreateSnapshot(Volume) (Volume, error)
 	ForkVolume(Volume) (Volume, error)

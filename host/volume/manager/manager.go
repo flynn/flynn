@@ -12,6 +12,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 /*
@@ -44,6 +45,7 @@ var (
 	ErrNoSuchProvider = errors.New("no such provider")
 	ErrProviderExists = errors.New("provider exists")
 	ErrNoSuchVolume   = errors.New("no such volume")
+	ErrVolumeExists   = errors.New("volume exists")
 )
 
 func New(dbPath string, defaultProvider func() (volume.Provider, error)) *Manager {
@@ -195,6 +197,44 @@ func (m *Manager) GetVolume(id string) volume.Volume {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return m.volumes[id]
+}
+
+func (m *Manager) ImportVolume(providerID string, data io.Reader, info *volume.Info) (volume.Volume, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if info.ID == "" {
+		info.ID = random.UUID()
+	}
+
+	if _, ok := m.volumes[info.ID]; ok {
+		return nil, ErrVolumeExists
+	}
+
+	if providerID == "" {
+		providerID = "default"
+	}
+	provider, ok := m.providers[providerID]
+	if !ok {
+		return nil, ErrNoSuchProvider
+	}
+
+	if err := m.LockDB(); err != nil {
+		return nil, err
+	}
+	defer m.UnlockDB()
+
+	vol, err := provider.ImportVolume(data, info)
+	if err != nil {
+		return nil, err
+	}
+
+	m.volumes[info.ID] = vol
+	m.persist(func(tx *bolt.Tx) error {
+		return m.persistVolume(tx, vol)
+	})
+
+	return vol, nil
 }
 
 func (m *Manager) DestroyVolume(id string) error {
