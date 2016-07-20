@@ -12,12 +12,15 @@ import (
 	"runtime"
 	"sync"
 
+	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/cliconfig"
 	"github.com/docker/docker/daemon/events"
 	"github.com/docker/docker/daemon/graphdriver"
 	_ "github.com/docker/docker/daemon/graphdriver/aufs"
 	"github.com/docker/docker/graph"
+	"github.com/docker/docker/image"
 	"github.com/docker/docker/opts"
+	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/docker/docker/pkg/term"
@@ -199,6 +202,18 @@ func (c *Context) Cleanup(id string) error {
 		return err
 	}
 	return c.driver.Remove(id)
+}
+
+func (c *Context) History(name string) ([]*docker.ImageHistory, error) {
+	return c.store.History(name)
+}
+
+func (c *Context) Diff(id, parent string) (archive.Archive, error) {
+	return c.driver.Diff(id, parent)
+}
+
+func (c *Context) LookupImage(name string) (*image.Image, error) {
+	return c.store.LookupImage(name)
 }
 
 func InfoPrinter(jsonOut bool) chan<- layer.PullInfo {

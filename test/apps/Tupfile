@@ -4,4 +4,4 @@ include_rules
 : |> !go ./signal |> bin/signal
 : |> !go ./ish |> bin/ish
 : |> !go ./partial-logger |> bin/partial-logger
-: bin/* |> docker build -t flynn/test-apps . |>
+: bin/* | $(ROOT)/util/imagebuilder/build-image |> ^ build-image test-apps^ sudo $(ROOT)/util/imagebuilder/build-image flynn/test-apps > %o |> $(ROOT)/image/test-apps.json
