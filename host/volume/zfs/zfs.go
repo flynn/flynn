@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	zfs "github.com/mistifyio/go-zfs"
 )
@@ -159,6 +160,11 @@ func (p *Provider) NewVolume() (volume.Volume, error) {
 	return v, nil
 }
 
+var zvolOpenAttempts = attempt.Strategy{
+	Total: 10 * time.Second,
+	Delay: 10 * time.Millisecond,
+}
+
 func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volume, error) {
 	v := &zfsVolume{
 		info:      info,
@@ -177,7 +183,13 @@ func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volum
 		return nil, err
 	}
 
-	dev, err := os.OpenFile(p.zvolPath(info.ID), os.O_WRONLY, 0666)
+	// open the zvol device, trying multiple times as the device node is
+	// created asynchronously
+	var dev *os.File
+	err = zvolOpenAttempts.Run(func() (err error) {
+		dev, err = os.OpenFile(p.zvolPath(info.ID), os.O_WRONLY, 0666)
+		return
+	})
 	if err != nil {
 		p.destroy(v)
 		return nil, err
