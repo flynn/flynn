@@ -91,6 +91,15 @@ func runJob(client controller.Client, config runConfig) error {
 		DisableLog: config.DisableLog,
 	}
 
+	// ensure slug apps from old clusters use /runner/init
+	release, err := client.GetRelease(req.ReleaseID)
+	if err != nil {
+		return err
+	}
+	if release.IsGitDeploy() && (len(req.Args) == 0 || req.Args[0] != "/runner/init") {
+		req.Args = append([]string{"/runner/init"}, req.Args...)
+	}
+
 	// set deprecated Entrypoint and Cmd for old clusters
 	if len(req.Args) > 0 {
 		req.DeprecatedEntrypoint = []string{req.Args[0]}
