@@ -204,7 +204,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 
 	// tag the docker image ready to be pushed
 	tag := fmt.Sprintf("%s/%s:latest", dockerHost, mustApp())
-	cmd = exec.Command("docker", "tag", "--force", image, tag)
+	cmd = exec.Command("docker", "tag", image, tag)
 	log.Printf("flynn: tagging Docker image with %q", strings.Join(cmd.Args, " "))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
