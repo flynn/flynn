@@ -169,18 +169,18 @@ UPDATE release_artifacts SET deleted_at = now() WHERE release_id = $1 AND artifa
 	releaseDeleteQuery = `
 UPDATE releases SET deleted_at = now() WHERE release_id = $1 AND deleted_at IS NULL`
 	artifactListQuery = `
-SELECT artifact_id, type, uri, meta, created_at FROM artifacts
+SELECT artifact_id, type, uri, meta, manifest, created_at FROM artifacts
 WHERE deleted_at IS NULL ORDER BY created_at DESC`
 	artifactListIDsQuery = `
-SELECT artifact_id, type, uri, meta, created_at FROM artifacts
+SELECT artifact_id, type, uri, meta, manifest, created_at FROM artifacts
 WHERE deleted_at IS NULL AND artifact_id = ANY($1)`
 	artifactSelectQuery = `
-SELECT artifact_id, type, uri, meta, created_at FROM artifacts
+SELECT artifact_id, type, uri, meta, manifest, created_at FROM artifacts
 WHERE artifact_id = $1 AND deleted_at IS NULL`
 	artifactSelectByTypeAndURIQuery = `
-SELECT artifact_id, meta, created_at FROM artifacts WHERE type = $1 AND uri = $2 AND deleted_at IS NULL`
+SELECT artifact_id, meta, manifest, created_at FROM artifacts WHERE type = $1 AND uri = $2 AND deleted_at IS NULL`
 	artifactInsertQuery = `
-INSERT INTO artifacts (artifact_id, type, uri, meta) VALUES ($1, $2, $3, $4) RETURNING created_at`
+INSERT INTO artifacts (artifact_id, type, uri, meta, manifest) VALUES ($1, $2, $3, $4, $5) RETURNING created_at`
 	artifactDeleteQuery = `
 UPDATE artifacts SET deleted_at = now() WHERE artifact_id = $1 AND deleted_at IS NULL`
 	artifactReleaseCountQuery = `

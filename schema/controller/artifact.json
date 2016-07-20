@@ -25,6 +25,10 @@
       "format": "uri",
       "type": "string"
     },
+    "manifest": {
+      "description": "Image manifest",
+      "type": "object"
+    },
     "meta": {
       "$ref": "/schema/controller/common#/definitions/meta"
     },

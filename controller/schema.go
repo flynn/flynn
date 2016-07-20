@@ -402,6 +402,9 @@ $$ LANGUAGE plpgsql`,
 		) r
 		WHERE release_id = r.id`,
 	)
+	migrations.Add(21,
+		`ALTER TABLE artifacts ADD COLUMN manifest jsonb`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
