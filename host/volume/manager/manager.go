@@ -40,9 +40,11 @@ type Manager struct {
 	defaultProvider func() (volume.Provider, error)
 }
 
-var NoSuchProvider = errors.New("no such provider")
-var ProviderAlreadyExists = errors.New("that provider id already exists")
-var NoSuchVolume = errors.New("no such volume")
+var (
+	ErrNoSuchProvider = errors.New("no such provider")
+	ErrProviderExists = errors.New("provider exists")
+	ErrNoSuchVolume   = errors.New("no such volume")
+)
 
 func New(dbPath string, defaultProvider func() (volume.Provider, error)) *Manager {
 	return &Manager{
@@ -132,7 +134,7 @@ func (m *Manager) AddProvider(id string, p volume.Provider) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if _, ok := m.providers[id]; ok {
-		return ProviderAlreadyExists
+		return ErrProviderExists
 	}
 	if err := m.LockDB(); err != nil {
 		return err
@@ -185,7 +187,7 @@ func (m *Manager) newVolumeFromProviderLocked(providerID string) (volume.Volume,
 	if p, ok := m.providers[providerID]; ok {
 		return managerProviderProxy{p, m}.NewVolume()
 	} else {
-		return nil, NoSuchProvider
+		return nil, ErrNoSuchProvider
 	}
 }
 
@@ -200,7 +202,7 @@ func (m *Manager) DestroyVolume(id string) error {
 	defer m.mutex.Unlock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return NoSuchVolume
+		return ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
 		return err
@@ -222,7 +224,7 @@ func (m *Manager) CreateSnapshot(id string) (volume.Volume, error) {
 	defer m.mutex.Unlock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return nil, NoSuchVolume
+		return nil, ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
 		return nil, err
@@ -242,7 +244,7 @@ func (m *Manager) ForkVolume(id string) (volume.Volume, error) {
 	defer m.mutex.Unlock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return nil, NoSuchVolume
+		return nil, ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
 		return nil, err
@@ -262,7 +264,7 @@ func (m *Manager) ListHaves(id string) ([]json.RawMessage, error) {
 	defer m.mutex.Unlock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return nil, NoSuchVolume
+		return nil, ErrNoSuchVolume
 	}
 	haves, err := vol.Provider().ListHaves(vol)
 	if err != nil {
@@ -275,7 +277,7 @@ func (m *Manager) SendSnapshot(id string, haves []json.RawMessage, stream io.Wri
 	m.mutex.Lock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return NoSuchVolume
+		return ErrNoSuchVolume
 	}
 	m.mutex.Unlock() // don't lock the manager for the duration of the send operation.
 	return vol.Provider().SendSnapshot(vol, haves, stream)
@@ -285,7 +287,7 @@ func (m *Manager) ReceiveSnapshot(id string, stream io.Reader) (volume.Volume, e
 	m.mutex.Lock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return nil, NoSuchVolume
+		return nil, ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
 		return nil, err
