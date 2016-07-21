@@ -40,7 +40,7 @@ var tlsCerts = map[string]*tlscert.Cert{
 		// of ASN.1 time).
 		// generated from src/pkg/crypto/tls:
 		// go run generate_cert.go  --rsa-bits 512 --host 127.0.0.1,::1,example.com,*.example.com --ca --start-date "Jan 1 00:00:00 1970" --duration=1000000h
-		CACert: `-----BEGIN CERTIFICATE-----
+		Cert: `-----BEGIN CERTIFICATE-----
 MIIBmjCCAUagAwIBAgIRAP5DRqWA/pgvAnbC6gnl82kwCwYJKoZIhvcNAQELMBIx
 EDAOBgNVBAoTB0FjbWUgQ28wIBcNNzAwMTAxMDAwMDAwWhgPMjA4NDAxMjkxNjAw
 MDBaMBIxEDAOBgNVBAoTB0FjbWUgQ28wXDANBgkqhkiG9w0BAQEFAANLADBIAkEA
@@ -125,7 +125,11 @@ func httpTestHandler(id string) http.Handler {
 func newHTTPClient(serverName string) *http.Client {
 	cert := tlsConfigForDomain(serverName)
 	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM([]byte(cert.CACert))
+	if len(cert.CACert) > 0 {
+		pool.AppendCertsFromPEM([]byte(cert.CACert))
+	} else {
+		pool.AppendCertsFromPEM([]byte(cert.Cert))
+	}
 
 	if strings.Contains(serverName, ":") {
 		serverName, _, _ = net.SplitHostPort(serverName)
@@ -141,7 +145,11 @@ func newHTTPClient(serverName string) *http.Client {
 func newHTTP2Client(serverName string) *http.Client {
 	cert := tlsConfigForDomain(serverName)
 	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM([]byte(cert.CACert))
+	if len(cert.CACert) > 0 {
+		pool.AppendCertsFromPEM([]byte(cert.CACert))
+	} else {
+		pool.AppendCertsFromPEM([]byte(cert.Cert))
+	}
 
 	if strings.Contains(serverName, ":") {
 		serverName, _, _ = net.SplitHostPort(serverName)
@@ -155,7 +163,7 @@ func newHTTP2Client(serverName string) *http.Client {
 
 func (s *S) newHTTPListener(t testutil.TestingT) *HTTPListener {
 	cert := tlsConfigForDomain("example.com")
-	pair, err := tls.X509KeyPair([]byte(cert.CACert), []byte(cert.PrivateKey))
+	pair, err := tls.X509KeyPair([]byte(cert.Cert), []byte(cert.PrivateKey))
 	if err != nil {
 		t.Fatal(err)
 	}

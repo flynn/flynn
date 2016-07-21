@@ -209,7 +209,7 @@ func (d *pgDataStore) addRouteCertWithTx(tx *pgx.Tx, r *router.Route) error {
 	} else {
 		cert = r.Certificate
 	}
-	if cert == nil {
+	if cert == nil || (len(cert.Cert) == 0 && len(cert.Key) == 0) {
 		return nil
 	}
 	cert.Routes = []string{r.ID}
