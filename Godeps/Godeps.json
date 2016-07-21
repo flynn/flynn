@@ -1053,6 +1053,10 @@
 			"Rev": "5a9dc85e4de606c9e32b769c9ff17fed84f687f9"
 		},
 		{
+			"ImportPath": "github.com/rancher/sparse-tools/sparse",
+			"Rev": "9cac891ad8a2029146df905ae09622eb1de8b19c"
+		},
+		{
 			"ImportPath": "github.com/rnd42/go-jsonpointer",
 			"Rev": "0480215403db768c5bf6db30d82908043c58422c"
 		},
