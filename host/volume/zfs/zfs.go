@@ -223,11 +223,7 @@ func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volum
 		return nil, err
 	}
 
-	var flags uintptr
-	if !info.Writeable {
-		flags |= syscall.MS_RDONLY
-	}
-	if err := syscall.Mount(dev.Name(), v.basemount, info.FSType, flags, info.MountData); err != nil {
+	if err := syscall.Mount(dev.Name(), v.basemount, info.FSType, info.MountFlags, ""); err != nil {
 		p.destroy(v)
 		return nil, err
 	}

@@ -780,10 +780,10 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 
 	// TODO: verify layer hashes before importing
 	vol, err := l.vman.ImportVolume("default", layer, &volume.Info{
-		ID:        volID,
-		Size:      size,
-		FSType:    "squashfs",
-		Writeable: false,
+		ID:         volID,
+		Size:       size,
+		FSType:     "squashfs",
+		MountFlags: syscall.MS_RDONLY,
 	})
 	if err != nil {
 		return "", fmt.Errorf("error importing squashfs layer: %s", err)
@@ -806,11 +806,10 @@ func (l *LibcontainerBackend) mountTmpfs(m *host.Mountspec) (string, error) {
 	defer tmpfs.Close()
 
 	vol, err := l.vman.ImportVolume("default", sparse.NewBufferedFileIoProcessorByFP(tmpfs), &volume.Info{
-		ID:        volID,
-		Size:      int64(defaultDiskQuota),
-		FSType:    "ext2",
-		MountData: "defaults,noatime",
-		Writeable: true,
+		ID:         volID,
+		Size:       int64(defaultDiskQuota),
+		FSType:     "ext2",
+		MountFlags: syscall.MS_NOATIME,
 	})
 	if err != nil {
 		return "", fmt.Errorf("error importing tmpfs: %s", err)
