@@ -290,36 +290,36 @@ func (s *S) TestCreateArtifact(c *C) {
 	})
 }
 
-func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
+func (s *S) createTestRelease(c *C, client controller.Client, in *ct.Release) *ct.Release {
 	if len(in.ArtifactIDs) == 0 {
-		in.ArtifactIDs = []string{s.createTestArtifact(c, s.c, &ct.Artifact{Type: host.ArtifactTypeDocker}).ID}
+		in.ArtifactIDs = []string{s.createTestArtifact(c, client, &ct.Artifact{Type: host.ArtifactTypeDocker}).ID}
 		in.LegacyArtifactID = in.ArtifactIDs[0]
 	}
-	c.Assert(s.c.CreateRelease(in), IsNil)
+	c.Assert(client.CreateRelease(in), IsNil)
 	return in
 }
 
 func (s *S) TestCreateRelease(c *C) {
-	for _, id := range []string{"", random.UUID()} {
-		out := s.createTestRelease(c, &ct.Release{ID: id})
-		if id != "" {
-			c.Assert(out.ID, Equals, id)
-		}
+	s.withEachClient(func(client controller.Client) {
+		for _, id := range []string{"", random.UUID()} {
+			out := s.createTestRelease(c, client, &ct.Release{ID: id})
+			if id != "" {
+				c.Assert(out.ID, Equals, id)
+			}
 
-		s.withEachClient(func(client controller.Client) {
 			gotRelease, err := client.GetRelease(out.ID)
 			c.Assert(err, IsNil)
 			c.Assert(gotRelease, DeepEquals, out)
 
 			_, err = client.GetRelease("fail" + out.ID)
 			c.Assert(err, Equals, controller.ErrNotFound)
-		})
-	}
+		}
+	})
 }
 
 func (s *S) TestCreateFormation(c *C) {
 	for i, useName := range []bool{false, true} {
-		release := s.createTestRelease(c, &ct.Release{
+		release := s.createTestRelease(c, s.c, &ct.Release{
 			Processes: map[string]ct.ProcessType{"web": {}},
 		})
 		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("create-formation-%d", i)})
@@ -375,7 +375,7 @@ func (s *S) deleteTestFormation(formation *ct.Formation) {
 
 func (s *S) TestDeleteFormation(c *C) {
 	for i, useName := range []bool{false, true} {
-		release := s.createTestRelease(c, &ct.Release{})
+		release := s.createTestRelease(c, s.c, &ct.Release{})
 		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("delete-formation-%d", i)})
 		s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
@@ -407,7 +407,7 @@ func (s *S) TestAppList(c *C) {
 }
 
 func (s *S) TestReleaseList(c *C) {
-	s.createTestRelease(c, &ct.Release{})
+	s.createTestRelease(c, s.c, &ct.Release{})
 
 	s.withEachClient(func(client controller.Client) {
 		list, err := client.ReleaseList()
@@ -501,16 +501,16 @@ func (s *S) TestAppReleaseList(c *C) {
 	// create 2 releases with formations
 	releases := make([]*ct.Release, 2)
 	for i := 0; i < 2; i++ {
-		r := s.createTestRelease(c, &ct.Release{})
+		r := s.createTestRelease(c, s.c, &ct.Release{})
 		releases[i] = r
 		s.createTestFormation(c, &ct.Formation{ReleaseID: r.ID, AppID: app.ID})
 	}
 
 	// create a release with no formation
-	s.createTestRelease(c, &ct.Release{})
+	s.createTestRelease(c, s.c, &ct.Release{})
 
 	// create a release for a different app
-	r := s.createTestRelease(c, &ct.Release{})
+	r := s.createTestRelease(c, s.c, &ct.Release{})
 	a := s.createTestApp(c, &ct.App{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: r.ID, AppID: a.ID})
 
@@ -537,7 +537,7 @@ func (s *S) TestArtifactList(c *C) {
 }
 
 func (s *S) TestFormationList(c *C) {
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, s.c, &ct.Release{})
 	app := s.createTestApp(c, &ct.App{Name: "formation-list"})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
@@ -567,7 +567,7 @@ func (s *S) setAppRelease(c *C, appID, id string) {
 }
 
 func (s *S) TestSetAppRelease(c *C) {
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, s.c, &ct.Release{})
 	app := s.createTestApp(c, &ct.App{Name: "set-release"})
 
 	s.setAppRelease(c, app.ID, release.ID)

@@ -90,7 +90,44 @@ func (c *Client) CreateArtifact(artifact *ct.Artifact) error {
 }
 
 func (c *Client) CreateRelease(release *ct.Release) error {
-	return c.v1client.CreateRelease(release)
+	data, err := c.graphqlRequest(&handler.RequestOptions{
+		Query: `
+			mutation createReleaseQuery($id: String, $artifacts: [String]!, $env: EnvObject, $meta: MetaObject, $processes: ProcessesObject) {
+				release: createRelease(id: $id, artifacts: $artifacts, env: $env, meta: $meta, processes: $processes) {
+					id
+					artifacts {
+						id
+					}
+					env
+					meta
+					processes
+					created_at
+				}
+			}
+		`,
+		Variables: map[string]interface{}{
+			"id":        release.ID,
+			"artifacts": release.ArtifactIDs,
+			"env":       release.Env,
+			"meta":      release.Meta,
+			"processes": release.Processes,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	out := &gt.Release{}
+	if err := json.Unmarshal(data["release"], out); err != nil {
+		return err
+	}
+	r := out.ToStandardType()
+	release.ID = r.ID
+	release.ArtifactIDs = r.ArtifactIDs
+	release.Env = r.Env
+	release.Meta = r.Meta
+	release.Processes = r.Processes
+	release.CreatedAt = r.CreatedAt
+	return nil
 }
 
 func (c *Client) CreateApp(app *ct.App) error {
