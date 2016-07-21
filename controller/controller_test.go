@@ -318,35 +318,38 @@ func (s *S) TestCreateRelease(c *C) {
 }
 
 func (s *S) TestCreateFormation(c *C) {
-	for i, useName := range []bool{false, true} {
-		release := s.createTestRelease(c, s.c, &ct.Release{
-			Processes: map[string]ct.ProcessType{"web": {}},
-		})
-		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("create-formation-%d", i)})
+	j := 0
+	s.withEachClient(func(client controller.Client) {
+		for i, useName := range []bool{false, true} {
+			release := s.createTestRelease(c, client, &ct.Release{
+				Processes: map[string]ct.ProcessType{"web": {}},
+			})
+			app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("create-formation-%d-%d", j, i)})
 
-		// First create a formation with an invalid process type. Will fail.
-		in := &ct.Formation{ReleaseID: release.ID, AppID: app.ID, Processes: map[string]int{"foo": 1}}
-		if useName {
-			in.AppID = app.Name
-		}
-		err := s.c.PutFormation(in)
-		c.Assert(hh.IsValidationError(err), Equals, true)
+			// First create a formation with an invalid process type. Will fail.
+			in := &ct.Formation{ReleaseID: release.ID, AppID: app.ID, Processes: map[string]int{"foo": 1}}
+			if useName {
+				in.AppID = app.Name
+			}
+			err := client.PutFormation(in)
+			fmt.Printf("err: %s\n", err)
+			c.Assert(hh.IsValidationError(err), Equals, true)
 
-		// Now edit the formation to have valid process types. Should succeed.
-		in.Processes = map[string]int{"web": 1}
-		out := s.createTestFormation(c, in)
-		defer s.deleteTestFormation(out)
-		c.Assert(out.AppID, Equals, app.ID)
-		c.Assert(out.ReleaseID, Equals, release.ID)
-		c.Assert(out.Processes["web"], Equals, 1)
+			// Now edit the formation to have valid process types. Should succeed.
+			in.Processes = map[string]int{"web": 1}
+			out := s.createTestFormation(c, in)
+			defer s.deleteTestFormation(out)
+			c.Assert(out.AppID, Equals, app.ID)
+			c.Assert(out.ReleaseID, Equals, release.ID)
+			c.Assert(out.Processes["web"], Equals, 1)
 
-		var appID string
-		if useName {
-			appID = app.Name
-		} else {
-			appID = app.ID
-		}
-		s.withEachClient(func(client controller.Client) {
+			var appID string
+			if useName {
+				appID = app.Name
+			} else {
+				appID = app.ID
+			}
+
 			gotFormation, err := client.GetFormation(appID, release.ID)
 			c.Assert(err, IsNil)
 			c.Assert(gotFormation, DeepEquals, out)
@@ -360,8 +363,9 @@ func (s *S) TestCreateFormation(c *C) {
 
 			_, err = client.GetFormation(appID, release.ID+"fail")
 			c.Assert(err, Equals, controller.ErrNotFound)
-		})
-	}
+		}
+		j++
+	})
 }
 
 func (s *S) createTestFormation(c *C, formation *ct.Formation) *ct.Formation {

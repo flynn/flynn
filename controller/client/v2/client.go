@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/controller/client/v1"
@@ -12,6 +13,7 @@ import (
 	gt "github.com/flynn/flynn/controller/types/graphql"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 	"github.com/graphql-go/handler"
@@ -42,9 +44,22 @@ func (c *Client) graphqlRequest(body *handler.RequestOptions) (map[string]json.R
 		return nil, err
 	}
 	if len(out.Errors) > 0 {
-		if out.Errors[0].Error() == ct.ErrNotFound.Error() {
-			// TODO(jvatic): Replace this with better error handling on the server
+		// TODO(jvatic): Replace this block with better error handling on the server
+		errString := out.Errors[0].Error()
+		if errString == ct.ErrNotFound.Error() {
 			return nil, ct.ErrNotFound
+		}
+		if strings.HasPrefix(errString, "validation error:") {
+			parts := strings.SplitN(strings.TrimPrefix(errString, "validation error: "), " ", 2)
+			var detail json.RawMessage
+			if parts[0] != "" {
+				detail, _ = json.Marshal(map[string]string{"field": parts[0]})
+			}
+			return nil, httphelper.JSONError{
+				Code:    httphelper.ValidationErrorCode,
+				Message: parts[1],
+				Detail:  detail,
+			}
 		}
 		return nil, out.Errors
 	}
@@ -308,7 +323,45 @@ func (c *Client) DeleteResource(providerID, resourceID string) (*ct.Resource, er
 }
 
 func (c *Client) PutFormation(formation *ct.Formation) error {
-	return c.v1client.PutFormation(formation)
+	data, err := c.graphqlRequest(&handler.RequestOptions{
+		Query: `
+			mutation putFormation($app: String!, $release: String!, $processes: ProcessesObject, $tags: TagsObject) {
+				formation: putFormation(app: $app, release: $release, processes: $processes, tags: $tags) {
+					app {
+						id
+					}
+					release {
+						id
+					}
+					processes
+					tags
+					updated_at
+					created_at
+				}
+			}
+		`,
+		Variables: map[string]interface{}{
+			"app":       formation.AppID,
+			"release":   formation.ReleaseID,
+			"processes": formation.Processes,
+			"tags":      formation.Tags,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	out := &gt.Formation{}
+	if err := json.Unmarshal(data["formation"], out); err != nil {
+		return err
+	}
+	f := out.ToStandardType()
+	formation.AppID = f.AppID
+	formation.ReleaseID = f.ReleaseID
+	formation.Processes = f.Processes
+	formation.Tags = f.Tags
+	formation.UpdatedAt = f.UpdatedAt
+	formation.CreatedAt = f.CreatedAt
+	return nil
 }
 
 func (c *Client) PutJob(job *ct.Job) error {
