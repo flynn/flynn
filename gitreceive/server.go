@@ -52,7 +52,7 @@ type gitHandler struct {
 type gitService struct {
 	method     string
 	suffix     string
-	handleFunc func(gitEnv, string, string, http.ResponseWriter, *http.Request)
+	handleFunc func(gitEnv, string, string, http.ResponseWriter, *http.Request) bool
 	rpc        string
 }
 
@@ -118,30 +118,28 @@ func (h *gitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.RemoveAll(repoPath)
-	if g.rpc == "git-receive-pack" {
-		defer func() {
-			if err := uploadRepo(repoPath, app.ID); err != nil {
-				logError(w, "uploadRepo", err)
-			}
-		}()
-	}
 
-	g.handleFunc(gitEnv{App: app.ID}, g.rpc, repoPath, w, r)
+	success := g.handleFunc(gitEnv{App: app.ID}, g.rpc, repoPath, w, r)
+	if success && g.rpc == "git-receive-pack" {
+		if err := uploadRepo(repoPath, app.ID); err != nil {
+			logError(w, "uploadRepo", err)
+		}
+	}
 }
 
-func handleGetInfoRefs(env gitEnv, _ string, path string, w http.ResponseWriter, r *http.Request) {
+func handleGetInfoRefs(env gitEnv, _ string, path string, w http.ResponseWriter, r *http.Request) bool {
 	rpc := r.URL.Query().Get("service")
 	if !(rpc == "git-upload-pack" || rpc == "git-receive-pack") {
 		// The 'dumb' Git HTTP protocol is not supported
 		http.Error(w, "Not Found", 404)
-		return
+		return false
 	}
 
 	// Prepare our Git subprocess
 	cmd, pipe := gitCommand(env, "git", subCommand(rpc), "--stateless-rpc", "--advertise-refs", path)
 	if err := cmd.Start(); err != nil {
 		fail500(w, "handleGetInfoRefs", err)
-		return
+		return false
 	}
 	defer cleanUpProcessGroup(cmd) // Ensure brute force subprocess clean-up
 
@@ -151,23 +149,25 @@ func handleGetInfoRefs(env gitEnv, _ string, path string, w http.ResponseWriter,
 	w.WriteHeader(200) // Don't bother with HTTP 500 from this point on, just return
 	if err := pktLine(w, fmt.Sprintf("# service=%s\n", rpc)); err != nil {
 		logError(w, "handleGetInfoRefs response", err)
-		return
+		return false
 	}
 	if err := pktFlush(w); err != nil {
 		logError(w, "handleGetInfoRefs response", err)
-		return
+		return false
 	}
 	if _, err := io.Copy(w, pipe); err != nil {
 		logError(w, "handleGetInfoRefs read from subprocess", err)
-		return
+		return false
 	}
 	if err := cmd.Wait(); err != nil {
 		logError(w, "handleGetInfoRefs wait for subprocess", err)
-		return
+		return false
 	}
+
+	return true
 }
 
-func handlePostRPC(env gitEnv, rpc string, path string, w http.ResponseWriter, r *http.Request) {
+func handlePostRPC(env gitEnv, rpc string, path string, w http.ResponseWriter, r *http.Request) bool {
 
 	// The client request body may have been gzipped.
 	body := r.Body
@@ -176,7 +176,7 @@ func handlePostRPC(env gitEnv, rpc string, path string, w http.ResponseWriter, r
 		body, err = gzip.NewReader(r.Body)
 		if err != nil {
 			fail500(w, "handlePostRPC", err)
-			return
+			return false
 		}
 	}
 
@@ -185,12 +185,12 @@ func handlePostRPC(env gitEnv, rpc string, path string, w http.ResponseWriter, r
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		fail500(w, "handlePostRPC", err)
-		return
+		return false
 	}
 	defer stdin.Close()
 	if err := cmd.Start(); err != nil {
 		fail500(w, "handlePostRPC", err)
-		return
+		return false
 	}
 	go func(done <-chan bool) {
 		<-done
@@ -200,7 +200,7 @@ func handlePostRPC(env gitEnv, rpc string, path string, w http.ResponseWriter, r
 	// Write the client request body to Git's standard input
 	if _, err := io.Copy(stdin, body); err != nil {
 		fail500(w, "handlePostRPC write to subprocess", err)
-		return
+		return false
 	}
 
 	// Start writing the response
@@ -209,12 +209,14 @@ func handlePostRPC(env gitEnv, rpc string, path string, w http.ResponseWriter, r
 	w.WriteHeader(200) // Don't bother with HTTP 500 from this point on, just return
 	if _, err := io.Copy(newWriteFlusher(w), pipe); err != nil {
 		logError(w, "handlePostRPC read from subprocess", err)
-		return
+		return false
 	}
 	if err := cmd.Wait(); err != nil {
 		logError(w, "handlePostRPC wait for subprocess", err)
-		return
+		return false
 	}
+
+	return true
 }
 
 func fail500(w http.ResponseWriter, context string, err error) {
