@@ -156,8 +156,12 @@ WARN:
 WARN: Copy the TLS CA certificate %s
 WARN: to /etc/docker/certs.d/%s/ca.crt
 WARN: on the docker daemon's host and restart docker.
+WARN:
+WARN: If using Docker for Mac, go to Docker -> Preferences
+WARN: -> Advanced, add %q as an
+WARN: Insecure Registry and hit "Apply & Restart".
 
-`[1:], caPath, host)
+`[1:], caPath, host, host)
 }
 
 func runDockerPush(args *docopt.Args, client controller.Client) error {
