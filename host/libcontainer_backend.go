@@ -728,7 +728,7 @@ func (l *LibcontainerBackend) setupMounts(job *host.Job, tmpPath string) ([]*con
 }
 
 func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
-	volID := path.Join("layer", m.ID)
+	volID := path.Join("squashfs", m.ID)
 	if vol := l.vman.GetVolume(volID); vol != nil {
 		return vol.Location(), nil
 	}
