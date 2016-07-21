@@ -268,6 +268,24 @@ func (s *S) TestAddHTTPRouteWithCert(c *C) {
 	unregister()
 }
 
+func (s *S) TestAddHTTPRouteWithInvalidCert(c *C) {
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	c1, _ := tlscert.Generate([]string{"1.example.com"})
+	c2, _ := tlscert.Generate([]string{"2.example.com"})
+
+	err := l.AddRoute(router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "test",
+		Certificate: &router.Certificate{
+			Cert: c1.Cert,
+			Key:  c2.PrivateKey,
+		},
+	}.ToRoute())
+	c.Assert(err, Not(IsNil))
+}
+
 func (s *S) TestAddHTTPRouteWithExistingCert(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	srv2 := httptest.NewServer(httpTestHandler("2"))
