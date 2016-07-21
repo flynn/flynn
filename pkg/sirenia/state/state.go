@@ -140,6 +140,7 @@ type Config struct {
 	Upstream   *discoverd.Instance `json:"upstream"`
 	Downstream *discoverd.Instance `json:"downstream"`
 	State      *State              `json:"state"`
+	StateIndex uint64              `json:"state_index"`
 }
 
 func peersEqual(a, b *discoverd.Instance) bool {
@@ -1078,7 +1079,7 @@ func (p *Peer) Config() *Config {
 	role := p.Info().Role
 	switch role {
 	case RolePrimary, RoleSync, RoleAsync:
-		return &Config{Role: role, Upstream: p.upstream, Downstream: p.downstream, State: p.Info().State}
+		return &Config{Role: role, Upstream: p.upstream, Downstream: p.downstream, State: p.Info().State, StateIndex: p.stateIndex}
 	case RoleUnassigned, RoleDeposed:
 		return &Config{Role: RoleNone}
 	default:

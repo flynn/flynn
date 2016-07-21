@@ -81,6 +81,7 @@ func runSteps(t *testing.T, singleton bool, steps []step) {
 				if p.Db != nil {
 					if p.Db.Config != nil {
 						p.Db.Config.State = nil
+						p.Db.Config.StateIndex = 0
 					}
 				}
 			}
