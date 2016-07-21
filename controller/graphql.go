@@ -337,7 +337,7 @@ func init() {
 		Name: "Release",
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
-				Type:        metaObjectType,
+				Type:        graphql.NewNonNull(graphql.String),
 				Description: "UUID of release",
 				Resolve: releaseFieldResolveFunc(func(_ *controllerAPI, release *ct.Release) (interface{}, error) {
 					return release.ID, nil
@@ -1501,6 +1501,61 @@ func init() {
 							Meta: metaValue(p.Args["meta"]),
 						}
 						return artifact, api.artifactRepo.Add(artifact)
+					}),
+				},
+				"createRelease": &graphql.Field{
+					Type: releaseObject,
+					Args: graphql.FieldConfigArgument{
+						"id": &graphql.ArgumentConfig{
+							Description: "UUID of release",
+							Type:        graphql.String,
+						},
+						"artifacts": &graphql.ArgumentConfig{
+							Description: "UUIDs of artifacts to include in release",
+							Type:        graphql.NewList(graphql.String),
+						},
+						"env": &graphql.ArgumentConfig{
+							Description: "Env vars to include in release",
+							Type:        envObjectType,
+						},
+						"meta": &graphql.ArgumentConfig{
+							Description: "Metadata to include in release",
+							Type:        metaObjectType,
+						},
+						"processes": &graphql.ArgumentConfig{
+							Description: "Processes to include in release",
+							Type:        processesObjectType,
+						},
+					},
+					Resolve: wrapResolveFunc(func(api *controllerAPI, p graphql.ResolveParams) (interface{}, error) {
+						release := &ct.Release{}
+						if v, ok := p.Args["id"]; ok {
+							release.ID = v.(string)
+						}
+						if v, ok := p.Args["artifacts"]; ok {
+							list := v.([]interface{})
+							release.ArtifactIDs = make([]string, len(list))
+							for i, aid := range list {
+								release.ArtifactIDs[i] = aid.(string)
+							}
+						}
+						if v, ok := p.Args["env"]; ok {
+							release.Env = v.(map[string]string)
+						}
+						if v, ok := p.Args["meta"]; ok {
+							release.Meta = v.(map[string]string)
+						}
+						if v, ok := p.Args["processes"]; ok {
+							b, err := json.Marshal(v)
+							if err != nil {
+								return nil, err
+							}
+							release.Processes = map[string]ct.ProcessType{}
+							if err := json.Unmarshal(b, &release.Processes); err != nil {
+								return nil, err
+							}
+						}
+						return release, api.releaseRepo.Add(release)
 					}),
 				},
 			},

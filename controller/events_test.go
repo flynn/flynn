@@ -13,7 +13,7 @@ import (
 func (s *S) TestEvents(c *C) {
 	app1 := s.createTestApp(c, &ct.App{Name: "app1"})
 	app2 := s.createTestApp(c, &ct.App{Name: "app2"})
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, s.c, &ct.Release{})
 
 	jobID1 := random.UUID()
 	jobID2 := random.UUID()
@@ -76,8 +76,8 @@ func (s *S) TestEvents(c *C) {
 }
 
 func (s *S) TestStreamAppLifeCycleEvents(c *C) {
-	release := s.createTestRelease(c, &ct.Release{})
-	nextRelease := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, s.c, &ct.Release{})
+	nextRelease := s.createTestRelease(c, s.c, &ct.Release{})
 
 	events := make(chan *ct.Event)
 	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{}, events)
@@ -179,7 +179,7 @@ func (s *S) TestStreamReleaseEvents(c *C) {
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, s.c, &ct.Release{})
 
 	var gotRelease, gotArtifact bool
 	for i := 0; i < 2; i++ {
@@ -217,7 +217,7 @@ func (s *S) TestStreamReleaseEvents(c *C) {
 }
 
 func (s *S) TestStreamFormationEvents(c *C) {
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, s.c, &ct.Release{
 		Processes: map[string]ct.ProcessType{"foo": {}},
 	})
 	app := s.createTestApp(c, &ct.App{Name: "stream-formation-test"})
@@ -374,7 +374,7 @@ func (s *S) TestStreamResourceEvents(c *C) {
 }
 
 func (s *S) TestListEvents(c *C) {
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, s.c, &ct.Release{})
 
 	app := s.createTestApp(c, &ct.App{Name: "app5"})
 
@@ -467,7 +467,7 @@ func (s *S) TestListEvents(c *C) {
 
 func (s *S) TestGetEvent(c *C) {
 	// ensure there's at least one event
-	_ = s.createTestRelease(c, &ct.Release{})
+	_ = s.createTestRelease(c, s.c, &ct.Release{})
 
 	events, err := s.c.ListEvents(ct.ListEventsOptions{})
 	c.Assert(err, IsNil)

@@ -10,7 +10,7 @@ import (
 
 func (s *S) TestFormationStreaming(c *C) {
 	before := time.Now()
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, s.c, &ct.Release{})
 	app := s.createTestApp(c, &ct.App{Name: "streamtest-existing"})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
@@ -40,7 +40,7 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(update.App, DeepEquals, app)
 	c.Assert(update.Release, DeepEquals, release)
 
-	release = s.createTestRelease(c, &ct.Release{
+	release = s.createTestRelease(c, s.c, &ct.Release{
 		Processes: map[string]ct.ProcessType{"foo": {}},
 	})
 	app = s.createTestApp(c, &ct.App{Name: "streamtest"})
@@ -73,7 +73,7 @@ func (s *S) TestFormationStreamDeleted(c *C) {
 	// create 3 releases with formations
 	releases := make([]*ct.Release, 3)
 	for i := 0; i < 3; i++ {
-		releases[i] = s.createTestRelease(c, &ct.Release{})
+		releases[i] = s.createTestRelease(c, s.c, &ct.Release{})
 		s.createTestFormation(c, &ct.Formation{ReleaseID: releases[i].ID, AppID: app.ID})
 	}
 
@@ -132,7 +132,7 @@ func (s *S) TestFormationListActive(c *C) {
 		for typ := range procs {
 			release.Processes[typ] = ct.ProcessType{}
 		}
-		s.createTestRelease(c, release)
+		s.createTestRelease(c, s.c, release)
 		s.createTestFormation(c, &ct.Formation{
 			AppID:     app.ID,
 			ReleaseID: release.ID,
