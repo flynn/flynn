@@ -18,6 +18,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	zfs "github.com/mistifyio/go-zfs"
+	"github.com/rancher/sparse-tools/sparse"
 )
 
 // blockSize is the block size used when creating new zvols
@@ -175,10 +176,15 @@ func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volum
 	// align size to blockSize
 	size := (info.Size/blockSize + 1) * blockSize
 
-	var err error
-	v.dataset, err = zfs.CreateVolume(path.Join(v.provider.dataset.Name, info.ID), uint64(size), map[string]string{
+	opts := map[string]string{
 		"volblocksize": strconv.Itoa(blockSize),
-	})
+	}
+	if _, ok := data.(sparse.FileIoProcessor); ok {
+		opts["refreservation"] = "none"
+	}
+
+	var err error
+	v.dataset, err = zfs.CreateVolume(path.Join(v.provider.dataset.Name, info.ID), uint64(size), opts)
 	if err != nil {
 		return nil, err
 	}
@@ -196,13 +202,20 @@ func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volum
 	}
 	defer dev.Close()
 
-	n, err := io.Copy(dev, data)
-	if err != nil {
-		p.destroy(v)
-		return nil, err
-	} else if n != info.Size {
-		p.destroy(v)
-		return nil, io.ErrShortWrite
+	if f, ok := data.(sparse.FileIoProcessor); ok {
+		if err := p.copySparse(dev, f); err != nil {
+			p.destroy(v)
+			return nil, err
+		}
+	} else {
+		n, err := io.Copy(dev, data)
+		if err != nil {
+			p.destroy(v)
+			return nil, err
+		} else if n != info.Size {
+			p.destroy(v)
+			return nil, io.ErrShortWrite
+		}
 	}
 
 	if err = os.MkdirAll(v.basemount, 0755); err != nil {
@@ -210,13 +223,35 @@ func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volum
 		return nil, err
 	}
 
-	if err := syscall.Mount(dev.Name(), v.basemount, info.FSType, syscall.MS_RDONLY, ""); err != nil {
+	var flags uintptr
+	if !info.Writeable {
+		flags |= syscall.MS_RDONLY
+	}
+	if err := syscall.Mount(dev.Name(), v.basemount, info.FSType, flags, info.MountData); err != nil {
 		p.destroy(v)
 		return nil, err
 	}
 
 	p.volumes[info.ID] = v
 	return v, nil
+}
+
+func (p *Provider) copySparse(dst io.WriteSeeker, src sparse.FileIoProcessor) error {
+	extents, err := sparse.GetFiemapExtents(src)
+	if err != nil {
+		return err
+	}
+
+	for _, x := range extents {
+		if _, err := dst.Seek(int64(x.Logical), os.SEEK_SET); err != nil {
+			return err
+		}
+		if _, err := io.Copy(dst, io.NewSectionReader(src, int64(x.Logical), int64(x.Length))); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p *Provider) owns(vol volume.Volume) (*zfsVolume, error) {

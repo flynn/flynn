@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -34,11 +35,13 @@ import (
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/miekg/dns"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/rancher/sparse-tools/sparse"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -48,6 +51,7 @@ const (
 	defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 	defaultPartition  = "user"
 	defaultMemory     = 1 * units.GiB
+	defaultDiskQuota  = 100 * units.MiB
 	RLIMIT_NPROC      = 6
 )
 
@@ -81,6 +85,11 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		return nil, err
 	}
 
+	defaultTmpfs, err := createTmpfs(defaultDiskQuota)
+	if err != nil {
+		return nil, err
+	}
+
 	return &LibcontainerBackend{
 		InitPath:            initPath,
 		factory:             factory,
@@ -98,6 +107,7 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		partitionCGroups:    partitionCGroups,
 		logger:              logger,
 		globalState:         &libcontainerGlobalState{},
+		defaultTmpfs:        defaultTmpfs,
 	}, nil
 }
 
@@ -133,6 +143,8 @@ type LibcontainerBackend struct {
 
 	globalStateMtx sync.Mutex
 	globalState    *libcontainerGlobalState
+
+	defaultTmpfs string
 }
 
 type Container struct {
@@ -667,23 +679,16 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 func (l *LibcontainerBackend) setupMounts(job *host.Job, tmpPath string) ([]*configs.Mount, error) {
 	paths := make(map[string][]string, len(job.Mountspecs))
 	for _, spec := range job.Mountspecs {
-		var path string
+		var mountFn func(*host.Mountspec) (string, error)
 		switch spec.Type {
 		case host.MountspecTypeSquashfs:
-			var err error
-			path, err = l.mountSquashfs(spec)
-			if err != nil {
-				return nil, err
-			}
+			mountFn = l.mountSquashfs
 		case host.MountspecTypeTmp:
-			// TODO: Use a volume for tmp layers.
-			//
-			//       Cannot be ZFS because it can't be used with OverlayFS:
-			//       http://list.zfsonlinux.org/pipermail/zfs-discuss/2015-September/023094.html
-			path = filepath.Join(tmpPath, "tmp-"+random.UUID())
-			if err := os.MkdirAll(path, 0755); err != nil {
-				return nil, err
-			}
+			mountFn = l.mountTmpfs
+		}
+		path, err := mountFn(spec)
+		if err != nil {
+			return nil, err
 		}
 		if _, ok := paths[spec.Mountpoint]; ok {
 			paths[spec.Mountpoint] = append(paths[spec.Mountpoint], path)
@@ -705,15 +710,18 @@ func (l *LibcontainerBackend) setupMounts(job *host.Job, tmpPath string) ([]*con
 			// lower dirs are stacked from right to left
 			dirs[len(layers)-i-1] = layer
 		}
-		workDir := filepath.Join(tmpPath, "overlay-workdir")
-		if err := os.Mkdir(workDir, 0755); err != nil {
-			return nil, err
+		upperDir := filepath.Join(dirs[0], "overlay-upperdir")
+		workDir := filepath.Join(dirs[0], "overlay-workdir")
+		for _, dir := range []string{upperDir, workDir} {
+			if err := os.Mkdir(dir, 0755); err != nil {
+				return nil, err
+			}
 		}
 		mounts = append(mounts, &configs.Mount{
 			Source:      "overlay",
 			Destination: path,
 			Device:      "overlay",
-			Data:        fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(dirs[1:], ":"), dirs[0], workDir),
+			Data:        fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(dirs[1:], ":"), upperDir, workDir),
 		})
 	}
 	return mounts, nil
@@ -772,12 +780,40 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 
 	// TODO: verify layer hashes before importing
 	vol, err := l.vman.ImportVolume("default", layer, &volume.Info{
-		ID:     volID,
-		Size:   size,
-		FSType: "squashfs",
+		ID:        volID,
+		Size:      size,
+		FSType:    "squashfs",
+		Writeable: false,
 	})
 	if err != nil {
 		return "", fmt.Errorf("error importing squashfs layer: %s", err)
+	}
+
+	return vol.Location(), nil
+}
+
+func (l *LibcontainerBackend) mountTmpfs(m *host.Mountspec) (string, error) {
+	volID := path.Join("tmpfs", m.ID)
+	if vol := l.vman.GetVolume(volID); vol != nil {
+		return vol.Location(), nil
+	}
+
+	// TODO: support different sized tmpfs
+	tmpfs, err := os.Open(l.defaultTmpfs)
+	if err != nil {
+		return "", err
+	}
+	defer tmpfs.Close()
+
+	vol, err := l.vman.ImportVolume("default", sparse.NewBufferedFileIoProcessorByFP(tmpfs), &volume.Info{
+		ID:        volID,
+		Size:      int64(defaultDiskQuota),
+		FSType:    "ext2",
+		MountData: "defaults,noatime",
+		Writeable: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("error importing tmpfs: %s", err)
 	}
 
 	return vol.Location(), nil
@@ -1479,4 +1515,24 @@ func createCGroupPartition(name string, cpuShares int64) error {
 		return fmt.Errorf("error writing cgroup param: %s", err)
 	}
 	return nil
+}
+
+func createTmpfs(size int64) (string, error) {
+	f, err := ioutil.TempFile("", "flynn-ext2-")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	shutdown.BeforeExit(func() { os.Remove(f.Name()) })
+
+	if err := f.Truncate(size); err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command("mkfs.ext2", "-F", "-L", "rootfs", "-m", "0", f.Name())
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("error creating ext2 filesystem: %s: %s", err, out)
+	}
+
+	return f.Name(), nil
 }

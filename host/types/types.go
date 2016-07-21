@@ -79,7 +79,7 @@ type Mountspec struct {
 	Type       MountspecType `json:"type,omitempty"`
 	ID         string        `json:"id,omitempty"`
 	Mountpoint string        `json:"mountpoint,omitempty"`
-	URL        string        `json:"url,omitempty,omitempty"`
+	URL        string        `json:"url,omitempty"`
 }
 
 type JobResources struct {
