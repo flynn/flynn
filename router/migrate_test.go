@@ -63,7 +63,7 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 			ParentRef:     fmt.Sprintf("some/parent/ref/%d", i),
 			Service:       fmt.Sprintf("migrationtest%d.example.org", i),
 			Domain:        fmt.Sprintf("migrationtest%d.example.org", i),
-			LegacyTLSCert: cert.CACert,
+			LegacyTLSCert: cert.Cert,
 			LegacyTLSKey:  cert.PrivateKey,
 		}
 		err := db.QueryRow(`
@@ -87,7 +87,7 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 			ParentRef:     fmt.Sprintf("some/parent/ref/%d", i),
 			Service:       fmt.Sprintf("migrationtest%d.example.org", i),
 			Domain:        fmt.Sprintf("migrationtest%d.example.org", i),
-			LegacyTLSCert: "  \n\n  \n " + cert.CACert + "   \n   \n   ",
+			LegacyTLSCert: "  \n\n  \n " + cert.Cert + "   \n   \n   ",
 			LegacyTLSKey:  "    \n   " + cert.PrivateKey + "   \n   \n  ",
 		}
 		err := db.QueryRow(`
@@ -125,7 +125,7 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 		if i == 0 || i >= len(certs)-2 {
 			continue
 		}
-		c.Assert(cert.CACert, Not(Equals), certs[i-1].CACert)
+		c.Assert(cert.Cert, Not(Equals), certs[i-1].Cert)
 	}
 
 	// run TLS object migration
@@ -155,12 +155,12 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 			c.Assert(fetchedCertKey, IsNil)
 			c.Assert(fetchedCertSHA256, IsNil)
 		} else {
-			sum := sha256.Sum256([]byte(strings.TrimSpace(cert.CACert)))
+			sum := sha256.Sum256([]byte(strings.TrimSpace(cert.Cert)))
 			certSHA256 := hex.EncodeToString(sum[:])
 			c.Assert(fetchedCert, Not(IsNil))
 			c.Assert(fetchedCertKey, Not(IsNil))
 			c.Assert(fetchedCertSHA256, Not(IsNil))
-			c.Assert(strings.TrimSpace(*fetchedCert), Equals, strings.TrimSpace(cert.CACert))
+			c.Assert(strings.TrimSpace(*fetchedCert), Equals, strings.TrimSpace(cert.Cert))
 			c.Assert(strings.TrimSpace(*fetchedCertKey), Equals, strings.TrimSpace(cert.PrivateKey))
 			c.Assert(*fetchedCertSHA256, Equals, certSHA256)
 		}

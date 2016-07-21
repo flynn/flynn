@@ -2,11 +2,13 @@ package main
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/router/types"
 	"github.com/jackc/pgx"
@@ -182,6 +184,14 @@ func (d *pgDataStore) AddCert(c *router.Certificate) error {
 func (d *pgDataStore) addCertWithTx(tx *pgx.Tx, c *router.Certificate) error {
 	c.Cert = strings.Trim(c.Cert, " \n")
 	c.Key = strings.Trim(c.Key, " \n")
+
+	if _, err := tls.X509KeyPair([]byte(c.Cert), []byte(c.Key)); err != nil {
+		return httphelper.JSONError{
+			Code:    httphelper.ValidationErrorCode,
+			Message: "Certificate invalid: " + err.Error(),
+		}
+	}
+
 	tlsCertSHA256 := sha256.Sum256([]byte(c.Cert))
 	if err := tx.QueryRow(sqlSelectCert, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		if err := tx.QueryRow(sqlAddCert, c.Cert, c.Key, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
@@ -209,7 +219,7 @@ func (d *pgDataStore) addRouteCertWithTx(tx *pgx.Tx, r *router.Route) error {
 	} else {
 		cert = r.Certificate
 	}
-	if cert == nil {
+	if cert == nil || (len(cert.Cert) == 0 && len(cert.Key) == 0) {
 		return nil
 	}
 	cert.Routes = []string{r.ID}
