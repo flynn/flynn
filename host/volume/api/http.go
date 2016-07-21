@@ -79,9 +79,15 @@ func (api *HTTPAPI) Create(w http.ResponseWriter, r *http.Request, ps httprouter
 	providerID := ps.ByName("provider_id")
 
 	vol, err := api.vman.NewVolumeFromProvider(providerID)
-	if err == volumemanager.ErrNoSuchProvider {
-		httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume provider with id %q", providerID))
-		return
+	if err != nil {
+		switch err {
+		case volumemanager.ErrNoSuchProvider:
+			httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume provider with id %q", providerID))
+			return
+		default:
+			httphelper.Error(w, err)
+			return
+		}
 	}
 
 	httphelper.JSON(w, 200, vol.Info())
