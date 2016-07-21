@@ -1558,6 +1558,53 @@ func init() {
 						return release, api.releaseRepo.Add(release)
 					}),
 				},
+				"putFormation": &graphql.Field{
+					Type: formationObject,
+					Args: graphql.FieldConfigArgument{
+						"app": &graphql.ArgumentConfig{
+							Description: "UUID of app",
+							Type:        graphql.NewNonNull(graphql.String),
+						},
+						"release": &graphql.ArgumentConfig{
+							Description: "UUID of release",
+							Type:        graphql.NewNonNull(graphql.String),
+						},
+						"processes": &graphql.ArgumentConfig{
+							Description: "Count of each process to include in formation",
+							Type:        processesObjectType,
+						},
+						"tags": &graphql.ArgumentConfig{
+							Description: "Tags to include in formation",
+							Type:        tagsObjectType,
+						},
+					},
+					Resolve: wrapResolveFunc(func(api *controllerAPI, p graphql.ResolveParams) (interface{}, error) {
+						formation := &ct.Formation{}
+						if v, ok := p.Args["app"]; ok {
+							formation.AppID = v.(string)
+						}
+						if v, ok := p.Args["release"]; ok {
+							formation.ReleaseID = v.(string)
+						}
+						if v, ok := p.Args["formation"]; ok {
+							formation.ReleaseID = v.(string)
+						}
+						if v, ok := p.Args["processes"]; ok {
+							d, err := json.Marshal(v)
+							if err != nil {
+								return nil, err
+							}
+							formation.Processes = map[string]int{}
+							if err := json.Unmarshal(d, &formation.Processes); err != nil {
+								return nil, err
+							}
+						}
+						if v, ok := p.Args["tags"]; ok {
+							formation.Tags = v.(map[string]map[string]string)
+						}
+						return formation, api.formationRepo.Add(formation)
+					}),
+				},
 			},
 		}),
 	})
