@@ -12,7 +12,7 @@ type replSetMember struct {
 type replSetConfig struct {
 	ID      string          `bson:"_id"`
 	Members []replSetMember `bson:"members"`
-	Version int
+	Version int64           `bson:"version"`
 }
 
 // Status structures

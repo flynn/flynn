@@ -268,7 +268,7 @@ func clusterAddrs(clusterState *state.State) []string {
 	return addrs
 }
 
-func (p *Process) replSetConfigFromState(current *replSetConfig, s *state.State) replSetConfig {
+func (p *Process) replSetConfigFromState(current *replSetConfig, s *state.State, stateIndex uint64) replSetConfig {
 	curIds := make(map[string]int, len(current.Members))
 	newAddrs := clusterAddrs(s)
 	// If any of the current peers are in the new config then preserve their IDs
@@ -292,7 +292,7 @@ func (p *Process) replSetConfigFromState(current *replSetConfig, s *state.State)
 	return replSetConfig{
 		ID:      "rs0",
 		Members: members,
-		Version: current.Version + 1,
+		Version: int64(stateIndex),
 	}
 }
 
@@ -326,7 +326,7 @@ func (p *Process) reconfigure(config *state.Config) error {
 		}
 
 		if config.Role == state.RolePrimary {
-			return p.assumePrimary(config.Downstream, config.State)
+			return p.assumePrimary(config.Downstream, config.State, config.StateIndex)
 		}
 
 		return p.assumeStandby(config.Upstream, config.Downstream)
@@ -341,7 +341,7 @@ func (p *Process) reconfigure(config *state.Config) error {
 	return nil
 }
 
-func (p *Process) assumePrimary(downstream *discoverd.Instance, clusterState *state.State) (err error) {
+func (p *Process) assumePrimary(downstream *discoverd.Instance, clusterState *state.State, stateIndex uint64) (err error) {
 	logger := p.Logger.New("fn", "assumePrimary")
 	if downstream != nil {
 		logger = logger.New("downstream", downstream.Addr)
@@ -356,7 +356,7 @@ func (p *Process) assumePrimary(downstream *discoverd.Instance, clusterState *st
 		if err != nil {
 			return err
 		}
-		replSetNew := p.replSetConfigFromState(replSetCurrent, clusterState)
+		replSetNew := p.replSetConfigFromState(replSetCurrent, clusterState, stateIndex)
 		if err := p.setReplConfig(replSetNew); err != nil {
 			return err
 		}
@@ -381,7 +381,7 @@ func (p *Process) assumePrimary(downstream *discoverd.Instance, clusterState *st
 		return err
 	}
 
-	if err := p.initPrimaryDB(clusterState); err != nil {
+	if err := p.initPrimaryDB(clusterState, stateIndex); err != nil {
 		logger.Error("error initialising primary, attempting stop")
 		if e := p.stop(); err != nil {
 			logger.Debug("ignoring error stopping process", "err", e)
@@ -508,7 +508,7 @@ func (p *Process) createUser() error {
 }
 
 // initPrimaryDB initializes the local database with the correct users and plugins.
-func (p *Process) initPrimaryDB(clusterState *state.State) error {
+func (p *Process) initPrimaryDB(clusterState *state.State, stateIndex uint64) error {
 	logger := p.Logger.New("fn", "initPrimaryDB")
 	logger.Info("initializing primary database")
 
@@ -570,7 +570,7 @@ func (p *Process) initPrimaryDB(clusterState *state.State) error {
 	if err != nil {
 		return err
 	}
-	replSetNew := p.replSetConfigFromState(replSetCurrent, clusterState)
+	replSetNew := p.replSetConfigFromState(replSetCurrent, clusterState, stateIndex)
 	err = p.setReplConfig(replSetNew)
 	if err != nil {
 		logger.Error("failed to reconfigure replia set", "err", err)
