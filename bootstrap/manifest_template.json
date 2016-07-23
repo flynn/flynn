@@ -547,7 +547,7 @@
               "service": {
                 "name": "docker-receive",
                 "create": true,
-                "check": {"type": "http", "path": "/v2/", "status": 401}
+                "check": {"type": "http", "path": "/.well-known/status"}
               }
             }
           ]
