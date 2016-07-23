@@ -1,11 +1,11 @@
 ---
-title: How To Deploy Python
+title: Python
 layout: docs
 ---
 
-# How To Deploy Python
+# Python
 
-Python is supported by the [Heroku Python
+Python is supported by the [Python
 buildpack](https://github.com/heroku/heroku-buildpack-python).
 
 ## Detection

@@ -1,9 +1,9 @@
 ---
-title: How To Deploy Java
+title: Java
 layout: docs
 ---
 
-# How to Deploy Java
+# Java
 
 Flynn supports deploying Java applications which use either the
 [Maven](http://maven.apache.org/) or [Gradle](http://www.gradle.org/) build

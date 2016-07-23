@@ -1,10 +1,10 @@
 ---
-title: Operating Flynn
+title: Production
 layout: docs
 toc_min_level: 2
 ---
 
-# Operating Flynn
+# Production
 
 We've designed Flynn to be very easy to get up and running with quickly.
 However, there are a variety of things that should be considered as you start

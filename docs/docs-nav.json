@@ -1,35 +1,38 @@
 [
-  { "title": "Using Flynn", "path": "/docs" },
-  { "title": "Installation", "path": "/docs/installation", "children": [
-    { "title": "Cloud Installer", "path": "/docs/installation" },
-    { "title": "Vagrant Environment", "path": "/docs/installation/vagrant" },
-    { "title": "Manual Installation", "path": "/docs/installation/manual" }
+  { "title": "Installation", "children": [
+    { "title": "Cloud", "path": "/docs/installation" },
+    { "title": "Vagrant", "path": "/docs/installation/vagrant" },
+    { "title": "Manual", "path": "/docs/installation/manual" }
   ] },
-  { "title": "Operating Flynn", "path": "/docs/operating" },
-  { "title": "Architecture", "path": "/docs/architecture" },
-  { "title": "Languages", "children": [
-    { "title": "How To Deploy Go", "path": "/docs/how-to-deploy-go" },
-    { "title": "How To Deploy Java", "path": "/docs/how-to-deploy-java" },
-    { "title": "How To Deploy Node.js", "path": "/docs/how-to-deploy-nodejs" },
-    { "title": "How To Deploy PHP", "path": "/docs/how-to-deploy-php" },
-    { "title": "How To Deploy Python", "path": "/docs/how-to-deploy-python" },
-    { "title": "How To Deploy Ruby", "path": "/docs/how-to-deploy-ruby" }
+  { "title": "Using", "children": [
+    { "title": "Databases", "path": "/docs/databases", "children": [
+          { "title": "PostgreSQL", "path": "/docs/databases/postgres" },
+          { "title": "MySQL", "path": "/docs/databases/mysql" },
+          { "title": "MongoDB", "path": "/docs/databases/mongodb" },
+          { "title": "Redis", "path": "/docs/databases/redis" }
+    ] },
+    { "title": "Languages", "children": [
+      { "title": "Go", "path": "/docs/languages/go" },
+      { "title": "Java", "path": "/docs/languages/java" },
+      { "title": "Node.js", "path": "/docs/languages/nodejs" },
+      { "title": "PHP", "path": "/docs/languages/php" },
+      { "title": "Python", "path": "/docs/languages/python" },
+      { "title": "Ruby", "path": "/docs/languages/ruby" }
+    ] }
   ] },
-  { "title": "Databases", "path": "/docs/databases", "children": [
-        { "title": "PostgreSQL", "path": "/docs/postgres" },
-        { "title": "MySQL", "path": "/docs/mysql" },
-        { "title": "MongoDB", "path": "/docs/mongodb" },
-        { "title": "Redis", "path": "/docs/redis" }
+  { "title": "Operating", "children": [
+    { "title": "Production", "path": "/docs/production" },
+    { "title": "Stability", "path": "/docs/stability" },
+    { "title": "Security", "path": "/docs/security" }
   ] },
-  { "title": "Stability", "path": "/docs/stability" },
-  { "title": "Security", "path": "/docs/security" },
-  { "title": "Contributing", "path": "/docs/contributing" },
-  { "title": "Development", "path": "/docs/development" },
   { "title": "FAQ", "path": "/docs/faq" },
-  { "title": "API", "children": [
+  { "title": "Reference", "children": [
+    { "title": "Architecture", "path": "/docs/architecture" },
+    { "title": "Contributing", "path": "/docs/contributing" },
+    { "title": "Development", "path": "/docs/development" },
     { "title": "Command Line", "path": "/docs/cli" },
     { "title": "Controller API", "path": "/docs/api/controller" },
-    { "title": "Router API", "path": "/docs/api/router" }
-  ] },
-  { "title": "Trademark Guidelines", "path": "/docs/trademark-guidelines" }
+    { "title": "Router API", "path": "/docs/api/router" },
+    { "title": "Trademark Guidelines", "path": "/docs/trademark-guidelines" }
+  ] }
 ]

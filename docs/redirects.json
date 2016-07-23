@@ -1,3 +1,12 @@
 {
-  "/docs/faq/how-do-i-update-flynn": "/docs/operating#updating"
+  "/docs/faq/how-do-i-update-flynn": "/docs/operating#updating",
+  "/docs/postgres": "/docs/databases/postgres",
+  "/docs/mysql": "/docs/databases/mysql",
+  "/docs/redis": "/docs/databases/redis",
+  "/docs/how-to-deploy-go": "/docs/languages/go",
+  "/docs/how-to-deploy-java": "/docs/languages/java",
+  "/docs/how-to-deploy-nodejs": "/docs/languages/nodejs",
+  "/docs/how-to-deploy-php": "/docs/languages/php",
+  "/docs/how-to-deploy-python": "/docs/languages/python",
+  "/docs/how-to-deploy-ruby": "/docs/languages/ruby"
 }
