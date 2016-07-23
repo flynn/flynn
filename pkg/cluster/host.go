@@ -135,10 +135,18 @@ func (c *Host) CreateVolume(providerId string) (*volume.Info, error) {
 	return &res, err
 }
 
+// ListVolume returns a list of volume IDs
+func (c *Host) ListVolumes() ([]*volume.Info, error) {
+	var volumes []*volume.Info
+	return volumes, c.c.Get("/storage/volumes", &volumes)
+}
+
+// DestroyVolume deletes a volume by ID
 func (c *Host) DestroyVolume(volumeID string) error {
 	return c.c.Delete(fmt.Sprintf("/storage/volumes/%s", volumeID))
 }
 
+// Create snapshot creates a snapshot of a volume on a host.
 func (c *Host) CreateSnapshot(volumeID string) (*volume.Info, error) {
 	var res volume.Info
 	err := c.c.Put(fmt.Sprintf("/storage/volumes/%s/snapshot", volumeID), nil, &res)
