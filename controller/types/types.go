@@ -430,8 +430,6 @@ const (
 	EventTypeResource             EventType = "resource"
 	EventTypeResourceDeletion     EventType = "resource_deletion"
 	EventTypeResourceAppDeletion  EventType = "resource_app_deletion"
-	EventTypeKey                  EventType = "key"
-	EventTypeKeyDeletion          EventType = "key_deletion"
 	EventTypeRoute                EventType = "route"
 	EventTypeRouteDeletion        EventType = "route_deletion"
 	EventTypeDomainMigration      EventType = "domain_migration"

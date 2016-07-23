@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/graphql/language/ast"
@@ -96,13 +98,29 @@ var eventObjectTypeEnum = graphql.NewEnum(graphql.EnumConfig{
 		string(ct.EventTypeResource):             &graphql.EnumValueConfig{Value: ct.EventTypeResource},
 		string(ct.EventTypeResourceDeletion):     &graphql.EnumValueConfig{Value: ct.EventTypeResourceDeletion},
 		string(ct.EventTypeResourceAppDeletion):  &graphql.EnumValueConfig{Value: ct.EventTypeResourceAppDeletion},
-		string(ct.EventTypeKey):                  &graphql.EnumValueConfig{Value: ct.EventTypeKey},
-		string(ct.EventTypeKeyDeletion):          &graphql.EnumValueConfig{Value: ct.EventTypeKeyDeletion},
 		string(ct.EventTypeRoute):                &graphql.EnumValueConfig{Value: ct.EventTypeRoute},
 		string(ct.EventTypeRouteDeletion):        &graphql.EnumValueConfig{Value: ct.EventTypeRouteDeletion},
 		string(ct.EventTypeDomainMigration):      &graphql.EnumValueConfig{Value: ct.EventTypeDomainMigration},
 		string(ct.EventTypeClusterBackup):        &graphql.EnumValueConfig{Value: ct.EventTypeClusterBackup},
 		string(ct.EventTypeAppGarbageCollection): &graphql.EnumValueConfig{Value: ct.EventTypeAppGarbageCollection},
+	},
+})
+
+var jobStateEnum = graphql.NewEnum(graphql.EnumConfig{
+	Name:        "JobState",
+	Description: "State of job",
+	Values: graphql.EnumValueConfigMap{
+		string(ct.JobStatePending):  &graphql.EnumValueConfig{Value: ct.JobStatePending},
+		string(ct.JobStateStarting): &graphql.EnumValueConfig{Value: ct.JobStateStarting},
+		string(ct.JobStateUp):       &graphql.EnumValueConfig{Value: ct.JobStateUp},
+		string(ct.JobStateStopping): &graphql.EnumValueConfig{Value: ct.JobStateStopping},
+		string(ct.JobStateDown):     &graphql.EnumValueConfig{Value: ct.JobStateDown},
+
+		// JobStateCrashed and JobStateFailed are no longer valid job states,
+		// but we still need to handle them in case they are set by old
+		// schedulers still using the legacy code.
+		string(ct.JobStateCrashed): &graphql.EnumValueConfig{Value: ct.JobStateCrashed},
+		string(ct.JobStateFailed):  &graphql.EnumValueConfig{Value: ct.JobStateFailed},
 	},
 })
 
@@ -228,6 +246,116 @@ func eventFieldResolveFunc(fn func(*controllerAPI, *ct.Event) (interface{}, erro
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
 		if event, ok := p.Source.(*ct.Event); ok {
 			return fn(api, event)
+		}
+		return nil, nil
+	}
+}
+
+func appDeletionEventFieldResolveFunc(fn func(*controllerAPI, *ct.AppDeletionEvent) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if event, ok := p.Source.(*ct.AppDeletionEvent); ok {
+			return fn(api, event)
+		}
+		return nil, nil
+	}
+}
+
+func appDeletionFieldResolveFunc(fn func(*controllerAPI, *ct.AppDeletion) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if ad, ok := p.Source.(*ct.AppDeletion); ok {
+			return fn(api, ad)
+		}
+		return nil, nil
+	}
+}
+
+func appReleaseFieldResolveFunc(fn func(*controllerAPI, *ct.AppRelease) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if ar, ok := p.Source.(*ct.AppRelease); ok {
+			return fn(api, ar)
+		}
+		return nil, nil
+	}
+}
+
+func deploymentEventFieldResolveFunc(fn func(*controllerAPI, *ct.DeploymentEvent) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if event, ok := p.Source.(*ct.DeploymentEvent); ok {
+			return fn(api, event)
+		}
+		return nil, nil
+	}
+}
+
+func scaleObjectFieldResolveFunc(fn func(*controllerAPI, *ct.Scale) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if s, ok := p.Source.(*ct.Scale); ok {
+			return fn(api, s)
+		}
+		return nil, nil
+	}
+}
+
+func releaseDeletionEventFieldResolveFunc(fn func(*controllerAPI, *ct.ReleaseDeletionEvent) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if event, ok := p.Source.(*ct.ReleaseDeletionEvent); ok {
+			return fn(api, event)
+		}
+		return nil, nil
+	}
+}
+
+func releaseDeletionFieldResolveFunc(fn func(*controllerAPI, *ct.ReleaseDeletion) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if rd, ok := p.Source.(*ct.ReleaseDeletion); ok {
+			return fn(api, rd)
+		}
+		return nil, nil
+	}
+}
+
+func tlsCertFieldResolveFunc(fn func(*controllerAPI, *tlscert.Cert) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if cert, ok := p.Source.(*tlscert.Cert); ok {
+			return fn(api, cert)
+		}
+		return nil, nil
+	}
+}
+
+func domainMigrationFieldResolveFunc(fn func(*controllerAPI, *ct.DomainMigration) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if dm, ok := p.Source.(*ct.DomainMigration); ok {
+			return fn(api, dm)
+		}
+		return nil, nil
+	}
+}
+
+func clusterBackupFieldResolveFunc(fn func(*controllerAPI, *ct.ClusterBackup) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if cb, ok := p.Source.(*ct.ClusterBackup); ok {
+			return fn(api, cb)
+		}
+		return nil, nil
+	}
+}
+
+func appGarbageCollectionFieldResolveFunc(fn func(*controllerAPI, *ct.AppGarbageCollection) (interface{}, error)) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		api := p.Context.Value(apiContextKey).(*controllerAPI)
+		if agc, ok := p.Source.(*ct.AppGarbageCollection); ok {
+			return fn(api, agc)
 		}
 		return nil, nil
 	}
@@ -952,57 +1080,613 @@ func init() {
 		}),
 	})
 
-	eventObject := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Event",
+	var (
+		eventAppObject                  *graphql.Object
+		eventAppDeletionObject          *graphql.Object
+		eventAppReleaseObject           *graphql.Object
+		eventDeploymentObject           *graphql.Object
+		eventJobObject                  *graphql.Object
+		eventScaleObject                *graphql.Object
+		eventReleaseObject              *graphql.Object
+		eventReleaseDeletionObject      *graphql.Object
+		eventArtifactObject             *graphql.Object
+		eventProviderObject             *graphql.Object
+		eventResourceObject             *graphql.Object
+		eventRouteObject                *graphql.Object
+		eventDomainMigrationObject      *graphql.Object
+		eventClusterBackupObject        *graphql.Object
+		eventAppGarbageCollectionObject *graphql.Object
+	)
+
+	eventInterface := graphql.NewInterface(graphql.InterfaceConfig{
+		Name: "EventInterface",
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.Int),
 				Description: "ID of event",
-				Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
-					return event.ID, nil
-				}),
 			},
 			"object_type": &graphql.Field{
 				Type:        eventObjectTypeEnum,
 				Description: "Type of event",
-				Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
-					return event.ObjectType, nil
-				}),
 			},
 			"object_id": &graphql.Field{
 				Type:        graphql.String,
 				Description: "UUID of object",
-				Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
-					return event.ObjectID, nil
-				}),
-			},
-			"data": &graphql.Field{
-				Type:        eventDataObjectType,
-				Description: "Event data",
-				Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
-					var data interface{}
-					return data, json.Unmarshal(event.Data, &data)
-				}),
 			},
 			"created_at": &graphql.Field{
 				Type:        graphqlTimeType,
 				Description: "Time event was created",
-				Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
-					return event.CreatedAt, nil
-				}),
 			},
 			"app": &graphql.Field{
 				Type:        appObject,
 				Description: "App event belongs to",
-				Resolve: eventFieldResolveFunc(func(api *controllerAPI, event *ct.Event) (interface{}, error) {
-					if event.AppID == "" {
-						return nil, nil
-					}
-					return api.appRepo.Get(event.AppID)
+			},
+		},
+		ResolveType: func(p graphql.ResolveTypeParams) *graphql.Object {
+			event := p.Value.(*ct.Event)
+			switch event.ObjectType {
+			case ct.EventTypeApp:
+				return eventAppObject
+			case ct.EventTypeAppDeletion:
+				return eventAppDeletionObject
+			case ct.EventTypeAppRelease:
+				return eventAppReleaseObject
+			case ct.EventTypeDeployment:
+				return eventDeploymentObject
+			case ct.EventTypeJob:
+				return eventJobObject
+			case ct.EventTypeScale:
+				return eventScaleObject
+			case ct.EventTypeRelease:
+				return eventReleaseObject
+			case ct.EventTypeReleaseDeletion:
+				return eventReleaseDeletionObject
+			case ct.EventTypeArtifact:
+				return eventArtifactObject
+			case ct.EventTypeProvider:
+				return eventProviderObject
+			case ct.EventTypeResource:
+				return eventResourceObject
+			case ct.EventTypeResourceDeletion:
+				return eventResourceObject
+			case ct.EventTypeResourceAppDeletion:
+				return eventResourceObject
+			case ct.EventTypeRoute:
+				return eventRouteObject
+			case ct.EventTypeRouteDeletion:
+				return eventRouteObject
+			case ct.EventTypeDomainMigration:
+				return eventDomainMigrationObject
+			case ct.EventTypeClusterBackup:
+				return eventClusterBackupObject
+			case ct.EventTypeAppGarbageCollection:
+				return eventAppGarbageCollectionObject
+			}
+			return nil
+		},
+	})
+
+	decodeEventObjectData := func(typ ct.EventType, data json.RawMessage) (interface{}, error) {
+		var obj interface{}
+		switch typ {
+		case ct.EventTypeApp:
+			obj = ct.App{}
+		case ct.EventTypeAppDeletion:
+			obj = ct.AppDeletionEvent{}
+		case ct.EventTypeAppRelease:
+			obj = ct.AppRelease{}
+		case ct.EventTypeDeployment:
+			obj = ct.Deployment{}
+		case ct.EventTypeJob:
+			obj = ct.Job{}
+		case ct.EventTypeScale:
+			obj = ct.Scale{}
+		case ct.EventTypeRelease:
+			obj = ct.Release{}
+		case ct.EventTypeReleaseDeletion:
+			obj = ct.ReleaseDeletionEvent{}
+		case ct.EventTypeArtifact:
+			obj = ct.Artifact{}
+		case ct.EventTypeProvider:
+			obj = ct.Provider{}
+		case ct.EventTypeResource:
+			obj = ct.Resource{}
+		case ct.EventTypeResourceDeletion:
+			obj = ct.Resource{}
+		case ct.EventTypeResourceAppDeletion:
+			obj = ct.Resource{}
+		case ct.EventTypeRoute:
+			obj = router.Route{}
+		case ct.EventTypeRouteDeletion:
+			obj = router.Route{}
+		case ct.EventTypeDomainMigration:
+			obj = ct.DomainMigration{}
+		case ct.EventTypeClusterBackup:
+			obj = ct.ClusterBackup{}
+		case ct.EventTypeAppGarbageCollection:
+			obj = ct.AppGarbageCollectionEvent{}
+		default:
+			return nil, fmt.Errorf("Invalid EventType: %s", typ)
+		}
+		if err := json.Unmarshal(data, &obj); err != nil {
+			return nil, err
+		}
+		return &obj, nil
+	}
+
+	newEventObject := func(name string, dataType *graphql.Object) *graphql.Object {
+		return graphql.NewObject(graphql.ObjectConfig{
+			Name: name,
+			Fields: graphql.Fields{
+				"id": &graphql.Field{
+					Type:        graphql.NewNonNull(graphql.Int),
+					Description: "ID of event",
+					Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
+						return event.ID, nil
+					}),
+				},
+				"object_type": &graphql.Field{
+					Type:        eventObjectTypeEnum,
+					Description: "Type of event",
+					Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
+						return event.ObjectType, nil
+					}),
+				},
+				"object_id": &graphql.Field{
+					Type:        graphql.String,
+					Description: "UUID of object",
+					Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
+						return event.ObjectID, nil
+					}),
+				},
+				"created_at": &graphql.Field{
+					Type:        graphqlTimeType,
+					Description: "Time event was created",
+					Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
+						return event.CreatedAt, nil
+					}),
+				},
+				"app": &graphql.Field{
+					Type:        appObject,
+					Description: "App event belongs to",
+					Resolve: eventFieldResolveFunc(func(api *controllerAPI, event *ct.Event) (interface{}, error) {
+						if event.AppID == "" {
+							return nil, nil
+						}
+						return api.appRepo.Get(event.AppID)
+					}),
+				},
+				"data": &graphql.Field{
+					Type:        dataType,
+					Description: fmt.Sprintf("%s associated with event", dataType.Name),
+					Resolve: eventFieldResolveFunc(func(_ *controllerAPI, event *ct.Event) (interface{}, error) {
+						return decodeEventObjectData(event.ObjectType, event.Data)
+					}),
+				},
+			},
+			Interfaces: []*graphql.Interface{
+				eventInterface,
+			},
+		})
+	}
+
+	appDeletionObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "AppDeletion",
+		Fields: graphql.Fields{
+			"app": &graphql.Field{
+				Type:        appObject,
+				Description: "App being deleted",
+				Resolve: appDeletionFieldResolveFunc(func(api *controllerAPI, ad *ct.AppDeletion) (interface{}, error) {
+					// TODO(jvatic): allow Get to return a deleted app
+					return api.appRepo.Get(ad.AppID)
+				}),
+			},
+			"routes": &graphql.Field{
+				Type:        graphql.NewList(routeObject),
+				Description: "Routes being deleted",
+				Resolve: appDeletionFieldResolveFunc(func(api *controllerAPI, ad *ct.AppDeletion) (interface{}, error) {
+					return ad.DeletedRoutes, nil
+				}),
+			},
+			"resources": &graphql.Field{
+				Type:        graphql.NewList(resourceObject),
+				Description: "Resources being deleted",
+				Resolve: appDeletionFieldResolveFunc(func(api *controllerAPI, ad *ct.AppDeletion) (interface{}, error) {
+					return ad.DeletedResources, nil
+				}),
+			},
+			"releases": &graphql.Field{
+				Type:        graphql.NewList(releaseObject),
+				Description: "Releases being deleted",
+				Resolve: appDeletionFieldResolveFunc(func(api *controllerAPI, ad *ct.AppDeletion) (interface{}, error) {
+					return ad.DeletedReleases, nil
 				}),
 			},
 		},
 	})
+
+	appDeletionEventObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "AppDeletionEvent",
+		Fields: graphql.Fields{
+			"app_deletion": &graphql.Field{
+				Type:        appDeletionObject,
+				Description: "AppDeletion",
+				Resolve: appDeletionEventFieldResolveFunc(func(_ *controllerAPI, event *ct.AppDeletionEvent) (interface{}, error) {
+					return event.AppDeletion, nil
+				}),
+			},
+			"error": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Error",
+				Resolve: appDeletionEventFieldResolveFunc(func(_ *controllerAPI, event *ct.AppDeletionEvent) (interface{}, error) {
+					return event.Error, nil
+				}),
+			},
+		},
+	})
+
+	appReleaseObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "AppRelease",
+		Fields: graphql.Fields{
+			"prev_release": &graphql.Field{
+				Type:        releaseObject,
+				Description: "Previous release",
+				Resolve: appReleaseFieldResolveFunc(func(_ *controllerAPI, ar *ct.AppRelease) (interface{}, error) {
+					return ar.PrevRelease, nil
+				}),
+			},
+			"release": &graphql.Field{
+				Type:        releaseObject,
+				Description: "Current release",
+				Resolve: appReleaseFieldResolveFunc(func(_ *controllerAPI, ar *ct.AppRelease) (interface{}, error) {
+					return ar.Release, nil
+				}),
+			},
+		},
+	})
+
+	deploymentEventObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "DeploymentEvent",
+		Fields: graphql.Fields{
+			"app": &graphql.Field{
+				Type:        appObject,
+				Description: "App",
+				Resolve: deploymentEventFieldResolveFunc(func(api *controllerAPI, event *ct.DeploymentEvent) (interface{}, error) {
+					return api.appRepo.Get(event.AppID)
+				}),
+			},
+			"deployment": &graphql.Field{
+				Type:        appObject,
+				Description: "Deployment",
+				Resolve: deploymentEventFieldResolveFunc(func(api *controllerAPI, event *ct.DeploymentEvent) (interface{}, error) {
+					return api.deploymentRepo.Get(event.DeploymentID)
+				}),
+			},
+			"release": &graphql.Field{
+				Type:        releaseObject,
+				Description: "Release",
+				Resolve: deploymentEventFieldResolveFunc(func(api *controllerAPI, event *ct.DeploymentEvent) (interface{}, error) {
+					return api.releaseRepo.Get(event.ReleaseID)
+				}),
+			},
+			"status": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Status of deployment",
+				Resolve: deploymentEventFieldResolveFunc(func(_ *controllerAPI, event *ct.DeploymentEvent) (interface{}, error) {
+					return event.Status, nil
+				}),
+			},
+			"job_type": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Deployment job type",
+				Resolve: deploymentEventFieldResolveFunc(func(_ *controllerAPI, event *ct.DeploymentEvent) (interface{}, error) {
+					return event.JobType, nil
+				}),
+			},
+			"job_state": &graphql.Field{
+				Type:        jobStateEnum,
+				Description: "Deployment job state",
+				Resolve: deploymentEventFieldResolveFunc(func(_ *controllerAPI, event *ct.DeploymentEvent) (interface{}, error) {
+					return event.JobState, nil
+				}),
+			},
+			"error": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Deployment error",
+				Resolve: deploymentEventFieldResolveFunc(func(_ *controllerAPI, event *ct.DeploymentEvent) (interface{}, error) {
+					return event.Error, nil
+				}),
+			},
+		},
+	})
+
+	scaleObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Scale",
+		Fields: graphql.Fields{
+			"prev_processes": &graphql.Field{
+				Type:        processesObjectType,
+				Description: "Count of each process in previous formation",
+				Resolve: scaleObjectFieldResolveFunc(func(_ *controllerAPI, s *ct.Scale) (interface{}, error) {
+					return s.PrevProcesses, nil
+				}),
+			},
+			"processes": &graphql.Field{
+				Type:        processesObjectType,
+				Description: "Count of each process in current formation",
+				Resolve: scaleObjectFieldResolveFunc(func(_ *controllerAPI, s *ct.Scale) (interface{}, error) {
+					return s.Processes, nil
+				}),
+			},
+			"release": &graphql.Field{
+				Type:        releaseObject,
+				Description: "Release of formation being scaled",
+				Resolve: scaleObjectFieldResolveFunc(func(api *controllerAPI, s *ct.Scale) (interface{}, error) {
+					return api.releaseRepo.Get(s.ReleaseID)
+				}),
+			},
+		},
+	})
+
+	releaseDeletionObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "ReleaseDeletion",
+		Fields: graphql.Fields{
+			"app": &graphql.Field{
+				Type:        appObject,
+				Description: "App release is being deleted for",
+				Resolve: releaseDeletionFieldResolveFunc(func(api *controllerAPI, rd *ct.ReleaseDeletion) (interface{}, error) {
+					return api.appRepo.Get(rd.AppID)
+				}),
+			},
+			"release": &graphql.Field{
+				Type:        releaseObject,
+				Description: "Release being deleted",
+				Resolve: releaseDeletionFieldResolveFunc(func(api *controllerAPI, rd *ct.ReleaseDeletion) (interface{}, error) {
+					return api.releaseRepo.Get(rd.ReleaseID)
+				}),
+			},
+			"remaining_apps": &graphql.Field{
+				Type:        graphql.NewList(appObject),
+				Description: "Apps release still exists for",
+				Resolve: releaseDeletionFieldResolveFunc(func(api *controllerAPI, rd *ct.ReleaseDeletion) (interface{}, error) {
+					// TODO(javtic): Move this into a single DB query
+					apps := make([]*ct.App, len(rd.RemainingApps))
+					for i, appID := range rd.RemainingApps {
+						app, err := api.appRepo.Get(appID)
+						if err != nil {
+							return nil, err
+						}
+						apps[i] = app.(*ct.App)
+					}
+					return apps, nil
+				}),
+			},
+			"deleted_files": &graphql.Field{
+				Type:        graphql.NewList(graphql.String),
+				Description: "URIs of deleted files",
+				Resolve: releaseDeletionFieldResolveFunc(func(_ *controllerAPI, rd *ct.ReleaseDeletion) (interface{}, error) {
+					return rd.DeletedFiles, nil
+				}),
+			},
+		},
+	})
+
+	releaseDeletionEventObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "ReleaseDeletionEvent",
+		Fields: graphql.Fields{
+			"release_deletion": &graphql.Field{
+				Type:        releaseDeletionObject,
+				Description: "ReleaseDeletion",
+				Resolve: releaseDeletionEventFieldResolveFunc(func(_ *controllerAPI, event *ct.ReleaseDeletionEvent) (interface{}, error) {
+					return event.ReleaseDeletion, nil
+				}),
+			},
+			"error": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Error",
+				Resolve: releaseDeletionEventFieldResolveFunc(func(_ *controllerAPI, event *ct.ReleaseDeletionEvent) (interface{}, error) {
+					return event.Error, nil
+				}),
+			},
+		},
+	})
+
+	tlsCertObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "TLSCert",
+		Fields: graphql.Fields{
+			"ca_cert": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "CACert",
+				Resolve: tlsCertFieldResolveFunc(func(_ *controllerAPI, cert *tlscert.Cert) (interface{}, error) {
+					return cert.CACert, nil
+				}),
+			},
+			"cert": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Cert",
+				Resolve: tlsCertFieldResolveFunc(func(_ *controllerAPI, cert *tlscert.Cert) (interface{}, error) {
+					return cert.Cert, nil
+				}),
+			},
+			"pin": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Pin",
+				Resolve: tlsCertFieldResolveFunc(func(_ *controllerAPI, cert *tlscert.Cert) (interface{}, error) {
+					return cert.Pin, nil
+				}),
+			},
+			"private_key": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Private key",
+				Resolve: tlsCertFieldResolveFunc(func(_ *controllerAPI, cert *tlscert.Cert) (interface{}, error) {
+					return cert.PrivateKey, nil
+				}),
+			},
+		},
+	})
+
+	domainMigrationObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "DomainMigration",
+		Fields: graphql.Fields{
+			"id": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "UUID of domain migration",
+				Resolve: domainMigrationFieldResolveFunc(func(_ *controllerAPI, dm *ct.DomainMigration) (interface{}, error) {
+					return dm.ID, nil
+				}),
+			},
+			"old_tls_cert": &graphql.Field{
+				Type:        tlsCertObject,
+				Description: "Old TLS cert",
+				Resolve: domainMigrationFieldResolveFunc(func(_ *controllerAPI, dm *ct.DomainMigration) (interface{}, error) {
+					return dm.OldTLSCert, nil
+				}),
+			},
+			"tls_cert": &graphql.Field{
+				Type:        tlsCertObject,
+				Description: "New TLS cert",
+				Resolve: domainMigrationFieldResolveFunc(func(_ *controllerAPI, dm *ct.DomainMigration) (interface{}, error) {
+					return dm.TLSCert, nil
+				}),
+			},
+			"old_domain": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Old domain",
+				Resolve: domainMigrationFieldResolveFunc(func(_ *controllerAPI, dm *ct.DomainMigration) (interface{}, error) {
+					return dm.OldDomain, nil
+				}),
+			},
+			"domain": &graphql.Field{
+				Type:        graphql.String,
+				Description: "New domain",
+				Resolve: domainMigrationFieldResolveFunc(func(_ *controllerAPI, dm *ct.DomainMigration) (interface{}, error) {
+					return dm.Domain, nil
+				}),
+			},
+			"created_at": &graphql.Field{
+				Type:        graphqlTimeType,
+				Description: "Time domain migration was created/queued",
+				Resolve: domainMigrationFieldResolveFunc(func(_ *controllerAPI, dm *ct.DomainMigration) (interface{}, error) {
+					return dm.CreatedAt, nil
+				}),
+			},
+			"finished_at": &graphql.Field{
+				Type:        graphqlTimeType,
+				Description: "Time domain migration finished",
+				Resolve: domainMigrationFieldResolveFunc(func(_ *controllerAPI, dm *ct.DomainMigration) (interface{}, error) {
+					return dm.FinishedAt, nil
+				}),
+			},
+		},
+	})
+
+	clusterBackupObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "ClusterBackup",
+		Fields: graphql.Fields{
+			"id": &graphql.Field{
+				Type:        graphql.String,
+				Description: "UUID of backup",
+				Resolve: clusterBackupFieldResolveFunc(func(_ *controllerAPI, cb *ct.ClusterBackup) (interface{}, error) {
+					return cb.ID, nil
+				}),
+			},
+			"status": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Status of backup",
+				Resolve: clusterBackupFieldResolveFunc(func(_ *controllerAPI, cb *ct.ClusterBackup) (interface{}, error) {
+					return cb.Status, nil
+				}),
+			},
+			"sha512": &graphql.Field{
+				Type:        graphql.String,
+				Description: "SHA512 hash of backup",
+				Resolve: clusterBackupFieldResolveFunc(func(_ *controllerAPI, cb *ct.ClusterBackup) (interface{}, error) {
+					return cb.SHA512, nil
+				}),
+			},
+			"size": &graphql.Field{
+				Type:        graphql.Int,
+				Description: "Size of backup in bytes",
+				Resolve: clusterBackupFieldResolveFunc(func(_ *controllerAPI, cb *ct.ClusterBackup) (interface{}, error) {
+					return cb.Size, nil
+				}),
+			},
+			"error": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Backup error",
+				Resolve: clusterBackupFieldResolveFunc(func(_ *controllerAPI, cb *ct.ClusterBackup) (interface{}, error) {
+					return cb.Error, nil
+				}),
+			},
+			"created_at": &graphql.Field{
+				Type:        graphqlTimeType,
+				Description: "Time backup was created",
+				Resolve: clusterBackupFieldResolveFunc(func(_ *controllerAPI, cb *ct.ClusterBackup) (interface{}, error) {
+					return cb.CreatedAt, nil
+				}),
+			},
+			"updated_at": &graphql.Field{
+				Type:        graphqlTimeType,
+				Description: "Time backup was last updated",
+				Resolve: clusterBackupFieldResolveFunc(func(_ *controllerAPI, cb *ct.ClusterBackup) (interface{}, error) {
+					return cb.UpdatedAt, nil
+				}),
+			},
+			"completed_at": &graphql.Field{
+				Type:        graphqlTimeType,
+				Description: "Time backup completed",
+				Resolve: clusterBackupFieldResolveFunc(func(_ *controllerAPI, cb *ct.ClusterBackup) (interface{}, error) {
+					return cb.CompletedAt, nil
+				}),
+			},
+		},
+	})
+
+	appGarbageCollectionObject := graphql.NewObject(graphql.ObjectConfig{
+		Name: "AppGarbageCollection",
+		Fields: graphql.Fields{
+			"app": &graphql.Field{
+				Type:        appObject,
+				Description: "App being garbage collected",
+				Resolve: appGarbageCollectionFieldResolveFunc(func(api *controllerAPI, agc *ct.AppGarbageCollection) (interface{}, error) {
+					// TODO(jvatic): allow deleted app to be queried here
+					return api.appRepo.Get(agc.AppID)
+				}),
+			},
+			"deleted_releases": &graphql.Field{
+				Type:        graphql.NewList(releaseObject),
+				Description: "Releases deleted along with app",
+				Resolve: appGarbageCollectionFieldResolveFunc(func(api *controllerAPI, agc *ct.AppGarbageCollection) (interface{}, error) {
+					// TODO(jvatic): allow deleted releases to be queried here
+					// TODO(jvatic): move this into a single query
+					releases := make([]*ct.Release, len(agc.DeletedReleases))
+					for i, rID := range agc.DeletedReleases {
+						r, err := api.releaseRepo.Get(rID)
+						if err != nil {
+							return nil, err
+						}
+						releases[i] = r.(*ct.Release)
+					}
+					return releases, nil
+				}),
+			},
+		},
+	})
+
+	eventAppObject = newEventObject("EventApp", appObject)
+	eventAppDeletionObject = newEventObject("EventAppDeletion", appDeletionEventObject)
+	eventAppReleaseObject = newEventObject("EventAppRelease", appReleaseObject)
+	eventDeploymentObject = newEventObject("EventDeployment", deploymentEventObject)
+	eventJobObject = newEventObject("EventJob", jobObject)
+	eventScaleObject = newEventObject("EventScale", scaleObject)
+	eventReleaseObject = newEventObject("EventRelease", releaseObject)
+	eventReleaseDeletionObject = newEventObject("EventReleaseDeletion", releaseDeletionEventObject)
+	eventArtifactObject = newEventObject("EventArtifact", artifactObject)
+	eventProviderObject = newEventObject("EventProvider", providerObject)
+	eventResourceObject = newEventObject("EventResource", resourceObject)
+	eventRouteObject = newEventObject("EventRoute", routeObject)
+	eventDomainMigrationObject = newEventObject("EventDomainMigration", domainMigrationObject)
+	eventClusterBackupObject = newEventObject("EventClusterBackup", clusterBackupObject)
+	eventAppGarbageCollectionObject = newEventObject("EventAppGarbageCollection", appGarbageCollectionObject)
 
 	expandedFormationObject := graphql.NewObject(graphql.ObjectConfig{
 		Name: "ExpandedFormation",
@@ -1103,7 +1787,7 @@ func init() {
 		}),
 	})
 	appObject.AddFieldConfig("events", &graphql.Field{
-		Type:        graphql.NewList(eventObject),
+		Type:        graphql.NewList(eventInterface),
 		Description: "Events for app",
 		Args: graphql.FieldConfigArgument{
 			"object_types": &graphql.ArgumentConfig{
@@ -1379,7 +2063,7 @@ func init() {
 					}),
 				},
 				"event": &graphql.Field{
-					Type: eventObject,
+					Type: eventInterface,
 					Args: graphql.FieldConfigArgument{
 						"id": &graphql.ArgumentConfig{
 							Description: "UUID of event",
@@ -1391,7 +2075,7 @@ func init() {
 					}),
 				},
 				"events": &graphql.Field{
-					Type: graphql.NewList(eventObject),
+					Type: graphql.NewList(eventInterface),
 					Args: graphql.FieldConfigArgument{
 						"object_types": &graphql.ArgumentConfig{
 							Description: "Filters events by object types",
