@@ -260,7 +260,11 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 		if len(keyVal) != 2 {
 			continue
 		}
-		release.Env[keyVal[0]] = keyVal[1]
+		// only set the key if it doesn't exist so variables set with
+		// `flynn env set` are not overwritten
+		if _, ok := release.Env[keyVal[0]]; !ok {
+			release.Env[keyVal[0]] = keyVal[1]
+		}
 	}
 
 	if release.Meta == nil {
