@@ -45,7 +45,7 @@ Example:
 
 	$ flynn docker push my-custom-image:v2
 	flynn: getting image config with "docker inspect -f {{ json .Config }} my-custom-image:v2"
-	flynn: tagging Docker image with "docker tag --force my-custom-image:v2 docker.1.localflynn.com/my-app:latest"
+	flynn: tagging Docker image with "docker tag my-custom-image:v2 docker.1.localflynn.com/my-app:latest"
 	flynn: pushing Docker image with "docker push docker.1.localflynn.com/my-app:latest"
 	The push refers to a repository [docker.1.localflynn.com/my-app] (len: 1)
 	a8eb754d1a89: Pushed
