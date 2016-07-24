@@ -18,7 +18,8 @@
       { "title": "PHP", "path": "/docs/languages/php" },
       { "title": "Python", "path": "/docs/languages/python" },
       { "title": "Ruby", "path": "/docs/languages/ruby" }
-    ] }
+    ] },
+    { "title": "Docker", "path": "/docs/docker" }
   ] },
   { "title": "Operating", "children": [
     { "title": "Production", "path": "/docs/production" },

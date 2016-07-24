@@ -8,5 +8,6 @@
   "/docs/how-to-deploy-nodejs": "/docs/languages/nodejs",
   "/docs/how-to-deploy-php": "/docs/languages/php",
   "/docs/how-to-deploy-python": "/docs/languages/python",
-  "/docs/how-to-deploy-ruby": "/docs/languages/ruby"
+  "/docs/how-to-deploy-ruby": "/docs/languages/ruby",
+  "/docs/faq/how-can-i-deploy-a-docker-image": "/docs/docker"
 }
