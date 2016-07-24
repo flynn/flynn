@@ -5,6 +5,7 @@
     { "title": "Manual", "path": "/docs/installation/manual" }
   ] },
   { "title": "Using", "children": [
+    { "title": "Basics", "path": "/docs/basics" },
     { "title": "Databases", "path": "/docs/databases", "children": [
           { "title": "PostgreSQL", "path": "/docs/databases/postgres" },
           { "title": "MySQL", "path": "/docs/databases/mysql" },

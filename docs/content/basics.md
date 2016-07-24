@@ -1,10 +1,10 @@
 ---
-title: Using Flynn
+title: Flynn Basics
 layout: docs
 toc_min_level: 2
 ---
 
-# Using Flynn
+# Flynn Basics
 
 This guide assumes you already have a running Flynn cluster and have configured
 the `flynn` command-line tool. If this is not the case, follow the [Installation
