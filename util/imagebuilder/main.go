@@ -216,9 +216,8 @@ func (b *Builder) mksquashfs(dir string) (*ct.ImageLayer, error) {
 	}
 
 	return &ct.ImageLayer{
-		Type:       ct.ImageLayerTypeSquashfs,
-		Length:     length,
-		Mountpoint: "/",
-		Hashes:     map[string]string{"sha512": sha512},
+		Type:   ct.ImageLayerTypeSquashfs,
+		Length: length,
+		Hashes: map[string]string{"sha512": sha512},
 	}, nil
 }

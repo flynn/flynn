@@ -515,10 +515,10 @@ type ImageLayerType string
 const ImageLayerTypeSquashfs ImageLayerType = "application/vnd.flynn.image.squashfs.v1"
 
 type ImageLayer struct {
-	Type       ImageLayerType    `json:"type,omitempty"`
-	Length     int64             `json:"length,omitempty"`
-	Mountpoint string            `json:"mountpoint,omitempty"`
-	Hashes     map[string]string `json:"hashes,omitempty"`
+	Type   ImageLayerType    `json:"type,omitempty"`
+	Length int64             `json:"length,omitempty"`
+	Hashes map[string]string `json:"hashes,omitempty"`
+	URL    string            `json:"url,omitempty"`
 }
 
 func (l *ImageLayer) ID() string {

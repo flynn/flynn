@@ -1,11 +1,9 @@
 package utils
 
 import (
-	"bytes"
 	"fmt"
 	"regexp"
 	"strings"
-	"text/template"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -108,29 +106,18 @@ func SetupMountspecs(job *host.Job, artifact *ct.Artifact) {
 		return
 	}
 
-	tmpl, _ := template.New("layer_url").Parse(artifact.Meta["layer_url_template"])
-
 	rootfs := manifest.Rootfs[0]
 	job.Mountspecs = make([]*host.Mountspec, len(rootfs.Layers)+1)
 	for i, layer := range rootfs.Layers {
-		spec := &host.Mountspec{
-			Type:       host.MountspecTypeSquashfs,
-			ID:         layer.Hashes["sha512"],
-			Mountpoint: layer.Mountpoint,
+		job.Mountspecs[i] = &host.Mountspec{
+			Type: host.MountspecTypeSquashfs,
+			ID:   layer.Hashes["sha512"],
+			URL:  layer.URL,
 		}
-
-		if tmpl != nil {
-			var url bytes.Buffer
-			tmpl.Execute(&url, layer)
-			spec.URL = url.String()
-		}
-
-		job.Mountspecs[i] = spec
 	}
 	job.Mountspecs[len(rootfs.Layers)] = &host.Mountspec{
-		Type:       host.MountspecTypeTmp,
-		ID:         job.ID,
-		Mountpoint: "/",
+		Type: host.MountspecTypeTmp,
+		ID:   job.ID,
 	}
 }
 

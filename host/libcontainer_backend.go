@@ -405,7 +405,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			return err
 		}
 	}
-	mounts, err := l.setupMounts(job, tmpPath)
+	rootMount, err := l.rootOverlayMount(job)
 	if err != nil {
 		log.Error("error setting up rootfs", "err", err)
 		return err
@@ -437,7 +437,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			"/proc/sys", "/proc/sysrq-trigger", "/proc/irq", "/proc/bus",
 		},
 		Devices: configs.DefaultAutoCreatedDevices,
-		Mounts: append(mounts, []*configs.Mount{
+		Mounts: append([]*configs.Mount{rootMount}, []*configs.Mount{
 			{
 				Source:      "proc",
 				Destination: "/proc",
@@ -676,9 +676,9 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	return nil
 }
 
-func (l *LibcontainerBackend) setupMounts(job *host.Job, tmpPath string) ([]*configs.Mount, error) {
-	paths := make(map[string][]string, len(job.Mountspecs))
-	for _, spec := range job.Mountspecs {
+func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, error) {
+	layers := make([]string, len(job.Mountspecs))
+	for i, spec := range job.Mountspecs {
 		var mountFn func(*host.Mountspec) (string, error)
 		switch spec.Type {
 		case host.MountspecTypeSquashfs:
@@ -690,41 +690,27 @@ func (l *LibcontainerBackend) setupMounts(job *host.Job, tmpPath string) ([]*con
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := paths[spec.Mountpoint]; ok {
-			paths[spec.Mountpoint] = append(paths[spec.Mountpoint], path)
-		} else {
-			paths[spec.Mountpoint] = []string{path}
+		layers[i] = path
+	}
+	dirs := make([]string, len(layers))
+	for i, layer := range layers {
+		// append mount paths in reverse order as overlay
+		// lower dirs are stacked from right to left
+		dirs[len(layers)-i-1] = layer
+	}
+	upperDir := filepath.Join(dirs[0], "overlay-upperdir")
+	workDir := filepath.Join(dirs[0], "overlay-workdir")
+	for _, dir := range []string{upperDir, workDir} {
+		if err := os.Mkdir(dir, 0755); err != nil {
+			return nil, err
 		}
 	}
-
-	mounts := make([]*configs.Mount, 0, len(paths))
-	for path, layers := range paths {
-		if len(layers) == 1 {
-			// TODO: use spec.Writeable?
-			mounts = append(mounts, bindMount(layers[0], path, true))
-			continue
-		}
-		dirs := make([]string, len(layers))
-		for i, layer := range layers {
-			// append mount paths in reverse order as overlay
-			// lower dirs are stacked from right to left
-			dirs[len(layers)-i-1] = layer
-		}
-		upperDir := filepath.Join(dirs[0], "overlay-upperdir")
-		workDir := filepath.Join(dirs[0], "overlay-workdir")
-		for _, dir := range []string{upperDir, workDir} {
-			if err := os.Mkdir(dir, 0755); err != nil {
-				return nil, err
-			}
-		}
-		mounts = append(mounts, &configs.Mount{
-			Source:      "overlay",
-			Destination: path,
-			Device:      "overlay",
-			Data:        fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(dirs[1:], ":"), upperDir, workDir),
-		})
-	}
-	return mounts, nil
+	return &configs.Mount{
+		Source:      "overlay",
+		Destination: "/",
+		Device:      "overlay",
+		Data:        fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(dirs[1:], ":"), upperDir, workDir),
+	}, nil
 }
 
 func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
