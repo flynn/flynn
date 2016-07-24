@@ -37,8 +37,7 @@ Options:
 Commands:
 	With no arguments, shows a list of releases associated with the app.
 
-	add	add a new release
-
+	add
 		Create a new release from a Docker image.
 
 		The optional file argument takes a path to a file containing release
@@ -46,24 +45,26 @@ Commands:
 		release environment and processes (similar to a Procfile). It can take any
 		of the arguments the controller Release type can take.
 
-	show	show information about a release
+	show
+		Show information about a release.
 
 		Omit the ID to show information about the current release.
 
-	update	update an existing release
+	update
+		Update an existing release.
 
 		Takes a path to a file containing release configuration in a JSON format.
 		It can take any of the arguments the controller Release type can take, and
 		will override existing config with any values set thus. Omit the ID to
 		update the current release.
 
-	delete  delete a release
+	delete
+		Delete a release.
 
 		Any associated file artifacts (e.g. slugs) will also be deleted.
 
-	rollback  rollback to a previous release
-
-		Deploys the previous release or the given release id.
+	rollback
+		Rollback to a previous release. Deploys the previous release or specified release ID.
 
 Examples:
 
