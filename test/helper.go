@@ -186,7 +186,7 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 }
 
 func (h *Helper) createArtifact(t *c.C, name string) *ct.Artifact {
-	path := fmt.Sprintf("../images/%s.json", name)
+	path := fmt.Sprintf("../image/%s.json", name)
 	f, err := os.Open(path)
 	t.Assert(err, c.IsNil)
 	defer f.Close()
