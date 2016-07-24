@@ -34,7 +34,6 @@
     { "title": "Development", "path": "/docs/development" },
     { "title": "Command Line", "path": "/docs/cli" },
     { "title": "Controller API", "path": "/docs/api/controller" },
-    { "title": "Router API", "path": "/docs/api/router" },
     { "title": "Trademark Guidelines", "path": "/docs/trademark-guidelines" }
   ] }
 ]
