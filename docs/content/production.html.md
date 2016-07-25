@@ -71,6 +71,71 @@ $ sudo zpool detach flynn-default /var/lib/flynn/volumes/zfs/vdev/flynn-default-
 $ sudo rm /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev
 ```
 
+## Blobstore Backend
+
+Flynn stores binary blobs like compiled applications, git repo archives,
+buildpack caches, and Docker image layers using the blobstore component. The
+blobstore supports two backends, Postgres and S3.
+
+By default, the blobstore uses the built-in Postgres appliance to store these
+blobs. This works well for light workloads and is the default configuration
+because it allows Flynn to be deployed anywhere without any external service
+dependencies.
+
+For anything other than light workloads, we recommend using [Amazon
+S3](https://aws.amazon.com/s3/) as the blobstore backend.
+
+To migrate to the S3 backend, you first need to provision a new bucket and
+create credentials for it. In AWS IAM, add a policy that looks like this:
+
+```text
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:DeleteObject",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:PutObject",
+                "s3:ListMultipartUploadParts",
+                "s3:AbortMultipartUpload",
+                "s3:ListBucketMultipartUploads"
+            ],
+            "Resource": [
+                "arn:aws:s3:::flynnblobstore",
+                "arn:aws:s3:::flynnblobstore/*"
+            ]
+        }
+    ]
+}
+```
+
+Don't forget to change the bucket name in the `Resource` section before adding
+the policy.
+
+After creating the S3 bucket and credentials, configure the blobstore to use it as
+the backend:
+
+```text
+flynn -a blobstore env set BACKEND_S3MAIN="backend=s3 region=us-east-1 \
+bucket=flynnblobstore access_key_id=$AWS_ACCESS_KEY_ID \
+secret_access_key=$AWS_SECRET_ACCESS_KEY"
+
+flynn -a blobstore env set DEFAULT_BACKEND=s3main
+```
+
+If the credentials are invalid, the first command will fail, and you can check the
+logs with `flynn -a blobstore log`.
+
+Finally, migrate the existing blobs from Postgres to S3 and remove them from
+Postgres:
+
+```text
+flynn -a blobstore run /bin/flynn-blobstore-migrate -delete
+```
+
 ## DNS and Load Balancing
 
 Flynn has a built-in router that handles all incoming HTTP, HTTPS and TCP
