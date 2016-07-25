@@ -11,5 +11,6 @@
   "/docs/how-to-deploy-ruby": "/docs/languages/ruby",
   "/docs/faq/how-can-i-deploy-a-docker-image": "/docs/docker",
   "/docs/faq/how-can-i-debug-a-cluster-problem": "/docs/production#debugging",
+  "/docs/faq/how-do-i-get-a-dashboard-login-token": "/docs/dashboard#login-token",
   "/docs": "/docs/basics"
 }

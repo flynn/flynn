@@ -20,6 +20,7 @@
       { "title": "Python", "path": "/docs/languages/python" },
       { "title": "Ruby", "path": "/docs/languages/ruby" }
     ] },
+    { "title": "Dashboard", "path": "/docs/dashboard" },
     { "title": "Docker", "path": "/docs/docker" }
   ] },
   { "title": "Operating", "children": [
