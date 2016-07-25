@@ -1,4 +1,5 @@
 include_rules
 : |> !go |> bin/docker-receive
+: |> !go ./artifact |> bin/docker-artifact
 : $(ROOT)/util/ca-certs/ca-certs.pem |> !cp |> bin/ca-certs.pem
-: bin/docker-receive bin/ca-certs.pem |> !docker-bootstrapped |>
+: bin/docker-receive bin/docker-artifact bin/ca-certs.pem |> !docker-bootstrapped |>
