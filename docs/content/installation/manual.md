@@ -7,14 +7,14 @@ layout: docs
 
 Flynn can be installed using our install script on Ubuntu 14.04 amd64.
 
-We recommend starting with a clean Ubuntu installation on machines with at least
+We recommend starting with a clean, stock-kernel Ubuntu installation on machines with at least
 1GB of RAM, 20GB of storage, and two CPU cores each.
 
 Before we get going with the installation, please note that if you plan on running a multi-node
 cluster, you should boot at least 3 nodes for cluster stability.
 
-*NOTE: If you are installing on Linode, you need to use native kernels (rather
-than Linode kernels) for AUFS support, see [this
+*NOTE: If you are installing on Linode or other providers that customize kernels, please note that you may need to change them for native kernels (rather
+than customised kernels). Linode custom kernels are missing AUFS support, see [this
 guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distributionsupplied-kernel-with-pvgrub)
 for instructions on how to switch.*
 
