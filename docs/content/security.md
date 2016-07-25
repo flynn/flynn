@@ -114,7 +114,7 @@ issues:
    branch. These fixes are not committed to the public repository.
 1. An advance notification is sent to the release announcements mailing list to
    allow users to prepare to apply the fix.
-1. Three business days after the notification, the fix is applied to the public
+1. Three days after the notification, the fix is applied to the public
    repository and new stable and nightly releases are pushed. The stable release
    will be a hotfix release that only contains the security fix.
 1. As soon as the fix is applied and released, announcements are sent to the

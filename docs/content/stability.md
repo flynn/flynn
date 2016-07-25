@@ -28,19 +28,20 @@ that is right for them. We are committed to transparency so you can decide which
 features of Flynn to use at different times in different ways based on your own
 specific needs.
 
+## Release Channels
+
 We currently have two release channels: nightly and stable.
+
+For details on current releases visit the [Flynn releases
+site](https://releases.flynn.io).
 
 Nightly updates will include all the bleeding edge changes that have just been
 merged into Flynn. These changes have all passed code review and our CI system,
 but may not be fully tested in "the real world".
 
-The stable channel is currently released monthly and changes have had more time
-to stabilize. We can't guarantee that these releases will be free of bugs or
-unexpected behavior, but our standards are and will continue to be high. It's
-important to us that users feel they can trust us and the systems we build, and
-that trust has to be earned. The release frequency will likely change over time
-as we work with users and transition to a release model inspired by the release
-train system used by major web browsers.
+Stable updates are released on the third Tuesday of each month with changes that
+have had more time to stabilize. [Security updates](/docs/security) are provided
+for the current and previous stable channel release.
 
 Flynn currently has some [security considerations](/docs/security) that you
 should take into account when evaluating it.
