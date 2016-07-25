@@ -37,6 +37,20 @@ To connect to a `psql` console for the database, run `flynn pg psql`. This does 
 require the Postgres client to be installed locally or firewall/security
 changes, as it runs in a container on the Flynn cluster.
 
+### Connecting via External Tools such as pgAdmin
+
+To access a provisioned database via external tools such as pgAdmin you should use SSH
+tunneling. For SSH Tunnel details, use SSH credentials you use to access host machine.
+For database details use values of environmental variables by executing following
+commands:
+
+```text
+$ flynn run host `flynn env get PGHOST`
+$ flynn env get PGDATABASE
+$ flynn env get PGUSER
+$ flynn env get PGPASSWORD
+```
+
 ### Dumping and restoring
 
 The Flynn CLI provides commands for exporting and restoring database dumps.
