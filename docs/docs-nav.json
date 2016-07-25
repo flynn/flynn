@@ -30,6 +30,7 @@
   { "title": "FAQ", "path": "/docs/faq" },
   { "title": "Reference", "children": [
     { "title": "Architecture", "path": "/docs/architecture" },
+    { "title": "Roadmap", "path": "/docs/roadmap" },
     { "title": "Contributing", "path": "/docs/contributing" },
     { "title": "Development", "path": "/docs/development" },
     { "title": "Command Line", "path": "/docs/cli" },
