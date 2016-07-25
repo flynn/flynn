@@ -18,6 +18,7 @@
   { "title": "Databases", "path": "/docs/databases", "children": [
         { "title": "PostgreSQL", "path": "/docs/postgres" },
         { "title": "MySQL", "path": "/docs/mysql" },
+        { "title": "MongoDB", "path": "/docs/mongodb" },
         { "title": "Redis", "path": "/docs/redis" }
   ] },
   { "title": "Stability", "path": "/docs/stability" },
