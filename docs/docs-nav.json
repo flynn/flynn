@@ -23,7 +23,8 @@
       { "title": "Ruby", "path": "/docs/languages/ruby" }
     ] },
     { "title": "Dashboard", "path": "/docs/dashboard" },
-    { "title": "Docker", "path": "/docs/docker" }
+    { "title": "Docker", "path": "/docs/docker" },
+    { "title": "Command Line Interface", "path": "/docs/cli" }
   ] },
   { "title": "Operating", "children": [
     { "title": "Production", "path": "/docs/production" },
@@ -36,7 +37,6 @@
     { "title": "Roadmap", "path": "/docs/roadmap" },
     { "title": "Contributing", "path": "/docs/contributing" },
     { "title": "Development", "path": "/docs/development" },
-    { "title": "Command Line", "path": "/docs/cli" },
     { "title": "Controller API", "path": "/docs/api/controller" },
     { "title": "Trademark Guidelines", "path": "/docs/trademark-guidelines" }
   ] }
