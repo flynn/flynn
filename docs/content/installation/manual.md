@@ -13,8 +13,9 @@ We recommend starting with a clean Ubuntu installation on machines with at least
 Before we get going with the installation, please note that if you plan on running a multi-node
 cluster, you should boot at least 3 nodes for cluster stability.
 
-*NOTE: If you are installing on Linode, you need to use native kernels (rather
-than Linode kernels) for AUFS support, see [this
+*NOTE: If you are installing on a provider that uses a customized kernel by
+default, you need to use the native Ubuntu kernel instead of of a custom kernel
+for AUFS support. On Linode, [use this
 guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distributionsupplied-kernel-with-pvgrub)
 for instructions on how to switch.*
 
