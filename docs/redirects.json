@@ -22,5 +22,6 @@
   "/docs/faq/how-can-i-ship-logs-to-a-log-aggregator": "/docs/apps#external-logs",
   "/docs/faq/how-do-i-restart-individual-components": "/docs/apps#processes",
   "/docs/faq/how-do-i-use-custom-buildpacks": "/docs/apps#buildpacks",
+  "/docs/faq/how-do-i-change-or-add-a-controller-key": "/docs/production#controller-keys",
   "/docs": "/docs/basics"
 }
