@@ -49,3 +49,15 @@ should take into account when evaluating it.
 Currently we do not recommend using the built-in database appliances for
 databases with high write volume or a large amount of data as they are not yet
 optimized for demanding use cases.
+
+## Release Mailing List
+
+If you'd like to receive email about each month's stable release and security
+updates, subscribe here:
+
+<form action="https://flynn.us7.list-manage.com/subscribe/post?u=9600741fc187618e1baa39a58&id=8aadb709f3" method="post" target="_blank" novalidate class="mailing-list-form">
+  <label>Email Address&nbsp;
+    <input type="email" name="EMAIL" placeholder="you@example.com">
+  </label>
+  <button type="submit" name="subscribe">Subscribe</button>
+</form>

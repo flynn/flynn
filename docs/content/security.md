@@ -135,6 +135,13 @@ The best way to receive security announcements is to subscribe to the release
 announcements mailing list. Any messages related to a security issue will have
 the word `security` in the subject.
 
+<form action="https://flynn.us7.list-manage.com/subscribe/post?u=9600741fc187618e1baa39a58&id=8aadb709f3" method="post" target="_blank" novalidate class="mailing-list-form">
+  <label>Email Address&nbsp;
+    <input type="email" name="EMAIL" placeholder="you@example.com">
+  </label>
+  <button type="submit" name="subscribe">Subscribe</button>
+</form>
+
 ## PGP Key
 
 ```text

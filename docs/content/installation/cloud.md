@@ -50,3 +50,15 @@ IP address of the server:
 ```text
 ssh -i ~/.flynn/installer/keys/flynn ubuntu@SERVER_IP
 ```
+
+## Release Mailing List
+
+If you'd like to receive email about each month's stable release and security
+updates, subscribe here:
+
+<form action="https://flynn.us7.list-manage.com/subscribe/post?u=9600741fc187618e1baa39a58&id=8aadb709f3" method="post" target="_blank" novalidate class="mailing-list-form">
+  <label>Email Address&nbsp;
+    <input type="email" name="EMAIL" placeholder="you@example.com">
+  </label>
+  <button type="submit" name="subscribe">Subscribe</button>
+</form>
