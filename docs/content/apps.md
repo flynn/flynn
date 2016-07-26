@@ -6,7 +6,7 @@ toc_min_level: 2
 
 # Apps
 
-Applications can be deployed to Flynn using [Buildpacks](/docs/buildpacks) or
+Applications can be deployed to Flynn using [Buildpacks](#buildpacks) or
 [Docker](/docs/docker). This page provides information about the management and
 configuration of apps on Flynn.
 
