@@ -22,7 +22,7 @@ started after the initial bootstrap act as proxies to the consensus cluster. We
 recommend starting with three or five hosts and adding more hosts when
 necessary.
 
-Each host should have a minimum of 1GB of memory, and inter-host network packets
+Each host should have a minimum of 2GB of memory, and inter-host network packets
 should have a latency of less than 2ms. Deploying a single Flynn cluster across
 higher latency WAN links is not recommended, as it can have a significant impact
 on the stability of cluster consensus.
