@@ -23,5 +23,6 @@
   "/docs/faq/how-do-i-restart-individual-components": "/docs/apps#processes",
   "/docs/faq/how-do-i-use-custom-buildpacks": "/docs/apps#buildpacks",
   "/docs/faq/how-do-i-change-or-add-a-controller-key": "/docs/production#controller-keys",
+  "/docs/faq/how-can-i-use-multiple-clusters-with-cli": "/docs/cli#global-flags",
   "/docs": "/docs/basics"
 }
