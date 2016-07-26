@@ -212,7 +212,21 @@ on the cluster, import the configuration, create databases, and import the data
 from the exported app. If you'd like to provide a new name for the app, the
 `--name` flag may be specified. By default a new route is created based on the
 app name and the cluster domain. To import the old routes in addition to the new
-route, add the `--routes` flag. 
+route, add the `--routes` flag.
+
+## SSH Client Key
+
+Some apps require a SSH private key to download dependencies or submodules while
+deploying. Flynn supports configuring a single SSH client key for the platform
+that will be used whenever SSH is used during builds triggered by `git push`.
+
+To configure the keypair, set the `SSH_CLIENT_KEY` and `SSH_CLIENT_HOSTS`
+environment variables on the built-in `gitreceive` app:
+
+```text
+flynn -a gitreceive env set SSH_CLIENT_HOSTS="$(ssh-keyscan -H github.com)"\
+   SSH_CLIENT_KEY="$(cat ~/.ssh/id_rsa)"
+```
 
 ## Monitoring
 
