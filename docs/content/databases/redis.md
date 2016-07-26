@@ -38,6 +38,20 @@ To connect to a console for the database, run `flynn redis redis-cli`. This does
 not require the Redis client to be installed locally or firewall/security
 changes, as it runs in a container on the Flynn cluster.
 
+### External access
+
+An external route can be created that allows access to the database from
+services that are not running on Flynn.
+
+```text
+flynn -a $(flynn env get FLYNN_REDIS) route add tcp --service $(flynn env get FLYNN_REDIS) --leader
+```
+
+This will provision a TCP port that always points at the primary instance.
+
+For security reasons this port should be firewalled, and it should only be
+accessed over the local network, VPN, or SSH tunnel.
+
 ## Safety
 
 No safety or availability guarantees are currently provided for the Redis

@@ -77,6 +77,20 @@ MySQL database, use `mysqldump` to create a dump file:
 $ mysqldump mydb > mydb.dump
 ```
 
+### External access
+
+An external route can be created that allows access to the database from
+services that are not running on Flynn.
+
+```text
+flynn -a mariadb route add tcp --service mariadb --leader
+```
+
+This will provision a TCP port that always points at the primary instance.
+
+For security reasons this port should be firewalled, and it should only be
+accessed over the local network, VPN, or SSH tunnel.
+
 ## Safety
 
 This appliance is designed to provide full consistency and partition tolerance
