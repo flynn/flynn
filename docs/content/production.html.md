@@ -325,9 +325,8 @@ discovery token or list of host IPs that was used to start the cluster.
 
 Care should be taken to ensure that the same version of Flynn is installed on
 all hosts. The installed version of Flynn can be checked with `flynn-host
-version`, and the version to install can be specified by setting the
-`FLYNN_VERSION` environment variable to the desired version when running the
-install script.
+version`, and the version to install can be specified by setting the `--version`
+CLI flag to the desired version when running the install script.
 
 # Replacing Hosts
 

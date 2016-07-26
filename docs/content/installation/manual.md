@@ -35,6 +35,9 @@ $ curl -fsSL -o /tmp/install-flynn https://dl.flynn.io/install-flynn
 $ sudo bash /tmp/install-flynn
 ```
 
+_To install a [specific channel or version](https://releases.flynn.io), you can
+use the `--channel` and `--version` flags._
+
 Running the installer script will:
 
 1. Install Flynn's runtime dependencies
