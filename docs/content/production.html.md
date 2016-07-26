@@ -1,10 +1,10 @@
 ---
-title: Operating Flynn
+title: Production
 layout: docs
 toc_min_level: 2
 ---
 
-# Operating Flynn
+# Production
 
 We've designed Flynn to be very easy to get up and running with quickly.
 However, there are a variety of things that should be considered as you start
@@ -22,7 +22,7 @@ started after the initial bootstrap act as proxies to the consensus cluster. We
 recommend starting with three or five hosts and adding more hosts when
 necessary.
 
-Each host should have a minimum of 1GB of memory, and inter-host network packets
+Each host should have a minimum of 2GB of memory, and inter-host network packets
 should have a latency of less than 2ms. Deploying a single Flynn cluster across
 higher latency WAN links is not recommended, as it can have a significant impact
 on the stability of cluster consensus.
@@ -69,6 +69,71 @@ errors: No known data errors
 # Detach the sparse file from the ZFS pool and delete it
 $ sudo zpool detach flynn-default /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev
 $ sudo rm /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev
+```
+
+## Blobstore Backend
+
+Flynn stores binary blobs like compiled applications, git repo archives,
+buildpack caches, and Docker image layers using the blobstore component. The
+blobstore supports two backends, Postgres and S3.
+
+By default, the blobstore uses the built-in Postgres appliance to store these
+blobs. This works well for light workloads and is the default configuration
+because it allows Flynn to be deployed anywhere without any external service
+dependencies.
+
+For anything other than light workloads, we recommend using [Amazon
+S3](https://aws.amazon.com/s3/) as the blobstore backend.
+
+To migrate to the S3 backend, you first need to provision a new bucket and
+create credentials for it. In AWS IAM, add a policy that looks like this:
+
+```text
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:DeleteObject",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:PutObject",
+                "s3:ListMultipartUploadParts",
+                "s3:AbortMultipartUpload",
+                "s3:ListBucketMultipartUploads"
+            ],
+            "Resource": [
+                "arn:aws:s3:::flynnblobstore",
+                "arn:aws:s3:::flynnblobstore/*"
+            ]
+        }
+    ]
+}
+```
+
+Don't forget to change the bucket name in the `Resource` section before adding
+the policy.
+
+After creating the S3 bucket and credentials, configure the blobstore to use it as
+the backend:
+
+```text
+flynn -a blobstore env set BACKEND_S3MAIN="backend=s3 region=us-east-1 \
+bucket=flynnblobstore access_key_id=$AWS_ACCESS_KEY_ID \
+secret_access_key=$AWS_SECRET_ACCESS_KEY"
+
+flynn -a blobstore env set DEFAULT_BACKEND=s3main
+```
+
+If the credentials are invalid, the first command will fail, and you can check the
+logs with `flynn -a blobstore log`.
+
+Finally, migrate the existing blobs from Postgres to S3 and remove them from
+Postgres:
+
+```text
+flynn -a blobstore run /bin/flynn-blobstore-migrate -delete
 ```
 
 ## DNS and Load Balancing
@@ -147,7 +212,21 @@ on the cluster, import the configuration, create databases, and import the data
 from the exported app. If you'd like to provide a new name for the app, the
 `--name` flag may be specified. By default a new route is created based on the
 app name and the cluster domain. To import the old routes in addition to the new
-route, add the `--routes` flag. 
+route, add the `--routes` flag.
+
+## SSH Client Key
+
+Some apps require a SSH private key to download dependencies or submodules while
+deploying. Flynn supports configuring a single SSH client key for the platform
+that will be used whenever SSH is used during builds triggered by `git push`.
+
+To configure the keypair, set the `SSH_CLIENT_KEY` and `SSH_CLIENT_HOSTS`
+environment variables on the built-in `gitreceive` app:
+
+```text
+flynn -a gitreceive env set SSH_CLIENT_HOSTS="$(ssh-keyscan -H github.com)"\
+   SSH_CLIENT_KEY="$(cat ~/.ssh/id_rsa)"
+```
 
 ## Monitoring
 
@@ -246,25 +325,72 @@ discovery token or list of host IPs that was used to start the cluster.
 
 Care should be taken to ensure that the same version of Flynn is installed on
 all hosts. The installed version of Flynn can be checked with `flynn-host
-version`, and the version to install can be specified by setting the
-`FLYNN_VERSION` environment variable to the desired version when running the
-install script.
+version`, and the version to install can be specified by setting the `--version`
+CLI flag to the desired version when running the install script.
 
 # Replacing Hosts
 
-If a member of the cluster that is participating in the consensus set becomes permanently unavailable it must be replaced in order to restore fault tolerance.
-If you have already added additional hosts to your cluster beyond the members of the consensus set then you can promote one of these peers to the consensus set.
-Otherwise you will first need to start a new host and join it to the cluster as described in the Adding Hosts section.
-You can check the Raft consensus status of your cluster hosts by running `flynn-host list`, if the host is a member its status will be displayed as `peer`, conversely it will be listed as `proxy`.
+If a member of the cluster that is participating in the consensus set becomes
+permanently unavailable, it must be replaced in order to restore fault
+tolerance. If you have already added additional hosts to your cluster beyond the
+members of the consensus set, you can promote one of these peers to the
+consensus set. Otherwise you will first need to start a new host and join it to
+the cluster as described in the Adding Hosts section. You can check the Raft
+consensus status of your cluster hosts by running `flynn-host list`. If the host
+is a member its status will be displayed as `peer`. If not, it will be listed as
+`proxy`.
 
-From this point you must first demote the old peer from the consensus set.
-If the peer is already unavailable the use of the `--force` flag is necessary, if however you are preemptively replacing the peer it can be omitted for a more graceful stepdown.
-The command to do so is `flynn-host demote --force $PEER_IP`.
+The first step is to demote the old peer from the consensus set. If the peer is
+already unavailable, use the `--force` flag. If you are preemptively replacing
+a peer that is currently working, the force flag should not be used.
 
-Once the old peer is removed you can add the new peer to the consensus set with `flynn-host promote $PEER_IP`.
-This may take a short time as the new peer replicates data from the Raft leader before starting to service operations.
+To demote the peer, run `flynn-host demote --force $PEER_IP`.
 
-When the process is complete a `discoverd` deployment should be run to update the `DISCOVERD_PEERS` environment variable.
-You can retrieve the current value with `flynn -a discoverd env get DISCOVERD_PEERS`. Replace the address of the old peer with the new one and update the value with `flynn -a discoverd env set DISCOVERD_PEERS=$PEER_IPS`
+Once the old peer is removed you can add the new peer to the consensus set with
+`flynn-host promote $PEER_IP`. This may take a short time as the new peer
+replicates data from the Raft leader before starting to service operations.
 
-At this point the host has been replaced successfully and the cluster has regained full fault tolerance.
+When the process is complete a `discoverd` deployment should be run to update
+the `DISCOVERD_PEERS` environment variable. You can retrieve the current value
+with `flynn -a discoverd env get DISCOVERD_PEERS`. Replace the address of the
+old peer with the new one and update the value with `flynn -a discoverd env set
+DISCOVERD_PEERS=$PEER_IPS`
+
+At this point the host has been replaced successfully and the cluster will
+regain full fault tolerance.
+
+## Controller Keys
+
+The Flynn CLI requires a controller authentication key to interact with
+a cluster. The key is generated at cluster creation time, but it can be changed
+and new keys can be added. Keys are stored in the environment variable
+`AUTH_KEY`, a comma-separated list of authentication keys.
+
+    # Generate a new random key
+    NEW_KEY=$(openssl rand -hex 16)
+
+    # Add the new key alongside the existing key
+    flynn -a controller env set AUTH_KEY=$NEW_KEY,$(flynn -a controller env get AUTH_KEY)
+
+To rotate an authentication key:
+
+    # Generate a new random key
+    NEW_KEY=$(openssl rand -hex 16)
+
+    # Add both the old and new keys to just the web process type
+    flynn -a controller env set -t web AUTH_KEY=$NEW_KEY,$(flynn -a controller env get AUTH_KEY)
+
+    # Update internal apps to use the new key
+    flynn -a docker-receive env set AUTH_KEY=$NEW_KEY CONTROLLER_KEY=$NEW_KEY
+    flynn -a gitreceive env set CONTROLLER_KEY=$NEW_KEY
+    flynn -a taffy env set CONTROLLER_KEY=$NEW_KEY
+    flynn -a dashboard env set CONTROLLER_KEY=$NEW_KEY
+    flynn -a redis env set CONTROLLER_KEY=$NEW_KEY
+    flynn -a mariadb env set CONTROLLER_KEY=$NEW_KEY
+    flynn -a mongodb env set CONTROLLER_KEY=$NEW_KEY
+
+    # Set the global key to be the new key
+    flynn -a controller env set AUTH_KEY=$NEW_KEY
+
+    # Unset the web process-specific key
+    flynn -a controller env unset -t web AUTH_KEY

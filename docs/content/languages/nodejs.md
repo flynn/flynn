@@ -1,11 +1,11 @@
 ---
-title: How To Deploy Node.js
+title: Node.js
 layout: docs
 ---
 
-# How To Deploy Node.js
+# Node.js
 
-Node.js is supported by the [Heroku Node.js buildpack](https://github.com/heroku/heroku-buildpack-nodejs).
+Node.js is supported by the [Node.js buildpack](https://github.com/heroku/heroku-buildpack-nodejs).
 
 ## Detection
 

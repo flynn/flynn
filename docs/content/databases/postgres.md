@@ -75,6 +75,20 @@ Postgres database, use `pg_dump` to create a dump file:
 $ pg_dump --format=custom --no-acl --no-owner mydb > mydb.dump
 ```
 
+### External access
+
+An external route can be created that allows access to the database from
+services that are not running on Flynn.
+
+```text
+flynn -a postgres route add tcp --service postgres --leader
+```
+
+This will provision a TCP port that always points at the primary instance.
+
+For security reasons this port should be firewalled, and it should only be
+accessed over the local network, VPN, or SSH tunnel.
+
 ### Extensions
 
 The Flynn Postgres appliance comes configured with many extensions available

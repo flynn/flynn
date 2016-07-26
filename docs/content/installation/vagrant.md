@@ -80,5 +80,5 @@ $ make reset
 
 With a successful installation, you will have a single node Flynn cluster running inside the VM.
 
-Now you have Flynn installed and running, head over to the [Using Flynn](/docs)
-page for guides on deploying your applications to Flynn.
+Now you have Flynn installed and running, head over to the [Flynn
+Basics](/docs/basics) page for a tutorial on deploying an application to Flynn.

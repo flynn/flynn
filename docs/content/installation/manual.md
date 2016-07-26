@@ -8,13 +8,16 @@ layout: docs
 Flynn can be installed using our install script on Ubuntu 14.04 amd64.
 
 We recommend starting with a clean Ubuntu installation on machines with at least
-1GB of RAM, 20GB of storage, and two CPU cores each.
+2GB of RAM, 40GB of storage, and two CPU cores each. It's possible to run Flynn
+on servers with lower specs, but we don't recommend it.
 
-Before we get going with the installation, please note that if you plan on running a multi-node
-cluster, you should boot at least 3 nodes for cluster stability.
+Before we get going with the installation, please note that if you plan on
+running a multi-node cluster, you should boot at least 3 nodes to provide high
+availability.
 
-*NOTE: If you are installing on Linode, you need to use native kernels (rather
-than Linode kernels) for AUFS support, see [this
+*NOTE: If you are installing on a provider that uses a customized kernel by
+default, you need to use the native Ubuntu kernel instead of a custom kernel
+for AUFS support. On Linode, [use this
 guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distributionsupplied-kernel-with-pvgrub)
 for instructions on how to switch.*
 
@@ -35,6 +38,9 @@ $ curl -fsSL -o /tmp/install-flynn https://dl.flynn.io/install-flynn
 $ sudo bash /tmp/install-flynn
 ```
 
+_To install a [specific channel or version](https://releases.flynn.io), you can
+use the `--channel` and `--version` flags._
+
 Running the installer script will:
 
 1. Install Flynn's runtime dependencies
@@ -42,8 +48,8 @@ Running the installer script will:
 3. Download and verify filesystem images for each of the Flynn components
 4. Install an Upstart job for controlling the `flynn-host` daemon
 
-Some of the filesystem images are quite large (hundreds of MB) so step 3 could take a while depending on
-your internet connection.
+Some of the filesystem images are quite large (several hundred megabytes) so step 3 could take a while depending on
+your Internet connection.
 
 ## Rinse and repeat
 
@@ -118,10 +124,6 @@ demo.localflynn.com.    A      192.168.84.44
 *.demo.localflynn.com.  CNAME  demo.localflynn.com.
 ```
 
-*If you are just using a single node and don't want to initially setup DNS
-records, you can use [xip.io](http://xip.io) which provides wildcard DNS for
-any IP address.*
-
 Set `CLUSTER_DOMAIN` to the main domain name and start the bootstrap process,
 specifying the number of hosts that are expected to be present and the discovery
 token if you created one.
@@ -144,5 +146,17 @@ The Layer 1 bootstrapper will get all necessary services running using the Layer
 If you try these instructions and run into issues, please open an issue or pull
 request.
 
-Now you have Flynn installed and running, head over to the [Using Flynn](/docs)
-page for guides on deploying your applications to Flynn.
+Now you have Flynn installed and running, head over to the [Flynn
+Basics](/docs/basics) page for a tutorial on deploying an application to Flynn.
+
+## Release Mailing List
+
+If you'd like to receive email about each month's stable release and security
+updates, subscribe here:
+
+<form action="https://flynn.us7.list-manage.com/subscribe/post?u=9600741fc187618e1baa39a58&id=8aadb709f3" method="post" target="_blank" novalidate class="mailing-list-form">
+  <label>Email Address&nbsp;
+    <input type="email" name="EMAIL" placeholder="you@example.com">
+  </label>
+  <button type="submit" name="subscribe">Subscribe</button>
+</form>

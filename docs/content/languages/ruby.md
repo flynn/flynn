@@ -1,14 +1,14 @@
 ---
-title: How To Deploy Ruby
+title: Ruby
 layout: docs
 ---
 
-# How to Deploy Ruby
+# Ruby
 
 Flynn supports deploying Ruby, Rack, and Rails applications using a variety of Ruby
 interpreters, namely MRI, [JRuby](http://www.jruby.org), and [Rubinius](http://rubini.us).
 
-Flynn uses the [Heroku Ruby buildpack](https://github.com/heroku/heroku-buildpack-ruby)
+Flynn uses the [Ruby buildpack](https://github.com/heroku/heroku-buildpack-ruby)
 to detect, compile, and release Ruby applications.
 
 ## Detection

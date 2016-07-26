@@ -1,27 +1,26 @@
+![Flynn logo](https://flynn.io/images/flynn-acaf9509.svg)
+
 # Flynn is an open source Platform as a Service
 
 - Website: [https://flynn.io](https://flynn.io)
-- IRC: #flynn on Freenode
+- IRC channel: #flynn on Freenode
 - Mailing list: [flynn-users](https://groups.google.com/d/forum/flynn-users)
 
 Flynn is designed to run anything that can run on Linux, not just stateless web
-apps. Flynn includes built-in database appliances (just Postgres right now) and
-handles TCP traffic as well as HTTP and HTTPS.
+apps. Flynn comes with highly available database appliances, including
+PostgreSQL, MySQL, and MongoDB.
 
 Eventually we want Flynn to be the only tool developers and ops teams need to
 develop, deploy, and manage running software.
 
 You can learn more about Flynn at [our website](https://flynn.io).
 
-The Flynn website also has [documentation](https://flynn.io/docs) including
-[FAQs](https://flynn.io/docs/faq).
-
-![Flynn logo](https://flynn.io/images/flynn-acaf9509.svg)
+The Flynn website also has [documentation](https://flynn.io/docs).
 
 ### Status
 
 Flynn is very actively developed by [Prime Directive, Inc.](https://flynn.io)
-and the greater Flynn community.
+and the Flynn community.
 
 Learn more about Flynn's [stability](https://flynn.io/docs/stability).
 
@@ -43,8 +42,8 @@ Guide](https://flynn.io/docs/installation).
 
 ### Deploying applications
 
-Check out the [Using Flynn](https://flynn.io/docs) guide for instructions on
-deploying and scaling applications.
+Check out the [Flynn Basics](https://flynn.io/docs/basics) guide for
+instructions on deploying and scaling applications.
 
 ## Contributing
 
@@ -60,8 +59,6 @@ There are many ways to help Flynn besides contributing code:
 
 - Find bugs and file issues.
 - Improve the [documentation](https://flynn.io/docs) and website.
-
-Learn more at [flynn.io](https://flynn.io).
 
 ## Contact us
 

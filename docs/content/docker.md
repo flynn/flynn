@@ -1,10 +1,10 @@
 ---
-title: How can I deploy a Docker image to Flynn?
+title: Docker
 layout: docs
 toc_min_level: 2
 ---
 
-# How can I deploy a Docker image to Flynn?
+# Docker
 
 Flynn has a built-in `docker-receive` app which wraps a Docker registry and
 imports pushed Docker images into a Flynn cluster.

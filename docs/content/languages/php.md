@@ -1,9 +1,9 @@
 ---
-title: How To Deploy PHP
+title: PHP
 layout: docs
 ---
 
-# How To Deploy PHP
+# PHP
 
 Flynn supports deploying PHP applications using either the PHP or [HHVM](http://hhvm.com/)
 runtime, with a choice of either [Apache2](http://httpd.apache.org/) or
