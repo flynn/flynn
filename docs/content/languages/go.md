@@ -6,36 +6,24 @@ layout: docs
 # Go
 
 Go apps are supported on Flynn by the [Go
-buildpack](https://github.com/kr/heroku-buildpack-go). 
+buildpack](https://github.com/heroku/heroku-buildpack-go).
 
 ## Detection
 
-The Go buildpack is used if the repository contains any filenames ending with `.go`.
+The Go buildpack is used if the repository contains any filenames ending with
+`.go`.
 
 ## Dependencies
 
-The Go buildpack allows you to specify and install your dependencies using one
-of two methods, `godep` or `go get`. The recommended method is to use
-[godep](https://github.com/tools/godep), which saves application dependencies
-into the git repo so that the application can be reproducibly deployed.
+The Go buildpack allows you to specify and install your dependencies using
+`godep`, which saves application dependencies into the git repo so that the
+application can be reproducibly deployed.
 
 ### godep
 
-To save dependencies using [godep](https://github.com/tools/godep), run `godep save` in your app directory and commit the `Godeps` directory. When you deploy
-to Flynn, the packages in the `Godeps` directory will be used.
-
-### go get
-
-If you do not have a `Godeps` directory in your app repo, the buildpack
-downloads [Mercurial](http://mercurial.selenic.com/) and
-[Bazaar](http://bazaar.canonical.com/en/) and then runs `go get` to download the
-latest version of each imported package. This method can be slow and unreliable, as it does not provide repeatable builds.
-
-A `.godir` file must exist in the root of the repository if you are not using
-godep. This file must contain the full package path of your application, which
-will be used to find packages and name the app binary. For example, a `.godir`
-file containing the path `github.com/flynn/flynn` with a main package in the
-root will result in a binary called `flynn`.
+To save dependencies using [godep](https://github.com/tools/godep), run `godep
+save` in your app directory and commit the `Godeps` and `vendor` directories.
+When you deploy to Flynn, the packages in the `Godeps` directory will be used.
 
 ### Go Version
 
