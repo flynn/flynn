@@ -1,6 +1,6 @@
 [
   { "title": "Installation", "children": [
-    { "title": "Cloud", "path": "/docs/installation" },
+    { "title": "Cloud", "path": "/docs/installation/cloud" },
     { "title": "Vagrant", "path": "/docs/installation/vagrant" },
     { "title": "Manual", "path": "/docs/installation/manual" },
     { "title": "Releases", "path": "https://releases.flynn.io" }
@@ -31,7 +31,6 @@
     { "title": "Stability", "path": "/docs/stability" },
     { "title": "Security", "path": "/docs/security" }
   ] },
-  { "title": "FAQ", "path": "/docs/faq" },
   { "title": "Reference", "children": [
     { "title": "Architecture", "path": "/docs/architecture" },
     { "title": "Roadmap", "path": "/docs/roadmap" },

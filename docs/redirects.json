@@ -25,5 +25,6 @@
   "/docs/faq/how-do-i-change-or-add-a-controller-key": "/docs/production#controller-keys",
   "/docs/faq/how-can-i-use-multiple-clusters-with-cli": "/docs/cli#global-flags",
   "/docs/faq/how-to-register-a-flynn-cluster-with-the-cli-tool": "/docs/cli#adding-clusters",
+  "/docs/faq/how-do-i-ssh-to-flynn-cluster-hosts": "/docs/installation/cloud#ssh-access",
   "/docs": "/docs/basics"
 }
