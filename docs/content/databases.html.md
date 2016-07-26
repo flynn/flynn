@@ -15,6 +15,11 @@ under [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem) due to
 limitations in the database software we are wrapping. This is noted specifically
 in the Safety section of the documentation for the database in question.
 
+Flynn's databases are currently designed with staging, testing, development, and
+small-scale production workloads in mind. They are not currently suitable for
+storing large amounts of data. We are in the process of making them usable for
+all use cases, including high volume, large dataset workloads.
+
 ## State Machine Design
 
 The Flynn database appliances are designed with a few goals in mind:
