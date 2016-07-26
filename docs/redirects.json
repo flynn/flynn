@@ -12,5 +12,15 @@
   "/docs/faq/how-can-i-deploy-a-docker-image": "/docs/docker",
   "/docs/faq/how-can-i-debug-a-cluster-problem": "/docs/production#debugging",
   "/docs/faq/how-do-i-get-a-dashboard-login-token": "/docs/dashboard#login-token",
+  "/docs/faq/how-can-i-pass-configuration-to-my-app": "/docs/apps#configuration",
+  "/docs/faq/how-do-i-use-an-external-datastore-with-flynn": "/docs/apps#external-databases",
+  "/docs/faq/how-can-i-cancel-a-crashed-deploy": "/docs/apps#deployment",
+  "/docs/faq/how-do-i-check-logs": "/docs/apps#logs",
+  "/docs/faq/how-can-i-use-my-own-domain": "/docs/apps#custom-domains",
+  "/docs/faq/how-can-my-containers-talk-to-each-other": "/docs/apps#service-discovery",
+  "/docs/faq/how-do-i-debug-a-failed-deploy": "/docs/apps#deployment",
+  "/docs/faq/how-can-i-ship-logs-to-a-log-aggregator": "/docs/apps#external-logs",
+  "/docs/faq/how-do-i-restart-individual-components": "/docs/apps#processes",
+  "/docs/faq/how-do-i-use-custom-buildpacks": "/docs/apps#buildpacks",
   "/docs": "/docs/basics"
 }
