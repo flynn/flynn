@@ -1,5 +1,5 @@
 [
-  { "title": "Installation", "children": [
+  { "title": "Installation", "path": "/docs/installation", "children": [
     { "title": "Cloud", "path": "/docs/installation/cloud" },
     { "title": "Vagrant", "path": "/docs/installation/vagrant" },
     { "title": "Manual", "path": "/docs/installation/manual" },
