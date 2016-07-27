@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
+	"github.com/flynn/flynn/router/schema"
 	"github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 	"github.com/jackc/pgx"
@@ -79,7 +80,8 @@ func (s *S) SetUpSuite(c *C) {
 	if err := pgtestutils.SetupPostgres(dbname); err != nil {
 		c.Fatal(err)
 	}
-	pgxpool, err := pgx.NewConnPool(newPgxConnPoolConfig())
+	pgxConfig := newPgxConnPoolConfig()
+	pgxpool, err := pgx.NewConnPool(pgxConfig)
 	if err != nil {
 		c.Fatal(err)
 	}
@@ -88,6 +90,16 @@ func (s *S) SetUpSuite(c *C) {
 	if err = migrateDB(db); err != nil {
 		c.Fatal(err)
 	}
+	db.Close()
+
+	// reconnect with prepared statements
+	pgxConfig.AfterConnect = schema.PrepareStatements
+	pgxpool, err = pgx.NewConnPool(pgxConfig)
+	if err != nil {
+		c.Fatal(err)
+	}
+	db = postgres.New(pgxpool, nil)
+
 	s.pgx = db.ConnPool
 	s.pgx.Exec(sqlCreateTruncateTables)
 }

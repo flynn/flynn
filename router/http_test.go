@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/tlscert"
+	"github.com/flynn/flynn/router/schema"
 	"github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 	"github.com/jackc/pgx"
@@ -661,7 +662,7 @@ func (s *S) TestHTTPResync(c *C) {
 		cmu.Lock()
 		defer cmu.Unlock()
 		connPids = append(connPids, conn.Pid)
-		return nil
+		return schema.PrepareStatements(conn)
 	}
 	pgxpool, err := pgx.NewConnPool(poolConfig)
 	if err != nil {

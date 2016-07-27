@@ -83,19 +83,9 @@ func NewPostgresDataStore(routeType string, pgx *pgx.ConnPool) *pgDataStore {
 }
 
 func (d *pgDataStore) Ping() error {
-	_, err := d.pgx.Exec("SELECT 1")
+	_, err := d.pgx.Exec("ping")
 	return err
 }
-
-const sqlAddRouteHTTP = `
-INSERT INTO ` + tableNameHTTP + ` (parent_ref, service, leader, domain, sticky, path)
-	VALUES ($1, $2, $3, $4, $5, $6)
-	RETURNING id, created_at, updated_at`
-
-const sqlAddRouteTCP = `
-INSERT INTO ` + tableNameTCP + ` (parent_ref, service, leader, port)
-	VALUES ($1, $2, $3, $4)
-	RETURNING id, created_at, updated_at`
 
 func (d *pgDataStore) Add(r *router.Route) (err error) {
 	switch d.tableName {
@@ -122,7 +112,7 @@ func (d *pgDataStore) addHTTP(r *router.Route) error {
 		return err
 	}
 	if err := tx.QueryRow(
-		sqlAddRouteHTTP,
+		"insert_http_route",
 		r.ParentRef,
 		r.Service,
 		r.Leader,
@@ -142,32 +132,13 @@ func (d *pgDataStore) addHTTP(r *router.Route) error {
 
 func (d *pgDataStore) addTCP(r *router.Route) error {
 	return d.pgx.QueryRow(
-		sqlAddRouteTCP,
+		"insert_tcp_route",
 		r.ParentRef,
 		r.Service,
 		r.Leader,
 		r.Port,
 	).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 }
-
-const sqlSelectCert = `
-SELECT id, created_at, updated_at FROM ` + tableNameCertificates + `
-	WHERE cert_sha256 = $1 AND deleted_at IS NULL`
-
-const sqlAddCert = `
-INSERT INTO ` + tableNameCertificates + ` (cert, key, cert_sha256)
-	VALUES ($1, $2, $3)
-	RETURNING id, created_at, updated_at
-`
-
-const sqlAddCertificate = `
-INSERT INTO ` + tableNameRoutesCertificate + ` (http_route_id, certificate_id)
-	VALUES ($1, $2)
-`
-
-const sqlCleanupCertificates = `
-DELETE FROM ` + tableNameRoutesCertificate + `
-	WHERE http_route_id = $1`
 
 func (d *pgDataStore) AddCert(c *router.Certificate) error {
 	tx, err := d.pgx.Begin()
@@ -193,16 +164,16 @@ func (d *pgDataStore) addCertWithTx(tx *pgx.Tx, c *router.Certificate) error {
 	}
 
 	tlsCertSHA256 := sha256.Sum256([]byte(c.Cert))
-	if err := tx.QueryRow(sqlSelectCert, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
-		if err := tx.QueryRow(sqlAddCert, c.Cert, c.Key, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := tx.QueryRow("select_certificate_by_sha", tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := tx.QueryRow("insert_certificate", c.Cert, c.Key, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return err
 		}
 	}
 	for _, rid := range c.Routes {
-		if _, err := tx.Exec(sqlCleanupCertificates, rid); err != nil {
+		if _, err := tx.Exec("delete_route_certificate_by_route_id", rid); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(sqlAddCertificate, rid, c.ID); err != nil {
+		if _, err := tx.Exec("insert_route_certificate", rid, c.ID); err != nil {
 			return err
 		}
 	}
@@ -236,28 +207,16 @@ func (d *pgDataStore) addRouteCertWithTx(tx *pgx.Tx, r *router.Route) error {
 	return nil
 }
 
-const sqlGetCert = `
-SELECT ` + selectColumnsHTTPCert + `, ARRAY(
-	SELECT http_route_id::varchar FROM ` + tableNameRoutesCertificate + ` WHERE certificate_id = $1
-) FROM ` + tableNameCertificates + ` AS c WHERE c.id = $1
-`
-
 func (d *pgDataStore) GetCert(id string) (*router.Certificate, error) {
 	cert := &router.Certificate{Routes: []string{}}
-	if err := d.pgx.QueryRow(sqlGetCert, id).Scan(&cert.ID, &cert.Cert, &cert.Key, &cert.CreatedAt, &cert.UpdatedAt, &cert.Routes); err != nil {
+	if err := d.pgx.QueryRow("select_certificate", id).Scan(&cert.ID, &cert.Cert, &cert.Key, &cert.CreatedAt, &cert.UpdatedAt, &cert.Routes); err != nil {
 		return nil, err
 	}
 	return cert, nil
 }
 
-const sqlListCerts = `
-SELECT ` + selectColumnsHTTPCert + `, ARRAY(
-	SELECT http_route_id::varchar FROM ` + tableNameRoutesCertificate + ` AS rc WHERE rc.certificate_id = c.id
-) FROM ` + tableNameCertificates + ` AS c
-`
-
 func (d *pgDataStore) ListCerts() ([]*router.Certificate, error) {
-	rows, err := d.pgx.Query(sqlListCerts)
+	rows, err := d.pgx.Query("list_certificates")
 	if err != nil {
 		return nil, err
 	}
@@ -274,14 +233,8 @@ func (d *pgDataStore) ListCerts() ([]*router.Certificate, error) {
 	return certs, rows.Err()
 }
 
-const sqlListCertRoutes = `
-SELECT ` + selectColumnsHTTP + ` FROM ` + tableNameHTTP + ` AS r
-INNER JOIN ` + tableNameRoutesCertificate + ` AS rc
-	ON rc.http_route_id = r.id AND rc.certificate_id = $1
-`
-
 func (d *pgDataStore) ListCertRoutes(id string) ([]*router.Route, error) {
-	rows, err := d.pgx.Query(sqlListCertRoutes, id)
+	rows, err := d.pgx.Query("list_certificate_routes", id)
 	if err != nil {
 		return nil, err
 	}
@@ -300,40 +253,21 @@ func (d *pgDataStore) ListCertRoutes(id string) ([]*router.Route, error) {
 	return routes, rows.Err()
 }
 
-const sqlRemoveCert = `
-UPDATE ` + tableNameCertificates + ` SET deleted_at = now() WHERE id = $1
-`
-
-const sqlRemoveRoutesCert = `
-DELETE FROM ` + tableNameRoutesCertificate + ` WHERE certificate_id = $1
-`
-
 func (d *pgDataStore) RemoveCert(id string) error {
 	tx, err := d.pgx.Begin()
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(sqlRemoveCert, id); err != nil {
+	if _, err := tx.Exec("delete_certificate", id); err != nil {
 		tx.Rollback()
 		return err
 	}
-	if _, err := tx.Exec(sqlRemoveRoutesCert, id); err != nil {
+	if _, err := tx.Exec("delete_route_certificate_by_certificate_id", id); err != nil {
 		tx.Rollback()
 		return err
 	}
 	return tx.Commit()
 }
-
-const sqlUpdateRouteHTTP = `
-UPDATE ` + tableNameHTTP + ` AS r
-	SET parent_ref = $1, service = $2, leader = $3, sticky = $4, path = $5
-	WHERE id = $6 AND domain = $7 AND deleted_at IS NULL
-	RETURNING %s`
-
-const sqlUpdateRouteTCP = `
-UPDATE ` + tableNameTCP + ` SET parent_ref = $1, service = $2, leader = $3
-	WHERE id = $4 AND port = $5 AND deleted_at IS NULL
-	RETURNING %s`
 
 func (d *pgDataStore) Update(r *router.Route) error {
 	var err error
@@ -356,7 +290,7 @@ func (d *pgDataStore) updateHTTP(r *router.Route) error {
 		return err
 	}
 	if err := d.scanRouteWithoutCert(r, d.pgx.QueryRow(
-		fmt.Sprintf(sqlUpdateRouteHTTP, selectColumnsHTTP),
+		"update_http_route",
 		r.ParentRef,
 		r.Service,
 		r.Leader,
@@ -377,7 +311,7 @@ func (d *pgDataStore) updateHTTP(r *router.Route) error {
 
 func (d *pgDataStore) updateTCP(r *router.Route) error {
 	return d.scanRoute(r, d.pgx.QueryRow(
-		fmt.Sprintf(sqlUpdateRouteTCP, d.columnNames()),
+		"update_tcp_route",
 		r.ParentRef,
 		r.Service,
 		r.Leader,
@@ -386,23 +320,20 @@ func (d *pgDataStore) updateTCP(r *router.Route) error {
 	))
 }
 
-const sqlRemoveRoute = `UPDATE %s SET deleted_at = now() WHERE id = $1`
-
 func (d *pgDataStore) Remove(id string) error {
-	_, err := d.pgx.Exec(fmt.Sprintf(sqlRemoveRoute, d.tableName), id)
+	var query string
+	switch d.tableName {
+	case tableNameTCP:
+		query = "delete_tcp_route"
+	case tableNameHTTP:
+		query = "delete_http_route"
+	}
+	_, err := d.pgx.Exec(query, id)
 	if postgres.IsPostgresCode(err, postgres.RaiseException) {
 		err = ErrInvalid
 	}
 	return err
 }
-
-const sqlGetHTTPRoute = `
-SELECT %s FROM %s AS r
-	LEFT OUTER JOIN %s AS rc ON r.id = rc.http_route_id
-	LEFT OUTER JOIN %s AS c ON c.id = rc.certificate_id
-	WHERE r.id = $1 AND r.deleted_at IS NULL`
-
-const sqlGetTCPRoute = `SELECT %s FROM %s WHERE id = $1 AND deleted_at IS NULL`
 
 func (d *pgDataStore) Get(id string) (*router.Route, error) {
 	if id == "" {
@@ -412,9 +343,9 @@ func (d *pgDataStore) Get(id string) (*router.Route, error) {
 	var query string
 	switch d.tableName {
 	case tableNameHTTP:
-		query = fmt.Sprintf(sqlGetHTTPRoute, d.columnNames(), d.tableName, tableNameRoutesCertificate, tableNameCertificates)
+		query = "select_http_route"
 	case tableNameTCP:
-		query = fmt.Sprintf(sqlGetTCPRoute, d.columnNames(), d.tableName)
+		query = "select_tcp_route"
 	}
 	row := d.pgx.QueryRow(query, id)
 
@@ -430,21 +361,13 @@ func (d *pgDataStore) Get(id string) (*router.Route, error) {
 	return r, nil
 }
 
-const sqlListHTTPRoutes = `
-SELECT %s FROM %s AS r
-	LEFT OUTER JOIN %s AS rc ON r.id = rc.http_route_id
-	LEFT OUTER JOIN %s AS c ON c.id = rc.certificate_id
-	WHERE r.deleted_at IS NULL`
-
-const sqlListTCPRoutes = `SELECT %s FROM %s WHERE deleted_at IS NULL`
-
 func (d *pgDataStore) List() ([]*router.Route, error) {
 	var query string
 	switch d.tableName {
 	case tableNameHTTP:
-		query = fmt.Sprintf(sqlListHTTPRoutes, d.columnNames(), d.tableName, tableNameRoutesCertificate, tableNameCertificates)
+		query = "list_http_routes"
 	case tableNameTCP:
-		query = fmt.Sprintf(sqlListTCPRoutes, d.columnNames(), d.tableName)
+		query = "list_tcp_routes"
 	}
 	rows, err := d.pgx.Query(query)
 	if err != nil {
@@ -572,23 +495,6 @@ func (d *pgDataStore) startListener(ctx context.Context) (<-chan string, <-chan 
 	return idc, errc, nil
 }
 
-const (
-	selectColumnsHTTP     = "r.id, r.parent_ref, r.service, r.leader, r.domain, r.sticky, r.path, r.created_at, r.updated_at"
-	selectColumnsHTTPCert = "c.id, c.cert, c.key, c.created_at, c.updated_at"
-	selectColumnsTCP      = "id, parent_ref, service, leader, port, created_at, updated_at"
-)
-
-func (d *pgDataStore) columnNames() string {
-	switch d.routeType {
-	case routeTypeHTTP:
-		return selectColumnsHTTP + ", " + selectColumnsHTTPCert
-	case routeTypeTCP:
-		return selectColumnsTCP
-	default:
-		panic(fmt.Sprintf("unknown routeType: %q", d.routeType))
-	}
-}
-
 type scannable interface {
 	Scan(dest ...interface{}) (err error)
 }
@@ -670,10 +576,8 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 	panic("unknown tableName: " + d.tableName)
 }
 
-const sqlUnlisten = `UNLISTEN %s`
-
 func unlistenAndRelease(pool *pgx.ConnPool, conn *pgx.Conn, channel string) {
-	if _, err := conn.Exec(fmt.Sprintf(sqlUnlisten, channel)); err != nil {
+	if err := conn.Unlisten(channel); err != nil {
 		conn.Close()
 	}
 	pool.Release(conn)
