@@ -108,24 +108,19 @@ func getApps(client controller.Client) (map[string]*ct.ExpandedFormation, error)
 		if err != nil {
 			return nil, fmt.Errorf("error getting %s app formation: %s", name, err)
 		}
-		imageArtifact, err := client.GetArtifact(release.ImageArtifactID())
-		if err != nil {
-			return nil, fmt.Errorf("error getting %s app artifact: %s", name, err)
-		}
-		fileArtifacts := make([]*ct.Artifact, len(release.FileArtifactIDs()))
-		for i, artifactID := range release.FileArtifactIDs() {
-			fileArtifact, err := client.GetArtifact(artifactID)
+		artifacts := make([]*ct.Artifact, len(release.ArtifactIDs))
+		for i, artifactID := range release.ArtifactIDs {
+			artifact, err := client.GetArtifact(artifactID)
 			if err != nil {
-				return nil, fmt.Errorf("error getting %s app file artifact: %s", name, err)
+				return nil, fmt.Errorf("error getting %s app artifact: %s", name, err)
 			}
-			fileArtifacts[i] = fileArtifact
+			artifacts[i] = artifact
 		}
 		data[name] = &ct.ExpandedFormation{
-			App:           app,
-			Release:       release,
-			ImageArtifact: imageArtifact,
-			FileArtifacts: fileArtifacts,
-			Processes:     formation.Processes,
+			App:       app,
+			Release:   release,
+			Artifacts: artifacts,
+			Processes: formation.Processes,
 		}
 	}
 	return data, nil

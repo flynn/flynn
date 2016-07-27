@@ -11,7 +11,6 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/go-docopt"
 )
 
@@ -197,6 +196,7 @@ func runReleaseShow(args *docopt.Args, client controller.Client) error {
 }
 
 func runReleaseAddDocker(args *docopt.Args, client controller.Client) error {
+	// TODO: Deprecate
 	release := &ct.Release{}
 	if args.String["--file"] != "" {
 		data, err := ioutil.ReadFile(args.String["--file"])
@@ -209,7 +209,7 @@ func runReleaseAddDocker(args *docopt.Args, client controller.Client) error {
 	}
 
 	artifact := &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
+		Type: ct.ArtifactTypeFlynn,
 		URI:  args.String["<uri>"],
 	}
 	if err := client.CreateArtifact(artifact); err != nil {

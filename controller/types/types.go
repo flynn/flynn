@@ -11,18 +11,18 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
+	"github.com/jtacoma/uritemplates"
 )
 
 const RouteParentRefPrefix = "controller/apps/"
 
 type ExpandedFormation struct {
-	App           *App                         `json:"app,omitempty"`
-	Release       *Release                     `json:"release,omitempty"`
-	ImageArtifact *Artifact                    `json:"artifact,omitempty"`
-	FileArtifacts []*Artifact                  `json:"file_artifacts,omitempty"`
-	Processes     map[string]int               `json:"processes,omitempty"`
-	Tags          map[string]map[string]string `json:"tags,omitempty"`
-	UpdatedAt     time.Time                    `json:"updated_at,omitempty"`
+	App       *App                         `json:"app,omitempty"`
+	Release   *Release                     `json:"release,omitempty"`
+	Artifacts []*Artifact                  `json:"artifacts,omitempty"`
+	Processes map[string]int               `json:"processes,omitempty"`
+	Tags      map[string]map[string]string `json:"tags,omitempty"`
+	UpdatedAt time.Time                    `json:"updated_at,omitempty"`
 }
 
 type App struct {
@@ -64,27 +64,6 @@ type Release struct {
 	LegacyArtifactID string `json:"artifact,omitempty"`
 }
 
-func (r *Release) ImageArtifactID() string {
-	if len(r.ArtifactIDs) > 0 {
-		return r.ArtifactIDs[0]
-	}
-	return r.LegacyArtifactID
-}
-
-func (r *Release) SetImageArtifactID(id string) {
-	if len(r.ArtifactIDs) == 0 {
-		r.ArtifactIDs = []string{id}
-	}
-	r.ArtifactIDs[0] = id
-}
-
-func (r *Release) FileArtifactIDs() []string {
-	if len(r.ArtifactIDs) < 1 {
-		return nil
-	}
-	return r.ArtifactIDs[1:len(r.ArtifactIDs)]
-}
-
 func (r *Release) IsGitDeploy() bool {
 	return r.Meta["git"] == "true"
 }
@@ -115,20 +94,33 @@ type Port struct {
 	Service *host.Service `json:"service,omitempty"`
 }
 
+type ArtifactType string
+
+const (
+	ArtifactTypeFlynn ArtifactType = "flynn"
+	ArtifactTypeFile  ArtifactType = "file"
+
+	DeprecatedArtifactTypeDocker ArtifactType = "docker"
+)
+
 type Artifact struct {
-	ID        string            `json:"id,omitempty"`
-	Type      host.ArtifactType `json:"type,omitempty"`
-	URI       string            `json:"uri,omitempty"`
-	Meta      map[string]string `json:"meta,omitempty"`
-	Manifest  *ImageManifest    `json:"manifest,omitempty"`
-	CreatedAt *time.Time        `json:"created_at,omitempty"`
+	ID               string            `json:"id,omitempty"`
+	Type             ArtifactType      `json:"type,omitempty"`
+	URI              string            `json:"uri,omitempty"`
+	Meta             map[string]string `json:"meta,omitempty"`
+	Manifest         *ImageManifest    `json:"manifest,omitempty"`
+	LayerURLTemplate string            `json:"layer_url_template,omitempty"`
+	CreatedAt        *time.Time        `json:"created_at,omitempty"`
 }
 
-func (a *Artifact) HostArtifact() *host.Artifact {
-	return &host.Artifact{
-		URI:  a.URI,
-		Type: a.Type,
+func (a *Artifact) LayerURL(layer *ImageLayer) string {
+	tmpl, err := uritemplates.Parse(a.LayerURLTemplate)
+	if err != nil {
+		return ""
 	}
+	values := map[string]interface{}{"id": layer.ID}
+	expanded, _ := tmpl.Expand(values)
+	return expanded
 }
 
 func (a *Artifact) Blobstore() bool {
@@ -515,12 +507,8 @@ type ImageLayerType string
 const ImageLayerTypeSquashfs ImageLayerType = "application/vnd.flynn.image.squashfs.v1"
 
 type ImageLayer struct {
+	ID     string            `json:"id,omitempty"`
 	Type   ImageLayerType    `json:"type,omitempty"`
 	Length int64             `json:"length,omitempty"`
 	Hashes map[string]string `json:"hashes,omitempty"`
-	URL    string            `json:"url,omitempty"`
-}
-
-func (l *ImageLayer) ID() string {
-	return l.Hashes["sha512"]
 }

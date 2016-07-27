@@ -15,7 +15,6 @@ import (
 
 	"github.com/docker/docker/pkg/term"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
@@ -243,7 +242,7 @@ func runUpdate(args *docopt.Args) error {
 
 	// TODO: get the latest updater image manifest and use here
 	artifact := &ct.Artifact{
-		Type:     host.ArtifactTypeFlynn,
+		Type:     ct.ArtifactTypeFlynn,
 		URI:      updaterImage,
 		Manifest: &ct.ImageManifest{},
 	}

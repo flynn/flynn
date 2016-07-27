@@ -208,11 +208,10 @@ $function$;
 `)
 
 	type manifestStep struct {
-		ID       string
-		Artifact struct {
-			URI string
-		}
-		Release struct {
+		ID        string
+		Artifacts []*ct.Artifact
+		Artifact  *ct.Artifact
+		Release   struct {
 			Env       map[string]string
 			Processes map[string]ct.ProcessType
 		}
@@ -222,7 +221,7 @@ $function$;
 		return fmt.Errorf("error decoding manifest json: %s", err)
 	}
 
-	artifactURIs := make(map[string]string)
+	artifacts := make(map[string]*ct.Artifact)
 	updateProcArgs := func(f *ct.ExpandedFormation, step *manifestStep) {
 		for typ, proc := range step.Release.Processes {
 			p := f.Release.Processes[typ]
@@ -245,12 +244,15 @@ $function$;
 				updateProcArgs(data.MongoDB, step)
 			}
 		}
-		if step.Artifact.URI != "" {
-			artifactURIs[step.ID] = step.Artifact.URI
+		if step.Artifact != nil {
+			artifacts[step.ID] = step.Artifact
+		} else if len(step.Artifacts) > 0 {
+			artifacts[step.ID] = step.Artifacts[0]
 
 			// update current artifact in database for service, taking care to
 			// check the database version as migration 15 changed the way
-			// artifacts are related to releases in the database
+			// artifacts are related to releases in the database, and migration
+			// 20 replaced "docker" artifacts with "flynn" artifacts
 			sqlBuf.WriteString(fmt.Sprintf(`
 DO $$
   BEGIN
@@ -260,32 +262,38 @@ DO $$
 	  SELECT release_id FROM apps WHERE name = '%[2]s'
 	)
       );
-    ELSE
+    ELSE IF (SELECT MAX(id) FROM schema_migrations) < 20 THEN
       UPDATE artifacts SET uri = '%[1]s' WHERE type = 'docker' AND artifact_id = (
+	SELECT artifact_id FROM release_artifacts WHERE release_id = (
+	  SELECT release_id FROM apps WHERE name = '%[2]s'
+	)
+      );
+    ELSE
+      UPDATE artifacts SET uri = '%[1]s', type = 'flynn', manifest = '%[3]s', layer_url_template = '%[4]s' WHERE type != 'file' AND artifact_id = (
 	SELECT artifact_id FROM release_artifacts WHERE release_id = (
 	  SELECT release_id FROM apps WHERE name = '%[2]s'
 	)
       );
     END IF;
   END;
-$$;`, step.Artifact.URI, step.ID))
+$$;`, step.Artifact.URI, step.ID, step.Artifact.Manifest, step.Artifact.LayerURLTemplate))
 		}
 	}
 
-	data.Discoverd.ImageArtifact.URI = artifactURIs["discoverd"]
+	data.Discoverd.Artifacts = []*ct.Artifact{artifacts["discoverd"]}
 	data.Discoverd.Release.Env["DISCOVERD_PEERS"] = "{{ range $ip := .SortedHostIPs }}{{ $ip }}:1111,{{ end }}"
-	data.Postgres.ImageArtifact.URI = artifactURIs["postgres"]
-	data.Flannel.ImageArtifact.URI = artifactURIs["flannel"]
-	data.Controller.ImageArtifact.URI = artifactURIs["controller"]
+	data.Postgres.Artifacts = []*ct.Artifact{artifacts["postgres"]}
+	data.Flannel.Artifacts = []*ct.Artifact{artifacts["flannel"]}
+	data.Controller.Artifacts = []*ct.Artifact{artifacts["controller"]}
 	if data.MariaDB != nil {
-		data.MariaDB.ImageArtifact.URI = artifactURIs["mariadb"]
+		data.MariaDB.Artifacts = []*ct.Artifact{artifacts["mariadb"]}
 		if data.MariaDB.Processes["mariadb"] == 0 {
 			// skip mariadb if it wasn't scaled up in the backup
 			data.MariaDB = nil
 		}
 	}
 	if data.MongoDB != nil {
-		data.MongoDB.ImageArtifact.URI = artifactURIs["mongodb"]
+		data.MongoDB.Artifacts = []*ct.Artifact{artifacts["mongodb"]}
 		if data.MongoDB.Processes["mongodb"] == 0 {
 			// skip mongodb if it wasn't scaled up in the backup
 			data.MongoDB = nil
@@ -302,7 +310,7 @@ DO $$
       INSERT INTO artifacts (artifact_id, type, uri) VALUES ('%s', 'docker', '%s');
     END IF;
   END;
-$$;`, random.UUID(), artifactURIs["slugbuilder-image"]))
+$$;`, random.UUID(), artifacts["slugbuilder-image"].URI))
 
 	// update the URI of slug artifacts currently being referenced by
 	// gitreceive (which will also update all current user releases
@@ -312,7 +320,7 @@ $$;`, random.UUID(), artifactURIs["slugbuilder-image"]))
 UPDATE artifacts SET uri = '%[1]s'
 WHERE artifact_id = (SELECT (env->>'%[2]s_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'))
 OR uri = (SELECT env->>'%[2]s_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'));`,
-			artifactURIs[name+"-image"], strings.ToUpper(name)))
+			artifacts[name+"-image"].URI, strings.ToUpper(name)))
 	}
 
 	// update the URI of redis artifacts currently being referenced by
@@ -322,7 +330,7 @@ OR uri = (SELECT env->>'%[2]s_IMAGE_URI' FROM releases WHERE release_id = (SELEC
 UPDATE artifacts SET uri = '%s'
 WHERE artifact_id = (SELECT (env->>'REDIS_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis'))
 OR uri = (SELECT env->>'REDIS_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis'));`,
-		artifactURIs["redis-image"]))
+		artifacts["redis-image"].URI))
 
 	// ensure the image ID environment variables are set for legacy apps
 	// which use image URI variables
@@ -330,7 +338,7 @@ OR uri = (SELECT env->>'REDIS_IMAGE_URI' FROM releases WHERE release_id = (SELEC
 		sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE releases SET env = pg_temp.json_object_update_key(env, '%[1]s_IMAGE_ID', (SELECT artifact_id::text FROM artifacts WHERE uri = '%[2]s'))
 WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
-			strings.ToUpper(name), artifactURIs[name+"-image"]))
+			strings.ToUpper(name), artifacts[name+"-image"].URI))
 	}
 
 	step := func(id, name string, action bootstrap.Action) bootstrap.Step {
@@ -393,7 +401,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 `, state.StepData["discoverd"].(*bootstrap.RunAppState).Release.Env["DISCOVERD_PEERS"]))
 
 	// load data into postgres
-	cmd := exec.JobUsingHost(state.Hosts[0], data.Postgres.ImageArtifact, nil)
+	cmd := exec.JobUsingHost(state.Hosts[0], data.Postgres.Artifacts[0], nil)
 	cmd.Args = []string{"psql"}
 	cmd.Env = map[string]string{
 		"PGHOST":     "leader.postgres.discoverd",
@@ -430,7 +438,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	// load data into mariadb if it was present in the backup.
 	if mysqldb != nil && data.MariaDB != nil {
-		cmd = exec.JobUsingHost(state.Hosts[0], data.MariaDB.ImageArtifact, nil)
+		cmd = exec.JobUsingHost(state.Hosts[0], data.MariaDB.Artifacts[0], nil)
 		cmd.Args = []string{"mysql", "-u", "flynn", "-h", "leader.mariadb.discoverd"}
 		cmd.Env = map[string]string{
 			"MYSQL_PWD": data.MariaDB.Release.Env["MYSQL_PWD"],
@@ -465,7 +473,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	// load data into mongodb if it was present in the backup.
 	if mongodb != nil && data.MongoDB != nil {
-		cmd = exec.JobUsingHost(state.Hosts[0], data.MongoDB.ImageArtifact, nil)
+		cmd = exec.JobUsingHost(state.Hosts[0], data.MongoDB.Artifacts[0], nil)
 		cmd.Args = []string{"mongorestore", "-h", "leader.mongodb.discoverd", "-u", "flynn", "-p", data.MongoDB.Release.Env["MONGO_PWD"], "--archive"}
 		cmd.Stdin = mongodb
 		meta = bootstrap.StepMeta{ID: "restore", Action: "restore-mongodb"}

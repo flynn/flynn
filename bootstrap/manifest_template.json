@@ -40,7 +40,7 @@
         }
       }
     },
-    "artifact": $image_artifact[discoverd],
+    "artifacts": [$image_artifact[discoverd]],
     "processes": {
       "app": 1
     }
@@ -65,7 +65,7 @@
         }
       }
     },
-    "artifact": $image_artifact[flannel],
+    "artifacts": [$image_artifact[flannel]],
     "processes": {
       "app": 1
     }
@@ -113,7 +113,7 @@
         }
       }
     },
-    "artifact": $image_artifact[postgresql],
+    "artifacts": [$image_artifact[postgresql]],
     "processes": {
       "postgres": 3,
       "web": 2
@@ -192,7 +192,7 @@
         }
       }
     },
-    "artifact": $image_artifact[controller],
+    "artifacts": [$image_artifact[controller]],
     "processes": {
       "web": 1
     },
@@ -306,7 +306,7 @@
         }
       }
     },
-    "artifact": $image_artifact[redis],
+    "artifacts": [$image_artifact[redis]],
     "processes": {
       "web": 2
     }
@@ -357,7 +357,7 @@
         }
       }
     },
-    "artifact": $image_artifact[mariadb],
+    "artifacts": [$image_artifact[mariadb]],
     "processes": {
       "mariadb": 0,
       "web": 2
@@ -410,7 +410,7 @@
         }
       }
     },
-    "artifact": $image_artifact[mongodb],
+    "artifacts": [$image_artifact[mongodb]],
     "processes": {
       "mongodb": 0,
       "web": 2
@@ -429,7 +429,7 @@
       "name": "blobstore",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": $image_artifact[blobstore],
+    "artifacts": [$image_artifact[blobstore]],
     "release": {
       "processes": {
         "web": {
@@ -450,7 +450,7 @@
       "name": "router",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": $image_artifact[router],
+    "artifacts": [$image_artifact[router]],
     "release": {
       "env": {
         "TLSCERT": "{{ (index .StepData \"controller-cert\").Cert }}",
@@ -478,7 +478,7 @@
       "name": "gitreceive",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": $image_artifact[gitreceive],
+    "artifacts": [$image_artifact[gitreceive]],
     "release": {
       "env": {
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
@@ -514,7 +514,7 @@
       "name": "docker-receive",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": $image_artifact[docker-receive],
+    "artifacts": [$image_artifact[docker-receive]],
     "release": {
       "env": {
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
@@ -588,7 +588,7 @@
       "name": "logaggregator",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": $image_artifact[logaggregator],
+    "artifacts": [$image_artifact[logaggregator]],
     "release": {
       "processes": {
         "app": {
@@ -611,7 +611,7 @@
       "name": "taffy",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": $image_artifact[taffy],
+    "artifacts": [$image_artifact[taffy]],
     "release": {
       "env": {
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
@@ -632,7 +632,7 @@
       "name": "dashboard",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": $image_artifact[dashboard],
+    "artifacts": [$image_artifact[dashboard]],
     "release": {
       "env": {
         "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
@@ -679,7 +679,7 @@
       "name": "status",
       "meta": {"flynn-system-app": "true"}
     },
-    "artifact": $image_artifact[status],
+    "artifacts": [$image_artifact[status]],
     "release": {
       "env": {
         "AUTH_KEY": "{{ (index .StepData \"status-key\").Data }}"

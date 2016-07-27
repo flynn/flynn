@@ -77,9 +77,6 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool, redactEnv []stri
 	for i, m := range job.Job.Mountspecs {
 		listRec(w, fmt.Sprintf("Mountspec[%d]", i), m)
 	}
-	for i, artifact := range job.Job.FileArtifacts {
-		listRec(w, fmt.Sprintf("FileArtifact[%d]", i), artifact.URI)
-	}
 	for _, vb := range job.Job.Config.Volumes {
 		listRec(w, fmt.Sprintf("Volume[%s]", vb.Target), vb.VolumeID)
 	}

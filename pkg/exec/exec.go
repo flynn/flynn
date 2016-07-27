@@ -200,7 +200,7 @@ func (c *Cmd) Start() error {
 	if c.Job.ID == "" {
 		c.Job.ID = cluster.GenerateJobID(c.HostID, "")
 	}
-	utils.SetupMountspecs(c.Job, c.ImageArtifact)
+	utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
 
 	if c.host == nil {
 		var err error

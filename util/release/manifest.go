@@ -11,7 +11,6 @@ import (
 	"regexp"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
 )
@@ -66,16 +65,12 @@ func interpolateManifest(imageDir, imageRepository string, src io.Reader, dest i
 			if err := json.NewDecoder(f).Decode(image); err != nil {
 				panic(err)
 			}
-			for _, rootfs := range image.Rootfs {
-				for _, layer := range rootfs.Layers {
-					layer.URL = fmt.Sprintf("file:///var/lib/flynn/layer-cache/%s.squashfs", layer.Hashes["sha512"])
-				}
-			}
 
 			artifact := &ct.Artifact{
-				Type:     host.ArtifactTypeFlynn,
-				URI:      fmt.Sprintf("%s?target=/%s/images/%s.json", imageRepository, version.String(), name),
-				Manifest: image,
+				Type:             ct.ArtifactTypeFlynn,
+				URI:              fmt.Sprintf("%s?target=/%s/images/%s.json", imageRepository, version.String(), name),
+				Manifest:         image,
+				LayerURLTemplate: "file:///var/lib/flynn/layer-cache/{id}.squashfs",
 			}
 			data, err := json.Marshal(artifact)
 			if err != nil {

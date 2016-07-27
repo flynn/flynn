@@ -383,6 +383,25 @@ func (s *S) TestReleaseList(c *C) {
 	c.Assert(list[0].ID, Not(Equals), "")
 }
 
+func (s *S) TestFlynnArtifact(c *C) {
+	artifact := &ct.Artifact{
+		Type: ct.ArtifactTypeFlynn,
+		URI:  "http://example.com/manifest.json",
+	}
+	err := s.c.CreateArtifact(artifact)
+	c.Assert(err, NotNil)
+	c.Assert(hh.IsValidationError(err), Equals, true)
+
+	artifact.Manifest = &ct.ImageManifest{
+		Type: ct.ImageManifestTypeV1,
+	}
+	c.Assert(s.c.CreateArtifact(artifact), IsNil)
+
+	gotArtifact, err := s.c.GetArtifact(artifact.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotArtifact, DeepEquals, artifact)
+}
+
 func (s *S) TestFileArtifact(c *C) {
 	artifact := &ct.Artifact{
 		Type: host.ArtifactTypeFile,

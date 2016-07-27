@@ -91,8 +91,8 @@ outer:
 	oldReleases := make([]*ct.Release, 0, len(releases))
 	distinctSlugs := make(map[string]struct{}, len(releases))
 	for _, release := range releases {
-		// ignore active releases
-		if _, ok := activeReleases[release.ID]; ok {
+		// ignore active or non-slug releases
+		if _, ok := activeReleases[release.ID]; ok || !release.IsGitDeploy() {
 			continue
 		}
 
@@ -100,15 +100,17 @@ outer:
 			oldReleases = append(oldReleases, release)
 		}
 
-		for _, id := range release.FileArtifactIDs() {
-			artifact, err := c.client.GetArtifact(id)
-			if err != nil {
-				log.Error("error getting file artifact for release", "release.id", release.ID, "artifact.id", id, "err", err)
-				return err
-			}
-			if artifact.Blobstore() {
-				distinctSlugs[artifact.URI] = struct{}{}
-			}
+		if len(release.ArtifactIDs) < 2 {
+			continue
+		}
+		id := release.ArtifactIDs[1]
+		artifact, err := c.client.GetArtifact(id)
+		if err != nil {
+			log.Error("error getting slug artifact for release", "release.id", release.ID, "artifact.id", id, "err", err)
+			return err
+		}
+		if artifact.Blobstore() {
+			distinctSlugs[artifact.URI] = struct{}{}
 		}
 	}
 	log.Info(fmt.Sprintf("app has %d releases (%d with distinct slugs)", len(releases), len(distinctSlugs)))

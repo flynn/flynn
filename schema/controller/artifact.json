@@ -29,6 +29,10 @@
       "description": "Image manifest",
       "type": "object"
     },
+    "layer_url_template": {
+      "description": "Layer URL Template",
+      "type": "string"
+    },
     "meta": {
       "$ref": "/schema/controller/common#/definitions/meta"
     },

@@ -102,7 +102,7 @@ Options:
 
 	fmt.Printf("-----> Building %s...\n", app.Name)
 
-	jobEnv := make(map[string]string, 7)
+	jobEnv := make(map[string]string, 6)
 	jobEnv["BUILD_CACHE_URL"] = fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID)
 	if buildpackURL, ok := env["BUILDPACK_URL"]; ok {
 		jobEnv["BUILDPACK_URL"] = buildpackURL
@@ -116,7 +116,6 @@ Options:
 	}
 	slugImageID := random.UUID()
 	jobEnv["CONTROLLER_KEY"] = os.Getenv("CONTROLLER_KEY")
-	jobEnv["SLUGRUNNER_IMAGE_ID"] = slugRunnerID
 	jobEnv["SLUG_IMAGE_ID"] = slugImageID
 
 	job := &host.Job{
@@ -177,7 +176,7 @@ Options:
 	fmt.Printf("-----> Creating release...\n")
 
 	release := &ct.Release{
-		ArtifactIDs: []string{slugImageID},
+		ArtifactIDs: []string{slugRunnerID, slugImageID},
 		Env:         prevRelease.Env,
 		Meta:        prevRelease.Meta,
 	}

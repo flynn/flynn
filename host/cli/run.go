@@ -32,7 +32,7 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 	// TODO: download <image> using temp tuf DB?
 	cmd := exec.Cmd{
 		ImageArtifact: &ct.Artifact{
-			Type:     host.ArtifactTypeFlynn,
+			Type:     ct.ArtifactTypeFlynn,
 			URI:      args.String["<image>"],
 			Manifest: &ct.ImageManifest{},
 		},

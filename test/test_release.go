@@ -13,7 +13,7 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/random"
 	tc "github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/updater/types"
 	c "github.com/flynn/go-check"
@@ -32,7 +32,7 @@ func (s *ReleaseSuite) addReleaseHosts(t *c.C) *tc.BootResult {
 	return res
 }
 
-var releaseScript = bytes.NewReader([]byte(`
+var releaseScript = template.Must(template.New("release-script").Delims("[[", "]]").Parse(`
 export TUF_TARGETS_PASSPHRASE="flynn-test"
 export TUF_SNAPSHOT_PASSPHRASE="flynn-test"
 export TUF_TIMESTAMP_PASSPHRASE="flynn-test"
@@ -73,7 +73,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   ln -s "${src}/script/install-flynn" "${dir}/install-flynn"
 
   # create a slug for testing slug based app updates
-  tar c -C "${src}/test/apps/http" . | docker run -i -a stdin -a stdout -a stderr flynn/slugbuilder - > "${dir}/slug.tgz"
+  tar c -C "${src}/test/apps/http" . | docker run -i -a stdin -a stdout -a stderr --dns "$(ip addr show flynnbr0 | grep -oP '100\.100\.\d+\.\d+')" -e CONTROLLER_KEY="[[ .ControllerKey ]]" -e SLUG_IMAGE_ID="[[ .SlugImageID ]]" flynn/slugbuilder
 
   # start a file server to serve the exported components
   sudo start-stop-daemon \
@@ -125,14 +125,17 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	releaseCluster := s.addReleaseHosts(t)
 	buildHost := releaseCluster.Instances[0]
 	var versionJSON bytes.Buffer
-	t.Assert(buildHost.Run("bash -ex", &tc.Streams{Stdin: releaseScript, Stdout: &versionJSON, Stderr: logWriter}), c.IsNil)
+	var script bytes.Buffer
+	slugImageID := random.UUID()
+	releaseScript.Execute(&script, struct{ ControllerKey, SlugImageID string }{releaseCluster.ControllerKey, slugImageID})
+	t.Assert(buildHost.Run("bash -ex", &tc.Streams{Stdin: &script, Stdout: &versionJSON, Stderr: logWriter}), c.IsNil)
 	var versions map[string]string
 	t.Assert(json.Unmarshal(versionJSON.Bytes(), &versions), c.IsNil)
 
 	// install Flynn from the blobstore on the vanilla host
 	blobstore := struct{ Blobstore string }{buildHost.IP + ":8080"}
 	installHost := releaseCluster.Instances[3]
-	var script bytes.Buffer
+	script.Reset()
 	installScript.Execute(&script, blobstore)
 	var installOutput bytes.Buffer
 	out := io.MultiWriter(logWriter, &installOutput)
@@ -240,7 +243,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		release, err := client.GetAppRelease(app.Name)
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s release ID: %s", app.Name, release.ID)
-		artifact, err := client.GetArtifact(release.ImageArtifactID())
+		artifact, err := client.GetArtifact(release.ArtifactIDs[0])
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s artifact: %+v", app.Name, artifact)
 		assertImage(artifact.URI, app.Image)
@@ -258,7 +261,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	// check slug based app was deployed correctly
 	release, err = client.GetAppRelease(slugApp.Name)
 	t.Assert(err, c.IsNil)
-	imageArtifact, err = client.GetArtifact(release.ImageArtifactID())
+	imageArtifact, err = client.GetArtifact(release.ArtifactIDs[0])
 	t.Assert(err, c.IsNil)
 	assertImage(imageArtifact.URI, "flynn/slugrunner")
 

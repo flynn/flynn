@@ -13,11 +13,20 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/imagebuilder"
 )
+
+const layerURLTemplate = "http://blobstore.discoverd/docker-receive/layers/{id}.squashfs"
+
+func layerURL(layer *ct.ImageLayer) string {
+	return fmt.Sprintf("http://blobstore.discoverd/docker-receive/layers/%s.squashfs", layer.ID)
+}
+
+func jsonURL(id string) string {
+	return fmt.Sprintf("http://blobstore.discoverd/docker-receive/layers/%s.json", id)
+}
 
 func main() {
 	log.SetFlags(0)
@@ -86,14 +95,15 @@ func run(url string) error {
 
 	// create the artifact
 	artifact := &ct.Artifact{
-		Type: host.ArtifactTypeFlynn,
+		Type: ct.ArtifactTypeFlynn,
 		URI:  imageURL,
 		Meta: map[string]string{
 			"blobstore":                 "true",
 			"docker-receive.repository": ref.Name(),
 			"docker-receive.digest":     ref.ID(),
 		},
-		Manifest: image,
+		Manifest:         image,
+		LayerURLTemplate: layerURLTemplate,
 	}
 	return client.CreateArtifact(artifact)
 }
@@ -118,7 +128,7 @@ func upload(data io.Reader, url string) error {
 type layerStore struct{}
 
 func (l *layerStore) Load(id string) (*ct.ImageLayer, error) {
-	res, err := http.Get(l.jsonURL(id))
+	res, err := http.Get(jsonURL(id))
 	if err != nil {
 		return nil, err
 	}
@@ -131,26 +141,17 @@ func (l *layerStore) Load(id string) (*ct.ImageLayer, error) {
 }
 
 func (l *layerStore) Save(id, path string, layer *ct.ImageLayer) error {
-	layer.URL = l.layerURL(layer)
 	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	if err := upload(f, layer.URL); err != nil {
+	if err := upload(f, layerURL(layer)); err != nil {
 		return err
 	}
 	data, err := json.Marshal(layer)
 	if err != nil {
 		return err
 	}
-	return upload(bytes.NewReader(data), l.jsonURL(id))
-}
-
-func (l *layerStore) jsonURL(id string) string {
-	return fmt.Sprintf("http://blobstore.discoverd/docker-receive/layers/%s.json", id)
-}
-
-func (l *layerStore) layerURL(layer *ct.ImageLayer) string {
-	return fmt.Sprintf("http://blobstore.discoverd/docker-receive/layers/%s.squashfs", layer.Hashes["sha512"])
+	return upload(bytes.NewReader(data), jsonURL(id))
 }

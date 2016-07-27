@@ -43,7 +43,9 @@ func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 	}
 	if artifactIDs != "" {
 		release.ArtifactIDs = split(artifactIDs[1:len(artifactIDs)-1], ",")
-		release.LegacyArtifactID = release.ImageArtifactID()
+	}
+	if len(release.ArtifactIDs) > 0 {
+		release.LegacyArtifactID = release.ArtifactIDs[0]
 	}
 	return release, err
 }
@@ -195,7 +197,7 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 		return tx.Commit()
 	}
 
-	fileArtifacts, err := r.artifacts.ListIDs(release.FileArtifactIDs()...)
+	artifacts, err := r.artifacts.ListIDs(release.ArtifactIDs...)
 	if err != nil {
 		return err
 	}
@@ -205,8 +207,8 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 		return err
 	}
 
-	blobstoreFiles := make([]string, 0, len(fileArtifacts))
-	for _, artifact := range fileArtifacts {
+	blobstoreFiles := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
 		if err := tx.Exec("release_artifacts_delete", release.ID, artifact.ID); err != nil {
 			tx.Rollback()
 			return err
@@ -224,6 +226,13 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 
 		if artifact.Blobstore() {
 			blobstoreFiles = append(blobstoreFiles, artifact.URI)
+			if artifact.Manifest != nil && len(artifact.Manifest.Rootfs) > 0 {
+				for _, rootfs := range artifact.Manifest.Rootfs {
+					for _, layer := range rootfs.Layers {
+						blobstoreFiles = append(blobstoreFiles, artifact.LayerURL(layer))
+					}
+				}
+			}
 		}
 		if err := tx.Exec("artifact_delete", artifact.ID); err != nil {
 			tx.Rollback()

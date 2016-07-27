@@ -230,12 +230,15 @@ func deployApp(client controller.Client, app *ct.App, uri string, updateFn updat
 		log.Error("error getting release", "err", err)
 		return err
 	}
-	artifact, err := client.GetArtifact(release.ImageArtifactID())
+	if len(release.ArtifactIDs) == 0 {
+		return errDeploySkipped{"release has no artifacts"}
+	}
+	artifact, err := client.GetArtifact(release.ArtifactIDs[0])
 	if err != nil {
 		log.Error("error getting release artifact", "err", err)
 		return err
 	}
-	if !app.System() {
+	if !app.System() && release.IsGitDeploy() {
 		u, err := url.Parse(artifact.URI)
 		if err != nil {
 			return err
@@ -258,7 +261,7 @@ func deployApp(client controller.Client, app *ct.App, uri string, updateFn updat
 		return err
 	}
 	release.ID = ""
-	release.SetImageArtifactID(artifact.ID)
+	release.ArtifactIDs[0] = artifact.ID
 	if updateFn != nil {
 		updateFn(release)
 	}

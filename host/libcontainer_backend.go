@@ -575,12 +575,11 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	l.state.mtx.Unlock()
 
 	initConfig := &containerinit.Config{
-		Args:          job.Config.Args,
-		TTY:           job.Config.TTY,
-		OpenStdin:     job.Config.Stdin,
-		WorkDir:       job.Config.WorkingDir,
-		Resources:     job.Resources,
-		FileArtifacts: job.FileArtifacts,
+		Args:      job.Config.Args,
+		TTY:       job.Config.TTY,
+		OpenStdin: job.Config.Stdin,
+		WorkDir:   job.Config.WorkingDir,
+		Resources: job.Resources,
 	}
 	if !job.Config.HostNetwork {
 		initConfig.IP = container.IP.String() + "/24"
@@ -680,6 +679,7 @@ func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, e
 	layers := make([]string, len(job.Mountspecs))
 	for i, spec := range job.Mountspecs {
 		var mountFn func(*host.Mountspec) (string, error)
+		// TODO: file artifacts
 		switch spec.Type {
 		case host.MountspecTypeSquashfs:
 			mountFn = l.mountSquashfs

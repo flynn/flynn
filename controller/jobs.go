@@ -231,8 +231,8 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	release := data.(*ct.Release)
-	if release.ImageArtifactID() == "" {
-		httphelper.ValidationError(w, "release.ImageArtifact", "must be set")
+	if len(release.ArtifactIDs) == 0 {
+		httphelper.ValidationError(w, "release.ArtifactIDs", "cannot be empty")
 		return
 	}
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
@@ -287,23 +287,16 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Args) > 0 {
 		job.Config.Args = newJob.Args
 	}
-	var imageArtifact *ct.Artifact
-	if len(release.ArtifactIDs) > 0 {
-		artifacts, err := c.artifactRepo.ListIDs(release.ArtifactIDs...)
-		if err != nil {
-			respondWithError(w, err)
-			return
-		}
-		imageArtifact = artifacts[release.ImageArtifactID()]
-		job.FileArtifacts = make([]*host.Artifact, len(release.FileArtifactIDs()))
-		for i, id := range release.FileArtifactIDs() {
-			job.FileArtifacts[i] = artifacts[id].HostArtifact()
-		}
+	artifacts := make([]*ct.Artifact, len(release.ArtifactIDs))
+	artifactList, err := c.artifactRepo.ListIDs(release.ArtifactIDs...)
+	if err != nil {
+		respondWithError(w, err)
+		return
 	}
-	// TODO: fetch the manifest if it isn't cached
-	if imageArtifact != nil {
-		utils.SetupMountspecs(job, imageArtifact)
+	for i, id := range release.ArtifactIDs {
+		artifacts[i] = artifactList[id]
 	}
+	utils.SetupMountspecs(job, artifacts)
 
 	// ensure slug apps use /runner/init
 	if release.IsGitDeploy() && (len(job.Config.Args) == 0 || job.Config.Args[0] != "/runner/init") {

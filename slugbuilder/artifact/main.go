@@ -16,7 +16,6 @@ import (
 	"github.com/docker/go-units"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 )
 
@@ -33,11 +32,6 @@ func main() {
 
 func run(dir string) error {
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
-	if err != nil {
-		return err
-	}
-
-	slugRunner, err := client.GetArtifact(os.Getenv("SLUGRUNNER_IMAGE_ID"))
 	if err != nil {
 		return err
 	}
@@ -88,12 +82,12 @@ func run(dir string) error {
 
 		Rootfs: []*ct.ImageRootfs{{
 			Platform: ct.DefaultImagePlatform,
-			Layers: append(slugRunner.Manifest.Rootfs[0].Layers, &ct.ImageLayer{
+			Layers: []*ct.ImageLayer{{
+				ID:     layerSha,
 				Type:   ct.ImageLayerTypeSquashfs,
 				Length: length,
 				Hashes: map[string]string{"sha512": layerSha},
-				URL:    layerURL,
-			}),
+			}},
 		}},
 	}
 
@@ -110,12 +104,13 @@ func run(dir string) error {
 
 	artifact := &ct.Artifact{
 		ID:   os.Getenv("SLUG_IMAGE_ID"),
-		Type: host.ArtifactTypeFlynn,
+		Type: ct.ArtifactTypeFlynn,
 		URI:  manifestURL,
 		Meta: map[string]string{
 			"blobstore": "true",
 		},
-		Manifest: manifest,
+		Manifest:         manifest,
+		LayerURLTemplate: "http://blobstore.discoverd/slugs/layers/{id}.squashfs",
 	}
 
 	// create artifact

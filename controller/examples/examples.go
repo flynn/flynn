@@ -16,7 +16,6 @@ import (
 	"github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
 	g "github.com/flynn/flynn/pkg/examplegenerator"
 	"github.com/flynn/flynn/pkg/httprecorder"
 	"github.com/flynn/flynn/pkg/random"
@@ -181,6 +180,7 @@ func (e *generator) getInitialAppRelease() {
 	if artifact, err := e.client.GetArtifact(appRelease.Env["SLUGRUNNER_IMAGE_ID"]); err == nil {
 		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = artifact.URI
 	}
+	e.resourceIds["SLUGRUNNER_IMAGE_URI"] = artifact.URI
 }
 
 func (e *generator) getApp() {
@@ -281,7 +281,7 @@ func (e *generator) deleteApp() {
 
 func (e *generator) createArtifact() {
 	artifact := &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
+		Type: ct.ArtifactTypeFlynn,
 		URI:  e.resourceIds["SLUGRUNNER_IMAGE_URI"],
 	}
 	err := e.client.CreateArtifact(artifact)

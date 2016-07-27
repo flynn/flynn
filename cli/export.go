@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -19,7 +20,6 @@ import (
 	"github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/backup"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
@@ -117,14 +117,87 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	var artifact *ct.Artifact
-	if artifactID := release.ImageArtifactID(); artifactID != "" {
-		artifact, err = client.GetArtifact(artifactID)
+	blobstoreRelease, err := client.GetAppRelease("blobstore")
+	if err != nil {
+		return fmt.Errorf("error getting blobstore release: %s", err)
+	}
+	download := func(name, url string) error {
+		reqR, reqW := io.Pipe()
+		config := runConfig{
+			App:        mustApp(),
+			Release:    blobstoreRelease.ID,
+			DisableLog: true,
+			Args:       []string{"curl", "--include", "--location", "--raw", url},
+			Stdout:     reqW,
+			Stderr:     ioutil.Discard,
+		}
+		if bar != nil {
+			config.Stdout = io.MultiWriter(config.Stdout, bar)
+		}
+		go func() {
+			if err := runJob(client, config); err != nil {
+				shutdown.Fatalf("error downloading %s: %s", name, err)
+			}
+		}()
+		req := bufio.NewReader(reqR)
+		var res *http.Response
+		maxRedirects := 5
+		for i := 0; i < maxRedirects; i++ {
+			res, err = http.ReadResponse(req, nil)
+			if err != nil {
+				return fmt.Errorf("error reading HTTP response: %s", err)
+			}
+			if res.StatusCode != http.StatusFound {
+				break
+			}
+		}
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status downloading %s: %d", name, res.StatusCode)
+		}
+		length, err := strconv.Atoi(res.Header.Get("Content-Length"))
+		if err != nil {
+			return fmt.Errorf("download of %s has missing or malformed Content-Length", name)
+		}
+
+		if err := tw.WriteHeader(name, length); err != nil {
+			return fmt.Errorf("error writing header for %s: %s", name, err)
+		}
+		if _, err := io.Copy(tw, res.Body); err != nil {
+			return fmt.Errorf("error writing %s: %s", name, err)
+		}
+		return nil
+	}
+
+	artifacts := make([]*ct.Artifact, 0, len(release.ArtifactIDs))
+	for _, id := range release.ArtifactIDs {
+		artifact, err := client.GetArtifact(id)
 		if err != nil && err != controller.ErrNotFound {
-			return fmt.Errorf("error retrieving artifact: %s", err)
+			return fmt.Errorf("error retrieving artifact %s: %s", id, err)
 		} else if err == nil {
-			if err := tw.WriteJSON("artifact.json", artifact); err != nil {
-				return fmt.Errorf("error exporting artifact: %s", err)
+			artifacts = append(artifacts, artifact)
+		}
+	}
+	if len(artifacts) > 0 {
+		if err := tw.WriteJSON("artifacts.json", artifacts); err != nil {
+			return fmt.Errorf("error exporting artifacts: %s", err)
+		}
+	}
+	// save layers of any Flynn artifacts
+	for _, artifact := range artifacts {
+		if artifact.Type != ct.ArtifactTypeFlynn {
+			continue
+		}
+		if artifact.Manifest == nil {
+			continue
+		}
+		for _, rootfs := range artifact.Manifest.Rootfs {
+			for _, layer := range rootfs.Layers {
+				name := filepath.Join("layer", layer.ID)
+				url := artifact.LayerURL(layer)
+				if err := download(name, url); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -138,9 +211,10 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	// if the release was deployed via docker-receive, pull the docker
-	// image and add it to the export using "docker save"
-	if release.IsDockerReceiveDeploy() && artifact != nil {
+	// if the release was deployed via docker-receive and has a deprecated
+	// "docker" artifact, pull the docker image and add it to the export
+	// using "docker save"
+	if release.IsDockerReceiveDeploy() && len(artifacts) > 0 && artifacts[0].Type == ct.DeprecatedArtifactTypeDocker {
 		cluster, err := getCluster()
 		if err != nil {
 			return err
@@ -153,8 +227,8 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		// the artifact will have an internal discoverd URL which will
 		// not work if the Docker daemon is outside the cluster, so
 		// generate a reference using the configured DockerPushURL
-		repo := artifact.Meta["docker-receive.repository"]
-		digest := artifact.Meta["docker-receive.digest"]
+		repo := artifacts[0].Meta["docker-receive.repository"]
+		digest := artifacts[0].Meta["docker-receive.digest"]
 		ref := fmt.Sprintf("%s/%s@%s", host, repo, digest)
 
 		// pull the Docker image
@@ -190,64 +264,18 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	// expect releases deployed via git to have a slug as their first file
-	// artifact, and legacy releases to have SLUG_URL set
+	// explicitly export slugs from old clusters which either have them as
+	// file artifacts or in SLUG_URL
 	var slugURL string
-	if release.IsGitDeploy() && len(release.FileArtifactIDs()) > 0 {
-		slugArtifact, err := client.GetArtifact(release.FileArtifactIDs()[0])
-		if err != nil && err != controller.ErrNotFound {
-			return fmt.Errorf("error retrieving slug artifact: %s", err)
-		} else if err == nil {
-			slugURL = slugArtifact.URI
-		}
+	if release.IsGitDeploy() && len(artifacts) > 1 && artifacts[1].Type == ct.ArtifactTypeFile {
+		slugURL = artifacts[1].URI
 	} else if u, ok := release.Env["SLUG_URL"]; ok {
 		slugURL = u
 	}
 	if slugURL != "" {
-		reqR, reqW := io.Pipe()
-		config := runConfig{
-			App:        mustApp(),
-			Release:    release.ID,
-			DisableLog: true,
-			Args:       []string{"curl", "--include", "--location", "--raw", slugURL},
-			Stdout:     reqW,
-			Stderr:     ioutil.Discard,
+		if err := download("slug.tar.gz", slugURL); err != nil {
+			return err
 		}
-		if bar != nil {
-			config.Stdout = io.MultiWriter(config.Stdout, bar)
-		}
-		go func() {
-			if err := runJob(client, config); err != nil {
-				shutdown.Fatalf("error retrieving slug: %s", err)
-			}
-		}()
-		req := bufio.NewReader(reqR)
-		var res *http.Response
-		maxRedirects := 5
-		for i := 0; i < maxRedirects; i++ {
-			res, err = http.ReadResponse(req, nil)
-			if err != nil {
-				return fmt.Errorf("error reading slug response: %s", err)
-			}
-			if res.StatusCode != http.StatusFound {
-				break
-			}
-		}
-		if res.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected status getting slug: %d", res.StatusCode)
-		}
-		length, err := strconv.Atoi(res.Header.Get("Content-Length"))
-		if err != nil {
-			return fmt.Errorf("slug has missing or malformed Content-Length")
-		}
-
-		if err := tw.WriteHeader("slug.tar.gz", length); err != nil {
-			return fmt.Errorf("error writing slug header: %s", err)
-		}
-		if _, err := io.Copy(tw, res.Body); err != nil {
-			return fmt.Errorf("error writing slug: %s", err)
-		}
-		res.Body.Close()
 	}
 
 	if pgConfig, err := getAppPgRunConfig(client); err == nil {
@@ -292,6 +320,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 	var (
 		app           *ct.App
 		release       *ct.Release
+		artifacts     []*ct.Artifact
 		imageArtifact *ct.Artifact
 		formation     *ct.Formation
 		routes        []router.Route
@@ -308,6 +337,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 	)
 	numResources := 0
 	numRoutes := 1
+	layers := make(map[string]io.Reader)
 
 	for {
 		header, err := tr.Next()
@@ -315,6 +345,24 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			break
 		} else if err != nil {
 			return fmt.Errorf("error reading export tar: %s", err)
+		}
+
+		if strings.HasPrefix(header.Name, "layer/") {
+			f, err := ioutil.TempFile("", "flynn-layer-")
+			if err != nil {
+				return fmt.Errorf("error creating layer tempfile: %s", err)
+			}
+			defer f.Close()
+			defer os.Remove(f.Name())
+			if _, err := io.Copy(f, tr); err != nil {
+				return fmt.Errorf("error reading %s: %s", header.Name, err)
+			}
+			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+				return fmt.Errorf("error seeking layer tempfile: %s", err)
+			}
+			layers[header.Name] = f
+			uploadSize += header.Size
+			continue
 		}
 
 		switch path.Base(header.Name) {
@@ -337,6 +385,10 @@ func runImport(args *docopt.Args, client controller.Client) error {
 				return fmt.Errorf("error decoding image artifact: %s", err)
 			}
 			imageArtifact.ID = ""
+		case "artifacts.json":
+			if err := json.NewDecoder(tr).Decode(artifacts); err != nil {
+				return fmt.Errorf("error decoding image artifact: %s", err)
+			}
 		case "formation.json":
 			formation = &ct.Formation{}
 			if err := json.NewDecoder(tr).Decode(formation); err != nil {
@@ -521,6 +573,18 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
+	if len(artifacts) > 0 {
+		artifactIDs := make([]string, len(artifacts))
+		for i, artifact := range artifacts {
+			// TODO: upload layers for each artifact
+			if err := client.CreateArtifact(artifact); err != nil {
+				return fmt.Errorf("error creating artifact: %s", err)
+			}
+			artifactIDs[i] = artifact.ID
+		}
+		release.ArtifactIDs = artifactIDs
+	}
+
 	uploadSlug := release != nil && imageArtifact != nil && slug != nil
 
 	if uploadSlug {
@@ -617,7 +681,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			return fmt.Errorf("error uploading slug: %s", err)
 		}
 		slugArtifact := &ct.Artifact{
-			Type: host.ArtifactTypeFile,
+			Type: ct.ArtifactTypeFile,
 			URI:  slugURI,
 		}
 		if err := client.CreateArtifact(slugArtifact); err != nil {

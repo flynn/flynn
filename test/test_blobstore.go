@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
+	ct "github.com/flynn/flynn/controller/types"
 	c "github.com/flynn/go-check"
 )
 
@@ -63,11 +64,13 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	// get slug artifact details
 	release, err := s.controllerClient(t).GetAppRelease("blobstore-backend-test-" + name)
 	t.Assert(err, c.IsNil)
-	artifact, err := s.controllerClient(t).GetArtifact(release.FileArtifactIDs()[0])
+	artifact, err := s.controllerClient(t).GetArtifact(release.ArtifactIDs[1])
 	t.Assert(err, c.IsNil)
+	t.Assert(artifact.Type, c.Equals, ct.ArtifactTypeFlynn)
 
 	// migrate slug to external backend
-	u, err := url.Parse(artifact.URI)
+	layer := artifact.Manifest.Rootfs[0].Layers[0]
+	u, err := url.Parse(artifact.LayerURL(layer))
 	t.Assert(err, c.IsNil)
 	migration := flynn(t, "/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore-migrate", "--", "-delete", "-prefix", u.Path)
 	t.Assert(migration, Succeeds)
@@ -78,7 +81,7 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	noRedirectsClient := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { return errors.New("no redirects") },
 	}
-	res, err := noRedirectsClient.Get(artifact.URI)
+	res, err := noRedirectsClient.Get(u.String())
 	if res == nil {
 		t.Fatal(err)
 	}
