@@ -136,7 +136,7 @@ func dockerLogin(host, key string) error {
 	cmd.Stderr = &out
 	err := cmd.Run()
 	if strings.Contains(out.String(), "certificate signed by unknown authority") {
-		err = ErrDockerTLSError
+		return ErrDockerTLSError
 	} else if err != nil {
 		return fmt.Errorf("error running `docker login`: %s - output: %q", err, out)
 	}
