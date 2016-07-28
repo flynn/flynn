@@ -87,7 +87,7 @@ func (i *Installer) Unsubscribe(sub *Subscription) {
 func (i *Installer) processEvent(event *Event) bool {
 	var err error
 	if event.Type == "log" || event.Type == "progress" {
-		if c, err := i.FindBaseCluster(event.ClusterID); err != nil || (err == nil && c.State == "running") {
+		if c, err := i.FindBaseCluster(event.ClusterID); err != nil || (err == nil && c.getState() == "running") {
 			return false
 		}
 	}
@@ -286,7 +286,8 @@ func (i *Installer) dbInsertItem(tableName string, item interface{}, typeMap map
 }
 
 func (c *BaseCluster) prompt(typ PromptType, msg string) *Prompt {
-	if c.State != "starting" && c.State != "deleting" {
+	state := c.getState()
+	if state != "starting" && state != "deleting" {
 		return &Prompt{}
 	}
 	res := c.sendPrompt(&Prompt{
@@ -384,7 +385,7 @@ func (c *BaseCluster) SendError(err error) {
 }
 
 func (c *BaseCluster) handleDone() {
-	if c.State != "running" {
+	if c.getState() != "running" {
 		return
 	}
 	c.sendEvent(&Event{
