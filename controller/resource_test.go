@@ -53,7 +53,7 @@ func (s *S) TestProvisionResource(c *C) {
 	c.Assert(resource.ID, Not(Equals), "")
 	c.Assert(resource.Apps, DeepEquals, []string{app1.ID, app2.ID})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotResource, err := client.GetResource(provider.ID, resource.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotResource, DeepEquals, resource)
@@ -79,7 +79,7 @@ func (s *S) TestPutResource(c *C) {
 	c.Assert(resource.ProviderID, Equals, provider.ID)
 	c.Assert(resource.CreatedAt, Not(IsNil))
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotResource, err := client.GetResource(provider.ID, resource.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotResource, DeepEquals, resource)
@@ -147,7 +147,7 @@ func (s *S) TestResourceLists(c *C) {
 		c.Assert(list[0].Apps, DeepEquals, apps)
 	}
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		check(client.ResourceList(provider.ID))
 		check(client.ResourceList(provider.Name))
 		check(client.AppResourceList(app1.ID))
@@ -165,7 +165,7 @@ func (s *S) TestAppResourceListWithDeletedAppResource(c *C) {
 	_, err := s.c.DeleteResourceApp(provider.ID, resource.ID, app1.ID)
 	c.Assert(err, IsNil)
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.AppResourceList(app1.ID)
 		c.Assert(err, IsNil)
 		c.Assert(len(list), Equals, 0)

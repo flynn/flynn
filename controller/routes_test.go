@@ -137,7 +137,7 @@ func (s *S) TestCreateRoute(c *C) {
 	route := s.createTestRoute(c, app.ID, (&router.TCPRoute{Service: "foo"}).ToRoute())
 	c.Assert(route.ID, Not(Equals), "")
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotRoute, err := client.GetRoute(app.ID, route.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotRoute, DeepEquals, route)
@@ -150,7 +150,7 @@ func (s *S) TestDeleteRoute(c *C) {
 
 	c.Assert(s.c.DeleteRoute(app.ID, route.ID), IsNil)
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		_, err := client.GetRoute(app.ID, route.ID)
 		c.Assert(err, Equals, controller.ErrNotFound)
 	})
@@ -168,7 +168,7 @@ func (s *S) TestUpdateRoute(c *C) {
 	c.Assert(s.c.UpdateRoute(app.ID, route0.ID, route0), IsNil)
 	c.Assert(s.c.UpdateRoute(app.ID, route1.ID, route1), IsNil)
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		routes, err := client.RouteList(app.ID)
 		c.Assert(err, IsNil)
 
@@ -190,7 +190,7 @@ func (s *S) TestListRoutes(c *C) {
 	s.createTestRoute(c, app1.ID, (&router.TCPRoute{Service: "bar"}).ToRoute())
 	s.createTestRoute(c, app1.ID, (&router.HTTPRoute{Service: "buzz", Domain: "example.net"}).ToRoute())
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		routes, err := client.RouteList(app0.ID)
 		c.Assert(err, IsNil)
 

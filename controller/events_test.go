@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 )
 
@@ -476,4 +479,242 @@ func (s *S) TestGetEvent(c *C) {
 	event, err := s.c.GetEvent(events[0].ID)
 	c.Assert(err, IsNil)
 	c.Assert(event, DeepEquals, events[0])
+}
+
+func (s *S) TestGetEvents(c *C) {
+	decodeEventObjectData := func(typ ct.EventType, data json.RawMessage) (interface{}, error) {
+		var obj interface{}
+		switch typ {
+		case ct.EventTypeApp:
+			obj = &ct.App{}
+		case ct.EventTypeAppDeletion:
+			obj = &ct.AppDeletionEvent{}
+		case ct.EventTypeAppRelease:
+			obj = &ct.AppRelease{}
+		case ct.EventTypeDeployment:
+			obj = &ct.Deployment{}
+		case ct.EventTypeJob:
+			obj = &ct.Job{}
+		case ct.EventTypeScale:
+			obj = &ct.Scale{}
+		case ct.EventTypeRelease:
+			obj = &ct.Release{}
+		case ct.EventTypeReleaseDeletion:
+			obj = &ct.ReleaseDeletionEvent{}
+		case ct.EventTypeArtifact:
+			obj = &ct.Artifact{}
+		case ct.EventTypeProvider:
+			obj = &ct.Provider{}
+		case ct.EventTypeResource:
+			obj = &ct.Resource{}
+		case ct.EventTypeResourceDeletion:
+			obj = &ct.Resource{}
+		case ct.EventTypeResourceAppDeletion:
+			obj = &ct.Resource{}
+		case ct.EventTypeRoute:
+			obj = &router.Route{}
+		case ct.EventTypeRouteDeletion:
+			obj = &router.Route{}
+		case ct.EventTypeDomainMigration:
+			obj = &ct.DomainMigration{}
+		case ct.EventTypeClusterBackup:
+			obj = &ct.ClusterBackup{}
+		case ct.EventTypeAppGarbageCollection:
+			obj = &ct.AppGarbageCollectionEvent{}
+		default:
+			return nil, fmt.Errorf("Invalid EventType: %s", typ)
+		}
+		if err := json.Unmarshal(data, obj); err != nil {
+			return nil, err
+		}
+		return obj, nil
+	}
+	assertEventsEqual := func(e1, e2 *ct.Event) {
+		c.Assert(e1.ID, Equals, e2.ID)
+		c.Assert(e1.AppID, Equals, e2.AppID)
+		c.Assert(e1.ObjectType, Equals, e2.ObjectType)
+		c.Assert(e1.ObjectID, Equals, e2.ObjectID)
+		c.Assert(e1.CreatedAt, DeepEquals, e2.CreatedAt)
+
+		c.Assert(e1.Data, Not(IsNil))
+		c.Assert(e2.Data, Not(IsNil))
+		data1, err := decodeEventObjectData(e1.ObjectType, e1.Data)
+		c.Assert(err, IsNil)
+		data2, err := decodeEventObjectData(e2.ObjectType, e2.Data)
+		c.Assert(err, IsNil)
+		if e1.ObjectType == ct.EventTypeReleaseDeletion {
+			rde1 := data1.(*ct.ReleaseDeletionEvent)
+			rde2 := data2.(*ct.ReleaseDeletionEvent)
+			c.Assert(rde1.Error, Equals, rde2.Error)
+			c.Assert(rde1.ReleaseDeletion, DeepEquals, rde2.ReleaseDeletion)
+		} else {
+			c.Assert(data1, DeepEquals, data2)
+		}
+	}
+
+	debugf(c, "EventTypeApp [create]")
+	app := s.createTestApp(c, &ct.App{})
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeApp},
+			AppID:       app.ID,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 1)
+
+		event, err := s.c.GetEvent(events[0].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[0])
+	})
+
+	debugf(c, "EventTypeRelease")
+	release := s.createTestRelease(c, s.c, &ct.Release{})
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeRelease},
+			Count:       1,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 1)
+
+		event, err := s.c.GetEvent(events[0].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[0])
+	})
+
+	debugf(c, "EventTypeDeployment")
+	_, err := s.c.CreateDeployment(app.ID, release.ID)
+	c.Assert(err, IsNil)
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeDeployment},
+			AppID:       app.ID,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 1)
+
+		event, err := s.c.GetEvent(events[0].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[0])
+	})
+
+	debugf(c, "EventTypeAppRelease")
+	// App release was set when deployment created
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeAppRelease},
+			AppID:       app.ID,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 1)
+
+		event, err := s.c.GetEvent(events[0].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[0])
+	})
+
+	debugf(c, "EventTypeApp [update]")
+	app.Meta = map[string]string{
+		"foo": "bar",
+	}
+	c.Assert(s.c.UpdateApp(app), IsNil)
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeApp},
+			AppID:       app.ID,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 2)
+
+		event, err := s.c.GetEvent(events[1].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[1])
+	})
+
+	debugf(c, "EventTypeRoute")
+	route := s.createTestRoute(c, app.ID, (&router.HTTPRoute{Domain: "example.com"}).ToRoute())
+	c.Assert(createEvent(s.db.Exec, &ct.Event{ // fake router doesn't create events
+		AppID:      app.ID,
+		ObjectID:   route.ID,
+		ObjectType: ct.EventTypeRoute,
+	}, route), IsNil)
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeRoute},
+			AppID:       app.ID,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 1)
+
+		event, err := s.c.GetEvent(events[0].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[0])
+	})
+
+	debugf(c, "EventTypeRouteDeletion")
+	c.Assert(createEvent(s.db.Exec, &ct.Event{
+		AppID:      app.ID,
+		ObjectID:   route.ID,
+		ObjectType: ct.EventTypeRouteDeletion,
+	}, route), IsNil)
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeRoute},
+			AppID:       app.ID,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 1)
+
+		event, err := s.c.GetEvent(events[0].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[0])
+	})
+
+	// TODO(jvatic): EventTypeJob
+	// TODO(jvatic): EventTypeScale
+	// TODO(jvatic): EventTypeArtifact
+	// TODO(jvatic): EventTypeProvider
+	// TODO(jvatic): EventTypeResource
+	// TODO(jvatic): EventTypeResourceDeletion
+	// TODO(jvatic): EventTypeResourceAppDeletion
+	// TODO(jvatic): EventTypeDomainMigration
+	// TODO(jvatic): EventTypeClusterBackup
+	// TODO(jvatic): EventTypeAppGarbageCollection
+
+	debugf(c, "EventTypeReleaseDeletion")
+	nextRelease := s.createTestRelease(c, s.c, &ct.Release{})
+	c.Assert(s.c.SetAppRelease(app.ID, nextRelease.ID), IsNil)
+	_, err = s.c.DeleteRelease(app.ID, release.ID)
+	c.Assert(err, IsNil)
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeReleaseDeletion},
+			AppID:       app.ID,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 1)
+
+		event, err := s.c.GetEvent(events[0].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[0])
+	})
+
+	debugf(c, "EventTypeAppDeletion")
+	c.Assert(createEvent(s.db.Exec, &ct.Event{
+		AppID:      app.ID,
+		ObjectID:   app.ID,
+		ObjectType: ct.EventTypeAppDeletion,
+	}, &ct.AppDeletion{AppID: app.ID}), IsNil)
+	s.withEachClient(c, func(client controller.Client) {
+		events, err := client.ListEvents(ct.ListEventsOptions{
+			ObjectTypes: []ct.EventType{ct.EventTypeAppDeletion},
+			AppID:       app.ID,
+		})
+		c.Assert(err, IsNil)
+		c.Assert(len(events), Equals, 1)
+
+		event, err := s.c.GetEvent(events[0].ID)
+		c.Assert(err, IsNil)
+		assertEventsEqual(event, events[0])
+	})
 }

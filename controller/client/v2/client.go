@@ -33,6 +33,74 @@ func New(v1client *v1controller.Client) *Client {
 	}
 }
 
+const (
+	FragmentAppFields = `
+		fragment appFields on App {
+			id
+			name
+			meta
+			strategy
+			current_release {
+				id
+			}
+			deploy_timeout
+			created_at
+			updated_at
+		}`
+
+	FragmentRouteFields = `
+		fragment routeFields on Route {
+			type
+			id
+			parent_ref
+			service
+			leader
+			created_at
+			updated_at
+			domain
+			certificate {
+				id
+				key
+				cert
+				created_at
+				updated_at
+			}
+			sticky
+			path
+			port
+		}`
+
+	FragmentResourceFields = `
+		fragment resourceFields on Resource {
+			id
+			provider {
+				id
+			}
+			external_id
+			env
+			apps {
+				id
+			}
+			created_at
+		}`
+
+	FragmentReleaseFields = `
+		fragment releaseFields on Release {
+			id
+			artifacts {
+				id
+			}
+			env
+			meta
+			processes
+			created_at
+		}`
+)
+
+func queryWithFragments(query string, fragments ...string) string {
+	return strings.Join([]string{query, strings.Join(fragments, "\n")}, "\n")
+}
+
 type graphqlResponse struct {
 	Errors ct.GraphQLErrors `json:"errors"`
 	Data   map[string]json.RawMessage
@@ -822,7 +890,126 @@ func (c *Client) StreamEvents(opts ct.StreamEventsOptions, output chan *ct.Event
 }
 
 func (c *Client) ListEvents(opts ct.ListEventsOptions) ([]*ct.Event, error) {
-	return c.v1client.ListEvents(opts)
+	r, w := io.Pipe()
+	errChan := make(chan error)
+	go func() {
+		errChan <- json.NewEncoder(w).Encode(opts)
+	}()
+	var variables map[string]interface{}
+	if err := json.NewDecoder(r).Decode(&variables); err != nil {
+		return nil, err
+	}
+	if err := <-errChan; err != nil {
+		return nil, err
+	}
+	data, err := c.graphqlRequest(&handler.RequestOptions{
+		Query: queryWithFragments(`query events($object_types: [String], $object_id: String, $app_id: String, $count: Int, $before_id: Int, $since_id: Int) {
+			events(object_types: $object_types, object_id: $object_id, app_id: $app_id, count: $count, before_id: $before_id, since_id: $since_id)  {
+				id
+				object_type
+				object_id
+				app {
+					id
+				}
+				...on EventApp {
+					data {
+						...appFields
+					}
+				}
+				... on EventAppRelease {
+					data {
+						prev_release {
+							...releaseFields
+						}
+						release {
+							...releaseFields
+						}
+					}
+				}
+				... on EventRelease {
+					data {
+						...releaseFields
+					}
+				}
+				... on EventAppDeletion {
+					data {
+						app_deletion {
+							app {
+								id
+							}
+							routes {
+								...routeFields
+							}
+							resources {
+								...resourceFields
+							}
+							releases {
+								...releaseFields
+							}
+						}
+						error
+					}
+				}
+				... on EventDeployment {
+					data {
+						app {
+							id
+						}
+						deployment {
+							id
+						}
+						release {
+							id
+						}
+						status
+						job_type
+						job_state
+						error
+					}
+				}
+				... on EventReleaseDeletion {
+					data {
+						release_deletion {
+							app {
+								id
+							}
+							release {
+								id
+							}
+							remaining_apps {
+								id
+							}
+							deleted_files
+						}
+						error
+					}
+				}
+				... on EventRoute {
+					data {
+						...routeFields
+					}
+				}
+				created_at
+			}
+		}`,
+			FragmentAppFields,
+			FragmentRouteFields,
+			FragmentResourceFields,
+			FragmentReleaseFields),
+		Variables: variables,
+	})
+	if err != nil {
+		return nil, err
+	}
+	l := []*gt.Event{}
+	if err := json.Unmarshal(data["events"], &l); err != nil {
+		return nil, err
+	}
+	list := make([]*ct.Event, len(l))
+	for i, event := range l {
+		list[i] = event.ToStandardType()
+	}
+	return list, nil
 }
 
 func (c *Client) GetEvent(id int64) (*ct.Event, error) {

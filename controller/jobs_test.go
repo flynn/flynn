@@ -24,7 +24,7 @@ func (s *S) TestJobList(c *C) {
 	id := random.UUID()
 	s.createTestJob(c, &ct.Job{UUID: id, AppID: app.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting, Meta: map[string]string{"some": "info"}})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.JobList(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(len(list), Equals, 1)
@@ -67,7 +67,7 @@ func (s *S) TestJobListActive(c *C) {
 
 	var list []*ct.Job
 	var err error
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err = client.JobListActive()
 		c.Assert(err, IsNil)
 		c.Assert(list, HasLen, 7)
@@ -103,7 +103,7 @@ func (s *S) TestJobGet(c *C) {
 
 	// test getting the job with both the job ID and the UUID
 	for _, id := range []string{jobID, uuid} {
-		s.withEachClient(func(client controller.Client) {
+		s.withEachClient(c, func(client controller.Client) {
 			job, err := client.GetJob(app.ID, id)
 			c.Assert(err, IsNil)
 			c.Assert(job.ID, Equals, jobID)
