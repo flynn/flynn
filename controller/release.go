@@ -117,6 +117,11 @@ func (r *ReleaseRepo) Get(id string) (interface{}, error) {
 	return scanRelease(row)
 }
 
+func (r *ReleaseRepo) GetDeleted(id string) (interface{}, error) {
+	row := r.db.QueryRow("release_select_deleted", id)
+	return scanRelease(row)
+}
+
 func releaseList(rows *pgx.Rows) ([]*ct.Release, error) {
 	var releases []*ct.Release
 	for rows.Next() {
@@ -180,6 +185,7 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 		}
 		event := ct.ReleaseDeletionEvent{
 			ReleaseDeletion: &ct.ReleaseDeletion{
+				AppID:         app.ID,
 				RemainingApps: apps,
 				ReleaseID:     release.ID,
 			},
@@ -236,6 +242,7 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 	if len(blobstoreFiles) == 0 {
 		event := ct.ReleaseDeletionEvent{
 			ReleaseDeletion: &ct.ReleaseDeletion{
+				AppID:     app.ID,
 				ReleaseID: release.ID,
 			},
 		}

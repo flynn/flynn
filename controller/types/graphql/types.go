@@ -1,6 +1,7 @@
 package graphqltypes
 
 import (
+	"encoding/json"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -68,6 +69,99 @@ func (r *Release) ToStandardType() *ct.Release {
 		Meta:             r.Meta,
 		Processes:        r.Processes,
 		CreatedAt:        r.CreatedAt,
+	}
+}
+
+type ReleaseDeletion struct {
+	App           *App     `json:"app"`
+	Release       *Release `json:"release"`
+	RemainingApps []*App   `json:"remaining_apps"`
+	DeletedFiles  []string `json:"deleted_files"`
+}
+
+func (d *ReleaseDeletion) ToStandardType() *ct.ReleaseDeletion {
+	var appID, releaseID string
+	if d.App != nil {
+		appID = d.App.ID
+	}
+	if d.Release != nil {
+		releaseID = d.Release.ID
+	}
+	var remainingApps []string
+	if len(d.RemainingApps) > 0 {
+		remainingApps = make([]string, len(d.RemainingApps))
+		for i, app := range d.RemainingApps {
+			remainingApps[i] = app.ID
+		}
+	}
+	var deletedFiles []string
+	if len(d.DeletedFiles) > 0 {
+		deletedFiles = d.DeletedFiles
+	}
+	return &ct.ReleaseDeletion{
+		AppID:         appID,
+		ReleaseID:     releaseID,
+		RemainingApps: remainingApps,
+		DeletedFiles:  deletedFiles,
+	}
+}
+
+type ReleaseDeletionEvent struct {
+	ReleaseDeletion *ReleaseDeletion `json:"release_deletion"`
+	Error           string           `json:"error"`
+}
+
+func (e *ReleaseDeletionEvent) ToStandardType() *ct.ReleaseDeletionEvent {
+	return &ct.ReleaseDeletionEvent{
+		ReleaseDeletion: e.ReleaseDeletion.ToStandardType(),
+		Error:           e.Error,
+	}
+}
+
+type AppRelease struct {
+	PrevRelease *Release `json:"prev_release,omitempty"`
+	Release     *Release `json:"release"`
+}
+
+func (r *AppRelease) ToStandardType() *ct.AppRelease {
+	var prevRelease, release *ct.Release
+	if r.PrevRelease != nil {
+		prevRelease = r.PrevRelease.ToStandardType()
+	}
+	if r.Release != nil {
+		release = r.Release.ToStandardType()
+	}
+	return &ct.AppRelease{
+		PrevRelease: prevRelease,
+		Release:     release,
+	}
+}
+
+type AppDeletion struct {
+	App              *App            `json:"app"`
+	DeletedRoutes    []*router.Route `json:"deleted_routes"`
+	DeletedResources []*Resource     `json:"deleted_resources"`
+	DeletedReleases  []*Release      `json:"deleted_releases"`
+}
+
+func (d *AppDeletion) ToStandardType() *ct.AppDeletion {
+	var appID string
+	if d.App != nil {
+		appID = d.App.ID
+	}
+	deletedResources := make([]*ct.Resource, len(d.DeletedResources))
+	for i, r := range d.DeletedResources {
+		deletedResources[i] = r.ToStandardType()
+	}
+	deletedReleases := make([]*ct.Release, len(d.DeletedReleases))
+	for i, r := range d.DeletedReleases {
+		deletedReleases[i] = r.ToStandardType()
+	}
+	return &ct.AppDeletion{
+		AppID:            appID,
+		DeletedRoutes:    d.DeletedRoutes,
+		DeletedResources: deletedResources,
+		DeletedReleases:  deletedReleases,
 	}
 }
 
@@ -158,6 +252,38 @@ func (d *Deployment) ToStandardType() *ct.Deployment {
 		DeployTimeout: d.DeployTimeout,
 		CreatedAt:     d.CreatedAt,
 		FinishedAt:    d.FinishedAt,
+	}
+}
+
+type DeploymentEvent struct {
+	App        *App        `json:"app,omitempty"`
+	Deployment *Deployment `json:"deployment,omitempty"`
+	Release    *Release    `json:"release,omitempty"`
+	Status     string      `json:"status,omitempty"`
+	JobType    string      `json:"job_type,omitempty"`
+	JobState   ct.JobState `json:"job_state,omitempty"`
+	Error      string      `json:"error,omitempty"`
+}
+
+func (e *DeploymentEvent) ToStandardType() *ct.DeploymentEvent {
+	var appID, deploymentID, releaseID string
+	if e.App != nil {
+		appID = e.App.ID
+	}
+	if e.Deployment != nil {
+		deploymentID = e.Deployment.ID
+	}
+	if e.Release != nil {
+		releaseID = e.Release.ID
+	}
+	return &ct.DeploymentEvent{
+		AppID:        appID,
+		DeploymentID: deploymentID,
+		ReleaseID:    releaseID,
+		Status:       e.Status,
+		JobType:      e.JobType,
+		JobState:     e.JobState,
+		Error:        e.Error,
 	}
 }
 
@@ -287,5 +413,108 @@ func (j *Job) ToStandardType() *ct.Job {
 		Restarts:   j.Restarts,
 		CreatedAt:  j.CreatedAt,
 		UpdatedAt:  j.UpdatedAt,
+	}
+}
+
+type Event struct {
+	ID         int64           `json:"id,omitempty"`
+	App        *App            `json:"app,omitempty"`
+	ObjectType ct.EventType    `json:"object_type,omitempty"`
+	ObjectID   string          `json:"object_id,omitempty"`
+	Data       json.RawMessage `json:"data,omitempty"`
+	CreatedAt  *time.Time      `json:"created_at,omitempty"`
+}
+
+func (e *Event) ToStandardType() *ct.Event {
+	var appID string
+	if e.App != nil {
+		appID = e.App.ID
+	}
+	data := e.Data
+	if e.ObjectType == ct.EventTypeRelease {
+		var release *Release
+		if err := json.Unmarshal(data, &release); err != nil {
+			// TODO(jvatic): Refactor to allow this method to return an error
+			panic(err)
+		}
+		var err error
+		data, err = json.Marshal(release.ToStandardType())
+		if err != nil {
+			// TODO(jvatic): Ditto on returning error
+			panic(err)
+		}
+	}
+	if e.ObjectType == ct.EventTypeAppRelease {
+		var appRelease *AppRelease
+		if err := json.Unmarshal(data, &appRelease); err != nil {
+			// TODO(jvatic): Refactor to allow this method to return an error
+			panic(err)
+		}
+		var err error
+		data, err = json.Marshal(appRelease.ToStandardType())
+		if err != nil {
+			// TODO(jvatic): Ditto on returning error
+			panic(err)
+		}
+	}
+	if e.ObjectType == ct.EventTypeAppDeletion {
+		var appDeletion *AppDeletion
+		if err := json.Unmarshal(data, &appDeletion); err != nil {
+			// TODO(jvatic): Refactor to allow this method to return an error
+			panic(err)
+		}
+		var err error
+		data, err = json.Marshal(appDeletion.ToStandardType())
+		if err != nil {
+			// TODO(jvatic): Ditto on returning error
+			panic(err)
+		}
+	}
+	if e.ObjectType == ct.EventTypeDeployment {
+		var deploymentEvent *DeploymentEvent
+		if err := json.Unmarshal(data, &deploymentEvent); err != nil {
+			// TODO(jvatic): Refactor to allow this method to return an error
+			panic(err)
+		}
+		var err error
+		data, err = json.Marshal(deploymentEvent.ToStandardType())
+		if err != nil {
+			// TODO(jvatic): Ditto on returning error
+			panic(err)
+		}
+	}
+	if e.ObjectType == ct.EventTypeReleaseDeletion {
+		var releaseDeletionEvent *ReleaseDeletionEvent
+		if err := json.Unmarshal(data, &releaseDeletionEvent); err != nil {
+			// TODO(jvatic): Refactor to allow this method to return an error
+			panic(err)
+		}
+		var err error
+		data, err = json.Marshal(releaseDeletionEvent.ToStandardType())
+		if err != nil {
+			// TODO(jvatic): Ditto on returning error
+			panic(err)
+		}
+	}
+	if e.ObjectType == ct.EventTypeRoute && data != nil {
+		var route *Route
+		if err := json.Unmarshal(data, &route); err != nil {
+			// TODO(jvatic): Refactor to allow this method to return an error
+			panic(err)
+		}
+		var err error
+		data, err = json.Marshal(route.ToStandardType())
+		if err != nil {
+			// TODO(jvaitc): Ditto on returning error
+			panic(err)
+		}
+	}
+	return &ct.Event{
+		ID:         e.ID,
+		AppID:      appID,
+		ObjectType: e.ObjectType,
+		ObjectID:   e.ObjectID,
+		Data:       data,
+		CreatedAt:  e.CreatedAt,
 	}
 }

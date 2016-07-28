@@ -27,7 +27,7 @@ func (s *S) TestCreateDeployment(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(d.FinishedAt, NotNil)
 	// but the app release should now be set
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotRelease, err := client.GetAppRelease(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(release.ID, Equals, gotRelease.ID)
@@ -118,7 +118,7 @@ func (s *S) TestGetDeployment(c *C) {
 	c.Assert(d.Status, Equals, "pending")
 
 	// test we can retrieve it
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		deployment, err := client.GetDeployment(d.ID)
 		c.Assert(err, IsNil)
 		c.Assert(deployment.ID, Equals, d.ID)
@@ -154,7 +154,7 @@ func (s *S) TestDeploymentList(c *C) {
 	c.Assert(err, IsNil)
 
 	// test we get back both the initial release and the new deployment
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		deployments, err := client.DeploymentList(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(deployments, HasLen, 2)

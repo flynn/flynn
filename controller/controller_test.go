@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/client/v1"
@@ -38,6 +39,7 @@ type S struct {
 	hc       handlerConfig
 	c        controller.Client
 	graphqlc controller.Client
+	db       *postgres.DB
 	flac     *fakeLogAggregatorClient
 	caCert   []byte
 }
@@ -82,6 +84,7 @@ func (s *S) SetUpSuite(c *C) {
 		c.Fatal(err)
 	}
 	db = postgres.New(pgxpool, nil)
+	s.db = db
 
 	ca, err := certgen.Generate(certgen.Params{IsCA: true})
 	if err != nil {
@@ -111,10 +114,16 @@ func (s *S) SetUpTest(c *C) {
 	s.cc.SetHosts(make(map[string]*tu.FakeHostClient))
 }
 
-func (s *S) withEachClient(fn func(controller.Client)) {
-	for _, client := range []controller.Client{s.c, s.graphqlc} {
+func (s *S) withEachClient(c *C, fn func(controller.Client)) {
+	names := []string{"v1", "v2"}
+	for i, client := range []controller.Client{s.c, s.graphqlc} {
+		debugf(c, "using controller %s client", names[i])
 		fn(client)
 	}
+}
+
+func debugf(c *C, format string, v ...interface{}) {
+	c.Logf(strings.Join([]string{"++", time.Now().Format("15:04:05.000"), format}, " "), v...)
 }
 
 func (s *S) TestBadAuth(c *C) {
@@ -147,7 +156,7 @@ func (s *S) TestCreateApp(c *C) {
 		}
 		c.Assert(app.Meta["foo"], Equals, "bar")
 
-		s.withEachClient(func(client controller.Client) {
+		s.withEachClient(c, func(client controller.Client) {
 			gotApp, err := client.GetApp(app.ID)
 			c.Assert(err, IsNil)
 			c.Assert(gotApp, DeepEquals, app)
@@ -187,7 +196,7 @@ func (s *S) TestUpdateApp(c *C) {
 	c.Assert(app.Meta, DeepEquals, meta)
 
 	var err error
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		app, err = client.GetApp(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(app.Meta, DeepEquals, meta)
@@ -200,7 +209,7 @@ func (s *S) TestUpdateApp(c *C) {
 	c.Assert(app.Meta, DeepEquals, meta)
 	c.Assert(app.Strategy, Equals, strategy)
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		app, err = client.GetApp(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(app.Meta, DeepEquals, meta)
@@ -217,7 +226,7 @@ func (s *S) TestUpdateApp(c *C) {
 	c.Assert(app.Strategy, Equals, strategy)
 	c.Assert(app.DeployTimeout, Equals, timeout)
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		app, err = client.GetApp(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(app.Meta, DeepEquals, meta)
@@ -243,7 +252,7 @@ func (s *S) TestUpdateAppMeta(c *C) {
 	c.Assert(s.c.UpdateAppMeta(app), IsNil)
 	c.Assert(app.Meta, DeepEquals, meta)
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		app, err := client.GetApp(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(app.Meta, DeepEquals, meta)
@@ -263,7 +272,7 @@ func (s *S) createTestArtifact(c *C, client controller.Client, in *ct.Artifact) 
 
 func (s *S) TestCreateArtifact(c *C) {
 	j := 0
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		for i, id := range []string{"", random.UUID()} {
 			in := &ct.Artifact{
 				ID:   id,
@@ -300,7 +309,7 @@ func (s *S) createTestRelease(c *C, client controller.Client, in *ct.Release) *c
 }
 
 func (s *S) TestCreateRelease(c *C) {
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		for _, id := range []string{"", random.UUID()} {
 			out := s.createTestRelease(c, client, &ct.Release{ID: id})
 			if id != "" {
@@ -319,7 +328,7 @@ func (s *S) TestCreateRelease(c *C) {
 
 func (s *S) TestCreateFormation(c *C) {
 	j := 0
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		for i, useName := range []bool{false, true} {
 			release := s.createTestRelease(c, client, &ct.Release{
 				Processes: map[string]ct.ProcessType{"web": {}},
@@ -391,7 +400,7 @@ func (s *S) TestDeleteFormation(c *C) {
 		}
 		c.Assert(s.c.DeleteFormation(appID, release.ID), IsNil)
 
-		s.withEachClient(func(client controller.Client) {
+		s.withEachClient(c, func(client controller.Client) {
 			_, err := client.GetFormation(appID, release.ID)
 			c.Assert(err, Equals, controller.ErrNotFound)
 		})
@@ -401,7 +410,7 @@ func (s *S) TestDeleteFormation(c *C) {
 func (s *S) TestAppList(c *C) {
 	s.createTestApp(c, &ct.App{Name: "list-test"})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.AppList()
 		c.Assert(err, IsNil)
 
@@ -413,7 +422,7 @@ func (s *S) TestAppList(c *C) {
 func (s *S) TestReleaseList(c *C) {
 	s.createTestRelease(c, s.c, &ct.Release{})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.ReleaseList()
 		c.Assert(err, IsNil)
 
@@ -426,7 +435,7 @@ func (s *S) TestReleaseArtifacts(c *C) {
 	// a release with no artifacts is ok
 	release := &ct.Release{}
 	c.Assert(s.c.CreateRelease(release), IsNil)
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotRelease, err := client.GetRelease(release.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotRelease.ArtifactIDs, IsNil)
@@ -438,7 +447,7 @@ func (s *S) TestReleaseArtifacts(c *C) {
 	imageArtifact := s.createTestArtifact(c, s.c, &ct.Artifact{Type: host.ArtifactTypeDocker})
 	release = &ct.Release{ArtifactIDs: []string{imageArtifact.ID}}
 	c.Assert(s.c.CreateRelease(release), IsNil)
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotRelease, err := client.GetRelease(release.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotRelease.ArtifactIDs, DeepEquals, []string{imageArtifact.ID})
@@ -473,7 +482,7 @@ func (s *S) TestReleaseArtifacts(c *C) {
 	artifactIDs := []string{imageArtifact.ID, fileArtifact.ID, secondFileArtifact.ID}
 	release = &ct.Release{ArtifactIDs: artifactIDs}
 	c.Assert(s.c.CreateRelease(release), IsNil)
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotRelease, err := client.GetRelease(release.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotRelease.ArtifactIDs, DeepEquals, artifactIDs)
@@ -492,7 +501,7 @@ func (s *S) TestFileArtifact(c *C) {
 	}
 	c.Assert(s.c.CreateArtifact(artifact), IsNil)
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotArtifact, err := client.GetArtifact(artifact.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotArtifact, DeepEquals, artifact)
@@ -519,7 +528,7 @@ func (s *S) TestAppReleaseList(c *C) {
 	s.createTestFormation(c, &ct.Formation{ReleaseID: r.ID, AppID: a.ID})
 
 	// check only the first two releases are returned, and in descending order
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.AppReleaseList(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(list, HasLen, len(releases))
@@ -531,7 +540,7 @@ func (s *S) TestAppReleaseList(c *C) {
 func (s *S) TestArtifactList(c *C) {
 	s.createTestArtifact(c, s.c, &ct.Artifact{})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.ArtifactList()
 		c.Assert(err, IsNil)
 
@@ -547,7 +556,7 @@ func (s *S) TestFormationList(c *C) {
 
 	var list []*ct.Formation
 	var err error
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err = client.FormationList(app.ID)
 		c.Assert(err, IsNil)
 
@@ -559,7 +568,7 @@ func (s *S) TestFormationList(c *C) {
 		c.Assert(s.c.DeleteFormation(f.AppID, f.ReleaseID), IsNil)
 	}
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.FormationList(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(list, HasLen, 0)
@@ -577,20 +586,20 @@ func (s *S) TestSetAppRelease(c *C) {
 	s.setAppRelease(c, app.ID, release.ID)
 
 	// get app release using app ID
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotRelease, err := client.GetAppRelease(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotRelease, DeepEquals, release)
 	})
 
 	// get app release using app name
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotRelease, err := client.GetAppRelease(app.Name)
 		c.Assert(err, IsNil)
 		c.Assert(gotRelease, DeepEquals, release)
 	})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		formations, err := client.FormationList(app.ID)
 		c.Assert(err, IsNil)
 		c.Assert(formations, HasLen, 0)
@@ -608,19 +617,19 @@ func (s *S) TestCreateProvider(c *C) {
 	c.Assert(provider.URL, Equals, "https://example.com")
 	c.Assert(provider.ID, Not(Equals), "")
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotProvider, err := client.GetProvider(provider.ID)
 		c.Assert(err, IsNil)
 		c.Assert(gotProvider, DeepEquals, provider)
 	})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		gotProvider, err := client.GetProvider(provider.Name)
 		c.Assert(err, IsNil)
 		c.Assert(gotProvider, DeepEquals, provider)
 	})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		_, err := client.GetProvider("fail" + provider.ID)
 		c.Assert(err, Equals, controller.ErrNotFound)
 	})
@@ -629,7 +638,7 @@ func (s *S) TestCreateProvider(c *C) {
 func (s *S) TestProviderList(c *C) {
 	s.createTestProvider(c, &ct.Provider{URL: "https://example.org", Name: "list-test"})
 
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.ProviderList()
 		c.Assert(err, IsNil)
 

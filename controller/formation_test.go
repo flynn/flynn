@@ -153,7 +153,7 @@ func (s *S) TestFormationListActive(c *C) {
 	}
 
 	expected := []*ct.ExpandedFormation{formations[4], formations[3], formations[1]}
-	s.withEachClient(func(client controller.Client) {
+	s.withEachClient(c, func(client controller.Client) {
 		list, err := client.FormationListActive()
 		c.Assert(err, IsNil)
 		c.Assert(list, HasLen, 3)

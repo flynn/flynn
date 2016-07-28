@@ -460,12 +460,12 @@ type JobWatcher interface {
 }
 
 type ListEventsOptions struct {
-	AppID       string
-	ObjectTypes []EventType
-	ObjectID    string
-	BeforeID    *int64
-	SinceID     *int64
-	Count       int
+	AppID       string      `json:"app_id,omitempty"`
+	ObjectTypes []EventType `json:"object_types,omitempty"`
+	ObjectID    string      `json:"object_id,omitempty"`
+	BeforeID    *int64      `json:"before_id,omitempty"`
+	SinceID     *int64      `json:"since_id,omitempty"`
+	Count       int         `json:"count,omitempty"`
 }
 
 type StreamEventsOptions struct {
