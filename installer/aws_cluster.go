@@ -464,7 +464,7 @@ func (c *AWSCluster) createStack() error {
 			StackName:        aws.String(c.StackName),
 			Tags:             []cloudformation.Tag{},
 			TemplateBody:     aws.String(stackTemplateString),
-			TimeoutInMinutes: aws.Integer(10),
+			TimeoutInMinutes: aws.Integer(30),
 			Parameters:       parameters,
 		})
 		return err
