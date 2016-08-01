@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/sirenia/state"
 )
@@ -40,8 +41,11 @@ func NewClient(addr string) *Client {
 
 	return &Client{
 		c: &httpclient.Client{
-			URL:  fmt.Sprintf("http://%s:%d", host, port+1),
-			HTTP: http.DefaultClient,
+			URL: fmt.Sprintf("http://%s:%d", host, port+1),
+			HTTP: &http.Client{
+				Timeout:   60 * time.Second,
+				Transport: &http.Transport{Dial: dialer.Retry.Dial},
+			},
 		},
 	}
 }
