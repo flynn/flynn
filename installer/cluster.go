@@ -97,23 +97,33 @@ func (c *BaseCluster) saveInstanceIPs() error {
 }
 
 func (c *BaseCluster) setState(state string) {
+	c.stateMtx.Lock()
 	c.State = state
-	if err := c.saveField("State", state); err != nil {
-		c.installer.logger.Debug(fmt.Sprintf("Error saving cluster State: %s", err.Error()))
-	}
-	if c.State == "running" {
-		if err := c.installer.txExec(`
-			UPDATE events SET DeletedAt = now() WHERE (Type == "log" OR Type == "progress") AND ClusterID == $1;
-		`, c.ID); err != nil {
-			c.installer.logger.Debug(fmt.Sprintf("Error updating events: %s", err.Error()))
+	c.stateMtx.Unlock()
+	go func() {
+		if err := c.saveField("State", state); err != nil {
+			c.installer.logger.Debug(fmt.Sprintf("Error saving cluster State: %s", err.Error()))
 		}
-		c.installer.removeClusterLogEvents(c.ID)
-	}
-	c.sendEvent(&Event{
+		if state == "running" {
+			if err := c.installer.txExec(`
+				UPDATE events SET DeletedAt = now() WHERE (Type == "log" OR Type == "progress") AND ClusterID == $1;
+			`, c.ID); err != nil {
+				c.installer.logger.Debug(fmt.Sprintf("Error updating events: %s", err.Error()))
+			}
+			c.installer.removeClusterLogEvents(c.ID)
+		}
+	}()
+	go c.sendEvent(&Event{
 		ClusterID:   c.ID,
 		Type:        "cluster_state",
 		Description: state,
 	})
+}
+
+func (c *BaseCluster) getState() string {
+	c.stateMtx.RLock()
+	defer c.stateMtx.RUnlock()
+	return c.State
 }
 
 func (c *BaseCluster) MarkDeleted() (err error) {

@@ -114,7 +114,7 @@ func (c *AzureCluster) Run() {
 
 		for _, step := range steps {
 			if err := step(); err != nil {
-				if c.base.State != "deleting" {
+				if c.base.getState() != "deleting" {
 					c.base.setState("error")
 					c.base.SendError(err)
 				}
@@ -277,7 +277,7 @@ func (c *AzureCluster) wrapRequest(runRequest func() error) error {
 }
 
 func (c *AzureCluster) Delete() {
-	prevState := c.base.State
+	prevState := c.base.getState()
 	c.base.setState("deleting")
 
 	if prevState != "deleting" {

@@ -148,6 +148,7 @@ type BaseCluster struct {
 	done              bool
 	passwordPromptMtx sync.Mutex
 	passwordCache     map[string]string
+	stateMtx          sync.RWMutex
 }
 
 type InstanceIPs struct {

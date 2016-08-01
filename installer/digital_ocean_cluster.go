@@ -101,7 +101,7 @@ func (c *DigitalOceanCluster) Run() {
 
 		for _, step := range steps {
 			if err := step(); err != nil {
-				if c.base.State != "deleting" {
+				if c.base.getState() != "deleting" {
 					c.base.setState("error")
 					c.base.SendError(err)
 				}
@@ -465,7 +465,7 @@ func (c *DigitalOceanCluster) wrapRequest(runRequest func() (*godo.Response, err
 }
 
 func (c *DigitalOceanCluster) Delete() {
-	prevState := c.base.State
+	prevState := c.base.getState()
 	c.base.setState("deleting")
 
 	if c.base.Domain != nil {
