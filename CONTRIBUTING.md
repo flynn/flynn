@@ -2,8 +2,6 @@
 
 We welcome and encourage community contributions to Flynn.
 
-Since the project is still unstable, there are specific priorities for development. Pull requests that do not address these priorities will not be accepted until Flynn is production ready.
-
 Please familiarize yourself with the Contribution Guidelines and Project Roadmap before contributing.
 
 There are many ways to help Flynn besides contributing code:
