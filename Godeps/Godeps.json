@@ -947,7 +947,7 @@
 		},
 		{
 			"ImportPath": "github.com/miekg/dns",
-			"Rev": "68de7327c02df3d7ae94703e88dd8c9a4f3052d9"
+			"Rev": "db96a2b759cdef4f11a34506a42eb8d1290c598e"
 		},
 		{
 			"ImportPath": "github.com/mistifyio/go-zfs",
