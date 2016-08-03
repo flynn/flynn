@@ -144,6 +144,7 @@ type BaseCluster struct {
 	credential        *Credential
 	installer         *Installer
 	pendingPrompt     *Prompt
+	promptMtx         sync.Mutex
 	aborted           bool
 	done              bool
 	passwordPromptMtx sync.Mutex

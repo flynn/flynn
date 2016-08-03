@@ -220,6 +220,8 @@ func (c *BaseCluster) findPrompt(id string) (*Prompt, error) {
 }
 
 func (c *BaseCluster) sendPrompt(prompt *Prompt) *Prompt {
+	c.promptMtx.Lock()
+	defer c.promptMtx.Unlock()
 	c.pendingPrompt = prompt
 
 	if err := c.installer.dbInsertItem("prompts", prompt, map[string]interface{}{
