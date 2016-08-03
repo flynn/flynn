@@ -652,9 +652,17 @@ func (s *Store) applySetServiceMetaCommand(cmd []byte, index uint64) error {
 		}
 	}
 
+	leaderID := c.Meta.LeaderID
+	c.Meta.LeaderID = ""
+
 	// Update the meta and set the index.
 	c.Meta.Index = index
 	s.data.Metas[c.Service] = c.Meta
+
+	if leaderID != "" {
+		// If a new leader was included in the meta update, apply it
+		s.data.Leaders[c.Service] = leaderID
+	}
 
 	// Broadcast EventKindServiceMeta event.
 	s.broadcast(&discoverd.Event{
@@ -662,6 +670,17 @@ func (s *Store) applySetServiceMetaCommand(cmd []byte, index uint64) error {
 		Kind:        discoverd.EventKindServiceMeta,
 		ServiceMeta: c.Meta,
 	})
+
+	if leaderID != "" {
+		// Broadcast leader update, if the new instance exists
+		if inst := s.data.Instances[c.Service][leaderID]; inst != nil {
+			s.broadcast(&discoverd.Event{
+				Service:  c.Service,
+				Kind:     discoverd.EventKindLeader,
+				Instance: inst,
+			})
+		}
+	}
 
 	return nil
 }

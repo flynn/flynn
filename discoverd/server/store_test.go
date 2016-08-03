@@ -271,6 +271,38 @@ func TestStore_AddInstance_LeaderEvent(t *testing.T) {
 	}
 }
 
+// Ensure the store sends a "leader" event when setting the leader.
+func TestStore_SetLeader_Event(t *testing.T) {
+	s := MustOpenStore()
+	defer s.Close()
+	if err := s.AddService("service0", &discoverd.ServiceConfig{LeaderType: discoverd.LeaderTypeManual}); err != nil {
+		t.Fatal(err)
+	} else if err := s.AddInstance("service0", &discoverd.Instance{ID: "inst0"}); err != nil {
+		t.Fatal(err)
+	} else if err := s.AddInstance("service0", &discoverd.Instance{ID: "inst1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add subscription.
+	ch := make(chan *discoverd.Event, 1)
+	s.Subscribe("service0", false, discoverd.EventKindLeader, ch)
+
+	// Update instance.
+	if err := s.SetServiceLeader("service0", "inst1"); err != nil {
+		t.Fatal(err)
+		t.Fatal(err)
+	}
+
+	// Verify "leader" event was received.
+	if e := <-ch; !reflect.DeepEqual(e, &discoverd.Event{
+		Service:  "service0",
+		Kind:     discoverd.EventKindLeader,
+		Instance: &discoverd.Instance{ID: "inst1", Index: 4},
+	}) {
+		t.Fatalf("unexpected event: %#v", e)
+	}
+}
+
 // Ensure the store can remove an instance from a service.
 func TestStore_RemoveInstance(t *testing.T) {
 	s := MustOpenStore()
@@ -526,6 +558,52 @@ func TestStore_SetServiceMeta_ErrNotFound(t *testing.T) {
 	defer s.Close()
 	if err := s.SetServiceMeta("service0", &discoverd.ServiceMeta{Data: []byte(`"foo"`), Index: 0}); !server.IsNotFound(err) {
 		t.Fatalf("unexpected error: %s", err)
+	}
+}
+
+// Ensure the store can set metadata and a leader at the same time for the service.
+func TestStore_SetServiceMeta_Leader(t *testing.T) {
+	s := MustOpenStore()
+	defer s.Close()
+	if err := s.AddService("service0", &discoverd.ServiceConfig{LeaderType: discoverd.LeaderTypeManual}); err != nil {
+		t.Fatal(err)
+	} else if err := s.AddInstance("service0", &discoverd.Instance{ID: "inst0"}); err != nil {
+		t.Fatal(err)
+	} else if err := s.AddInstance("service0", &discoverd.Instance{ID: "inst1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add subscription.
+	ch := make(chan *discoverd.Event, 2)
+	s.Subscribe("service0", false, discoverd.EventKindLeader|discoverd.EventKindServiceMeta, ch)
+
+	// Set metadata and leader.
+	if err := s.SetServiceMeta("service0", &discoverd.ServiceMeta{Data: []byte(`"foo"`), LeaderID: "inst1", Index: 0}); err != nil {
+		t.Fatal(err)
+	}
+
+	expected := &discoverd.ServiceMeta{Data: []byte(`"foo"`), Index: 5}
+	// Verify metadata was updated.
+	if m := s.ServiceMeta("service0"); !reflect.DeepEqual(m, expected) {
+		t.Fatalf("unexpected meta: %#v", m)
+	}
+
+	// Verify service meta event was received.
+	if e := <-ch; !reflect.DeepEqual(e, &discoverd.Event{
+		Service:     "service0",
+		Kind:        discoverd.EventKindServiceMeta,
+		ServiceMeta: expected,
+	}) {
+		t.Fatalf("unexpected event: %#v", e)
+	}
+
+	// Verify leader event was received.
+	if e := <-ch; !reflect.DeepEqual(e, &discoverd.Event{
+		Service:  "service0",
+		Kind:     discoverd.EventKindLeader,
+		Instance: &discoverd.Instance{ID: "inst1", Index: 4},
+	}) {
+		t.Fatalf("unexpected event: %#v", e)
 	}
 }
 
