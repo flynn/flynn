@@ -63,7 +63,7 @@ func (s *HostSuite) TestAddFailingJob(t *c.C) {
 	t.Assert(h.AddJob(job), c.IsNil)
 
 	// check we get a create then error event
-	actual := make([]*host.Event, 0, 2)
+	actual := make(map[string]*host.Event, 2)
 loop:
 	for {
 		select {
@@ -71,7 +71,10 @@ loop:
 			if !ok {
 				t.Fatalf("job event stream closed unexpectedly: %s", stream.Err())
 			}
-			actual = append(actual, e)
+			if _, ok := actual[e.Event]; ok {
+				t.Fatalf("unexpected event: %v", e)
+			}
+			actual[e.Event] = e
 			if len(actual) >= 2 {
 				break loop
 			}
@@ -79,12 +82,12 @@ loop:
 			t.Fatal("timed out waiting for job event")
 		}
 	}
-	t.Assert(actual, c.HasLen, 2)
-	t.Assert(actual[0].Event, c.Equals, host.JobEventCreate)
-	t.Assert(actual[1].Event, c.Equals, host.JobEventError)
-	jobErr := actual[1].Job.Error
-	t.Assert(jobErr, c.NotNil)
-	t.Assert(*jobErr, c.Equals, `host: invalid job partition "nonexistent"`)
+	t.Assert(actual[host.JobEventCreate], c.NotNil)
+	e := actual[host.JobEventError]
+	t.Assert(e, c.NotNil)
+	t.Assert(e.Job, c.NotNil)
+	t.Assert(e.Job.Error, c.NotNil)
+	t.Assert(*e.Job.Error, c.Equals, `host: invalid job partition "nonexistent"`)
 }
 
 func (s *HostSuite) TestAttachNonExistentJob(t *c.C) {
