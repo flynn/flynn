@@ -32,16 +32,13 @@ func (d *Discoverd) SetState(state *state.DiscoverdState) error {
 		return err
 	}
 	meta := &discoverd.ServiceMeta{Index: state.Index, Data: data}
+	if state.State.Primary != nil {
+		meta.LeaderID = state.State.Primary.ID
+	}
 	if err := d.service.SetMeta(meta); err != nil {
 		return err
 	}
 	state.Index = meta.Index
-	if state.State.Primary != nil {
-		if err := d.service.SetLeader(state.State.Primary.ID); err != nil {
-			d.log.Error("error setting discoverd leader", "id", state.State.Primary.ID, "err", err)
-			// TODO(titanous): can we do anything about this?
-		}
-	}
 	return nil
 }
 
