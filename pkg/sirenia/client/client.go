@@ -43,8 +43,8 @@ func NewClient(addr string) *Client {
 		c: &httpclient.Client{
 			URL: fmt.Sprintf("http://%s:%d", host, port+1),
 			HTTP: &http.Client{
-				Timeout:   60 * time.Second,
-				Transport: &http.Transport{Dial: dialer.Retry.Dial},
+				Timeout:   3 * time.Minute, // client operation timeout
+				Transport: &http.Transport{Dial: dialer.Default.Dial},
 			},
 		},
 	}
