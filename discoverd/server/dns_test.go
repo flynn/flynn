@@ -70,9 +70,75 @@ func (s *DNSSuite) TestRecursorParsing(c *C) {
 	})
 }
 
+func startUpstreamTestServer(c *C) (string, string, func()) {
+	h := dns.HandlerFunc(func(w dns.ResponseWriter, req *dns.Msg) {
+		res := &dns.Msg{}
+		res.SetReply(req)
+		switch req.Question[0].Name {
+		case "long-compressed-response.":
+			for i := 0; i < 25; i++ {
+				res.Answer = append(res.Answer, &dns.A{
+					Hdr: dns.RR_Header{
+						Name:   req.Question[0].Name,
+						Rrtype: dns.TypeA,
+						Class:  dns.ClassINET,
+					},
+					A: net.IP{192, 168, 0, byte(i)},
+				})
+			}
+			if res.Len() <= 512 {
+				panic("not huge")
+			}
+			res.Compress = true
+			if res.Len() > 512 {
+				panic("too big compressed")
+			}
+			w.WriteMsg(res)
+		}
+	})
+	up := make(chan struct{}, 2)
+	notifyStart := func() { up <- struct{}{} }
+
+	udpListener, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	udp := &dns.Server{
+		Net:               "udp",
+		PacketConn:        udpListener,
+		Handler:           h,
+		NotifyStartedFunc: notifyStart,
+	}
+	go udp.ActivateAndServe()
+
+	tcpListener, err := net.Listen("tcp4", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	tcp := &dns.Server{
+		Net:               "tcp",
+		Listener:          tcpListener,
+		Handler:           h,
+		NotifyStartedFunc: notifyStart,
+	}
+	go tcp.ActivateAndServe()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-up:
+		case <-time.After(5 * time.Second):
+			c.Fatal("timed out waiting for server to start")
+		}
+	}
+
+	return udpListener.(*net.UDPConn).LocalAddr().String(), tcpListener.Addr().String(), func() {
+		udp.Shutdown()
+		tcp.Shutdown()
+	}
+}
+
 func (s *DNSSuite) TestRecursor(c *C) {
 	s.srv.Close()
 	s.srv = nil
+
+	udpAddr, tcpAddr, cleanup := startUpstreamTestServer(c)
+	defer cleanup()
 
 	withResolvers := func(resolvers []string, net string, f func(string)) {
 		srv := s.newServer(c, resolvers)
@@ -84,17 +150,17 @@ func (s *DNSSuite) TestRecursor(c *C) {
 		f(addr)
 	}
 
-	for _, net := range []string{"tcp", "udp"} {
+	for net, upstreamAddr := range map[string]string{"tcp": tcpAddr, "udp": udpAddr} {
 		c.Log(net)
 		client := &dns.Client{
 			ReadTimeout: 10 * time.Second,
 			Net:         net,
 		}
 		msg := &dns.Msg{}
-		msg.SetQuestion("google.com.", dns.TypeA)
+		msg.SetQuestion("long-compressed-response.", dns.TypeA)
 
 		// Valid request
-		withResolvers([]string{"8.8.8.8:53"}, net, func(addr string) {
+		withResolvers([]string{upstreamAddr}, net, func(addr string) {
 			res, _, err := client.Exchange(msg, addr)
 			c.Assert(err, IsNil)
 			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
@@ -102,7 +168,7 @@ func (s *DNSSuite) TestRecursor(c *C) {
 		})
 
 		// Failing recursor fallback
-		withResolvers([]string{"127.1.1.1:55", "8.8.8.8:53"}, net, func(addr string) {
+		withResolvers([]string{"127.1.1.1:55", upstreamAddr}, net, func(addr string) {
 			res, _, err := client.Exchange(msg, addr)
 			c.Assert(err, IsNil)
 			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)

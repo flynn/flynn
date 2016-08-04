@@ -149,10 +149,12 @@ func (d dnsAPI) Recurse(w dns.ResponseWriter, req *dns.Msg) {
 	}
 
 	for _, recursor := range d.Recursors {
+		req.Compress = true
 		res, _, err := client.Exchange(req, recursor)
 		if err != nil {
 			continue
 		}
+		res.Compress = true
 		w.WriteMsg(res)
 		return
 	}
@@ -173,6 +175,7 @@ func (d dnsAPI) ServiceLookup(w dns.ResponseWriter, req *dns.Msg) {
 
 	res := &dns.Msg{}
 	res.Authoritative = true
+	res.Compress = true
 	res.RecursionAvailable = len(d.Recursors) > 0
 	res.SetReply(req)
 	defer func() {
