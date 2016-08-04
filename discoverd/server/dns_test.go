@@ -8,12 +8,16 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
 	. "github.com/flynn/go-check"
 	"github.com/miekg/dns"
 )
+
+// Hook gocheck up to the "go test" runner
+func Test(t *testing.T) { TestingT(t) }
 
 type DNSSuite struct {
 	srv   *DNSServer
@@ -397,6 +401,12 @@ func (s *DNSSuite) TestServiceLookup(c *C) {
 				} else {
 					return t.data, nil
 				}
+			}
+			return nil, nil
+		}
+		s.store.ServiceLeaderFn = func(service string) (*discoverd.Instance, error) {
+			if service == "a" && len(t.data) > 0 {
+				return t.data[0], nil
 			}
 			return nil, nil
 		}
