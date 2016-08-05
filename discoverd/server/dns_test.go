@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
@@ -15,19 +16,12 @@ import (
 	"github.com/miekg/dns"
 )
 
-type DNSSuite struct {
-	srv   *DNSServer
-	store DNSServerStore
-}
+// Hook gocheck up to the "go test" runner
+func Test(t *testing.T) { TestingT(t) }
+
+type DNSSuite struct{}
 
 var _ = Suite(&DNSSuite{})
-
-func (s *DNSSuite) SetUpTest(c *C) {
-	s.srv = s.newServer(c, []string{"8.8.8.8", "8.8.4.4"})
-	s.srv.SetStore(&s.store)
-	s.store.InstancesFn = func(service string) ([]*discoverd.Instance, error) { return nil, nil }
-	s.store.ServiceLeaderFn = func(service string) (*discoverd.Instance, error) { return nil, nil }
-}
 
 func (s *DNSSuite) newServer(c *C, recursors []string) *DNSServer {
 	srv := &DNSServer{
@@ -35,15 +29,12 @@ func (s *DNSSuite) newServer(c *C, recursors []string) *DNSServer {
 		TCPAddr:   "127.0.0.1:0",
 		Recursors: recursors,
 	}
-	srv.SetStore(&s.store)
+	srv.SetStore(&DNSServerStore{
+		InstancesFn:     func(service string) ([]*discoverd.Instance, error) { return nil, nil },
+		ServiceLeaderFn: func(service string) (*discoverd.Instance, error) { return nil, nil },
+	})
 	c.Assert(srv.ListenAndServe(), IsNil)
 	return srv
-}
-
-func (s *DNSSuite) TearDownTest(c *C) {
-	if s.srv != nil {
-		s.srv.Close()
-	}
 }
 
 func (s *DNSSuite) TestRecursorParsing(c *C) {
@@ -66,9 +57,72 @@ func (s *DNSSuite) TestRecursorParsing(c *C) {
 	})
 }
 
+func startUpstreamTestServer(c *C) (string, string, func()) {
+	h := dns.HandlerFunc(func(w dns.ResponseWriter, req *dns.Msg) {
+		res := &dns.Msg{}
+		res.SetReply(req)
+		switch req.Question[0].Name {
+		case "long-compressed-response.":
+			for i := 0; i < 25; i++ {
+				res.Answer = append(res.Answer, &dns.A{
+					Hdr: dns.RR_Header{
+						Name:   req.Question[0].Name,
+						Rrtype: dns.TypeA,
+						Class:  dns.ClassINET,
+					},
+					A: net.IP{192, 168, 0, byte(i)},
+				})
+			}
+			if res.Len() <= 512 {
+				panic("not huge")
+			}
+			res.Compress = true
+			if res.Len() > 512 {
+				panic("too big compressed")
+			}
+			w.WriteMsg(res)
+		}
+	})
+	up := make(chan struct{}, 2)
+	notifyStart := func() { up <- struct{}{} }
+
+	udpListener, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	udp := &dns.Server{
+		Net:               "udp",
+		PacketConn:        udpListener,
+		Handler:           h,
+		NotifyStartedFunc: notifyStart,
+	}
+	go udp.ActivateAndServe()
+
+	tcpListener, err := net.Listen("tcp4", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	tcp := &dns.Server{
+		Net:               "tcp",
+		Listener:          tcpListener,
+		Handler:           h,
+		NotifyStartedFunc: notifyStart,
+	}
+	go tcp.ActivateAndServe()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-up:
+		case <-time.After(5 * time.Second):
+			c.Fatal("timed out waiting for server to start")
+		}
+	}
+
+	return udpListener.(*net.UDPConn).LocalAddr().String(), tcpListener.Addr().String(), func() {
+		udp.Shutdown()
+		tcp.Shutdown()
+	}
+}
+
 func (s *DNSSuite) TestRecursor(c *C) {
-	s.srv.Close()
-	s.srv = nil
+	udpAddr, tcpAddr, cleanup := startUpstreamTestServer(c)
+	defer cleanup()
 
 	withResolvers := func(resolvers []string, net string, f func(string)) {
 		srv := s.newServer(c, resolvers)
@@ -80,17 +134,17 @@ func (s *DNSSuite) TestRecursor(c *C) {
 		f(addr)
 	}
 
-	for _, net := range []string{"tcp", "udp"} {
+	for net, upstreamAddr := range map[string]string{"tcp": tcpAddr, "udp": udpAddr} {
 		c.Log(net)
 		client := &dns.Client{
 			ReadTimeout: 10 * time.Second,
 			Net:         net,
 		}
 		msg := &dns.Msg{}
-		msg.SetQuestion("google.com.", dns.TypeA)
+		msg.SetQuestion("long-compressed-response.", dns.TypeA)
 
 		// Valid request
-		withResolvers([]string{"8.8.8.8:53"}, net, func(addr string) {
+		withResolvers([]string{upstreamAddr}, net, func(addr string) {
 			res, _, err := client.Exchange(msg, addr)
 			c.Assert(err, IsNil)
 			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
@@ -98,7 +152,7 @@ func (s *DNSSuite) TestRecursor(c *C) {
 		})
 
 		// Failing recursor fallback
-		withResolvers([]string{"127.1.1.1:55", "8.8.8.8:53"}, net, func(addr string) {
+		withResolvers([]string{"127.1.1.1:55", upstreamAddr}, net, func(addr string) {
 			res, _, err := client.Exchange(msg, addr)
 			c.Assert(err, IsNil)
 			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
@@ -389,136 +443,117 @@ func (s *DNSSuite) TestServiceLookup(c *C) {
 	}
 
 	for _, t := range tests {
-		// Mock the call to Instances to return t.data.
-		s.store.InstancesFn = func(service string) ([]*discoverd.Instance, error) {
-			if service == "a" {
-				if len(t.data) == 0 {
-					return []*discoverd.Instance{}, nil
-				} else {
-					return t.data, nil
+		func() {
+			srv := s.newServer(c, []string{"8.8.8.8", "8.8.4.4"})
+			defer srv.Close()
+			srv.SetStore(&DNSServerStore{
+				InstancesFn: func(service string) ([]*discoverd.Instance, error) {
+					if service == "a" {
+						if len(t.data) == 0 {
+							return []*discoverd.Instance{}, nil
+						} else {
+							return t.data, nil
+						}
+					}
+					return nil, nil
+				},
+				ServiceLeaderFn: func(service string) (*discoverd.Instance, error) {
+					if service == "a" && len(t.data) > 0 {
+						return t.data[0], nil
+					}
+					return nil, nil
+				},
+			})
+
+			client := &dns.Client{Net: t.net}
+			for q, addrs := range t.qs {
+				c.Logf("+ %s: %s - %s - %s", t.domain, t.net, t.name, dns.TypeToString[q])
+
+				// exchange the question
+				req := &dns.Msg{}
+				req.SetQuestion(t.domain, q)
+				addr := srv.UDPAddr
+				if t.net == "tcp" {
+					addr = srv.TCPAddr
 				}
-			}
-			return nil, nil
-		}
+				res, _, err := client.Exchange(req, addr)
+				c.Assert(err, IsNil)
 
-		client := &dns.Client{Net: t.net}
-		for q, addrs := range t.qs {
-			c.Logf("+ %s: %s - %s - %s", t.domain, t.net, t.name, dns.TypeToString[q])
-
-			// exchange the question
-			req := &dns.Msg{}
-			req.SetQuestion(t.domain, q)
-			addr := s.srv.UDPAddr
-			if t.net == "tcp" {
-				addr = s.srv.TCPAddr
-			}
-			res, _, err := client.Exchange(req, addr)
-			c.Assert(err, IsNil)
-
-			if strings.Contains(t.name, "NXDOMAIN") {
-				// if this is a nxdomain test we just need to ensure we got an nxdomain
-				c.Assert(res.Rcode, Equals, dns.RcodeNameError)
-				c.Assert(res.Extra, HasLen, 0)
-				c.Assert(res.Answer, HasLen, 0)
-				assertSOA(c, res.Ns)
-				continue
-			}
-
-			// UDP responses only include up to three responses
-			truncated := t.net == "udp" && len(addrs) > 3
-
-			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
-			switch {
-			case q == dns.TypeANY:
-				if truncated {
-					// three SRV records plus three A/AAAA records
-					c.Assert(res.Answer, HasLen, 6)
-				} else {
-					// SRV + A/AAAA records
-					c.Assert(res.Answer, HasLen, len(addrs)*2)
+				if strings.Contains(t.name, "NXDOMAIN") {
+					// if this is a nxdomain test we just need to ensure we got an nxdomain
+					c.Assert(res.Rcode, Equals, dns.RcodeNameError)
+					c.Assert(res.Extra, HasLen, 0)
+					c.Assert(res.Answer, HasLen, 0)
+					assertSOA(c, res.Ns)
+					continue
 				}
-			case q == dns.TypeSOA:
-				// the only response to a SOA question should be an SOA answer
-				assertSOA(c, res.Answer)
-				continue
-			case len(addrs) == 0:
-				// empty responses include an SOA answer in the authority section
-				assertSOA(c, res.Ns)
-				c.Assert(res.Answer, HasLen, 0)
-			default:
-				if truncated {
-					c.Assert(res.Answer, HasLen, 3)
-				} else {
-					c.Assert(res.Answer, HasLen, len(addrs))
-				}
-			}
 
-			// build a list of all A/AAAA and SRV records received
-			ips := make(map[string]struct{}, len(addrs))
-			srv := make(map[string]struct{}, len(addrs))
-			for _, rr := range res.Answer {
-				switch v := rr.(type) {
-				case *dns.A:
-					ips[v.A.String()] = struct{}{}
-					c.Assert(v.A.To4(), NotNil)
-					c.Assert(v.Hdr.Name, Equals, t.domain)
-					c.Assert(v.Hdr.Rrtype, Equals, dns.TypeA)
-				case *dns.AAAA:
-					ips[v.AAAA.String()] = struct{}{}
-					c.Assert(v.AAAA.To4(), IsNil)
-					c.Assert(v.Hdr.Name, Equals, t.domain)
-					c.Assert(v.Hdr.Rrtype, Equals, dns.TypeAAAA)
-				case *dns.SRV:
-					srv[fmt.Sprintf("%s:%d", v.Target, v.Port)] = struct{}{}
-					c.Assert(v.Hdr.Name, Equals, t.domain)
-					c.Assert(v.Hdr.Rrtype, Equals, dns.TypeSRV)
-					c.Assert(v.Weight, Equals, uint16(1))
-					c.Assert(v.Priority, Equals, uint16(1))
+				// UDP responses only include up to three responses
+				truncated := t.net == "udp" && len(addrs) > 3
+
+				c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
+				switch {
+				case q == dns.TypeANY:
+					if truncated {
+						// three SRV records plus three A/AAAA records
+						c.Assert(res.Answer, HasLen, 6)
+					} else {
+						// SRV + A/AAAA records
+						c.Assert(res.Answer, HasLen, len(addrs)*2)
+					}
+				case q == dns.TypeSOA:
+					// the only response to a SOA question should be an SOA answer
+					assertSOA(c, res.Answer)
+					continue
+				case len(addrs) == 0:
+					// empty responses include an SOA answer in the authority section
+					assertSOA(c, res.Ns)
+					c.Assert(res.Answer, HasLen, 0)
 				default:
-					c.Fatalf("unexpected record in answer %#v", v)
-				}
-			}
-
-			// ensure that we got the expected A/AAAA records
-			if q == dns.TypeANY || q == dns.TypeA || q == dns.TypeAAAA {
-				if truncated {
-					c.Assert(ips, HasLen, 3)
-				} else {
-					c.Assert(ips, HasLen, len(addrs))
-				}
-
-				var found int
-				for _, addr := range addrs {
-					if _, ok := ips[addr.IP.String()]; ok {
-						found++
+					if truncated {
+						c.Assert(res.Answer, HasLen, 3)
+					} else {
+						c.Assert(res.Answer, HasLen, len(addrs))
 					}
 				}
 
-				if truncated {
-					c.Assert(found, Equals, 3)
-				} else {
-					c.Assert(found, Equals, len(addrs))
+				// build a list of all A/AAAA and SRV records received
+				ips := make(map[string]struct{}, len(addrs))
+				srv := make(map[string]struct{}, len(addrs))
+				for _, rr := range res.Answer {
+					switch v := rr.(type) {
+					case *dns.A:
+						ips[v.A.String()] = struct{}{}
+						c.Assert(v.A.To4(), NotNil)
+						c.Assert(v.Hdr.Name, Equals, t.domain)
+						c.Assert(v.Hdr.Rrtype, Equals, dns.TypeA)
+					case *dns.AAAA:
+						ips[v.AAAA.String()] = struct{}{}
+						c.Assert(v.AAAA.To4(), IsNil)
+						c.Assert(v.Hdr.Name, Equals, t.domain)
+						c.Assert(v.Hdr.Rrtype, Equals, dns.TypeAAAA)
+					case *dns.SRV:
+						srv[fmt.Sprintf("%s:%d", v.Target, v.Port)] = struct{}{}
+						c.Assert(v.Hdr.Name, Equals, t.domain)
+						c.Assert(v.Hdr.Rrtype, Equals, dns.TypeSRV)
+						c.Assert(v.Weight, Equals, uint16(1))
+						c.Assert(v.Priority, Equals, uint16(1))
+					default:
+						c.Fatalf("unexpected record in answer %#v", v)
+					}
 				}
-			} else {
-				c.Assert(ips, HasLen, 0)
-			}
 
-			// ensure that we got the expected SRV records
-			if q == dns.TypeANY || q == dns.TypeSRV {
-				if truncated {
-					c.Assert(srv, HasLen, 3)
-				} else {
-					c.Assert(srv, HasLen, len(addrs))
-				}
+				// ensure that we got the expected A/AAAA records
+				if q == dns.TypeANY || q == dns.TypeA || q == dns.TypeAAAA {
+					if truncated {
+						c.Assert(ips, HasLen, 3)
+					} else {
+						c.Assert(ips, HasLen, len(addrs))
+					}
 
-				if !strings.Contains(t.name, "duplicate") {
 					var found int
 					for _, addr := range addrs {
-						key := fmt.Sprintf("%s.a._i.discoverd.:%d", addr.ID, addr.Port)
-						if strings.Contains(t.name, "instance") || strings.Contains(t.name, "leader") {
-							key = fmt.Sprintf("%s:%d", t.domain, addr.Port)
-						}
-						if _, ok := srv[key]; ok {
+						if _, ok := ips[addr.IP.String()]; ok {
 							found++
 						}
 					}
@@ -528,42 +563,72 @@ func (s *DNSSuite) TestServiceLookup(c *C) {
 					} else {
 						c.Assert(found, Equals, len(addrs))
 					}
+				} else {
+					c.Assert(ips, HasLen, 0)
 				}
-			} else {
-				c.Assert(srv, HasLen, 0)
-			}
 
-			// responses to SRV questions over TCP get instance records in
-			// the extra section so that another lookup is not needed to get
-			// the IP addresses
-			if t.net == "tcp" && q == dns.TypeSRV {
-				c.Assert(res.Extra, HasLen, len(addrs))
-				extraIPs := make(map[string]string, len(res.Extra))
-				for _, rr := range res.Extra {
-					switch v := rr.(type) {
-					case *dns.A:
-						c.Assert(v.Hdr.Rrtype, Equals, dns.TypeA)
-						id := strings.TrimSuffix(strings.ToLower(v.Hdr.Name), ".a._i.discoverd.")
-						extraIPs[id] = v.A.String()
-					case *dns.AAAA:
-						c.Assert(v.Hdr.Rrtype, Equals, dns.TypeAAAA)
-						id := strings.TrimSuffix(strings.ToLower(v.Hdr.Name), ".a._i.discoverd.")
-						extraIPs[id] = v.AAAA.String()
-					default:
-						c.Fatalf("unexpected record in extra %#v", v)
-					}
-				}
-				for _, addr := range addrs {
-					if strings.Contains(t.name, "leader") {
-						c.Assert(extraIPs[strings.ToLower(t.domain)], Equals, addr.IP.String())
+				// ensure that we got the expected SRV records
+				if q == dns.TypeANY || q == dns.TypeSRV {
+					if truncated {
+						c.Assert(srv, HasLen, 3)
 					} else {
-						c.Assert(extraIPs[addr.ID], Equals, addr.IP.String())
+						c.Assert(srv, HasLen, len(addrs))
 					}
+
+					if !strings.Contains(t.name, "duplicate") {
+						var found int
+						for _, addr := range addrs {
+							key := fmt.Sprintf("%s.a._i.discoverd.:%d", addr.ID, addr.Port)
+							if strings.Contains(t.name, "instance") || strings.Contains(t.name, "leader") {
+								key = fmt.Sprintf("%s:%d", t.domain, addr.Port)
+							}
+							if _, ok := srv[key]; ok {
+								found++
+							}
+						}
+
+						if truncated {
+							c.Assert(found, Equals, 3)
+						} else {
+							c.Assert(found, Equals, len(addrs))
+						}
+					}
+				} else {
+					c.Assert(srv, HasLen, 0)
 				}
-			} else {
-				c.Assert(res.Extra, HasLen, 0)
+
+				// responses to SRV questions over TCP get instance records in
+				// the extra section so that another lookup is not needed to get
+				// the IP addresses
+				if t.net == "tcp" && q == dns.TypeSRV {
+					c.Assert(res.Extra, HasLen, len(addrs))
+					extraIPs := make(map[string]string, len(res.Extra))
+					for _, rr := range res.Extra {
+						switch v := rr.(type) {
+						case *dns.A:
+							c.Assert(v.Hdr.Rrtype, Equals, dns.TypeA)
+							id := strings.TrimSuffix(strings.ToLower(v.Hdr.Name), ".a._i.discoverd.")
+							extraIPs[id] = v.A.String()
+						case *dns.AAAA:
+							c.Assert(v.Hdr.Rrtype, Equals, dns.TypeAAAA)
+							id := strings.TrimSuffix(strings.ToLower(v.Hdr.Name), ".a._i.discoverd.")
+							extraIPs[id] = v.AAAA.String()
+						default:
+							c.Fatalf("unexpected record in extra %#v", v)
+						}
+					}
+					for _, addr := range addrs {
+						if strings.Contains(t.name, "leader") {
+							c.Assert(extraIPs[strings.ToLower(t.domain)], Equals, addr.IP.String())
+						} else {
+							c.Assert(extraIPs[addr.ID], Equals, addr.IP.String())
+						}
+					}
+				} else {
+					c.Assert(res.Extra, HasLen, 0)
+				}
 			}
-		}
+		}()
 	}
 }
 
