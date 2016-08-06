@@ -13,7 +13,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
@@ -98,8 +97,7 @@ func (m *Main) ParseFlags(args []string) error {
 	if port := os.Getenv("PORT"); port != "" {
 		m.Addr = ":" + port
 	}
-
-	m.Handler.RedisImageURI = os.Getenv("REDIS_IMAGE_URI")
+	m.Handler.RedisImageID = os.Getenv("REDIS_IMAGE_ID")
 
 	// Connect to controller.
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
@@ -161,8 +159,7 @@ type Handler struct {
 	// Key used to access the controller.
 	ControllerClient controller.Client
 
-	// URI of the flynn/redis appliance.
-	RedisImageURI string
+	RedisImageID string
 
 	Logger log15.Logger
 }
@@ -183,13 +180,6 @@ func NewHandler() *Handler {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) { h.router.ServeHTTP(w, req) }
 
 func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: h.RedisImageURI}
-	if err := h.ControllerClient.CreateArtifact(imageArtifact); err != nil {
-		h.Logger.Error("error creating image artifact:", "err", err)
-		httphelper.Error(w, err)
-		return
-	}
-
 	// Generate a password for the redis instance to use.
 	password := random.String(PasswordLength)
 
@@ -197,7 +187,7 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 	serviceName := "redis-" + random.UUID()
 
 	release := &ct.Release{
-		ArtifactIDs: []string{imageArtifact.ID},
+		ArtifactIDs: []string{h.RedisImageID},
 		Meta:        make(map[string]string),
 		Processes: map[string]ct.ProcessType{
 			"redis": {
@@ -227,7 +217,7 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	h.Logger.Info("creating release", "artifact.id", imageArtifact.ID)
+	h.Logger.Info("creating release", "artifact.id", h.RedisImageID)
 	if err := h.ControllerClient.CreateRelease(release); err != nil {
 		h.Logger.Error("error creating release", "err", err)
 		httphelper.Error(w, err)

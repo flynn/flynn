@@ -180,8 +180,11 @@ func (e *generator) createAppError() {
 
 func (e *generator) getInitialAppRelease() {
 	appRelease, err := e.client.GetAppRelease("gitreceive")
-	if err == nil {
-		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = appRelease.Env["SLUGRUNNER_IMAGE_URI"]
+	if err != nil {
+		return
+	}
+	if artifact, err := e.client.GetArtifact(appRelease.Env["SLUGRUNNER_IMAGE_ID"]); err == nil {
+		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = artifact.URI
 	}
 }
 

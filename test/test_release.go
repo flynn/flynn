@@ -171,8 +171,8 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(client.CreateApp(slugApp), c.IsNil)
 	gitreceive, err := client.GetAppRelease("gitreceive")
 	t.Assert(err, c.IsNil)
-	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: gitreceive.Env["SLUGRUNNER_IMAGE_URI"]}
-	t.Assert(client.CreateArtifact(imageArtifact), c.IsNil)
+	imageArtifact, err := client.GetArtifact(gitreceive.Env["SLUGRUNNER_IMAGE_ID"])
+	t.Assert(err, c.IsNil)
 	slugArtifact := &ct.Artifact{Type: host.ArtifactTypeFile, URI: fmt.Sprintf("http://%s:8080/slug.tgz", buildHost.IP)}
 	t.Assert(client.CreateArtifact(slugArtifact), c.IsNil)
 	release := &ct.Release{
@@ -242,8 +242,11 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	// check gitreceive has the correct slug env vars
 	gitreceive, err = client.GetAppRelease("gitreceive")
 	t.Assert(err, c.IsNil)
-	assertImage(gitreceive.Env["SLUGBUILDER_IMAGE_URI"], "flynn/slugbuilder")
-	assertImage(gitreceive.Env["SLUGRUNNER_IMAGE_URI"], "flynn/slugrunner")
+	for _, name := range []string{"slugbuilder", "slugrunner"} {
+		artifact, err := client.GetArtifact(gitreceive.Env[strings.ToUpper(name)+"_IMAGE_ID"])
+		t.Assert(err, c.IsNil)
+		assertImage(artifact.URI, "flynn/"+name)
+	}
 
 	// check slug based app was deployed correctly
 	release, err = client.GetAppRelease(slugApp.Name)
