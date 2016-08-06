@@ -326,6 +326,9 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	}
 
 	if attach {
+		// TODO(titanous): This Wait could block indefinitely if something goes
+		// wrong, a context should be threaded in that cancels if the client
+		// goes away.
 		if err := attachClient.Wait(); err != nil {
 			respondWithError(w, fmt.Errorf("attach wait failed: %s", err.Error()))
 			return
@@ -346,7 +349,10 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		}
 		go cp(conn, attachClient.Conn())
 		go cp(attachClient.Conn(), conn)
-		<-done
+
+		// Wait for one of the connections to be closed or interrupted. EOF is
+		// framed inside the attach protocol, so a read/write error indicates
+		// that we're done and should clean up.
 		<-done
 
 		return
