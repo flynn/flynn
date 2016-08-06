@@ -971,6 +971,7 @@ func (l *LibcontainerBackend) ResizeTTY(id string, height, width uint16) error {
 	if err != nil {
 		return err
 	}
+	defer pty.Close()
 	return term.SetWinsize(pty.Fd(), &term.Winsize{Height: height, Width: width})
 }
 
@@ -1015,6 +1016,7 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 		if err != nil {
 			return err
 		}
+		defer pty.Close()
 		if err := term.SetWinsize(pty.Fd(), &term.Winsize{Height: req.Height, Width: req.Width}); err != nil {
 			return err
 		}
@@ -1057,6 +1059,9 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 		if err != nil {
 			return err
 		}
+		defer stdout.Close()
+		defer stderr.Close()
+		defer initLog.Close()
 		if req.Attached != nil {
 			req.Attached <- struct{}{}
 		}
