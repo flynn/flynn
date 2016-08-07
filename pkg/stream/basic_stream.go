@@ -31,11 +31,11 @@ type Basic struct {
 	Error  error
 }
 
-func (s Basic) Close() error {
+func (s *Basic) Close() error {
 	close(s.StopCh)
 	return nil
 }
 
-func (s Basic) Err() error {
+func (s *Basic) Err() error {
 	return s.Error
 }
