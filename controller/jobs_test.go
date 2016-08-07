@@ -2,8 +2,6 @@ package main
 
 import (
 	"io"
-	"io/ioutil"
-	"strings"
 
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
@@ -208,7 +206,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	hc := tu.NewFakeHostClient(hostID, false)
 	s.cc.AddHost(hc)
 
-	done := make(chan struct{})
+	input := make(chan string, 1)
 	var jobID string
 	hc.SetAttachFunc("*", func(req *host.AttachReq, wait bool) (cluster.AttachClient, error) {
 		c.Assert(wait, Equals, true)
@@ -220,17 +218,18 @@ func (s *S) TestRunJobAttached(c *C) {
 			Width:  10,
 		})
 		jobID = req.JobID
-		pipeR, pipeW := io.Pipe()
+		inPipeR, inPipeW := io.Pipe()
 		go func() {
-			stdin, err := ioutil.ReadAll(pipeR)
-			c.Assert(err, IsNil)
-			c.Assert(string(stdin), Equals, "test in")
-			close(done)
+			buf := make([]byte, 10)
+			n, _ := inPipeR.Read(buf)
+			input <- string(buf[:n])
 		}()
+		outPipeR, outPipeW := io.Pipe()
+		go outPipeW.Write([]byte("test out"))
 		return cluster.NewAttachClient(struct {
 			io.Reader
 			io.WriteCloser
-		}{strings.NewReader("test out"), pipeW}), nil
+		}{outPipeR, inPipeW}), nil
 	})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker, URI: "docker://foo/bar"})
@@ -254,10 +253,11 @@ func (s *S) TestRunJobAttached(c *C) {
 
 	_, err = rwc.Write([]byte("test in"))
 	c.Assert(err, IsNil)
-	rwc.CloseWrite()
-	stdout, err := ioutil.ReadAll(rwc)
+	c.Assert(<-input, Equals, "test in")
+	buf := make([]byte, 10)
+	n, _ := rwc.Read(buf)
 	c.Assert(err, IsNil)
-	c.Assert(string(stdout), Equals, "test out")
+	c.Assert(string(buf[:n]), Equals, "test out")
 	rwc.Close()
 
 	jobs, err := hc.ListJobs()
