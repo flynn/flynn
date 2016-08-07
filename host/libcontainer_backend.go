@@ -971,6 +971,7 @@ func (l *LibcontainerBackend) ResizeTTY(id string, height, width uint16) error {
 	if err != nil {
 		return err
 	}
+	defer pty.Close()
 	return term.SetWinsize(pty.Fd(), &term.Winsize{Height: height, Width: width})
 }
 
@@ -1015,21 +1016,31 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 		if err != nil {
 			return err
 		}
+		defer pty.Close()
 		if err := term.SetWinsize(pty.Fd(), &term.Winsize{Height: req.Height, Width: req.Width}); err != nil {
 			return err
 		}
 		if req.Attached != nil {
 			req.Attached <- struct{}{}
 		}
-		if req.Stdin != nil && req.Stdout != nil {
-			go io.Copy(pty, req.Stdin)
-		} else if req.Stdin != nil {
-			io.Copy(pty, req.Stdin)
+
+		done := make(chan struct{}, 2)
+		if req.Stdin != nil {
+			go func() {
+				io.Copy(pty, req.Stdin)
+				done <- struct{}{}
+			}()
 		}
 		if req.Stdout != nil {
-			io.Copy(req.Stdout, pty)
+			go func() {
+				io.Copy(req.Stdout, pty)
+				done <- struct{}{}
+			}()
 		}
-		pty.Close()
+
+		<-done
+		l.logger.Info("one side of the TTY went away, stopping job", "fn", "attach", "job.id", req.Job.Job.ID)
+		client.Stop()
 		return io.EOF
 	}
 	if req.Stdin != nil {
@@ -1048,6 +1059,9 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 		if err != nil {
 			return err
 		}
+		defer stdout.Close()
+		defer stderr.Close()
+		defer initLog.Close()
 		if req.Attached != nil {
 			req.Attached <- struct{}{}
 		}

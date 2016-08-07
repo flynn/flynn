@@ -258,7 +258,5 @@ func (c *attachClient) CloseWrite() error {
 }
 
 func (c *attachClient) Close() error {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
 	return c.conn.Close()
 }
