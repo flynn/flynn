@@ -51,7 +51,6 @@ const (
 	defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 	defaultPartition  = "user"
 	defaultMemory     = 1 * units.GiB
-	defaultDiskQuota  = 100 * units.MiB
 	RLIMIT_NPROC      = 6
 )
 
@@ -85,7 +84,7 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		return nil, err
 	}
 
-	defaultTmpfs, err := createTmpfs(defaultDiskQuota)
+	tmpfsCache, err := newTmpfsCache()
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +106,7 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		partitionCGroups:    partitionCGroups,
 		logger:              logger,
 		globalState:         &libcontainerGlobalState{},
-		defaultTmpfs:        defaultTmpfs,
+		tmpfsCache:          tmpfsCache,
 	}, nil
 }
 
@@ -144,7 +143,7 @@ type LibcontainerBackend struct {
 	globalStateMtx sync.Mutex
 	globalState    *libcontainerGlobalState
 
-	defaultTmpfs string
+	tmpfsCache *tmpfsCache
 }
 
 type Container struct {
@@ -676,30 +675,31 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 }
 
 func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, error) {
-	layers := make([]string, len(job.Mountspecs))
-	for i, spec := range job.Mountspecs {
-		var mountFn func(*host.Mountspec) (string, error)
-		// TODO: file artifacts
-		switch spec.Type {
-		case host.MountspecTypeSquashfs:
-			mountFn = l.mountSquashfs
-		case host.MountspecTypeTmp:
-			mountFn = l.mountTmpfs
+	layers := make([]string, 0, len(job.Mountspecs)+1)
+	for _, spec := range job.Mountspecs {
+		if spec.Type != host.MountspecTypeSquashfs {
+			return nil, fmt.Errorf("unknown mountspec type: %q", spec.Type)
 		}
-		path, err := mountFn(spec)
+		// TODO: file artifacts
+		path, err := l.mountSquashfs(spec)
 		if err != nil {
 			return nil, err
 		}
-		layers[i] = path
+		layers = append(layers, path)
 	}
+	tmpfs, err := l.mountTmpfs(job)
+	if err != nil {
+		return nil, err
+	}
+	layers = append(layers, tmpfs)
 	dirs := make([]string, len(layers))
 	for i, layer := range layers {
 		// append mount paths in reverse order as overlay
 		// lower dirs are stacked from right to left
 		dirs[len(layers)-i-1] = layer
 	}
-	upperDir := filepath.Join(dirs[0], "overlay-upperdir")
-	workDir := filepath.Join(dirs[0], "overlay-workdir")
+	upperDir := filepath.Join(tmpfs, "overlay-upperdir")
+	workDir := filepath.Join(tmpfs, "overlay-workdir")
 	for _, dir := range []string{upperDir, workDir} {
 		if err := os.Mkdir(dir, 0755); err != nil {
 			return nil, err
@@ -771,6 +771,7 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 		FSType:     "squashfs",
 		MountFlags: syscall.MS_RDONLY,
 	})
+	// TODO: if the error if ErrVolumeExists, try getting the volume again
 	if err != nil {
 		return "", fmt.Errorf("error importing squashfs layer: %s", err)
 	}
@@ -778,22 +779,26 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 	return vol.Location(), nil
 }
 
-func (l *LibcontainerBackend) mountTmpfs(m *host.Mountspec) (string, error) {
-	volID := path.Join("tmpfs", m.ID)
-	if vol := l.vman.GetVolume(volID); vol != nil {
-		return vol.Location(), nil
+func (l *LibcontainerBackend) mountTmpfs(job *host.Job) (string, error) {
+	size := *resource.Defaults()[resource.TypeDisk].Limit
+	if spec, ok := job.Resources[resource.TypeDisk]; ok && spec.Limit != nil {
+		size = *spec.Limit
 	}
 
-	// TODO: support different sized tmpfs
-	tmpfs, err := os.Open(l.defaultTmpfs)
+	path, err := l.tmpfsCache.Create(size)
+	if err != nil {
+		return "", err
+	}
+
+	tmpfs, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer tmpfs.Close()
 
 	vol, err := l.vman.ImportVolume("default", sparse.NewBufferedFileIoProcessorByFP(tmpfs), &volume.Info{
-		ID:         volID,
-		Size:       int64(defaultDiskQuota),
+		ID:         job.ID,
+		Size:       size,
 		FSType:     "ext2",
 		MountFlags: syscall.MS_NOATIME,
 	})
@@ -1008,6 +1013,12 @@ func (c *Container) cleanup() error {
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
 		c.l.ipalloc.ReleaseIP(c.l.bridgeNet, c.IP)
 	}
+
+	// remove the tmpfs volume (which has the same ID as the job)
+	if err := c.l.vman.DestroyVolume(c.job.ID); err != nil {
+		log.Error("error removing tmpfs volume", "err", err)
+	}
+
 	os.RemoveAll(c.TmpPath)
 	log.Info("finished cleanup")
 	return nil
@@ -1502,7 +1513,19 @@ func createCGroupPartition(name string, cpuShares int64) error {
 	return nil
 }
 
-func createTmpfs(size int64) (string, error) {
+type tmpfsCache struct {
+	cache map[int64]string
+	mtx   sync.Mutex
+}
+
+func (t *tmpfsCache) Create(size int64) (string, error) {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
+	if path, ok := t.cache[size]; ok {
+		return path, nil
+	}
+
 	f, err := ioutil.TempFile("", "flynn-ext2-")
 	if err != nil {
 		return "", err
@@ -1519,5 +1542,15 @@ func createTmpfs(size int64) (string, error) {
 		return "", fmt.Errorf("error creating ext2 filesystem: %s: %s", err, out)
 	}
 
+	t.cache[size] = f.Name()
 	return f.Name(), nil
+}
+
+func newTmpfsCache() (*tmpfsCache, error) {
+	c := &tmpfsCache{cache: make(map[int64]string)}
+	defaultSize := *resource.Defaults()[resource.TypeDisk].Limit
+	if _, err := c.Create(defaultSize); err != nil {
+		return nil, err
+	}
+	return c, nil
 }

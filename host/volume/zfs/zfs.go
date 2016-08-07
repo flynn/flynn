@@ -172,6 +172,9 @@ var zvolOpenAttempts = attempt.Strategy{
 }
 
 func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volume, error) {
+	if info.ID == "" {
+		info.ID = path.Join(info.FSType, random.UUID())
+	}
 	v := &zfsVolume{
 		info:      info,
 		provider:  p,

@@ -69,10 +69,7 @@ func (j *Job) Dup() *Job {
 
 type MountspecType string
 
-const (
-	MountspecTypeSquashfs MountspecType = "squashfs"
-	MountspecTypeTmp      MountspecType = "tmp"
-)
+const MountspecTypeSquashfs MountspecType = "squashfs"
 
 type Mountspec struct {
 	Type MountspecType `json:"type,omitempty"`

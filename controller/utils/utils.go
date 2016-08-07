@@ -137,10 +137,6 @@ func SetupMountspecs(job *host.Job, artifacts []*ct.Artifact) {
 			})
 		}
 	}
-	job.Mountspecs = append(job.Mountspecs, &host.Mountspec{
-		Type: host.MountspecTypeTmp,
-		ID:   job.ID,
-	})
 }
 
 func ProvisionVolume(h VolumeCreator, job *host.Job) error {
