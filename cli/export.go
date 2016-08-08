@@ -529,12 +529,18 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		if err != nil {
 			return fmt.Errorf("unable to retrieve gitreceive release: %s", err)
 		}
-		imageArtifact = &ct.Artifact{
-			Type: host.ArtifactTypeDocker,
-			URI:  gitreceiveRelease.Env["SLUGRUNNER_IMAGE_URI"],
-		}
-		if imageArtifact.URI == "" {
-			return fmt.Errorf("gitreceive env missing SLUGRUNNER_IMAGE_URI")
+		if id, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_ID"]; ok {
+			imageArtifact, err = client.GetArtifact(id)
+			if err != nil {
+				return fmt.Errorf("unable to get slugrunner image artifact: %s", err)
+			}
+		} else if uri, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_URI"]; ok {
+			imageArtifact = &ct.Artifact{
+				Type: host.ArtifactTypeDocker,
+				URI:  uri,
+			}
+		} else {
+			return fmt.Errorf("gitreceive env missing slug runner image")
 		}
 	}
 
@@ -568,8 +574,10 @@ func runImport(args *docopt.Args, client controller.Client) error {
 
 		release.ArtifactIDs = []string{artifact.ID}
 	} else if imageArtifact != nil {
-		if err := client.CreateArtifact(imageArtifact); err != nil {
-			return fmt.Errorf("error creating image artifact: %s", err)
+		if imageArtifact.ID == "" {
+			if err := client.CreateArtifact(imageArtifact); err != nil {
+				return fmt.Errorf("error creating image artifact: %s", err)
+			}
 		}
 		release.ArtifactIDs = []string{imageArtifact.ID}
 	}

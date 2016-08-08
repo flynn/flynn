@@ -79,6 +79,16 @@ Options:
 		return err
 	}
 
+	slugBuilder, err := client.GetArtifact(os.Getenv("SLUGBUILDER_IMAGE_ID"))
+	if err != nil {
+		return fmt.Errorf("Error getting slugbuilder image: %s", err)
+	}
+
+	slugRunnerID := os.Getenv("SLUGRUNNER_IMAGE_ID")
+	if _, err := client.GetArtifact(slugRunnerID); err != nil {
+		return fmt.Errorf("Error getting slugrunner image: %s", err)
+	}
+
 	app, err := client.GetApp(appName)
 	if err == controller.ErrNotFound {
 		return fmt.Errorf("Unknown app %q", appName)
@@ -127,7 +137,7 @@ Options:
 		job.Resources = sb.Resources
 	}
 
-	cmd := exec.Job(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), job)
+	cmd := exec.Job(*slugBuilder.HostArtifact(), job)
 	var output bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
@@ -158,11 +168,6 @@ Options:
 
 	fmt.Printf("-----> Creating release...\n")
 
-	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: os.Getenv("SLUGRUNNER_IMAGE_URI")}
-	if err := client.CreateArtifact(artifact); err != nil {
-		return fmt.Errorf("Error creating image artifact: %s", err)
-	}
-
 	slugArtifact := &ct.Artifact{
 		Type: host.ArtifactTypeFile,
 		URI:  slugURL,
@@ -173,7 +178,7 @@ Options:
 	}
 
 	release := &ct.Release{
-		ArtifactIDs: []string{artifact.ID, slugArtifact.ID},
+		ArtifactIDs: []string{slugRunnerID, slugArtifact.ID},
 		Env:         prevRelease.Env,
 		Meta:        prevRelease.Meta,
 	}
