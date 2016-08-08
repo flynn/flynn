@@ -44,6 +44,10 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 	nlog := log.New("release_id", d.NewReleaseID)
 	for _, typ := range processTypes {
 		num := d.Processes[typ]
+		// don't scale processes which no longer exist in the new release
+		if _, ok := d.newRelease.Processes[typ]; !ok {
+			num = 0
+		}
 		diff := 1
 		if d.isOmni(typ) {
 			diff = d.hostCount

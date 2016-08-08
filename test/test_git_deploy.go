@@ -367,3 +367,24 @@ func (s *GitDeploySuite) TestNonMasterPush(t *c.C) {
 	t.Assert(push, c.Not(Succeeds))
 	t.Assert(push, OutputContains, "push must include a change to the master branch")
 }
+
+func (s *GitDeploySuite) TestProcfileChange(t *c.C) {
+	for _, strategy := range []string{"all-at-once", "one-by-one"} {
+		r := s.newGitRepo(t, "http")
+		name := "procfile-change-" + strategy
+		t.Assert(r.flynn("create", name), Succeeds)
+		t.Assert(s.controllerClient(t).UpdateApp(&ct.App{ID: name, Strategy: strategy}), c.IsNil)
+		t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+		// add a new web process type
+		t.Assert(r.sh("echo new-web: http >> Procfile"), Succeeds)
+		t.Assert(r.git("commit", "-a", "-m", "add new-web process"), Succeeds)
+		t.Assert(r.git("push", "flynn", "master"), Succeeds)
+		t.Assert(r.flynn("scale", "new-web=1"), Succeeds)
+
+		// remove the new web process type
+		t.Assert(r.sh("sed -i '/new-web: http/d' Procfile"), Succeeds)
+		t.Assert(r.git("commit", "-a", "-m", "remove new-web process"), Succeeds)
+		t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	}
+}
