@@ -7,7 +7,14 @@ func (d *DeployJob) deployAllAtOnce() error {
 	log.Info("starting all-at-once deployment")
 
 	expected := make(ct.JobEvents)
+	newProcs := make(map[string]int, len(d.Processes))
 	for typ, n := range d.Processes {
+		// ignore processes which no longer exist in the new
+		// release
+		if _, ok := d.newRelease.Processes[typ]; !ok {
+			continue
+		}
+		newProcs[typ] = n
 		total := n
 		if d.isOmni(typ) {
 			total *= d.hostCount
@@ -26,11 +33,11 @@ func (d *DeployJob) deployAllAtOnce() error {
 	}
 	if expected.Count() > 0 {
 		log := log.New("release_id", d.NewReleaseID)
-		log.Info("creating new formation", "processes", d.Processes)
+		log.Info("creating new formation", "processes", newProcs)
 		if err := d.client.PutFormation(&ct.Formation{
 			AppID:     d.AppID,
 			ReleaseID: d.NewReleaseID,
-			Processes: d.Processes,
+			Processes: newProcs,
 		}); err != nil {
 			log.Error("error creating new formation", "err", err)
 			return err
