@@ -768,8 +768,8 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	}
 	if err != nil {
 		log.Error("error connecting to container", "err", err)
-		c.l.state.SetStatusFailed(c.job.ID, errors.New("failed to connect to container"))
 		readyErr(err)
+		c.l.state.SetStatusFailed(c.job.ID, errors.New("failed to connect to container"))
 		return err
 	}
 	defer c.Client.Close()
