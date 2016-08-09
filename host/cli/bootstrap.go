@@ -316,9 +316,18 @@ OR uri = (SELECT env->>'%[2]s_IMAGE_URI' FROM releases WHERE release_id = (SELEC
 			artifactURIs[name+"-image"], strings.ToUpper(name)))
 	}
 
+	// update the URI of redis artifacts currently being referenced by
+	// the redis app (which will also update all current redis
+	// resources to use the latest redis image)
+	sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE artifacts SET uri = '%s'
+WHERE artifact_id = (SELECT (env->>'REDIS_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis'))
+OR uri = (SELECT env->>'REDIS_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis'));`,
+		artifactURIs["redis-image"]))
+
 	// ensure the image ID environment variables are set for legacy apps
 	// which use image URI variables
-	for _, name := range []string{"slugbuilder", "slugrunner"} {
+	for _, name := range []string{"redis", "slugbuilder", "slugrunner"} {
 		sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE releases SET env = pg_temp.json_object_update_key(env, '%[1]s_IMAGE_ID', (SELECT artifact_id::text FROM artifacts WHERE uri = '%[2]s'))
 WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,

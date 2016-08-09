@@ -170,7 +170,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	)
 	t.Assert(err, c.IsNil)
 
-	// deploy a slug based app
+	// deploy a slug based app + Redis resource
 	slugApp := &ct.App{}
 	t.Assert(client.CreateApp(slugApp), c.IsNil)
 	gitreceive, err := client.GetAppRelease("gitreceive")
@@ -179,10 +179,13 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(err, c.IsNil)
 	slugArtifact := &ct.Artifact{Type: host.ArtifactTypeFile, URI: fmt.Sprintf("http://%s:8080/slug.tgz", buildHost.IP)}
 	t.Assert(client.CreateArtifact(slugArtifact), c.IsNil)
+	resource, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: "redis", Apps: []string{slugApp.ID}})
+	t.Assert(err, c.IsNil)
 	release := &ct.Release{
 		ArtifactIDs: []string{imageArtifact.ID, slugArtifact.ID},
 		Processes:   map[string]ct.ProcessType{"web": {Args: []string{"/runner/init", "bin/http"}}},
 		Meta:        map[string]string{"git": "true"},
+		Env:         resource.Env,
 	}
 	t.Assert(client.CreateRelease(release), c.IsNil)
 	t.Assert(client.SetAppRelease(slugApp.ID, release.ID), c.IsNil)
@@ -258,4 +261,11 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	imageArtifact, err = client.GetArtifact(release.ImageArtifactID())
 	t.Assert(err, c.IsNil)
 	assertImage(imageArtifact.URI, "flynn/slugrunner")
+
+	// check Redis app was deployed correctly
+	release, err = client.GetAppRelease(resource.Env["FLYNN_REDIS"])
+	t.Assert(err, c.IsNil)
+	imageArtifact, err = client.GetArtifact(release.ImageArtifactID())
+	t.Assert(err, c.IsNil)
+	assertImage(imageArtifact.URI, "flynn/redis")
 }

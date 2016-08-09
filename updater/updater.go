@@ -20,7 +20,7 @@ import (
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
-var slugBuilder, slugRunner *ct.Artifact
+var redisImage, slugBuilder, slugRunner *ct.Artifact
 
 // use a flag to determine whether to use a TTY log formatter because actually
 // assigning a TTY to the job causes reading images via stdin to fail.
@@ -108,7 +108,15 @@ func run() error {
 		uris[app.Name] = uri
 	}
 
-	log.Info("creating slug image artifacts")
+	log.Info("creating new image artifacts")
+	redisImage = &ct.Artifact{
+		Type: host.ArtifactTypeDocker,
+		URI:  uris["redis"],
+	}
+	if err := client.CreateArtifact(redisImage); err != nil {
+		log.Error("error creating redis image artifact", "err", err)
+		return err
+	}
 	slugRunner = &ct.Artifact{
 		Type: host.ArtifactTypeDocker,
 		URI:  uris["slugrunner"],
@@ -168,17 +176,32 @@ func run() error {
 		log.Info("finished deploy of system app")
 	}
 
-	// deploy all other apps
+	// deploy all other apps (including provisioned Redis apps)
 	apps, err := client.AppList()
 	if err != nil {
 		log.Error("error getting apps", "err", err)
 		return err
 	}
 	for _, app := range apps {
+		log := log.New("name", app.Name)
+
+		if app.RedisAppliance() {
+			log.Info("starting deploy of Redis app")
+			if err := deployApp(client, app, redisImage.URI, nil, log); err != nil {
+				if e, ok := err.(errDeploySkipped); ok {
+					log.Info("skipped deploy of Redis app", "reason", e.reason)
+					continue
+				}
+				return err
+			}
+			log.Info("finished deploy of Redis app")
+			continue
+		}
+
 		if app.System() {
 			continue
 		}
-		log := log.New("name", app.Name)
+
 		log.Info("starting deploy of app to update slugrunner")
 		if err := deployApp(client, app, slugRunner.URI, nil, log); err != nil {
 			if e, ok := err.(errDeploySkipped); ok {
@@ -221,8 +244,8 @@ func deployApp(client controller.Client, app *ct.App, uri string, updateFn updat
 		}
 	}
 	skipDeploy := artifact.URI == uri
-	if updateSlugImages(release.Env) {
-		skipDeploy = false // deploy apps that depend on slug images if updated
+	if updateImageIDs(release.Env) {
+		skipDeploy = false
 	}
 	if skipDeploy {
 		return errDeploySkipped{"app is already using latest images"}
@@ -251,12 +274,14 @@ func deployApp(client controller.Client, app *ct.App, uri string, updateFn updat
 	return nil
 }
 
-// updateSlugImages updates SLUGBUILDER_IMAGE_ID and SLUGRUNNER_IMAGE_ID if
-// they are set and have an old ID, and also replaces the legacy
-// SLUGBUILDER_IMAGE_URI and SLUGRUNNER_IMAGE_URI
-func updateSlugImages(env map[string]string) bool {
+// updateImageIDs updates REDIS_IMAGE_ID, SLUGBUILDER_IMAGE_ID and
+// SLUGRUNNER_IMAGE_ID if they are set and have an old ID, and also
+// replaces the legacy REDIS_IMAGE_URI, SLUGBUILDER_IMAGE_URI and
+// SLUGRUNNER_IMAGE_URI
+func updateImageIDs(env map[string]string) bool {
 	updated := false
 	for prefix, newID := range map[string]string{
+		"REDIS":       redisImage.ID,
 		"SLUGBUILDER": slugBuilder.ID,
 		"SLUGRUNNER":  slugRunner.ID,
 	} {

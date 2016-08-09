@@ -42,4 +42,5 @@ var SystemApps = []SystemApp{
 	{Name: "slugrunner", ImageOnly: true},
 	{Name: "mariadb", Optional: true},
 	{Name: "mongodb", Optional: true},
+	{Name: "redis"},
 }
