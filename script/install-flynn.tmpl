@@ -107,6 +107,10 @@ main() {
     do_remove $assume_yes
   fi
 
+  if [[ -e "/usr/local/bin/flynn-host" ]]; then
+    fail "Flynn is already installed. Run 'flynn-host update' to update to a more recent version, or use --clean to remove the existing Flynn install first"
+  fi
+
   if ! $install; then
     exit
   fi

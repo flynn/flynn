@@ -151,10 +151,14 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		}
 	}
 
-	// installing on an instance with Flynn running should not fail
+	// installing on an instance with Flynn running should fail
 	script.Reset()
 	installScript.Execute(&script, blobstore)
-	t.Assert(buildHost.Run("sudo bash -ex", &tc.Streams{Stdin: &script, Stdout: logWriter, Stderr: logWriter}), c.IsNil)
+	installOutput.Reset()
+	err := buildHost.Run("sudo bash -ex", &tc.Streams{Stdin: &script, Stdout: out, Stderr: out})
+	if err == nil || !strings.Contains(installOutput.String(), "ERROR: Flynn is already installed.") {
+		t.Fatal("expected Flynn install to fail but it didn't")
+	}
 
 	// create a controller client for the release cluster
 	pin, err := base64.StdEncoding.DecodeString(releaseCluster.ControllerPin)
