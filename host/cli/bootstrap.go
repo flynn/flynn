@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/go-docopt"
 )
 
@@ -292,23 +293,36 @@ $$;`, step.Artifact.URI, step.ID))
 		}
 	}
 
-	// update slugrunner image URIs, taking care to handle legacy clusters
-	// which use SLUGRUNNER_IMAGE_URI rather than SLUGRUNNER_IMAGE_ID
+	// create the slugbuilder artifact if gitreceive still references
+	// SLUGBUILDER_IMAGE_URI (in which case there is no slugbuilder
+	// artifact in the database)
 	sqlBuf.WriteString(fmt.Sprintf(`
-UPDATE artifacts SET uri = '%s'
-WHERE artifact_id = (SELECT (env->>'SLUGRUNNER_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'))
-OR uri = (SELECT env->>'SLUGRUNNER_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'));`,
-		artifactURIs["slugrunner-image"]))
+DO $$
+  BEGIN
+    IF (SELECT env->>'SLUGBUILDER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive')) IS NULL THEN
+      INSERT INTO artifacts (artifact_id, type, uri) VALUES ('%s', 'docker', '%s');
+    END IF;
+  END;
+$$;`, random.UUID(), artifactURIs["slugbuilder-image"]))
 
-	// update legacy gitreceive and taffy apps which reference slug URIs
-	// rather than artifact IDs
-	for _, app := range []string{"gitreceive", "taffy"} {
-		for _, env := range []string{"slugbuilder", "slugrunner"} {
-			sqlBuf.WriteString(fmt.Sprintf(`
-UPDATE releases SET env = pg_temp.json_object_update_key(env, '%[1]s_IMAGE_URI', '%[2]s')
-WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL AND release_id = (SELECT release_id from apps WHERE name = '%[3]s');`,
-				strings.ToUpper(env), artifactURIs[env+"-image"], app))
-		}
+	// update the URI of slug artifacts currently being referenced by
+	// gitreceive (which will also update all current user releases
+	// to use the latest slugrunner)
+	for _, name := range []string{"slugbuilder", "slugrunner"} {
+		sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE artifacts SET uri = '%[1]s'
+WHERE artifact_id = (SELECT (env->>'%[2]s_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'))
+OR uri = (SELECT env->>'%[2]s_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'));`,
+			artifactURIs[name+"-image"], strings.ToUpper(name)))
+	}
+
+	// ensure the image ID environment variables are set for legacy apps
+	// which use image URI variables
+	for _, name := range []string{"slugbuilder", "slugrunner"} {
+		sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE releases SET env = pg_temp.json_object_update_key(env, '%[1]s_IMAGE_ID', (SELECT artifact_id::text FROM artifacts WHERE uri = '%[2]s'))
+WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
+			strings.ToUpper(name), artifactURIs[name+"-image"]))
 	}
 
 	step := func(id, name string, action bootstrap.Action) bootstrap.Step {
