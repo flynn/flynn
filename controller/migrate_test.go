@@ -333,3 +333,35 @@ func (MigrateSuite) TestMigrateProcessArgs(c *C) {
 		}
 	}
 }
+
+func (MigrateSuite) TestMigrateRedisService(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_redis_service")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 19
+	m.migrateTo(19)
+
+	type procType struct {
+		Service string `json:"service"`
+	}
+
+	// add a Redis app
+	appName := "redis-" + random.UUID()
+	appMeta := map[string]string{"flynn-system-app": "true"}
+	releaseID := random.UUID()
+	procs := map[string]*procType{
+		"redis": {Service: "redis"},
+	}
+	c.Assert(db.Exec(`INSERT INTO releases (release_id, processes) VALUES ($1, $2)`, releaseID, procs), IsNil)
+	c.Assert(db.Exec(`INSERT INTO apps (app_id, name, release_id, meta) VALUES ($1, $2, $3, $4)`, random.UUID(), appName, releaseID, appMeta), IsNil)
+
+	// migrate to 20 and check the service got updated
+	m.migrateTo(20)
+	var updatedProcs map[string]*procType
+	c.Assert(db.QueryRow(`SELECT processes FROM releases WHERE release_id = $1`, releaseID).Scan(&updatedProcs), IsNil)
+	proc, ok := updatedProcs["redis"]
+	if !ok {
+		c.Fatal("missing redis process type")
+	}
+	c.Assert(proc.Service, Equals, appName)
+}

@@ -390,6 +390,18 @@ $$ LANGUAGE plpgsql`,
 	migrations.AddSteps(19,
 		migrateProcessArgs,
 	)
+	migrations.Add(20,
+		// update Redis app service name to match the app name
+		`UPDATE releases
+		SET processes = r.processes
+		FROM (
+			SELECT r.release_id AS id, jsonb_set(r.processes, '{redis,service}', ('"' || a.name || '"')::jsonb, true) AS processes
+			FROM releases r
+			INNER JOIN apps a USING (release_id)
+			WHERE a.meta->>'flynn-system-app' = 'true' AND a.name LIKE 'redis-%'
+		) r
+		WHERE release_id = r.id`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
