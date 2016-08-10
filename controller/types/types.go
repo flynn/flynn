@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/host/resource"
@@ -38,6 +39,10 @@ type App struct {
 func (a *App) System() bool {
 	v, ok := a.Meta["flynn-system-app"]
 	return ok && v == "true"
+}
+
+func (a *App) RedisAppliance() bool {
+	return a.System() && strings.HasPrefix(a.Name, "redis-")
 }
 
 // Critical apps cannot be completely scaled down by the scheduler

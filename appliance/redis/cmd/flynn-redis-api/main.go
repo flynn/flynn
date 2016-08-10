@@ -197,7 +197,7 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 				},
 				Data:    true,
 				Args:    []string{"/bin/start-flynn-redis", "redis"},
-				Service: "redis",
+				Service: serviceName,
 			},
 		},
 		Env: map[string]string{
