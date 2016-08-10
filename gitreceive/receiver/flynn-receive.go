@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
@@ -135,6 +136,13 @@ Options:
 	}
 	if sb, ok := prevRelease.Processes["slugbuilder"]; ok {
 		job.Resources = sb.Resources
+	} else if rawLimit := os.Getenv("SLUGBUILDER_DEFAULT_MEMORY_LIMIT"); rawLimit != "" {
+		if limit, err := resource.ParseLimit(resource.TypeMemory, rawLimit); err == nil {
+			r := make(resource.Resources)
+			resource.SetDefaults(&r)
+			r[resource.TypeMemory] = resource.Spec{Limit: &limit, Request: &limit}
+			job.Resources = r
+		}
 	}
 
 	cmd := exec.Job(*slugBuilder.HostArtifact(), job)
