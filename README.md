@@ -55,6 +55,9 @@ these priorities may not be accepted.
 Please familiarize yourself with the [Contribution
 Guide](https://flynn.io/docs/contributing) before contributing.
 
+You can install Flynn development environment and tools by following the
+[Development Guide](https://flynn.io/docs/development).
+
 There are many ways to help Flynn besides contributing code:
 
 - Find bugs and file issues.
