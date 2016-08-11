@@ -1677,6 +1677,7 @@ func (s *S) TestHTTPCloseNotify(c *C) {
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	req := newReq("http://"+l.Addr, "example.com")
+	req.Method = "POST"
 	req.Cancel = cancel
 	res, err := httpClient.Do(req)
 	c.Assert(err, IsNil)
