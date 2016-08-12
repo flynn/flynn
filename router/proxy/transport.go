@@ -26,7 +26,10 @@ var (
 
 	httpTransport = &http.Transport{
 		Dial: customDial,
-		ResponseHeaderTimeout: 120 * time.Second,
+		// The response header timeout is currently set pretty high because
+		// gitreceive doesn't send headers until it is done unpacking the repo,
+		// it should be lowered after this is fixed.
+		ResponseHeaderTimeout: 10 * time.Minute,
 		TLSHandshakeTimeout:   10 * time.Second, // unused, but safer to leave default in place
 	}
 
