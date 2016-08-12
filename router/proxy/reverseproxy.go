@@ -86,17 +86,35 @@ func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, re
 		return
 	}
 
-	clientGone := rw.(http.CloseNotifier).CloseNotify()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // finish cancellation goroutine
+	// CloseNotify can trigger early with HTTP/1.1 pipelined requests. Since
+	// there is no way to detect if a request is pipelined, we instead check if
+	// the request was made over HTTP/2 or if the method is defined as
+	// idempotent. Pipelining is relatively rare in the wild, the most common
+	// client that uses pipelining is Safari on iOS, which also supports HTTP/2
+	// so this is only relevant when no TLS certificate is configured for the
+	// route. There may be obscure non-browser API clients that use
+	// POST/PUT/DELETE with pipelining. If this issue comes up again, we can add
+	// a route tunable to disable CloseNotify or suggest that the client stop
+	// using pipelining or switch to HTTP/2. The issue presents itself as
+	// request cancellations that result in 503s in response to random pipelined
+	// requests.
+	//
+	// https://golang.org/issue/13165
+	// https://golang.org/pkg/net/http/#CloseNotifier
+	if req.ProtoMajor == 2 || (req.Method != "GET" && req.Method != "HEAD") {
+		clientGone := rw.(http.CloseNotifier).CloseNotify()
+		var cancel func()
+		ctx, cancel = context.WithCancel(ctx)
+		defer cancel() // finish cancellation goroutine
 
-	go func() {
-		select {
-		case <-clientGone:
-			cancel() // client went away, cancel request
-		case <-ctx.Done():
-		}
-	}()
+		go func() {
+			select {
+			case <-clientGone:
+				cancel() // client went away, cancel request
+			case <-ctx.Done():
+			}
+		}()
+	}
 
 	res, err := transport.RoundTrip(ctx, outreq, l)
 	if err != nil {
