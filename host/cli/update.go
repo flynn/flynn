@@ -41,17 +41,21 @@ Options:
 Update Flynn components`)
 }
 
-// minimum version that we can update from
-// versions prior to this are running postgres 9.4 which requires an export/import to
-// upgrade the database format.
-var minVersion = "v20160707.0"
+// minVersion is the minimum version that can be updated from.
+//
+// The current minimum version is v20160711.0 since versions prior to that used
+// the libvirt-lxc container runtime with an nsumount binary which no longer
+// exists.
+var minVersion = "v20160711.0"
+
+var ErrIncompatibleVersion = fmt.Errorf(`
+Versions prior to %s cannot be updated in-place to this version of Flynn.
+In order to update to this version a cluster backup/restore is required.
+Please see the updating documentation at https://flynn.io/docs/production#backup/restore.
+`[1:], minVersion)
 
 func runUpdate(args *docopt.Args) error {
 	log := log15.New()
-	v := version.Parse(version.String())
-	if v.Before(version.Parse(minVersion)) && !v.Dev {
-		return fmt.Errorf("Versions prior to %s cannot be updated in-place to this version of Flynn.\nIn order to update to this version a cluster export/import is required.\nPlease see the updating documentation at https://flynn.io/docs/operating#backup/restore.", minVersion)
-	}
 
 	// create and update a TUF client
 	log.Info("initializing TUF client")
@@ -113,6 +117,23 @@ func runUpdate(args *docopt.Args) error {
 			}
 		}
 		return
+	}
+
+	log.Info("checking host version compatibility")
+	if err := eachHost(func(host *cluster.Host, log log15.Logger) error {
+		status, err := host.GetStatus()
+		if err != nil {
+			log.Error("error getting host status", "err", err)
+			return err
+		}
+		v := version.Parse(status.Version)
+		if v.Before(version.Parse(minVersion)) && !v.Dev {
+			log.Error(ErrIncompatibleVersion.Error(), "version", status.Version)
+			return ErrIncompatibleVersion
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	var mtx sync.Mutex
