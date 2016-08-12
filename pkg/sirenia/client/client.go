@@ -20,9 +20,9 @@ type DatabaseInfo struct {
 	Config           *state.Config       `json:"config"`
 	Running          bool                `json:"running"`
 	SyncedDownstream *discoverd.Instance `json:"synced_downstream"`
-	XLog             string              `json:"xlog,omitempty"`
-	UserExists       bool                `json:"user_exists,omitempty"`
-	ReadWrite        bool                `json:"read_write,omitempty"`
+	XLog             string              `json:"xlog"`
+	UserExists       bool                `json:"user_exists"`
+	ReadWrite        bool                `json:"read_write"`
 }
 
 type Status struct {
