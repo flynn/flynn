@@ -40,9 +40,12 @@ extend(Dashboard.prototype, {
 
 	ready: function () {
 		var resolveWaitForNav;
+		this.waitingForNav = true;
 		this.waitForNav = new Promise(function(resolve) {
 			resolveWaitForNav = resolve;
-		});
+		}).then(function () {
+			this.waitingForNav = false;
+		}.bind(this));
 
 		var loadURL = function() {
 			resolveWaitForNav();

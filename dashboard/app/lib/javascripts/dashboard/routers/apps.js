@@ -467,6 +467,9 @@ var AppsRouter = Router.createClass({
 			break;
 
 		case "GITHUB_AUTH_CHANGE":
+			if (this.context.waitingForNav) {
+				return;
+			}
 			this.history.navigate(this.history.path, { force: true, replace: true });
 			break;
 		}
