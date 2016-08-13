@@ -75,7 +75,7 @@ var MainRouter = Router.createClass({
 			React.createElement("section", { className: "panel" },
 				React.createElement(
 					InstallCertComponent, {
-						certURL: Config.API_SERVER.replace("https", "http") + "/cert"
+						certURL: Config.endpoints.cert
 					}))), this.context.el);
 	},
 

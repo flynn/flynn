@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strings"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/gorilla/sessions"
@@ -28,7 +29,7 @@ type Config struct {
 	GithubCloneAuthRequired bool
 	SessionStore            *sessions.CookieStore
 	AppName                 string
-	CACert                  []byte
+	InstallCert             bool
 	Cache                   bool
 	DefaultDeployTimeout    int
 }
@@ -101,7 +102,7 @@ func LoadConfigFromEnv() *Config {
 		conf.AppName = "dashboard"
 	}
 
-	conf.CACert = []byte(os.Getenv("CA_CERT"))
+	conf.InstallCert = strings.HasPrefix(conf.URL, "https://")
 
 	conf.Cache = os.Getenv("DISABLE_CACHE") == ""
 
