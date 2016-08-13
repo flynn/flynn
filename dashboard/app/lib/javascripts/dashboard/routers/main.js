@@ -68,6 +68,7 @@ var MainRouter = Router.createClass({
 		var handleSubmit = function (e) {
 			e.preventDefault();
 			this.context.__isCertInstalled().then(function () {
+				Config.unfreezeNav();
 				this.history.navigate("/login", {params: params});
 			}.bind(this));
 		}.bind(this);

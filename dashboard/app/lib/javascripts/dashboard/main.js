@@ -259,6 +259,7 @@ extend(Dashboard.prototype, {
 				force: true,
 				params: [params]
 			});
+			Config.freezeNav();
 			break;
 
 		case "SERVICE_UNAVAILABLE":
