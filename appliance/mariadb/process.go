@@ -40,6 +40,12 @@ const (
 	DefaultOpTimeout   = 5 * time.Minute
 	DefaultReplTimeout = 1 * time.Minute
 
+	// Performance optimisation
+	DefaultTmpTableSize    = "64M"
+	DefaultMaxHeapSize     = "64M"
+	DefaultQueryCacheLimit = "128M"
+	DefaultInnoDBPoolSize  = 1
+
 	BinName    = "mysqld"
 	ConfigName = "my.cnf"
 
@@ -81,6 +87,12 @@ type Process struct {
 	ReplTimeout  time.Duration
 	WaitUpstream bool
 
+	// Performance tweaks
+	TmpTableSize    string
+	MaxHeapSize     string
+	QueryCacheLimit string
+	InnoDBPoolSize  uint32
+
 	Logger log15.Logger
 
 	// cmd is the running system command.
@@ -101,7 +113,13 @@ func NewProcess() *Process {
 		Password:    DefaultPassword,
 		OpTimeout:   DefaultOpTimeout,
 		ReplTimeout: DefaultReplTimeout,
-		Logger:      log15.New("app", "mariadb"),
+
+		TmpTableSize:    DefaultTmpTableSize,
+		MaxHeapSize:     DefaultMaxHeapSize,
+		QueryCacheLimit: DefaultQueryCacheLimit,
+		InnoDBPoolSize:  DefaultInnoDBPoolSize,
+
+		Logger: log15.New("app", "mariadb"),
 
 		events:         make(chan state.DatabaseEvent, 1),
 		cancelSyncWait: func() {},
@@ -942,6 +960,12 @@ func (p *Process) writeConfig(d configData) error {
 	d.DataDir = p.DataDir
 	d.ServerID = p.ServerID
 
+	// Performance tweaks
+	d.TmpTableSize = p.TmpTableSize
+	d.MaxHeapSize = p.MaxHeapSize
+	d.QueryCacheLimit = p.QueryCacheLimit
+	d.InnoDBPoolSize = p.InnoDBPoolSize
+
 	f, err := os.Create(p.ConfigPath())
 	if err != nil {
 		return err
@@ -957,6 +981,12 @@ type configData struct {
 	DataDir  string
 	ServerID uint32
 	ReadOnly bool
+
+	// Performance tweaks
+	TmpTableSize    string
+	MaxHeapSize     string
+	QueryCacheLimit string
+	InnoDBPoolSize  uint32
 }
 
 var configTemplate = template.Must(template.New("my.cnf").Parse(`
@@ -976,6 +1006,22 @@ datadir             = {{.DataDir}}
 log_bin             = {{.DataDir}}/mariadb-bin
 log_bin_index       = {{.DataDir}}/mariadb-bin.index
 log_slave_updates   = 1
+
+##
+# Performance tweaks
+##
+# Disable DNS host name lookups and use only IP-addresses to save time
+skip-name-resolve   = 1
+
+# Bigger tmp files
+tmp_table_size={{.TmpTableSize}}
+max_heap_table_size={{.MaxHeapSize}}
+
+# Use query cache for responding to repeated queries faster
+query_cache_limit={{.QueryCacheLimit}}
+
+# Set innoDB pool
+innodb_buffer_pool_instances={{.InnoDBPoolSize}}
 
 {{if .ReadOnly}}
 read_only = 1
