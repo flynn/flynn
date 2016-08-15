@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type JavaScriptAsset struct {
@@ -27,6 +28,7 @@ type JavaScriptAsset struct {
 	compiledData      bytes.Buffer
 	isCompiled        bool
 	transformerJSPath string
+	l                 log.Logger
 }
 
 func (a *JavaScriptAsset) OutputExt() string {
@@ -36,7 +38,8 @@ func (a *JavaScriptAsset) OutputExt() string {
 func (a *JavaScriptAsset) OutputPath() string {
 	p, err := a.RelPath()
 	if err != nil {
-		log.Fatal(err)
+		a.l.Error("Error getting rel path", "err", err)
+		os.Exit(1)
 	}
 	return p
 }
@@ -137,6 +140,8 @@ func (a *JavaScriptAsset) Compile() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	a.l.Info("Transforming JavaScript")
 
 	var buf bytes.Buffer
 	cmd := exec.Command("node", a.transformerJSPath)

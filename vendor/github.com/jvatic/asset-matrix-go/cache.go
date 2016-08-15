@@ -2,16 +2,18 @@ package assetmatrix
 
 import (
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
+
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type Cache struct {
 	Dir            string
 	cacheHits      []string
 	cacheHitsMutex sync.Mutex
+	l              log.Logger
 }
 
 func (c *Cache) FindCachedAsset(a Asset) (Asset, error) {
@@ -26,7 +28,7 @@ func (c *Cache) FindCachedAsset(a Asset) (Asset, error) {
 	c.cacheHitsMutex.Lock()
 	c.cacheHits = append(c.cacheHits, p)
 	c.cacheHitsMutex.Unlock()
-	return &CachedAsset{input: a, p: p}, nil
+	return &CachedAsset{input: a, p: p, l: c.l.New("path", p)}, nil
 }
 
 func (c *Cache) CacheAsset(ar io.Reader, checksum string) io.Reader {
@@ -36,13 +38,13 @@ func (c *Cache) CacheAsset(ar io.Reader, checksum string) io.Reader {
 	p := filepath.Join(c.Dir, checksum)
 	if err := os.MkdirAll(c.Dir, 0755); err != nil {
 		// abort
-		log.Println(err)
+		c.l.Error("Error creating cache dir", "err", err)
 		return ar
 	}
 	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0755)
 	if err != nil {
 		// abort
-		log.Println(err)
+		c.l.Error("Error creating cache file", "err", err, "checksum", checksum)
 		return ar
 	}
 	c.cacheHitsMutex.Lock()
@@ -54,7 +56,7 @@ func (c *Cache) CacheAsset(ar io.Reader, checksum string) io.Reader {
 		defer f.Close()
 		defer w.Close()
 		if _, err := io.Copy(f, cr); err != nil {
-			log.Fatal(err)
+			c.l.Error("Error writing to cache", "err", err)
 		}
 	}()
 	return r
@@ -84,6 +86,7 @@ func (c *Cache) CleanupCacheDir() error {
 type CachedAsset struct {
 	p     string
 	input Asset
+	l     log.Logger
 }
 
 func (a *CachedAsset) Open() (*os.File, error) {
@@ -128,7 +131,7 @@ func (a *CachedAsset) Compile() (io.Reader, error) {
 		defer file.Close()
 		defer w.Close()
 		if _, err := io.Copy(w, file); err != nil {
-			log.Fatal(err)
+			a.l.Error("Error reading from cache", "err", err)
 		}
 	}()
 	return r, nil

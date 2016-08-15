@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type SCSSAsset struct {
@@ -20,6 +21,7 @@ type SCSSAsset struct {
 	findAsset      func(string) (Asset, error)
 	scssJSPath     string
 	assetURLPrefix string
+	l              log.Logger
 }
 
 func (a *SCSSAsset) OutputExt() string {
@@ -29,7 +31,8 @@ func (a *SCSSAsset) OutputExt() string {
 func (a *SCSSAsset) OutputPath() string {
 	p, err := a.RelPath()
 	if err != nil {
-		log.Fatal(err)
+		a.l.Error("Error getting rel path", "err", err)
+		os.Exit(1)
 	}
 	if filepath.Ext(p) == ".scss" {
 		p = strings.TrimSuffix(p, ".scss")
@@ -77,6 +80,8 @@ func (a *SCSSAsset) Compile() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	a.l.Info("Compiling SCSS")
 
 	t, err := ioutil.TempFile("", filepath.Base(a.Path()))
 	if err != nil {
@@ -148,7 +153,8 @@ func (a *SCSSAsset) Compile() (io.Reader, error) {
 					}
 					_p, err := ia.RelPath()
 					if err != nil {
-						log.Fatal(err)
+						a.l.Error("Error getting rel path", "err", err)
+						os.Exit(1)
 					}
 					_p = strings.TrimSuffix(_p, filepath.Ext(_p)) + "-" + a.r.cacheBreaker + filepath.Ext(_p)
 					if _, err := stdin.Write([]byte(_p + "\n")); err != nil {

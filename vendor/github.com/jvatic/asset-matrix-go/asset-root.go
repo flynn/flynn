@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type AssetRoot struct {
@@ -16,6 +18,7 @@ type AssetRoot struct {
 	GitBranch         string
 	GitRef            string
 	ESLintConfigPath  string
+	Log               log.Logger
 	cacheBreaker      string
 	indexMtx          sync.Mutex
 	assetIndex        map[string]Asset
