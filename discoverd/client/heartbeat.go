@@ -36,15 +36,11 @@ var runAttempts = attempt.Strategy{
 }
 
 func (c *Client) maybeAddService(service string) error {
-	return runAttempts.Run(func() error {
-		if err := c.AddService(service, nil); err != nil {
-			if !hh.IsObjectExistsError(err) {
-				return err
-			}
-			return nil
-		}
+	err := c.AddService(service, nil)
+	if hh.IsObjectExistsError(err) {
 		return nil
-	})
+	}
+	return err
 }
 
 func (c *Client) AddServiceAndRegister(service, addr string) (Heartbeater, error) {
