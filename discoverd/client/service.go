@@ -38,7 +38,12 @@ func (c *Client) AddService(name string, conf *ServiceConfig) error {
 	if conf.LeaderType == "" {
 		conf.LeaderType = LeaderTypeOldest
 	}
-	return c.Put("/services/"+name, conf, nil)
+	return runAttempts.RunWithValidator(func() error {
+		return c.Put("/services/"+name, conf, nil)
+	}, func(err error) bool {
+		// TODO(titanous): fix Retry error field to be correct for discoverd
+		return !hh.IsObjectExistsError(err)
+	})
 }
 
 func (c *Client) RemoveService(name string) error {
