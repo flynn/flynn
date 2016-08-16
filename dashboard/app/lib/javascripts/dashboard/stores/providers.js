@@ -374,7 +374,9 @@ var Providers = Store.createClass({
 			}, this)).then(function () {
 				this.setState({
 					fetched: true,
-					providers: Config.PROVIDER_ORDER.map(function (name) {
+					providers: Config.PROVIDER_ORDER.filter(function (name) {
+						return providers.hasOwnProperty(name);
+					}).map(function (name) {
 						return providers[name];
 					}),
 					providerApps: providerApps,
