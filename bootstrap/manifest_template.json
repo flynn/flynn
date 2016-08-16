@@ -693,8 +693,7 @@
         "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
         "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}",
         "APP_NAME": "dashboard",
-        "SECURE_COOKIES": "true",
-        "CA_CERT": "{{ (index .StepData \"controller-cert\").CACert }}"
+        "SECURE_COOKIES": "true"
       },
       "processes": {
         "web": {

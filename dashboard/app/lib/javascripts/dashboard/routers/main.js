@@ -68,6 +68,7 @@ var MainRouter = Router.createClass({
 		var handleSubmit = function (e) {
 			e.preventDefault();
 			this.context.__isCertInstalled().then(function () {
+				Config.unfreezeNav();
 				this.history.navigate("/login", {params: params});
 			}.bind(this));
 		}.bind(this);
@@ -75,7 +76,7 @@ var MainRouter = Router.createClass({
 			React.createElement("section", { className: "panel" },
 				React.createElement(
 					InstallCertComponent, {
-						certURL: Config.API_SERVER.replace("https", "http") + "/cert"
+						certURL: Config.endpoints.cert
 					}))), this.context.el);
 	},
 

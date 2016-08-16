@@ -35,6 +35,9 @@ var RouteLink = React.createClass({
 		if (this.props.params) {
 			options.params = this.props.params;
 		}
+		if (Config.isNavFrozen) {
+			return;
+		}
 		Config.history.navigate(this.props.path, options);
 	},
 

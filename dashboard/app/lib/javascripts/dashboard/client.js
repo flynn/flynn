@@ -127,12 +127,12 @@ var Client = createClass({
 	},
 
 	ping: function (endpoint, protocol) {
-		endpoint = window.location.host.replace("dashboard", endpoint);
-		endpoint = protocol + "://" + endpoint + "/ping";
-
-		return this.performRequest('GET', {
-			url: endpoint
-		});
+		if (endpoint === 'controller') {
+			return this.performRequest('GET', {
+				url: protocol + '://controller.' + Config.default_route_domain + '/ping'
+			});
+		}
+		return Promise.reject(new Error('Invalid ping endpoint: '+ endpoint));
 	},
 
 	getApps: function () {

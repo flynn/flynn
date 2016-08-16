@@ -63,7 +63,6 @@ func APIHandler(conf *Config) http.Handler {
 	router.DELETE(prefixPath("/user/session"), api.WrapHandler(api.Logout))
 
 	router.GET(prefixPath("/config"), api.WrapHandler(api.GetConfig))
-	router.GET(prefixPath("/cert"), api.WrapHandler(api.GetCert))
 
 	router.NotFound = router2.ServeHTTP
 	router2.GET(prefixPath("/*path"), api.WrapHandler(api.ServeAsset))
@@ -252,6 +251,7 @@ func (api *API) GetConfig(ctx context.Context, w http.ResponseWriter, req *http.
 
 	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", api.conf.ControllerDomain)
 	config.Endpoints["cluster_status"] = fmt.Sprintf("https://status.%s", api.conf.DefaultRouteDomain)
+	config.Endpoints["cert"] = fmt.Sprintf("http://%s/ca-cert", api.conf.ControllerDomain)
 	config.DefaultRouteDomain = api.conf.DefaultRouteDomain
 	config.GithubAPIURL = api.conf.GithubAPIURL
 	config.GithubTokenURL = api.conf.GithubTokenURL
@@ -270,11 +270,6 @@ func (api *API) GetConfig(ctx context.Context, w http.ResponseWriter, req *http.
 	}
 
 	httphelper.JSON(w, 200, config)
-}
-
-func (api *API) GetCert(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
-	w.Write(api.conf.CACert)
 }
 
 type DashboardConfig struct {
@@ -317,7 +312,7 @@ func (api *API) cacheDashboardJS() error {
 		AppName:              api.conf.AppName,
 		ApiServer:            api.conf.URL,
 		PathPrefix:           api.conf.PathPrefix,
-		InstallCert:          len(api.conf.CACert) > 0,
+		InstallCert:          api.conf.InstallCert,
 		DefaultDeployTimeout: api.conf.DefaultDeployTimeout,
 	})
 	data.Write([]byte(";\n"))

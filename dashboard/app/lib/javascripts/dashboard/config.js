@@ -139,4 +139,11 @@ Config.setDashboardAppID = function (appID) {
 	Config.dashboardAppID = appID;
 };
 
+Config.freezeNav = function () {
+	Config.isNavFrozen = true;
+};
+
+Config.unfreezeNav = function () {
+	Config.isNavFrozen = false;
+};
 export default Config;
