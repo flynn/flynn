@@ -157,6 +157,7 @@ var services = []Service{
 	{Name: "logaggregator", ReqFn: LeaderReqFn("logaggregator", "80")},
 	{Name: "postgres", ReqFn: LeaderReqFn("postgres", "5433")},
 	{Name: "mariadb", ReqFn: LeaderReqFn("mariadb", "3307"), Optional: true},
+	{Name: "mongodb", ReqFn: LeaderReqFn("mongodb", "27018"), Optional: true},
 	{Name: "router", ReqFn: RandomReqFn("router-api")},
 }
 
