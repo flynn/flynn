@@ -76,10 +76,8 @@ var CreateProviderRoute = React.createClass({
 				name: 'PROVISION_RESOURCE',
 				providerID: this.props.providerID
 			});
-		} else {
-			// go back to where we came from
-			this.props.onHide();
 		}
+		this.props.onHide();
 	},
 
 	__handleCreateBtnClick: function (e) {
