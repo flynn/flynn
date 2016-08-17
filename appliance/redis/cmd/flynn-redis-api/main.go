@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -288,7 +289,7 @@ func (h *Handler) serveDeleteCluster(w http.ResponseWriter, req *http.Request, _
 	appName := release.Env["FLYNN_REDIS"]
 	if appName == "" {
 		h.Logger.Error("unable to find app name", "release.id", releaseID)
-		httphelper.Error(w, err)
+		httphelper.Error(w, errors.New("unable to find app name"))
 		return
 	}
 	h.Logger.Info("found release app", "app.name", appName)
