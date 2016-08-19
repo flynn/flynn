@@ -79,7 +79,9 @@ var AppRoutes = Store.createClass({
 			var res = args[0];
 			this.setState({
 				fetched: true,
-				routes: res
+				routes: res.filter(function (route) {
+					return route.type === 'http';
+				})
 			});
 		}.bind(this));
 	},
@@ -97,7 +99,7 @@ AppRoutes.isValidId = function (id) {
 AppRoutes.registerWithDispatcher(Dispatcher);
 
 var shouldHTTPS = function (route) {
-	return !!route.certificate || !!route.domain.match(new RegExp('^[^.]+\\.'+ Config.default_route_domain.replace('.', '\\.') +'$'))
+	return route.type === 'http' && !!route.certificate || !!route.domain.match(new RegExp('^[^.]+\\.'+ Config.default_route_domain.replace('.', '\\.') +'$'));
 };
 
 export { shouldHTTPS };
