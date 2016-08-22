@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	// LeaderTimeout is the amount of time discoverd will wait for a leader.
-	LeaderTimeout = 10 * time.Minute
+	// Wait indefinitely
+	IndefiniteTimeout = time.Duration(-1)
 )
 
 func main() {
@@ -239,7 +239,7 @@ func (m *Main) Run(args ...string) error {
 	m.logger.Printf("discoverd listening for HTTP on %s", opt.Addr)
 
 	// Wait for leadership.
-	if err := m.waitForLeader(LeaderTimeout); err != nil {
+	if err := m.waitForLeader(IndefiniteTimeout); err != nil {
 		return err
 	}
 
@@ -316,7 +316,7 @@ func (m *Main) Promote() error {
 		}
 
 		// Wait for leadership.
-		if err := m.waitForLeader(LeaderTimeout); err != nil {
+		if err := m.waitForLeader(60 * time.Second); err != nil {
 			return err
 		}
 
@@ -536,13 +536,16 @@ func MergeHostPort(host, portAddr string) string {
 }
 
 // waitForLeader polls the store until a leader is found or a timeout occurs.
+// If timeout is -1 then wait indefinitely
 func (m *Main) waitForLeader(timeout time.Duration) error {
 	// Ignore leadership if we are a proxy.
 	if m.store == nil {
 		return nil
 	}
-
-	timeoutCh := time.After(timeout)
+	var timeoutCh <-chan time.Time
+	if timeout != IndefiniteTimeout {
+		timeoutCh = time.After(timeout)
+	}
 	for {
 		select {
 		case <-timeoutCh:
