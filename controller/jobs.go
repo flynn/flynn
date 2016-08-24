@@ -231,10 +231,17 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	release := data.(*ct.Release)
-	if len(release.ArtifactIDs) == 0 {
+
+	var artifactIDs []string
+	if len(newJob.ArtifactIDs) > 0 {
+		artifactIDs = newJob.ArtifactIDs
+	} else if len(release.ArtifactIDs) > 0 {
+		artifactIDs = release.ArtifactIDs
+	} else {
 		httphelper.ValidationError(w, "release.ArtifactIDs", "cannot be empty")
 		return
 	}
+
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
 	hosts, err := c.clusterClient.Hosts()
@@ -287,13 +294,13 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Args) > 0 {
 		job.Config.Args = newJob.Args
 	}
-	artifacts := make([]*ct.Artifact, len(release.ArtifactIDs))
-	artifactList, err := c.artifactRepo.ListIDs(release.ArtifactIDs...)
+	artifacts := make([]*ct.Artifact, len(artifactIDs))
+	artifactList, err := c.artifactRepo.ListIDs(artifactIDs...)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
-	for i, id := range release.ArtifactIDs {
+	for i, id := range artifactIDs {
 		artifacts[i] = artifactList[id]
 	}
 	utils.SetupMountspecs(job, artifacts)

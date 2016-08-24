@@ -63,7 +63,7 @@ func run(url string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := context.PullDocker(url, os.Stdout); err != nil {
+	if _, err := context.PullDocker(url, pinkerton.DockerPullPrinter(os.Stdout)); err != nil {
 		return err
 	}
 
@@ -95,6 +95,7 @@ func run(url string) error {
 
 	// create the artifact
 	artifact := &ct.Artifact{
+		ID:   os.Getenv("ARTIFACT_ID"),
 		Type: ct.ArtifactTypeFlynn,
 		URI:  imageURL,
 		Meta: map[string]string{

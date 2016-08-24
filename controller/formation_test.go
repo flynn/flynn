@@ -1,13 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/pkg/random"
 	. "github.com/flynn/go-check"
 )
 
@@ -54,9 +51,11 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(streamCtrl.Err(), IsNil)
 	c.Assert(out.Release, DeepEquals, release)
 	c.Assert(out.App, DeepEquals, app)
+	c.Assert(out.Artifacts, HasLen, len(release.ArtifactIDs))
+	for i, id := range release.ArtifactIDs {
+		c.Assert(out.Artifacts[i].ID, Equals, id)
+	}
 	c.Assert(out.Processes, DeepEquals, formation.Processes)
-	c.Assert(out.ImageArtifact.CreatedAt, Not(IsNil))
-	c.Assert(out.ImageArtifact.ID, Equals, release.ImageArtifactID())
 
 	c.Assert(s.c.DeleteFormation(app.ID, release.ID), IsNil)
 
@@ -123,12 +122,14 @@ outer:
 func (s *S) TestFormationListActive(c *C) {
 	app1 := s.createTestApp(c, &ct.App{})
 	app2 := s.createTestApp(c, &ct.App{})
-	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	fileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
+	artifacts := []*ct.Artifact{
+		s.createTestArtifact(c, &ct.Artifact{}),
+		s.createTestArtifact(c, &ct.Artifact{}),
+	}
 
 	createFormation := func(app *ct.App, procs map[string]int) *ct.ExpandedFormation {
 		release := &ct.Release{
-			ArtifactIDs: []string{imageArtifact.ID, fileArtifact.ID},
+			ArtifactIDs: []string{artifacts[0].ID, artifacts[1].ID},
 			Processes:   make(map[string]ct.ProcessType, len(procs)),
 		}
 		for typ := range procs {
@@ -141,11 +142,10 @@ func (s *S) TestFormationListActive(c *C) {
 			Processes: procs,
 		})
 		return &ct.ExpandedFormation{
-			App:           app,
-			Release:       release,
-			ImageArtifact: imageArtifact,
-			FileArtifacts: []*ct.Artifact{fileArtifact},
-			Processes:     procs,
+			App:       app,
+			Release:   release,
+			Artifacts: artifacts,
+			Processes: procs,
 		}
 	}
 
@@ -168,8 +168,7 @@ func (s *S) TestFormationListActive(c *C) {
 		actual := list[i]
 		c.Assert(actual.App.ID, Equals, f.App.ID)
 		c.Assert(actual.Release.ID, Equals, f.Release.ID)
-		c.Assert(actual.ImageArtifact.ID, Equals, f.ImageArtifact.ID)
-		c.Assert(actual.FileArtifacts, DeepEquals, f.FileArtifacts)
+		c.Assert(actual.Artifacts, DeepEquals, f.Artifacts)
 		c.Assert(actual.Processes, DeepEquals, f.Processes)
 	}
 }
@@ -181,9 +180,7 @@ func (s *S) TestFormationStreamingInterrupted(c *C) {
 	artifactRepo := NewArtifactRepo(s.hc.db)
 	formationRepo := NewFormationRepo(s.hc.db, appRepo, releaseRepo, artifactRepo)
 
-	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: fmt.Sprintf("https://example.com/%s", random.String(8))}
-	c.Assert(artifactRepo.Add(artifact), IsNil)
-
+	artifact := s.createTestArtifact(c, &ct.Artifact{})
 	release := &ct.Release{ArtifactIDs: []string{artifact.ID}}
 	c.Assert(releaseRepo.Add(release), IsNil)
 

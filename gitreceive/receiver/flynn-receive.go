@@ -144,7 +144,7 @@ Options:
 		}
 	}
 
-	cmd := exec.Job(*slugBuilder.HostArtifact(), job)
+	cmd := exec.Job(slugBuilder, job)
 	var output bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr

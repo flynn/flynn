@@ -680,7 +680,6 @@ func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, e
 		if spec.Type != host.MountspecTypeSquashfs {
 			return nil, fmt.Errorf("unknown mountspec type: %q", spec.Type)
 		}
-		// TODO: file artifacts
 		path, err := l.mountSquashfs(spec)
 		if err != nil {
 			return nil, err
@@ -743,7 +742,11 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 		layer = f
 		size = stat.Size()
 	case "http", "https":
-		res, err := http.Get(u.String())
+		url, err := l.resolveDiscoverdURL(u)
+		if err != nil {
+			return "", err
+		}
+		res, err := http.Get(url)
 		if err != nil {
 			return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
 		}
@@ -809,16 +812,12 @@ func (l *LibcontainerBackend) mountTmpfs(job *host.Job) (string, error) {
 	return vol.Location(), nil
 }
 
-// resolveDiscoverdURI resolves a discoverd host in the given URI to an address
+// resolveDiscoverdURL resolves a discoverd host in the given URL to an address
 // using the configured discoverd URL as the host is likely not using discoverd
 // to resolve DNS queries
-func (l *LibcontainerBackend) resolveDiscoverdURI(uri string) (string, error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return "", err
-	}
+func (l *LibcontainerBackend) resolveDiscoverdURL(u *url.URL) (string, error) {
 	if !strings.HasSuffix(u.Host, ".discoverd") {
-		return uri, nil
+		return u.String(), nil
 	}
 
 	// ensure discoverd is configured

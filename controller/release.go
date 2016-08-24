@@ -224,6 +224,8 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 			continue
 		}
 
+		// TODO: if docker-receive artifact, delete via the registry to
+		//       remove the Docker files
 		if artifact.Blobstore() {
 			blobstoreFiles = append(blobstoreFiles, artifact.URI)
 			if artifact.Manifest != nil && len(artifact.Manifest.Rootfs) > 0 {

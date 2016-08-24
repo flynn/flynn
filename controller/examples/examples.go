@@ -180,7 +180,6 @@ func (e *generator) getInitialAppRelease() {
 	if artifact, err := e.client.GetArtifact(appRelease.Env["SLUGRUNNER_IMAGE_ID"]); err == nil {
 		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = artifact.URI
 	}
-	e.resourceIds["SLUGRUNNER_IMAGE_URI"] = artifact.URI
 }
 
 func (e *generator) getApp() {
@@ -283,6 +282,45 @@ func (e *generator) createArtifact() {
 	artifact := &ct.Artifact{
 		Type: ct.ArtifactTypeFlynn,
 		URI:  e.resourceIds["SLUGRUNNER_IMAGE_URI"],
+		Manifest: &ct.ImageManifest{
+			Type: ct.ImageManifestTypeV1,
+			Meta: map[string]string{"foo": "bar"},
+			Entrypoints: map[string]*ct.ImageEntrypoint{
+				"_default": {
+					Env:        map[string]string{"key": "default-val"},
+					WorkingDir: "/",
+					Args:       []string{"bash"},
+				},
+				"web": {
+					Env:        map[string]string{"key": "other-val"},
+					WorkingDir: "/app",
+					Args:       []string{"/bin/web-server"},
+				},
+			},
+			Rootfs: []*ct.ImageRootfs{
+				{
+					Platform: &ct.ImagePlatform{
+						Architecture: "amd64",
+						OS:           "linux",
+					},
+					Layers: []*ct.ImageLayer{
+						{
+							ID:     "8f065abdf965e23fa22f",
+							Type:   ct.ImageLayerTypeSquashfs,
+							Length: 34570240,
+							Hashes: map[string]string{"sha512": "8f065abdf965e23fa22f0395f33effb6762c0e58768bd86bec7eda2b99b5656f3b0f1d3bb8316b775f7f8a5a3e8ce3defb7d2c9637c877ee211540fa274616ab"},
+						},
+						{
+							ID:     "efe6a3b8cc4d26524187",
+							Type:   ct.ImageLayerTypeSquashfs,
+							Length: 92368896,
+							Hashes: map[string]string{"sha512": "efe6a3b8cc4d26524187575b3792f54bcdd17c2dcd178db2c2c00a01329a1a2a02a9f081645723102b8e39424e2c11ebc8e222993bc9980b2b09190f9404557a"},
+						},
+					},
+				},
+			},
+		},
+		LayerURLTemplate: "https://dl.flynn.io/tuf?target=/layers/{id}.squashfs",
 	}
 	err := e.client.CreateArtifact(artifact)
 	if err != nil {

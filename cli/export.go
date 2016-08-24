@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -183,9 +182,12 @@ func runExport(args *docopt.Args, client controller.Client) error {
 			return fmt.Errorf("error exporting artifacts: %s", err)
 		}
 	}
-	// save layers of any Flynn artifacts
+	// save layers of any Flynn artifacts stored in the blobstore
 	for _, artifact := range artifacts {
 		if artifact.Type != ct.ArtifactTypeFlynn {
+			continue
+		}
+		if !artifact.Blobstore() {
 			continue
 		}
 		if artifact.Manifest == nil {
@@ -193,7 +195,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		}
 		for _, rootfs := range artifact.Manifest.Rootfs {
 			for _, layer := range rootfs.Layers {
-				name := filepath.Join("layer", layer.ID)
+				name := layer.ID + ".layer"
 				url := artifact.LayerURL(layer)
 				if err := download(name, url); err != nil {
 					return err
@@ -267,7 +269,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 	// explicitly export slugs from old clusters which either have them as
 	// file artifacts or in SLUG_URL
 	var slugURL string
-	if release.IsGitDeploy() && len(artifacts) > 1 && artifacts[1].Type == ct.ArtifactTypeFile {
+	if release.IsGitDeploy() && len(artifacts) > 1 && artifacts[1].Type == ct.DeprecatedArtifactTypeFile {
 		slugURL = artifacts[1].URI
 	} else if u, ok := release.Env["SLUG_URL"]; ok {
 		slugURL = u
@@ -318,14 +320,13 @@ func runImport(args *docopt.Args, client controller.Client) error {
 	tr := tar.NewReader(src)
 
 	var (
-		app           *ct.App
-		release       *ct.Release
-		artifacts     []*ct.Artifact
-		imageArtifact *ct.Artifact
-		formation     *ct.Formation
-		routes        []router.Route
-		slug          io.Reader
-		dockerImage   struct {
+		app         *ct.App
+		release     *ct.Release
+		artifacts   []*ct.Artifact
+		formation   *ct.Formation
+		routes      []router.Route
+		legacySlug  io.Reader
+		dockerImage struct {
 			config struct {
 				Tag string `json:"tag"`
 			}
@@ -347,7 +348,8 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			return fmt.Errorf("error reading export tar: %s", err)
 		}
 
-		if strings.HasPrefix(header.Name, "layer/") {
+		filename := path.Base(header.Name)
+		if strings.HasSuffix(filename, ".layer") {
 			f, err := ioutil.TempFile("", "flynn-layer-")
 			if err != nil {
 				return fmt.Errorf("error creating layer tempfile: %s", err)
@@ -360,12 +362,12 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
 				return fmt.Errorf("error seeking layer tempfile: %s", err)
 			}
-			layers[header.Name] = f
+			layers[strings.TrimSuffix(filename, ".layer")] = f
 			uploadSize += header.Size
 			continue
 		}
 
-		switch path.Base(header.Name) {
+		switch filename {
 		case "app.json":
 			app = &ct.App{}
 			if err := json.NewDecoder(tr).Decode(app); err != nil {
@@ -379,15 +381,9 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			}
 			release.ID = ""
 			release.ArtifactIDs = nil
-		case "artifact.json":
-			imageArtifact = &ct.Artifact{}
-			if err := json.NewDecoder(tr).Decode(imageArtifact); err != nil {
-				return fmt.Errorf("error decoding image artifact: %s", err)
-			}
-			imageArtifact.ID = ""
 		case "artifacts.json":
-			if err := json.NewDecoder(tr).Decode(artifacts); err != nil {
-				return fmt.Errorf("error decoding image artifact: %s", err)
+			if err := json.NewDecoder(tr).Decode(&artifacts); err != nil {
+				return fmt.Errorf("error decoding artifacts: %s", err)
 			}
 		case "formation.json":
 			formation = &ct.Formation{}
@@ -417,7 +413,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
 				return fmt.Errorf("error seeking slug tempfile: %s", err)
 			}
-			slug = f
+			legacySlug = f
 			uploadSize += header.Size
 		case "docker-image.json":
 			if err := json.NewDecoder(tr).Decode(&dockerImage.config); err != nil {
@@ -573,38 +569,99 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	if len(artifacts) > 0 {
-		artifactIDs := make([]string, len(artifacts))
-		for i, artifact := range artifacts {
-			// TODO: upload layers for each artifact
-			if err := client.CreateArtifact(artifact); err != nil {
-				return fmt.Errorf("error creating artifact: %s", err)
-			}
-			artifactIDs[i] = artifact.ID
-		}
-		release.ArtifactIDs = artifactIDs
-	}
-
-	uploadSlug := release != nil && imageArtifact != nil && slug != nil
-
-	if uploadSlug {
-		// Use current slugrunner as the artifact
+	if legacySlug != nil {
+		// Use current slugbuilder to convert the legacy slug to a
+		// Flynn squashfs image
 		gitreceiveRelease, err := client.GetAppRelease("gitreceive")
 		if err != nil {
 			return fmt.Errorf("unable to retrieve gitreceive release: %s", err)
 		}
-		if id, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_ID"]; ok {
-			imageArtifact, err = client.GetArtifact(id)
-			if err != nil {
-				return fmt.Errorf("unable to get slugrunner image artifact: %s", err)
-			}
-		} else if uri, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_URI"]; ok {
-			imageArtifact = &ct.Artifact{
-				Type: host.ArtifactTypeDocker,
-				URI:  uri,
-			}
-		} else {
+		slugBuilderID, ok := gitreceiveRelease.Env["SLUGBUILDER_IMAGE_ID"]
+		if !ok {
+			return fmt.Errorf("gitreceive env missing slug builder image")
+		}
+		slugRunnerID, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_ID"]
+		if !ok {
 			return fmt.Errorf("gitreceive env missing slug runner image")
+		}
+
+		slugImageID := random.UUID()
+		config := runConfig{
+			App:        app.ID,
+			Release:    gitreceiveRelease.ID,
+			ReleaseEnv: true,
+			Artifacts:  []string{slugBuilderID},
+			DisableLog: true,
+			Args:       []string{"/bin/convert-legacy-slug.sh"},
+			Stdin:      legacySlug,
+			Stdout:     ioutil.Discard,
+			Stderr:     ioutil.Discard,
+			Env:        map[string]string{"SLUG_IMAGE_ID": slugImageID},
+		}
+		if bar != nil {
+			config.Stdin = bar.NewProxyReader(config.Stdin)
+		}
+		if err := runJob(client, config); err != nil {
+			return fmt.Errorf("error uploading slug: %s", err)
+		}
+		release.ID = ""
+		release.ArtifactIDs = []string{slugRunnerID, slugImageID}
+		if release.Meta == nil {
+			release.Meta = make(map[string]string, 1)
+		}
+		release.Meta["git"] = "true"
+	} else if len(artifacts) > 0 {
+		// import blobstore Flynn artifacts
+		blobstoreRelease, err := client.GetAppRelease("blobstore")
+		if err != nil {
+			return fmt.Errorf("unable to retrieve blobstore release: %s", err)
+		}
+		upload := func(id, url string) error {
+			layer, ok := layers[id]
+			if !ok {
+				return fmt.Errorf("missing layer in export: %s", id)
+			}
+			config := runConfig{
+				App:        app.ID,
+				Release:    blobstoreRelease.ID,
+				DisableLog: true,
+				Args:       []string{"curl", "--request", "PUT", "--upload-file", "-", url},
+				Stdin:      layer,
+				Stdout:     ioutil.Discard,
+				Stderr:     ioutil.Discard,
+			}
+			if bar != nil {
+				config.Stdin = bar.NewProxyReader(config.Stdin)
+			}
+			if err := runJob(client, config); err != nil {
+				return fmt.Errorf("error uploading layer: %s", err)
+			}
+			return nil
+		}
+
+		release.ArtifactIDs = make([]string, len(artifacts))
+		for i, artifact := range artifacts {
+			if artifact.Type != ct.ArtifactTypeFlynn {
+				continue
+			}
+			if !artifact.Blobstore() {
+				continue
+			}
+			if artifact.Manifest == nil {
+				continue
+			}
+			for _, rootfs := range artifact.Manifest.Rootfs {
+				for _, layer := range rootfs.Layers {
+					if err := upload(layer.ID, artifact.LayerURL(layer)); err != nil {
+						return err
+					}
+				}
+			}
+			artifact.ID = ""
+			if err := client.CreateArtifact(artifact); err != nil {
+				return fmt.Errorf("error creating artifact: %s", err)
+			}
+			release.ArtifactIDs[i] = artifact.ID
 		}
 	}
 
@@ -637,17 +694,28 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		}
 
 		release.ArtifactIDs = []string{artifact.ID}
-	} else if imageArtifact != nil {
-		if imageArtifact.ID == "" {
-			if err := client.CreateArtifact(imageArtifact); err != nil {
-				return fmt.Errorf("error creating image artifact: %s", err)
-			}
-		}
-		release.ArtifactIDs = []string{imageArtifact.ID}
 	}
 
 	if release != nil {
+		// use the current slugrunner image for slug releases
+		if release.IsGitDeploy() && len(release.ArtifactIDs) > 0 {
+			gitreceiveRelease, err := client.GetAppRelease("gitreceive")
+			if err != nil {
+				return fmt.Errorf("unable to retrieve gitreceive release: %s", err)
+			}
+			slugRunnerID, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_ID"]
+			if !ok {
+				return fmt.Errorf("gitreceive env missing slug runner image")
+			}
+			release.ArtifactIDs[0] = slugRunnerID
+		}
 		for t, proc := range release.Processes {
+			// update legacy slug releases to use Args rather than the
+			// deprecated Entrypoint and Cmd fields
+			if release.IsGitDeploy() && len(proc.Args) == 0 {
+				proc.Args = append([]string{"/runner/init"}, proc.DeprecatedCmd...)
+				proc.DeprecatedCmd = nil
+			}
 			for i, port := range proc.Ports {
 				if port.Service != nil && strings.HasPrefix(port.Service.Name, oldName) {
 					proc.Ports[i].Service.Name = strings.Replace(port.Service.Name, oldName, app.Name, 1)
@@ -655,44 +723,6 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			}
 			release.Processes[t] = proc
 		}
-		if err := client.CreateRelease(release); err != nil {
-			return fmt.Errorf("error creating release: %s", err)
-		}
-		if err := client.SetAppRelease(app.ID, release.ID); err != nil {
-			return fmt.Errorf("error setting app release: %s", err)
-		}
-	}
-
-	if uploadSlug {
-		slugURI := fmt.Sprintf("http://blobstore.discoverd/%s/slug.tgz", random.UUID())
-		config := runConfig{
-			App:        app.ID,
-			Release:    release.ID,
-			DisableLog: true,
-			Args:       []string{"curl", "--request", "PUT", "--upload-file", "-", slugURI},
-			Stdin:      slug,
-			Stdout:     ioutil.Discard,
-			Stderr:     ioutil.Discard,
-		}
-		if bar != nil {
-			config.Stdin = bar.NewProxyReader(config.Stdin)
-		}
-		if err := runJob(client, config); err != nil {
-			return fmt.Errorf("error uploading slug: %s", err)
-		}
-		slugArtifact := &ct.Artifact{
-			Type: ct.ArtifactTypeFile,
-			URI:  slugURI,
-		}
-		if err := client.CreateArtifact(slugArtifact); err != nil {
-			return fmt.Errorf("error creating slug artifact: %s", err)
-		}
-		release.ID = ""
-		release.ArtifactIDs = append(release.ArtifactIDs, slugArtifact.ID)
-		if release.Meta == nil {
-			release.Meta = make(map[string]string, 1)
-		}
-		release.Meta["git"] = "true"
 		if err := client.CreateRelease(release); err != nil {
 			return fmt.Errorf("error creating release: %s", err)
 		}

@@ -78,11 +78,15 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	artifact := &ct.Artifact{}
 	var typ string
-	err := s.Scan(&artifact.ID, &typ, &artifact.URI, &artifact.Meta, &artifact.Manifest, &artifact.LayerURLTemplate, &artifact.CreatedAt)
+	var layerURLTemplate *string
+	err := s.Scan(&artifact.ID, &typ, &artifact.URI, &artifact.Meta, &artifact.Manifest, &layerURLTemplate, &artifact.CreatedAt)
 	if err == pgx.ErrNoRows {
 		err = ErrNotFound
 	}
 	artifact.Type = ct.ArtifactType(typ)
+	if layerURLTemplate != nil {
+		artifact.LayerURLTemplate = *layerURLTemplate
+	}
 	return artifact, err
 }
 

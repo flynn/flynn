@@ -97,9 +97,20 @@ type Port struct {
 type ArtifactType string
 
 const (
+	// ArtifactTypeFlynn is the type of artifact which references a Flynn
+	// image manifest
 	ArtifactTypeFlynn ArtifactType = "flynn"
-	ArtifactTypeFile  ArtifactType = "file"
 
+	// DeprecatedArtifactTypeFile is a deprecated artifact type which was
+	// used to reference slugs when they used to be tarballs stored in the
+	// blobstore (they are now squashfs based Flynn images)
+	DeprecatedArtifactTypeFile ArtifactType = "file"
+
+	// DeprecatedArtifactTypeDocker is a deprecated artifact type which
+	// used to reference a pinkerton-compatible Docker URI used to pull
+	// Docker images from a Docker registry (they are now converted to
+	// squashfs based Flynn images either at build time or at push time by
+	// docker-receive)
 	DeprecatedArtifactTypeDocker ArtifactType = "docker"
 )
 
@@ -236,16 +247,17 @@ func JobDownEvents(count int) map[JobState]int {
 }
 
 type NewJob struct {
-	ReleaseID  string             `json:"release,omitempty"`
-	ReleaseEnv bool               `json:"release_env,omitempty"`
-	Args       []string           `json:"args,omitempty"`
-	Env        map[string]string  `json:"env,omitempty"`
-	Meta       map[string]string  `json:"meta,omitempty"`
-	TTY        bool               `json:"tty,omitempty"`
-	Columns    int                `json:"tty_columns,omitempty"`
-	Lines      int                `json:"tty_lines,omitempty"`
-	DisableLog bool               `json:"disable_log,omitempty"`
-	Resources  resource.Resources `json:"resources,omitempty"`
+	ReleaseID   string             `json:"release,omitempty"`
+	ReleaseEnv  bool               `json:"release_env,omitempty"`
+	ArtifactIDs []string           `json:"artifacts,omitempty"`
+	Args        []string           `json:"args,omitempty"`
+	Env         map[string]string  `json:"env,omitempty"`
+	Meta        map[string]string  `json:"meta,omitempty"`
+	TTY         bool               `json:"tty,omitempty"`
+	Columns     int                `json:"tty_columns,omitempty"`
+	Lines       int                `json:"tty_lines,omitempty"`
+	DisableLog  bool               `json:"disable_log,omitempty"`
+	Resources   resource.Resources `json:"resources,omitempty"`
 
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
 	DeprecatedCmd        []string `json:"cmd,omitempty"`

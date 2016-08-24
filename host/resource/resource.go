@@ -53,6 +53,10 @@ var defaults = Resources{
 
 type Resources map[Type]Spec
 
+func (r Resources) SetDiskLimit(size int64) {
+	r[TypeDisk] = Spec{Request: typeconv.Int64Ptr(size), Limit: typeconv.Int64Ptr(size)}
+}
+
 func Defaults() Resources {
 	r := make(Resources)
 	SetDefaults(&r)

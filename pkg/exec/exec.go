@@ -9,6 +9,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/schedutil"
@@ -34,6 +35,8 @@ type Cmd struct {
 	Stderr io.Writer
 
 	TermHeight, TermWidth uint16
+
+	Resources resource.Resources
 
 	// cluster is used to communicate with the layer 0 cluster
 	cluster ClusterClient
@@ -83,11 +86,15 @@ type Cmd struct {
 }
 
 func Command(artifact *ct.Artifact, args ...string) *Cmd {
-	return &Cmd{ImageArtifact: artifact, Args: args}
+	cmd := &Cmd{ImageArtifact: artifact, Args: args}
+	resource.SetDefaults(&cmd.Resources)
+	return cmd
 }
 
 func Job(artifact *ct.Artifact, job *host.Job) *Cmd {
-	return &Cmd{ImageArtifact: artifact, Job: job}
+	cmd := &Cmd{ImageArtifact: artifact, Job: job}
+	resource.SetDefaults(&cmd.Resources)
+	return cmd
 }
 
 type ClusterClient interface {
@@ -189,7 +196,8 @@ func (c *Cmd) Start() error {
 				Env:   c.Env,
 				Stdin: c.Stdin != nil || c.stdinPipe != nil,
 			},
-			Metadata: c.Meta,
+			Metadata:  c.Meta,
+			Resources: c.Resources,
 		}
 		// if attaching to stdout / stderr, avoid round tripping the
 		// streams via on-disk log files.
