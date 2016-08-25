@@ -1437,13 +1437,13 @@ func (s *Scheduler) stopJob(job *Job) error {
 }
 
 // findJobToStop finds a job from the given formation and type which should be
-// stopped, choosing pending jobs if present, and the most recently started job
-// otherwise
+// stopped, choosing pending or stopping jobs if present, and the most recently
+// started job otherwise
 func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 	var runningJob *Job
 	for _, job := range s.jobs.WithFormationAndType(f, typ) {
 		switch job.State {
-		case JobStatePending:
+		case JobStatePending, JobStateStopping:
 			return job, nil
 		case JobStateStarting, JobStateRunning:
 			// if the job is on a host which is shutting down,

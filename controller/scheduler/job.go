@@ -121,10 +121,6 @@ func (j *Job) needsVolume() bool {
 	return j.Formation.Release.Processes[j.Type].Data
 }
 
-func (j *Job) IsStopped() bool {
-	return j.State == JobStateStopping || j.State == JobStateStopped
-}
-
 func (j *Job) IsRunning() bool {
 	return j.State == JobStateStarting || j.State == JobStateRunning
 }
@@ -134,7 +130,7 @@ func (j *Job) IsSchedulable() bool {
 }
 
 func (j *Job) IsInFormation(key utils.FormationKey) bool {
-	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key
+	return j.State != JobStateStopped && j.Formation != nil && j.Formation.key() == key
 }
 
 func (j *Job) IsInApp(appID string) bool {
