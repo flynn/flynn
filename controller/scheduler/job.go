@@ -125,10 +125,6 @@ func (j *Job) IsRunning() bool {
 	return j.State == JobStateStarting || j.State == JobStateRunning
 }
 
-func (j *Job) IsSchedulable() bool {
-	return j.Formation != nil && j.Type != ""
-}
-
 func (j *Job) IsInFormation(key utils.FormationKey) bool {
 	return j.State != JobStateStopped && j.Formation != nil && j.Formation.key() == key
 }
