@@ -34,29 +34,42 @@ above the error then re-run `flynn docker login`._
 Run the following to push a Docker image to `docker-receive` and deploy it:
 
 ```
-$ flynn docker push IMAGE
+$ flynn -a APPNAME docker push IMAGE
 ```
 
-where `IMAGE` is a reference to a Docker image which is available to the local
-`docker` CLI (in other words, an image which appears in the output of `docker
-images`).
+where `APPNAME` is the name of an existing Flynn app and `IMAGE` is a reference
+to a Docker image which is available to the local `docker` CLI (in other words,
+an image which appears in the output of `docker images`).
 
-### Example
+## Routing
 
-Here is an example of deploying the `elasticsearch:2.3.3` image from
-[Docker Hub](https://hub.docker.com/_/elasticsearch/).
+Flynn automatically registers the HTTP route `http://APPNAME.$CLUSTER_DOMAIN`
+for the app. In order to receive HTTP traffic for this route, the app needs to
+listen on the port which is set in the `PORT` environment variable.
 
-Pull the image from Docker Hub:
+## Example
+
+Here is an example of deploying the [Flynn Node.js example app](https://github.com/flynn-examples/nodejs-flynn-example)
+using `flynn docker push`.
+
+Clone the git repository:
 
 ```
-$ docker pull elasticsearch:2.3.3
+$ git clone https://github.com/flynn-examples/nodejs-flynn-example.git
+$ cd nodejs-flynn-example
+```
+
+Build the Docker image:
+
+```
+$ docker build -t nodejs-flynn-example .
 ```
 
 Create an app:
 
 ```
-$ flynn create --remote "" elasticsearch
-Created elasticsearch
+$ flynn create --remote "" nodejs
+Created nodejs
 ```
 
 _NOTE: the `--remote ""` flag prevents Flynn trying to configure the local
@@ -66,20 +79,21 @@ deploying with `git push` rather than `flynn docker push`._
 Push the Docker image:
 
 ```
-$ flynn -a elasticsearch docker push elasticsearch:2.3.3
-flynn: getting image config with "docker inspect -f {{ json .Config }} elasticsearch:2.3.3"
-flynn: tagging Docker image with "docker tag --force elasticsearch:2.3.3 docker.1.localflynn.com/elasticsearch:latest"
-flynn: pushing Docker image with "docker push docker.1.localflynn.com/elasticsearch:latest"
-The push refers to a repository [docker.1.localflynn.com/elasticsearch] (len: 1)
-f44f27940253: Pushed
-d7ed2fb18d43: Pushed
+$ flynn -a nodejs docker push nodejs-flynn-example
+flynn: getting image config with "docker inspect -f {{ json .Config }} nodejs-flynn-example"
+flynn: tagging Docker image with "docker tag nodejs-flynn-example docker.1.localflynn.com/nodejs:latest"
+flynn: pushing Docker image with "docker push docker.1.localflynn.com/nodejs:latest"
+The push refers to a repository [docker.1.localflynn.com/nodejs] (len: 1)
+82b9b0ffb6da: Pushed
+be8edf33c031: Pushed
 ...
-3c1b9f450611: Pushed
-00f7d2b44350: Pushed
-latest: digest: sha256:2447896a610a410aee1c351e33bfb489d2eb4875b4c17d83ef31add54b41b9a3 size: 18250
+767584930cea: Pushed
+d34921bc2709: Pushed
+latest: digest: sha256:be6aeade058f0df30a039a432aaf4cb21accd992d4c0df80ddb333b15f401b6a size: 16114
 flynn: image pushed, waiting for artifact creation
-flynn: deploying release using artifact URI http://flynn:dbd202007171356f4551160dede351ae@docker-receive.discoverd?name=elasticsearch&id=sha256:2447896a610a410aee1c351e33bfb489d2eb4875b4c17d83ef31add54b41b9a3
+flynn: deploying release using artifact URI http://flynn:dbd202007171356f4551160dede351ae@docker-receive.discoverd?name=nodejs&id=sha256:be6aeade058f0df30a039a432aaf4cb21accd992d4c0df80ddb333b15f401b6a
 flynn: image deployed, scale it with 'flynn scale app=N'
+
 ```
 
 You now have a release with an `app` process which runs using the pushed image
@@ -89,32 +103,29 @@ config.
 If this is the first deploy of the app, scale the `app` process to start it:
 
 ```
-$ flynn -a elasticsearch scale app=1
+$ flynn -a nodejs scale app=1
 scaling app: 0=>1
 
-19:32:47.916 ==> app 0c363db0-80a4-41b8-b96f-1b490ff2b26d pending
-19:32:47.926 ==> app host0-0c363db0-80a4-41b8-b96f-1b490ff2b26d starting
-19:32:51.556 ==> app host0-0c363db0-80a4-41b8-b96f-1b490ff2b26d up
+16:24:31.397 ==> app 4a7319af-af2c-4fe1-9a9a-2dd4d5bd3765 pending
+16:24:31.398 ==> app host0-4a7319af-af2c-4fe1-9a9a-2dd4d5bd3765 starting
+16:24:31.527 ==> app host0-4a7319af-af2c-4fe1-9a9a-2dd4d5bd3765 up
 
-scale completed in 3.650229343s
+scale completed in 140.63784ms
 ```
 
-The `app` process will be configured with a service name the same as the app's
-name so your Flynn apps can communicate with the deployed service using
-`APPNAME.discoverd:PORT` (e.g. `elasticsearch.discoverd:9200`):
+The `app` process will be configured with a service name like `APPNAME-web` so
+your Flynn apps can communicate with the deployed service internally using
+`APPNAME-web.discoverd:PORT` (e.g. `nodejs-web.discoverd:8080`):
 
 ```
-$ flynn -a elasticsearch run curl http://elasticsearch.discoverd:9200
-{
-  "name" : "Emplate",
-  "cluster_name" : "elasticsearch",
-  "version" : {
-    "number" : "2.3.3",
-    "build_hash" : "218bdf10790eef486ff2c41a3df5cfa32dadcfde",
-    "build_timestamp" : "2016-05-17T15:40:04Z",
-    "build_snapshot" : false,
-    "lucene_version" : "5.5.0"
-  },
-  "tagline" : "You Know, for Search"
-}
+$ flynn -a nodejs run curl http://nodejs-web.discoverd:8080
+Hello from Flynn on port 8080 from container 4a7319af-af2c-4fe1-9a9a-2dd4d5bd3765
+```
+
+The app can be reached externally via the automatically registered route
+`http://APPNAME.$CLUSTER_DOMAIN`:
+
+```
+$ curl http://nodejs.1.localflynn.com
+Hello from Flynn on port 8080 from container 4a7319af-af2c-4fe1-9a9a-2dd4d5bd3765
 ```
