@@ -41,6 +41,19 @@ where `IMAGE` is a reference to a Docker image which is available to the local
 `docker` CLI (in other words, an image which appears in the output of `docker
 images`).
 
+## Using routes
+In order to use flynn routes your container needs to listen to port 8080.
+
+To make your container future proof it should listen to port defined in `$PORT` env.
+
+It's easy to define `$PORT` env in your Dockerfile:
+
+```Dockerfile
+ENV PORT="8080"
+```
+
+This way flynn can override the port later when it will be dynamic instead of `8080`.
+
 ### Example
 
 Here is an example of deploying the `elasticsearch:2.3.3` image from
