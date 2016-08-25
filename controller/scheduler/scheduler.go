@@ -845,19 +845,73 @@ func (s *Scheduler) ShuffledHosts() []*Host {
 	return hosts
 }
 
+var putJobAttempts = attempt.Strategy{
+	Delay: 100 * time.Millisecond,
+	Total: time.Minute,
+}
+
+// RunPutJobs starts a loop which receives jobs from the s.putJobs channel and
+// persists them to the controller using the putJobAttempts retry strategy.
+//
+// A goroutine is started per job to persist, but care is taken to persist jobs
+// with the same UUID sequentially and in order to avoid for example a job
+// transitioning from "down" to "up" in the controller.
 func (s *Scheduler) RunPutJobs() {
 	log := s.logger.New("fn", "RunPutJobs")
 	log.Info("starting job persistence loop")
-	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
-	for job := range s.putJobs {
-		err := strategy.RunWithValidator(func() error {
+
+	// queue is a map of job UUID to a slice of jobs to persist for that
+	// given UUID, and the loop below persists the jobs in the slice
+	// in FIFO order
+	queue := make(map[string][]*ct.Job)
+
+	// done is a channel which receives a UUID once a job has been
+	// persisted for that UUID, thus potentially triggering the
+	// persistence of the next job in the queue for that UUID
+	done := make(chan string)
+
+	// persist makes multiple attempts to persist the given job, sending to
+	// the done channel once the attempts have finished
+	persist := func(job *ct.Job) {
+		err := putJobAttempts.RunWithValidator(func() error {
 			return s.PutJob(job)
 		}, httphelper.IsRetryableError)
 		if err != nil {
 			log.Error("error persisting job", "job.id", job.ID, "job.state", job.State, "err", err)
 		}
+		done <- job.UUID
 	}
-	log.Info("stopping job persistence loop")
+
+	// start the persistence loop which receives from both the s.putJobs
+	// and the done channel, modifies the queue accordingly and then calls
+	// the persist function in a goroutine if necessary
+	for {
+		select {
+		case job, ok := <-s.putJobs:
+			if !ok {
+				log.Info("stopping job persistence loop")
+				return
+			}
+
+			// push the job to the back of the queue
+			queue[job.UUID] = append(queue[job.UUID], job)
+
+			// if there is only one job in the queue, persist it
+			if len(queue[job.UUID]) == 1 {
+				go persist(job)
+			}
+		case uuid := <-done:
+			// remove the persisted job from the queue
+			queue[uuid] = queue[uuid][1:]
+
+			// if the queue has more jobs, persist the first one
+			if len(queue[uuid]) > 0 {
+				go persist(queue[uuid][0])
+			} else {
+				delete(queue, uuid)
+			}
+		}
+	}
 }
 
 func (s *Scheduler) HandleLeaderChange(isLeader bool) {
