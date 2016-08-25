@@ -43,7 +43,7 @@ func (s *BlobstoreSuite) TestBlobstoreBackendGCS(t *c.C) {
 	err := json.Unmarshal([]byte(gcsConfig), &data)
 	t.Assert(err, c.IsNil)
 
-	s.testBlobstoreBackend(t, "gcs", ".+google.+", fmt.Sprintf(`"BACKEND_GCS=backend=gcs bucket=%s"`, data.Bucket), `"BACKEND_GCS_CONFIG=$BLOBSTORE_GCS_CONFIG"`)
+	s.testBlobstoreBackend(t, "gcs", ".+google.+", fmt.Sprintf(`"BACKEND_GCS=backend=gcs bucket=%s"`, data.Bucket), `"BACKEND_GCS_KEY=$BLOBSTORE_GCS_CONFIG"`)
 }
 
 func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern string, env ...string) {
