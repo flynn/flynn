@@ -96,6 +96,30 @@ func TestS3Filesystem(t *testing.T) {
 	testFilesystem(r, false, t)
 }
 
+func TestGCSFilesystem(t *testing.T) {
+	key := os.Getenv("BLOBSTORE_GCS_CONFIG")
+	if key == "" {
+		t.Skip("GCS not configured")
+	}
+
+	var info struct{ Bucket string }
+	if err := json.Unmarshal([]byte(key), &info); err != nil {
+		t.Fatal(err)
+	}
+
+	db := initDB(t)
+	defer db.Close()
+	b, err := backend.NewGCS("gcs-test", map[string]string{"key": key, "bucket": info.Bucket})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := data.NewFileRepo(db, []backend.Backend{b}, "gcs-test")
+	testList(r, t)
+	testDelete(r, t)
+	testOffset(r, t, false)
+	testFilesystem(r, false, t)
+}
+
 func testList(r *data.FileRepo, t *testing.T) {
 	srv := httptest.NewServer(handler(r))
 	defer srv.Close()

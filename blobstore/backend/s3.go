@@ -17,6 +17,10 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 )
 
+func init() {
+	Backends["s3"] = NewS3
+}
+
 func NewS3(name string, info map[string]string) (Backend, error) {
 	c := aws.NewConfig()
 	b := &s3Backend{

@@ -43,3 +43,5 @@ type Backend interface {
 	Copy(tx *postgres.DBTx, dst, src FileInfo) error
 	Delete(tx *postgres.DBTx, info FileInfo) error
 }
+
+var Backends = make(map[string]func(string, map[string]string) (Backend, error))

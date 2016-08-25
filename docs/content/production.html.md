@@ -75,18 +75,23 @@ $ sudo rm /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev
 
 Flynn stores binary blobs like compiled applications, git repo archives,
 buildpack caches, and Docker image layers using the blobstore component. The
-blobstore supports two backends, Postgres and S3.
+blobstore supports multiple backends: Postgres, [Amazon
+S3](https://aws.amazon.com/s3/), and [Google Cloud
+Storage](https://cloud.google.com/storage/).
 
 By default, the blobstore uses the built-in Postgres appliance to store these
 blobs. This works well for light workloads and is the default configuration
 because it allows Flynn to be deployed anywhere without any external service
 dependencies.
 
-For anything other than light workloads, we recommend using [Amazon
-S3](https://aws.amazon.com/s3/) as the blobstore backend.
+For anything other than light workloads, we recommend using Amazon
+S3 or Google Cloud Storage as the blobstore backend.
+
+### Amazon S3
 
 To migrate to the S3 backend, you first need to provision a new bucket and
-create credentials for it. In AWS IAM, add a policy that looks like this:
+create credentials for it. In AWS IAM, create a user with access credentials and
+add a policy that looks like this:
 
 ```text
 {
@@ -112,11 +117,11 @@ create credentials for it. In AWS IAM, add a policy that looks like this:
 }
 ```
 
-Don't forget to change the bucket name in the `Resource` section before adding
-the policy.
+Don't forget to save the credentials when creating the user and set the bucket
+name in the `Resource` section before adding the policy.
 
 After creating the S3 bucket and credentials, configure the blobstore to use it as
-the backend:
+the backend with bucket, region, and access credentials:
 
 ```text
 flynn -a blobstore env set BACKEND_S3MAIN="backend=s3 region=us-east-1 \
@@ -131,6 +136,35 @@ logs with `flynn -a blobstore log`.
 
 Finally, migrate the existing blobs from Postgres to S3 and remove them from
 Postgres:
+
+```text
+flynn -a blobstore run /bin/flynn-blobstore-migrate -delete
+```
+
+### Google Cloud Storage
+
+To migrate to the Google Cloud Storage backend, you first need to create a new
+[Service Account in
+IAM](https://console.cloud.google.com/iam-admin/serviceaccounts). The account
+does not need any roles, but make sure you create a private key and download the
+JSON version. After creating the account, create a Cloud Storage bucket and add
+the service account ID as a user with Owner access to the bucket permissions.
+
+After creating the Cloud Storage bucket and credentials, configure the blobstore
+to use it as the backend, with the bucket name and key file:
+
+```text
+flynn -a blobstore env set BACKEND_GCSMAIN="backend=gcs bucket=flynnblobstore" \
+BACKEND_GCSMAIN_KEY="$(cat Project-7633a787c43f.json)"
+
+flynn -a blobstore env set DEFAULT_BACKEND=gcsmain
+```
+
+If the credentials are invalid, the first command will fail, and you can check the
+logs with `flynn -a blobstore log`.
+
+Finally, migrate the existing blobs from Postgres to Cloud Storage and
+remove them from Postgres:
 
 ```text
 flynn -a blobstore run /bin/flynn-blobstore-migrate -delete

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/flynn/flynn/blobstore/backend"
@@ -15,24 +16,27 @@ import (
 	"github.com/stevvooe/resumable/sha512"
 )
 
-const configEnvPrefix = "BACKEND_"
+var configEnvPattern = regexp.MustCompile(`^BACKEND_([A-Z0-9]+)$`)
 
 func NewFileRepoFromEnv(db *postgres.DB) (*FileRepo, error) {
 	backends := []backend.Backend{backend.Postgres}
-	for _, env := range os.Environ() {
-		if !strings.HasPrefix(env, configEnvPrefix) {
+	environment := os.Environ()
+	for _, env := range environment {
+		nameInfo := strings.SplitN(env, "=", 2)
+		nameMatch := configEnvPattern.FindStringSubmatch(nameInfo[0])
+		if len(nameMatch) < 2 {
 			continue
 		}
-		nameInfo := strings.SplitN(env, "=", 2)
-		name := strings.ToLower(strings.TrimPrefix(nameInfo[0], configEnvPrefix))
-		info, err := parseBackendInfo(nameInfo[1])
+		name := strings.ToLower(nameMatch[1])
+		info, err := parseBackendInfo(environment, name, nameInfo[1])
 		if err != nil {
 			return nil, err
 		}
-		if info["backend"] != "s3" {
+		newBackend, ok := backend.Backends[info["backend"]]
+		if !ok {
 			return nil, fmt.Errorf("blobstore: unknown backend %q for %s", info["backend"], name)
 		}
-		b, err := backend.NewS3(name, info)
+		b, err := newBackend(name, info)
 		if err != nil {
 			return nil, err
 		}
@@ -57,9 +61,9 @@ func NewFileRepoFromEnv(db *postgres.DB) (*FileRepo, error) {
 	return NewFileRepo(db, backends, defaultBackend), nil
 }
 
-func parseBackendInfo(s string) (map[string]string, error) {
+func parseBackendInfo(environment []string, name, params string) (map[string]string, error) {
 	info := make(map[string]string)
-	for _, token := range strings.Split(s, " ") {
+	for _, token := range strings.Split(params, " ") {
 		if token == "" {
 			continue
 		}
@@ -68,6 +72,15 @@ func parseBackendInfo(s string) (map[string]string, error) {
 			return nil, fmt.Errorf("blobstore: error parsing backend kv pair %q", token)
 		}
 		info[kv[0]] = kv[1]
+	}
+	prefix := strings.ToUpper(fmt.Sprintf("BACKEND_%s_", name))
+	for _, env := range environment {
+		if !strings.HasPrefix(env, prefix) {
+			continue
+		}
+		kv := strings.SplitN(env, "=", 2)
+		k := strings.ToLower(strings.TrimPrefix(kv[0], prefix))
+		info[k] = kv[1]
 	}
 	return info, nil
 }
