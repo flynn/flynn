@@ -1425,11 +1425,20 @@ func (s *Scheduler) stopJob(job *Job) error {
 		return fmt.Errorf("unknown host: %q", job.HostID)
 	}
 
-	log.Info("requesting host to stop job", "host.id", job.HostID)
+	// set the state to JobStateStopping in case a StartJob goroutine is
+	// still trying to start the job, in which case it will get an
+	// ErrJobNotPending error on the next call to PlaceJob
 	job.State = JobStateStopping
+
+	log.Info("requesting host to stop job", "host.id", job.HostID)
+	// call host.StopJob in a goroutine so it doesn't block the main
+	// scheduler loop
 	go func() {
-		// host.StopJob can block, so run it in a goroutine
 		if err := host.client.StopJob(job.JobID); err != nil {
+			// when an error happens, we don't know if the job actually
+			// stopped or not, but just log the error instead of retrying
+			// and let the next SyncJobs routine determine if another
+			// attempt at stopping the job is necessary
 			log.Error("error requesting host to stop job", "err", err)
 		}
 	}()
