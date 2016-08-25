@@ -117,20 +117,20 @@ func newBuild(commit, branch, description string, merge bool) *Build {
 }
 
 type Runner struct {
-	bc                cluster.BootConfig
-	events            chan Event
-	rootFS            string
-	githubToken       string
-	s3                *s3.S3
-	networks          map[string]struct{}
-	netMtx            sync.Mutex
-	db                *bolt.DB
-	buildCh           chan struct{}
-	clusters          map[string]*cluster.Cluster
-	authKey           string
-	blobstoreS3Config string
-	subnet            uint64
-	ircMsgs           chan string
+	bc          cluster.BootConfig
+	events      chan Event
+	rootFS      string
+	githubToken string
+	s3          *s3.S3
+	networks    map[string]struct{}
+	netMtx      sync.Mutex
+	db          *bolt.DB
+	buildCh     chan struct{}
+	clusters    map[string]*cluster.Cluster
+	authKey     string
+	runEnv      map[string]string
+	subnet      uint64
+	ircMsgs     chan string
 }
 
 var args *arg.Args
@@ -149,6 +149,7 @@ func main() {
 		buildCh:  make(chan struct{}, args.ConcurrentBuilds),
 		clusters: make(map[string]*cluster.Cluster),
 		ircMsgs:  make(chan string, 100),
+		runEnv:   make(map[string]string),
 	}
 	if err := runner.start(); err != nil {
 		shutdown.Fatal(err)
@@ -160,10 +161,17 @@ func (r *Runner) start() error {
 	if r.authKey == "" {
 		return errors.New("AUTH_KEY not set")
 	}
+	r.runEnv["TEST_RUNNER_AUTH_KEY"] = r.authKey
 
-	r.blobstoreS3Config = os.Getenv("BLOBSTORE_S3_CONFIG")
-	if r.blobstoreS3Config == "" {
-		return errors.New("BLOBSTORE_S3_CONFIG")
+	if c := os.Getenv("BLOBSTORE_S3_CONFIG"); c != "" {
+		r.runEnv["BLOBSTORE_S3_CONFIG"] = c
+	} else {
+		return errors.New("BLOBSTORE_S3_CONFIG not set")
+	}
+	if c := os.Getenv("BLOBSTORE_GCS_CONFIG"); c != "" {
+		r.runEnv["BLOBSTORE_GCS_CONFIG"] = c
+	} else {
+		return errors.New("BLOBSTORE_GCS_CONFIG not set")
 	}
 
 	r.githubToken = os.Getenv("GITHUB_TOKEN")
@@ -446,11 +454,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	var script bytes.Buffer
 	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "Config": config.Clusters[0], "ListenPort": listenPort})
-	env := map[string]string{
-		"TEST_RUNNER_AUTH_KEY": r.authKey,
-		"BLOBSTORE_S3_CONFIG":  r.blobstoreS3Config,
-	}
-	return c.RunWithEnv(script.String(), &cluster.Streams{Stdout: out, Stderr: out}, env)
+	return c.RunWithEnv(script.String(), &cluster.Streams{Stdout: out, Stderr: out}, r.runEnv)
 }
 
 var s3attempts = attempt.Strategy{
