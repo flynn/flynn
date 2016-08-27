@@ -48,7 +48,7 @@ func (m Migrations) Migrate(db *DB) error {
 			return err
 		}
 
-		if err := tx.Exec("LOCK TABLE schema_migrations IN ACCESS EXCLUSIVE MODE"); err != nil {
+		if err := tx.Exec("LOCK TABLE schema_migrations IN EXCLUSIVE MODE"); err != nil {
 			tx.Rollback()
 			return err
 		}
