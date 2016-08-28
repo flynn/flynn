@@ -337,6 +337,7 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	if shutdown.IsActive() {
 		log.Warn("refusing to start job due to active shutdown")
 		httphelper.JSON(w, 500, struct{}{})
+		h.addJobRateLimitBucket.Put()
 		return
 	}
 
@@ -345,11 +346,13 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	if err := httphelper.DecodeJSON(r, job); err != nil {
 		log.Error("error decoding job", "err", err)
 		httphelper.Error(w, err)
+		h.addJobRateLimitBucket.Put()
 		return
 	}
 	if job.ImageArtifact == nil {
 		log.Warn("rejecting job as no ImageArtifact set")
 		httphelper.ValidationError(w, "ImageArtifact", "must be set")
+		h.addJobRateLimitBucket.Put()
 		return
 	}
 
@@ -357,6 +360,7 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	if err := h.host.state.Acquire(); err != nil {
 		log.Error("error acquiring state database", "err", err)
 		httphelper.Error(w, err)
+		h.addJobRateLimitBucket.Put()
 		return
 	}
 
@@ -367,6 +371,7 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		} else {
 			httphelper.Error(w, err)
 		}
+		h.addJobRateLimitBucket.Put()
 		return
 	}
 
