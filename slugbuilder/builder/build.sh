@@ -104,7 +104,7 @@ if [[ -f "${env_cookie}" ]]; then
 fi
 
 if [[ -n "${BUILD_CACHE_URL}" ]]; then
-  curl "${BUILD_CACHE_URL}" | tar --extract --gunzip --directory "${cache_root}" &>/dev/null || true
+  curl --location "${BUILD_CACHE_URL}" | tar --extract --gunzip --directory "${cache_root}" &>/dev/null || true
 fi
 
 # In heroku, there are two separate directories, and some
