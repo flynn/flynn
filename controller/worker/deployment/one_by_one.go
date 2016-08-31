@@ -111,7 +111,9 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 	log.Info("ensuring old formation is scaled down to zero")
 	diff := make(ct.JobEvents, len(oldScale))
 	for typ, count := range oldScale {
-		diff[typ] = ct.JobDownEvents(count)
+		if count > 0 {
+			diff[typ] = ct.JobDownEvents(count)
+		}
 	}
 	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
@@ -121,9 +123,9 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 		return ErrSkipRollback{err.Error()}
 	}
 	if diff.Count() > 0 {
-		log.Info(fmt.Sprintf("waiting for %d job down event(s)", diff.Count()))
+		log.Info(fmt.Sprintf("waiting for %d job down event(s)", diff.Count()), "diff", diff)
 		if err := d.waitForJobEvents(d.OldReleaseID, diff, log); err != nil {
-			log.Error("error waiting for job down events", "err", err)
+			log.Error("error waiting for job down events", "diff", diff, "err", err)
 			return ErrSkipRollback{err.Error()}
 		}
 	}
