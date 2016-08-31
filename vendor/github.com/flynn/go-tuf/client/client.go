@@ -8,9 +8,8 @@ import (
 	"io/ioutil"
 
 	"github.com/flynn/go-tuf/data"
-	"github.com/flynn/go-tuf/keys"
-	"github.com/flynn/go-tuf/signed"
 	"github.com/flynn/go-tuf/util"
+	"github.com/flynn/go-tuf/verify"
 )
 
 // LocalStore is local storage for downloaded top-level metadata.
@@ -69,7 +68,7 @@ type Client struct {
 	localMeta map[string]json.RawMessage
 
 	// db is a key DB used for verifying metadata
-	db *keys.DB
+	db *verify.DB
 
 	// consistentSnapshot indicates whether the remote storage is using
 	// consistent snapshots (as specified in root.json)
@@ -97,7 +96,7 @@ func (c *Client) Init(rootKeys []*data.Key, threshold int) error {
 		return err
 	}
 
-	c.db = keys.NewDB()
+	c.db = verify.NewDB()
 	rootKeyIDs := make([]string, len(rootKeys))
 	for i, key := range rootKeys {
 		id := key.ID()
@@ -131,7 +130,7 @@ func (c *Client) Update() (data.Files, error) {
 func (c *Client) update(latestRoot bool) (data.Files, error) {
 	// Always start the update using local metadata
 	if err := c.getLocalMeta(); err != nil {
-		if _, ok := err.(signed.ErrExpired); ok {
+		if _, ok := err.(verify.ErrExpired); ok {
 			if !latestRoot {
 				return c.updateWithLatestRoot(nil)
 			}
@@ -140,7 +139,7 @@ func (c *Client) update(latestRoot bool) (data.Files, error) {
 			// should not have continued the update
 			return nil, err
 		}
-		if latestRoot && err == signed.ErrRoleThreshold {
+		if latestRoot && err == verify.ErrRoleThreshold {
 			// Root was updated with new keys, so our local metadata is no
 			// longer validating. Read only the versions from the local metadata
 			// and re-download everything.
@@ -162,7 +161,7 @@ func (c *Client) update(latestRoot bool) (data.Files, error) {
 	if err != nil {
 		// ErrRoleThreshold could indicate timestamp keys have been
 		// revoked, so retry with the latest root.json
-		if isDecodeFailedWithErr(err, signed.ErrRoleThreshold) && !latestRoot {
+		if isDecodeFailedWithErr(err, verify.ErrRoleThreshold) && !latestRoot {
 			return c.updateWithLatestRoot(nil)
 		}
 		return nil, err
@@ -189,7 +188,7 @@ func (c *Client) update(latestRoot bool) (data.Files, error) {
 	if err != nil {
 		// ErrRoleThreshold could indicate snapshot keys have been
 		// revoked, so retry with the latest root.json
-		if isDecodeFailedWithErr(err, signed.ErrRoleThreshold) && !latestRoot {
+		if isDecodeFailedWithErr(err, verify.ErrRoleThreshold) && !latestRoot {
 			return c.updateWithLatestRoot(nil)
 		}
 		return nil, err
@@ -267,7 +266,7 @@ func (c *Client) getLocalMeta() error {
 		if err := json.Unmarshal(s.Signed, root); err != nil {
 			return err
 		}
-		c.db = keys.NewDB()
+		c.db = verify.NewDB()
 		for id, k := range root.Keys {
 			if err := c.db.AddKey(id, k); err != nil {
 				return err
@@ -278,7 +277,7 @@ func (c *Client) getLocalMeta() error {
 				return err
 			}
 		}
-		if err := signed.Verify(s, "root", 0, c.db); err != nil {
+		if err := c.db.Verify(s, "root", 0); err != nil {
 			return err
 		}
 		c.consistentSnapshot = root.ConsistentSnapshot
@@ -288,7 +287,7 @@ func (c *Client) getLocalMeta() error {
 
 	if snapshotJSON, ok := meta["snapshot.json"]; ok {
 		snapshot := &data.Snapshot{}
-		if err := signed.UnmarshalTrusted(snapshotJSON, snapshot, "snapshot", c.db); err != nil {
+		if err := verify.UnmarshalTrusted(snapshotJSON, snapshot, "snapshot", c.db); err != nil {
 			return err
 		}
 		c.snapshotVer = snapshot.Version
@@ -296,7 +295,7 @@ func (c *Client) getLocalMeta() error {
 
 	if targetsJSON, ok := meta["targets.json"]; ok {
 		targets := &data.Targets{}
-		if err := signed.UnmarshalTrusted(targetsJSON, targets, "targets", c.db); err != nil {
+		if err := verify.UnmarshalTrusted(targetsJSON, targets, "targets", c.db); err != nil {
 			return err
 		}
 		c.targetsVer = targets.Version
@@ -305,7 +304,7 @@ func (c *Client) getLocalMeta() error {
 
 	if timestampJSON, ok := meta["timestamp.json"]; ok {
 		timestamp := &data.Timestamp{}
-		if err := signed.UnmarshalTrusted(timestampJSON, timestamp, "timestamp", c.db); err != nil {
+		if err := verify.UnmarshalTrusted(timestampJSON, timestamp, "timestamp", c.db); err != nil {
 			return err
 		}
 		c.timestampVer = timestamp.Version
@@ -454,7 +453,7 @@ func (c *Client) downloadMeta(name string, m data.FileMeta) ([]byte, error) {
 // decodeRoot decodes and verifies root metadata.
 func (c *Client) decodeRoot(b json.RawMessage) error {
 	root := &data.Root{}
-	if err := signed.Unmarshal(b, root, "root", c.rootVer, c.db); err != nil {
+	if err := verify.Unmarshal(b, root, "root", c.rootVer, c.db); err != nil {
 		return ErrDecodeFailed{"root.json", err}
 	}
 	c.rootVer = root.Version
@@ -466,7 +465,7 @@ func (c *Client) decodeRoot(b json.RawMessage) error {
 // root and targets file meta.
 func (c *Client) decodeSnapshot(b json.RawMessage) (data.FileMeta, data.FileMeta, error) {
 	snapshot := &data.Snapshot{}
-	if err := signed.Unmarshal(b, snapshot, "snapshot", c.snapshotVer, c.db); err != nil {
+	if err := verify.Unmarshal(b, snapshot, "snapshot", c.snapshotVer, c.db); err != nil {
 		return data.FileMeta{}, data.FileMeta{}, ErrDecodeFailed{"snapshot.json", err}
 	}
 	c.snapshotVer = snapshot.Version
@@ -477,7 +476,7 @@ func (c *Client) decodeSnapshot(b json.RawMessage) (data.FileMeta, data.FileMeta
 // returns updated targets.
 func (c *Client) decodeTargets(b json.RawMessage) (data.Files, error) {
 	targets := &data.Targets{}
-	if err := signed.Unmarshal(b, targets, "targets", c.targetsVer, c.db); err != nil {
+	if err := verify.Unmarshal(b, targets, "targets", c.targetsVer, c.db); err != nil {
 		return nil, ErrDecodeFailed{"targets.json", err}
 	}
 	updatedTargets := make(data.Files)
@@ -498,7 +497,7 @@ func (c *Client) decodeTargets(b json.RawMessage) (data.Files, error) {
 // new snapshot file meta.
 func (c *Client) decodeTimestamp(b json.RawMessage) (data.FileMeta, error) {
 	timestamp := &data.Timestamp{}
-	if err := signed.Unmarshal(b, timestamp, "timestamp", c.timestampVer, c.db); err != nil {
+	if err := verify.Unmarshal(b, timestamp, "timestamp", c.timestampVer, c.db); err != nil {
 		return data.FileMeta{}, ErrDecodeFailed{"timestamp.json", err}
 	}
 	c.timestampVer = timestamp.Version

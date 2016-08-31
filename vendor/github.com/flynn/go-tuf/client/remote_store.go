@@ -8,12 +8,24 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type HTTPRemoteOptions struct {
 	MetadataPath string
 	TargetsPath  string
 	UserAgent    string
+	Retries      *HTTPRemoteRetries
+}
+
+type HTTPRemoteRetries struct {
+	Delay time.Duration
+	Total time.Duration
+}
+
+var DefaultHTTPRetries = &HTTPRemoteRetries{
+	Delay: time.Second,
+	Total: 10 * time.Second,
 }
 
 func HTTPRemoteStore(baseURL string, opts *HTTPRemoteOptions) (RemoteStore, error) {
@@ -51,7 +63,17 @@ func (h *httpRemoteStore) get(s string) (io.ReadCloser, int64, error) {
 	if h.opts.UserAgent != "" {
 		req.Header.Set("User-Agent", h.opts.UserAgent)
 	}
-	res, err := http.DefaultClient.Do(req)
+	var res *http.Response
+	if r := h.opts.Retries; r != nil {
+		for start := time.Now(); time.Since(start) < r.Total; time.Sleep(r.Delay) {
+			res, err = http.DefaultClient.Do(req)
+			if err == nil && (res.StatusCode < 500 || res.StatusCode > 599) {
+				break
+			}
+		}
+	} else {
+		res, err = http.DefaultClient.Do(req)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
