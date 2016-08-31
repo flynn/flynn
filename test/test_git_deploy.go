@@ -55,22 +55,7 @@ func (s *GitDeploySuite) TestEmptyRelease(t *c.C) {
 }
 
 func (s *GitDeploySuite) TestBuildCaching(t *c.C) {
-	r := s.newGitRepo(t, "build-cache")
-	t.Assert(r.flynn("create"), Succeeds)
-	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
-
-	r.git("commit", "-m", "bump", "--allow-empty")
-	push := r.git("push", "flynn", "master")
-	t.Assert(push, Succeeds)
-	t.Assert(push, c.Not(OutputContains), "cached")
-
-	r.git("commit", "-m", "bump", "--allow-empty")
-	push = r.git("push", "flynn", "master")
-	t.Assert(push, SuccessfulOutputContains, "cached: 0")
-
-	r.git("commit", "-m", "bump", "--allow-empty")
-	push = r.git("push", "flynn", "master")
-	t.Assert(push, SuccessfulOutputContains, "cached: 1")
+	s.testBuildCaching(t)
 }
 
 func (s *GitDeploySuite) TestAppRecreation(t *c.C) {

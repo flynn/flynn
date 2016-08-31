@@ -276,6 +276,25 @@ func (h *Helper) buildDockerImage(t *c.C, repo string, lines ...string) {
 	t.Assert(run(t, cmd), Succeeds)
 }
 
+func (h *Helper) testBuildCaching(t *c.C) {
+	r := h.newGitRepo(t, "build-cache")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	r.git("commit", "-m", "bump", "--allow-empty")
+	push := r.git("push", "flynn", "master")
+	t.Assert(push, Succeeds)
+	t.Assert(push, c.Not(OutputContains), "cached")
+
+	r.git("commit", "-m", "bump", "--allow-empty")
+	push = r.git("push", "flynn", "master")
+	t.Assert(push, SuccessfulOutputContains, "cached: 0")
+
+	r.git("commit", "-m", "bump", "--allow-empty")
+	push = r.git("push", "flynn", "master")
+	t.Assert(push, SuccessfulOutputContains, "cached: 1")
+}
+
 type gitRepo struct {
 	dir string
 	t   *c.C

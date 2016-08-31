@@ -92,6 +92,9 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	t.Assert(r.git("commit", "--allow-empty", "-m", "foo"), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 
+	// test that build caching still works
+	s.testBuildCaching(t)
+
 	// test that exporting the app works
 	t.Assert(r.flynn("export", "--file", "/dev/null"), Succeeds)
 
