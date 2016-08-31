@@ -1,16 +1,16 @@
-// Copyright 2012 The Go Authors. All rights reserved.
+// Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build amd64,!gccgo,!appengine
+// +build arm,!gccgo,!appengine
 
 package poly1305
 
-// This function is implemented in poly1305_amd64.s
+// This function is implemented in poly1305_arm.s
 
 //go:noescape
 
-func poly1305(out *[16]byte, m *byte, mlen uint64, key *[32]byte)
+func poly1305_auth_armv6(out *[16]byte, m *byte, mlen uint32, key *[32]byte)
 
 // Sum generates an authenticator for m using a one-time key and puts the
 // 16-byte result into out. Authenticating two different messages with the same
@@ -20,5 +20,5 @@ func Sum(out *[16]byte, m []byte, key *[32]byte) {
 	if len(m) > 0 {
 		mPtr = &m[0]
 	}
-	poly1305(out, mPtr, uint64(len(m)), key)
+	poly1305_auth_armv6(out, mPtr, uint32(len(m)), key)
 }

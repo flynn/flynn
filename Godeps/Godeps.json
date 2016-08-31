@@ -765,23 +765,19 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/client",
-			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
+			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/data",
-			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
-		},
-		{
-			"ImportPath": "github.com/flynn/go-tuf/keys",
-			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
-		},
-		{
-			"ImportPath": "github.com/flynn/go-tuf/signed",
-			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
+			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/util",
-			"Rev": "0bb0dc9389665565aff2076752231214bb68a6c4"
+			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-tuf/verify",
+			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
 		},
 		{
 			"ImportPath": "github.com/flynn/oauth2",
@@ -1134,24 +1130,36 @@
 			"Rev": "a57a12c1b1d8aa37cf2f9da4fa7657b1f1fed88c"
 		},
 		{
+			"ImportPath": "golang.org/x/crypto/curve25519",
+			"Rev": "b13fc1fd382d01861b16b2e6474487d3d4d27f20"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ed25519",
+			"Rev": "b13fc1fd382d01861b16b2e6474487d3d4d27f20"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ed25519/internal/edwards25519",
+			"Rev": "b13fc1fd382d01861b16b2e6474487d3d4d27f20"
+		},
+		{
 			"ImportPath": "golang.org/x/crypto/nacl/secretbox",
-			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
+			"Rev": "b13fc1fd382d01861b16b2e6474487d3d4d27f20"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/poly1305",
-			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
+			"Rev": "b13fc1fd382d01861b16b2e6474487d3d4d27f20"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/salsa20/salsa",
-			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
+			"Rev": "b13fc1fd382d01861b16b2e6474487d3d4d27f20"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ssh",
-			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
+			"Rev": "b13fc1fd382d01861b16b2e6474487d3d4d27f20"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ssh/agent",
-			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
+			"Rev": "b13fc1fd382d01861b16b2e6474487d3d4d27f20"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",

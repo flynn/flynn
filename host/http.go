@@ -285,6 +285,7 @@ func (h *jobAPI) PullBinariesAndConfig(w http.ResponseWriter, r *http.Request, p
 	}
 	opts := &tuf.HTTPRemoteOptions{
 		UserAgent: fmt.Sprintf("flynn-host/%s %s-%s pull", version.String(), runtime.GOOS, runtime.GOARCH),
+		Retries:   tuf.DefaultHTTPRetries,
 	}
 	log.Info("creating remote TUF store")
 	remote, err := tuf.HTTPRemoteStore(query.Get("repository"), opts)

@@ -87,6 +87,7 @@ func (u *Updater) update() error {
 	plat := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
 	opts := &tuf.HTTPRemoteOptions{
 		UserAgent: fmt.Sprintf("flynn-cli/%s %s", version.String(), plat),
+		Retries:   tuf.DefaultHTTPRetries,
 	}
 	remote, err := tuf.HTTPRemoteStore(u.repo, opts)
 	if err != nil {

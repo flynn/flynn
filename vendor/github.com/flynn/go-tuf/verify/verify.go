@@ -1,25 +1,12 @@
-package signed
+package verify
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 	"time"
 
-	"github.com/agl/ed25519"
 	"github.com/flynn/go-tuf/data"
-	"github.com/flynn/go-tuf/keys"
 	"github.com/tent/canonical-json-go"
-)
-
-var (
-	ErrMissingKey    = errors.New("tuf: missing key")
-	ErrNoSignatures  = errors.New("tuf: data has no signatures")
-	ErrInvalid       = errors.New("tuf: signature verification failed")
-	ErrWrongMethod   = errors.New("tuf: invalid signature type")
-	ErrUnknownRole   = errors.New("tuf: unknown role")
-	ErrRoleThreshold = errors.New("tuf: valid signatures did not meet threshold")
-	ErrWrongType     = errors.New("tuf: meta file has wrong type")
 )
 
 type signedMeta struct {
@@ -28,8 +15,8 @@ type signedMeta struct {
 	Version int       `json:"version"`
 }
 
-func Verify(s *data.Signed, role string, minVersion int, db *keys.DB) error {
-	if err := VerifySignatures(s, role, db); err != nil {
+func (db *DB) Verify(s *data.Signed, role string, minVersion int) error {
+	if err := db.VerifySignatures(s, role); err != nil {
 		return err
 	}
 
@@ -38,7 +25,7 @@ func Verify(s *data.Signed, role string, minVersion int, db *keys.DB) error {
 		return err
 	}
 	if strings.ToLower(sm.Type) != strings.ToLower(role) {
-		return ErrWrongType
+		return ErrWrongMetaType
 	}
 	if IsExpired(sm.Expires) {
 		return ErrExpired{sm.Expires}
@@ -54,7 +41,7 @@ var IsExpired = func(t time.Time) bool {
 	return t.Sub(time.Now()) <= 0
 }
 
-func VerifySignatures(s *data.Signed, role string, db *keys.DB) error {
+func (db *DB) VerifySignatures(s *data.Signed, role string) error {
 	if len(s.Signatures) == 0 {
 		return ErrNoSignatures
 	}
@@ -74,15 +61,7 @@ func VerifySignatures(s *data.Signed, role string, db *keys.DB) error {
 	}
 
 	valid := make(map[string]struct{})
-	var sigBytes [ed25519.SignatureSize]byte
 	for _, sig := range s.Signatures {
-		if _, ok := Verifiers[sig.Method]; !ok {
-			return ErrWrongMethod
-		}
-		if len(sig.Signature) != len(sigBytes) {
-			return ErrInvalid
-		}
-
 		if !roleData.ValidKey(sig.KeyID) {
 			continue
 		}
@@ -91,8 +70,7 @@ func VerifySignatures(s *data.Signed, role string, db *keys.DB) error {
 			continue
 		}
 
-		copy(sigBytes[:], sig.Signature)
-		if err := Verifiers[sig.Method].Verify(key.Public[:], msg, sigBytes[:]); err != nil {
+		if err := Verifiers[key.Type].Verify(key.Value.Public, msg, sig.Signature); err != nil {
 			return err
 		}
 		valid[sig.KeyID] = struct{}{}
@@ -104,23 +82,23 @@ func VerifySignatures(s *data.Signed, role string, db *keys.DB) error {
 	return nil
 }
 
-func Unmarshal(b []byte, v interface{}, role string, minVersion int, db *keys.DB) error {
+func Unmarshal(b []byte, v interface{}, role string, minVersion int, db *DB) error {
 	s := &data.Signed{}
 	if err := json.Unmarshal(b, s); err != nil {
 		return err
 	}
-	if err := Verify(s, role, minVersion, db); err != nil {
+	if err := db.Verify(s, role, minVersion); err != nil {
 		return err
 	}
 	return json.Unmarshal(s.Signed, v)
 }
 
-func UnmarshalTrusted(b []byte, v interface{}, role string, db *keys.DB) error {
+func UnmarshalTrusted(b []byte, v interface{}, role string, db *DB) error {
 	s := &data.Signed{}
 	if err := json.Unmarshal(b, s); err != nil {
 		return err
 	}
-	if err := VerifySignatures(s, role, db); err != nil {
+	if err := db.VerifySignatures(s, role); err != nil {
 		return err
 	}
 	return json.Unmarshal(s.Signed, v)

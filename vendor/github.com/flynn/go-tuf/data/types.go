@@ -4,12 +4,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"sync"
 	"time"
 
-	"github.com/tent/canonical-json-go"
+	cjson "github.com/tent/canonical-json-go"
 )
 
-const KeyIDLength = sha256.Size * 2
+const (
+	KeyIDLength            = sha256.Size * 2
+	KeyTypeEd25519         = "ed25519"
+	KeyTypeECDSA_SHA2_P256 = "ecdsa-sha2-nistp256"
+)
 
 type Signed struct {
 	Signed     json.RawMessage `json:"signed"`
@@ -25,21 +30,22 @@ type Signature struct {
 type Key struct {
 	Type  string   `json:"keytype"`
 	Value KeyValue `json:"keyval"`
+
+	id     string
+	idOnce sync.Once
 }
 
 func (k *Key) ID() string {
-	// create a copy so the private key is not included
-	data, _ := cjson.Marshal(&Key{
-		Type:  k.Type,
-		Value: KeyValue{Public: k.Value.Public},
+	k.idOnce.Do(func() {
+		data, _ := cjson.Marshal(k)
+		digest := sha256.Sum256(data)
+		k.id = hex.EncodeToString(digest[:])
 	})
-	digest := sha256.Sum256(data)
-	return hex.EncodeToString(digest[:])
+	return k.id
 }
 
 type KeyValue struct {
-	Public  HexBytes `json:"public"`
-	Private HexBytes `json:"private,omitempty"`
+	Public HexBytes `json:"public"`
 }
 
 func DefaultExpires(role string) time.Time {
