@@ -764,13 +764,28 @@ func (p *Process) userExists() (bool, error) {
 	}
 	defer session.Close()
 
-	var entry struct {
-		Retval bson.M `bson:"retval"`
+	type user struct {
+		ID       string `bson:"_id"`
+		User     string `bson:"user"`
+		Database string `bson:"db"`
 	}
-	if err := session.Run(bson.M{"usersInfo": bson.M{"user": "flynn", "db": "admin"}}, &entry); err != nil {
+
+	var userInfo struct {
+		Users []user `bson:"users"`
+		Ok    int    `bson:"ok"`
+	}
+
+	if err := session.DB("admin").Run(bson.D{{"usersInfo", bson.M{"user": "flynn", "db": "admin"}}}, &userInfo); err != nil {
 		return false, err
 	}
-	return entry.Retval != nil, nil
+
+	for _, u := range userInfo.Users {
+		if u.User == "flynn" && u.Database == "admin" {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (p *Process) waitForSyncInner(downstream *discoverd.Instance, stopCh, doneCh chan struct{}) {

@@ -412,6 +412,7 @@
     "release": {
       "env": {
         "FLYNN_MONGO": "mongodb",
+        "MONGO_DATABASE": "admin",
         "MONGO_HOST": "leader.mongodb.discoverd",
         "MONGO_USER": "flynn",
         "MONGO_PWD": "{{ (index .StepData \"mongodb-password\").Data }}",
