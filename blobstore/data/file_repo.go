@@ -169,6 +169,34 @@ func (r *FileRepo) ListFilesExcludingDefaultBackend(prefix string) ([]BackendFil
 	return res, rows.Err()
 }
 
+func (r *FileRepo) ListDeletedFilesForCleanup() ([]BackendFile, error) {
+	rows, err := r.db.Query(
+		"SELECT file_id, external_id, backend, name FROM files WHERE backend != 'postgres' AND deleted_at IS NOT NULL",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []BackendFile
+	for rows.Next() {
+		var info backend.FileInfo
+		var backendName string
+		var externalID *string
+		if rows.Scan(&info.ID, &externalID, &backendName, &info.Name); err != nil {
+			return nil, err
+		}
+		if externalID != nil {
+			info.ExternalID = *externalID
+		}
+		f := BackendFile{FileInfo: info}
+		f.Backend, _ = r.getBackend(backendName)
+		res = append(res, f)
+	}
+
+	return res, rows.Err()
+}
+
 // Get is like Open, except the FileStream is not populated (useful for HEAD requests)
 func (r *FileRepo) Get(name string, body bool) (*backend.File, error) {
 	tx, err := r.db.Begin()
@@ -328,10 +356,31 @@ create:
 			}
 		} else {
 			// file exists, not appending, overwrite by deleting
-			err = tx.Exec("UPDATE files SET deleted_at = now() WHERE name = $1 AND deleted_at IS NULL", name)
-			if err != nil {
+			var di backend.FileInfo
+			var externalID *string
+			var backendName string
+			if err := tx.QueryRow(
+				"UPDATE files SET deleted_at = now() WHERE name = $1 AND deleted_at IS NULL RETURNING file_id, external_id, backend", name,
+			).Scan(&di.ID, &externalID, &backendName); err != nil {
 				tx.Rollback()
 				return err
+			}
+			if externalID != nil {
+				di.ExternalID = *externalID
+			}
+			// delete old file from backend
+			if err := func() error {
+				if backendName == "postgres" {
+					// no need to call delete, it is done automatically by a trigger
+					return nil
+				}
+				b, err := r.getBackend(backendName)
+				if err != nil {
+					return err
+				}
+				return b.Delete(nil, di)
+			}(); err != nil {
+				log.Printf("Error deleting %s (%s) from backend %s: %s", di.ExternalID, name, backendName, err)
 			}
 			goto create
 		}
