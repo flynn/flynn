@@ -174,6 +174,7 @@ install_packages() {
     "docker-engine=1.9.1-0~trusty"
     "make"
     "mercurial"
+    "squashfs-tools"
     "tup"
     "ubuntu-zfs"
     "vim-tiny"
