@@ -2,12 +2,18 @@ package downloader
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"syscall"
 
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pkg/tufutil"
 	tuf "github.com/flynn/go-tuf/client"
 )
@@ -26,11 +32,12 @@ var config = []string{
 // Downloader downloads versioned files using a tuf client
 type Downloader struct {
 	client  *tuf.Client
+	vman    *volumemanager.Manager
 	version string
 }
 
-func New(client *tuf.Client, version string) *Downloader {
-	return &Downloader{client, version}
+func New(client *tuf.Client, vman *volumemanager.Manager, version string) *Downloader {
+	return &Downloader{client, vman, version}
 }
 
 // DownloadBinaries downloads the Flynn binaries using the tuf client to the
@@ -73,6 +80,94 @@ func (d *Downloader) DownloadConfig(dir string) (map[string]string, error) {
 		paths[conf] = path
 	}
 	return paths, nil
+}
+
+func (d *Downloader) DownloadImages(info chan *ct.ImagePullInfo) error {
+	defer close(info)
+
+	path := filepath.Join(d.version, "images.json.gz")
+	tmp, err := tufutil.Download(d.client, path)
+	if err != nil {
+		return err
+	}
+	defer tmp.Close()
+
+	gz, err := gzip.NewReader(tmp)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	var images map[string]*ct.Artifact
+	if err := json.NewDecoder(gz).Decode(&images); err != nil {
+		return err
+	}
+
+	for _, image := range images {
+		if err := d.downloadImage(image, info); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (d *Downloader) downloadImage(artifact *ct.Artifact, info chan *ct.ImagePullInfo) error {
+	info <- &ct.ImagePullInfo{
+		Name:     artifact.Meta["flynn.component"],
+		Type:     ct.ImagePullTypeImage,
+		Artifact: artifact,
+	}
+
+	for _, rootfs := range artifact.Manifest.Rootfs {
+		for _, layer := range rootfs.Layers {
+			if layer.Type != ct.ImageLayerTypeSquashfs {
+				continue
+			}
+
+			info <- &ct.ImagePullInfo{
+				Name:  artifact.Meta["flynn.component"],
+				Type:  ct.ImagePullTypeLayer,
+				Layer: layer,
+			}
+
+			if err := d.downloadSquashfsLayer(layer, artifact.LayerURL(layer)); err != nil {
+				return fmt.Errorf("error downloading layer: %s", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (d *Downloader) downloadSquashfsLayer(layer *ct.ImageLayer, layerURL string) error {
+	if vol := d.vman.GetVolume(layer.ID); vol != nil {
+		return nil
+	}
+
+	u, err := url.Parse(layerURL)
+	if err != nil {
+		return err
+	}
+
+	target := u.Query().Get("target")
+	if target == "" {
+		return fmt.Errorf("missing target param in URL: %s", layerURL)
+	}
+
+	tmp, err := tufutil.Download(d.client, target)
+	if err != nil {
+		return err
+	}
+	defer tmp.Close()
+
+	_, err = d.vman.ImportVolume("default", tmp, &volume.Info{
+		ID:         layer.ID,
+		Size:       layer.Length,
+		FSType:     "squashfs",
+		MountFlags: syscall.MS_RDONLY,
+	})
+	return err
 }
 
 func (d *Downloader) downloadGzippedFile(name, dir string, versionSuffix bool) (string, error) {

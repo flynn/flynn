@@ -23,22 +23,15 @@ usage: $0 [options] TUF_DIR
 
 OPTIONS:
   -h, --help      Show this message
-  --no-compress   Don't compress exported images
 USAGE
 }
 
 main() {
-  local compress=true
-
   while true; do
     case "$1" in
       -h | --help)
         usage
         exit 0
-        ;;
-      --no-compress)
-        compress=false
-        shift
         ;;
       *)
         break
@@ -65,6 +58,9 @@ main() {
   cd "${tuf_dir}"
   tuf clean
 
+  # trace commands from here on out
+  set -x
+
   # add the flynn-host binary at the top level so it can be found by the install script
   cp "${ROOT}/host/bin/flynn-host.gz" "staged/targets/flynn-host.gz"
 
@@ -76,7 +72,7 @@ main() {
   gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/${version}/flynn-init.gz"
   gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/${version}/upstart.conf.gz"
   gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/${version}/bootstrap-manifest.json.gz"
-  gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/${version}/version.json.gz"
+  gzip -9 --stdout "${ROOT}/images.json"                 > "staged/targets/${version}/images.json.gz"
 
   for f in ${ROOT}/cli/bin/flynn-{linux-amd64,linux-386,darwin-amd64,freebsd-amd64,windows-amd64,windows-386}; do
     local name="$(basename "${f}").gz"
@@ -84,11 +80,7 @@ main() {
   done
   tuf add --custom="{\"version\": \"${version}\"}"
 
-  local export_args=()
-  if ! $compress; then
-    export_args+=("--no-compress")
-  fi
-  "${ROOT}/util/release/flynn-release" export ${export_args[@]} "${ROOT}/version.json" "staged/targets"
+  "${ROOT}/util/release/flynn-release" export "${ROOT}/images.json" "staged/targets"
   tuf add
 
   tuf snapshot

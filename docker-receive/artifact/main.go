@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha512"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -86,8 +84,7 @@ func run(url string) error {
 	if err != nil {
 		return err
 	}
-	imageHash := sha512.Sum512(imageData)
-	imageURL := fmt.Sprintf("http://blobstore.discoverd/docker-receive/images/%s.json", hex.EncodeToString(imageHash[:]))
+	imageURL := fmt.Sprintf("http://blobstore.discoverd/docker-receive/images/%s.json", image.ID())
 
 	if err := upload(bytes.NewReader(imageData), imageURL); err != nil {
 		return err

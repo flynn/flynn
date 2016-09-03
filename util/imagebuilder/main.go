@@ -89,6 +89,9 @@ func (l *layerStore) Save(id, path string, layer *ct.ImageLayer) error {
 	if err := os.Rename(path, l.layerPath(layer)); err != nil {
 		return err
 	}
+	if err := os.Chmod(l.layerPath(layer), 0644); err != nil {
+		return err
+	}
 	f, err := os.Create(l.jsonPath(id))
 	if err != nil {
 		return err
@@ -110,5 +113,5 @@ func (l *layerStore) jsonPath(id string) string {
 }
 
 func (l *layerStore) layerPath(layer *ct.ImageLayer) string {
-	return filepath.Join(l.root, layer.Hashes["sha512"]+".squashfs")
+	return filepath.Join(l.root, layer.ID+".squashfs")
 }

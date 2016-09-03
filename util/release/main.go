@@ -12,14 +12,13 @@ Usage:
   flynn-release manifest [--output=<dest>] [--image-dir=<dir>] [--image-repository=<url>] [--id-file=<file>] <template>
   flynn-release vagrant <url> <checksum> <version> <provider>
   flynn-release amis <version> <ids>
-  flynn-release export [--no-compress] <manifest> <dir>
+  flynn-release export <manifest> <dir>
 
 Options:
   -o --output=<dest>           output destination file ("-" for stdout) [default: -]
   -i --id-file=<file>          JSON file containing ID mappings
   -r --image-repository=<url>  the image repository URL [default: https://dl.flynn.io/images]
   -d --image-dir=<dir>         the image manifest directory
-  --no-compress                don't compress exported images
 `
 	args, _ := docopt.Parse(usage, nil, true, "", false)
 

@@ -15,12 +15,11 @@ import (
 	"sync"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/downloader"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/api"
 	"github.com/flynn/flynn/host/volume/manager"
-	"github.com/flynn/flynn/pinkerton"
-	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/keepalive"
@@ -241,19 +240,24 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 	defer os.Remove(tufDB)
 
-	info := make(chan layer.PullInfo)
+	query := r.URL.Query()
+
+	log.Info("initializing TUF client")
+	client, err := newTufClient(tufDB, query.Get("repository"))
+	if err != nil {
+		log.Error("error initializing TUF client", "err", err)
+		httphelper.Error(w, err)
+		return
+	}
+
+	info := make(chan *ct.ImagePullInfo)
 	stream := sse.NewStream(w, info, nil)
 	go stream.Serve()
 
+	d := downloader.New(client, h.host.vman, query.Get("version"))
+
 	log.Info("pulling images")
-	if err := pinkerton.PullImages(
-		tufDB,
-		r.URL.Query().Get("repository"),
-		r.URL.Query().Get("driver"),
-		r.URL.Query().Get("root"),
-		r.URL.Query().Get("version"),
-		info,
-	); err != nil {
+	if err := d.DownloadImages(info); err != nil {
 		log.Error("error pulling images", "err", err)
 		stream.CloseWithError(err)
 		return
@@ -276,26 +280,15 @@ func (h *jobAPI) PullBinariesAndConfig(w http.ResponseWriter, r *http.Request, p
 
 	query := r.URL.Query()
 
-	log.Info("creating local TUF store")
-	local, err := tuf.FileLocalStore(tufDB)
+	log.Info("initializing TUF client")
+	client, err := newTufClient(tufDB, query.Get("repository"))
 	if err != nil {
-		log.Error("error creating local TUF store", "err", err)
+		log.Error("error initializing TUF client", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
-	opts := &tuf.HTTPRemoteOptions{
-		UserAgent: fmt.Sprintf("flynn-host/%s %s-%s pull", version.String(), runtime.GOOS, runtime.GOARCH),
-		Retries:   tuf.DefaultHTTPRetries,
-	}
-	log.Info("creating remote TUF store")
-	remote, err := tuf.HTTPRemoteStore(query.Get("repository"), opts)
-	if err != nil {
-		log.Error("error creating remote TUF store", "err", err)
-		httphelper.Error(w, err)
-		return
-	}
-	client := tuf.NewClient(local, remote)
-	d := downloader.New(client, query.Get("version"))
+
+	d := downloader.New(client, h.host.vman, query.Get("version"))
 
 	log.Info("downloading binaries")
 	paths, err := d.DownloadBinaries(query.Get("bin-dir"))
@@ -518,6 +511,22 @@ func (h *jobAPI) Update(w http.ResponseWriter, req *http.Request, _ httprouter.P
 		log.Info("exiting")
 		os.Exit(0)
 	})
+}
+
+func newTufClient(tufDB, repository string) (*tuf.Client, error) {
+	local, err := tuf.FileLocalStore(tufDB)
+	if err != nil {
+		return nil, err
+	}
+	opts := &tuf.HTTPRemoteOptions{
+		UserAgent: fmt.Sprintf("flynn-host/%s %s-%s pull", version.String(), runtime.GOOS, runtime.GOARCH),
+		Retries:   tuf.DefaultHTTPRetries,
+	}
+	remote, err := tuf.HTTPRemoteStore(repository, opts)
+	if err != nil {
+		return nil, err
+	}
+	return tuf.NewClient(local, remote), nil
 }
 
 func extractTufDB(r *http.Request) (string, error) {

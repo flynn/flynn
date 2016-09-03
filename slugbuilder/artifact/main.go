@@ -95,8 +95,7 @@ func run(dir string) error {
 	if err != nil {
 		return err
 	}
-	manifestHash := sha512.Sum512(manifestData)
-	manifestURL := fmt.Sprintf("http://blobstore.discoverd/slugs/images/%s.json", hex.EncodeToString(manifestHash[:]))
+	manifestURL := fmt.Sprintf("http://blobstore.discoverd/slugs/images/%s.json", manifest.ID())
 
 	if err := upload(bytes.NewReader(manifestData), manifestURL); err != nil {
 		return err

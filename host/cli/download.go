@@ -9,8 +9,12 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/docker/go-units"
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/downloader"
-	"github.com/flynn/flynn/pinkerton"
+	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/host/volume/manager"
+	"github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
@@ -20,15 +24,14 @@ import (
 
 func init() {
 	Register("download", runDownload, `
-usage: flynn-host download [--driver=<name>] [--root=<path>] [--repository=<uri>] [--tuf-db=<path>] [--config-dir=<dir>] [--bin-dir=<dir>]
+usage: flynn-host download [--repository=<uri>] [--tuf-db=<path>] [--config-dir=<dir>] [--bin-dir=<dir>] [--volpath=<path>]
 
 Options:
-  -d --driver=<name>       image storage driver [default: aufs]
-  -r --root=<path>         image storage root [default: /var/lib/docker]
-  -u --repository=<uri>    TUF repository URI [default: https://dl.flynn.io/tuf]
+  -r --repository=<uri>    TUF repository URI [default: https://dl.flynn.io/tuf]
   -t --tuf-db=<path>       local TUF file [default: /etc/flynn/tuf.db]
   -c --config-dir=<dir>    config directory [default: /etc/flynn]
   -b --bin-dir=<dir>       binary directory [default: /usr/local/bin]
+  -v --volpath=<path>      directory to create volumes in [default: /var/lib/flynn/volumes]
 
 Download container images and Flynn binaries from a TUF repository.
 
@@ -36,11 +39,22 @@ Set FLYNN_VERSION to download an explicit version.`)
 }
 
 func runDownload(args *docopt.Args) error {
-	if err := os.MkdirAll(args.String["--root"], 0755); err != nil {
-		return fmt.Errorf("error creating root dir: %s", err)
-	}
-
 	log := log15.New()
+
+	log.Info("initializing ZFS volumes")
+	volPath := args.String["--volpath"]
+	volDB := filepath.Join(volPath, "volumes.bolt")
+	volMan := volumemanager.New(volDB, func() (volume.Provider, error) {
+		return zfs.NewProvider(&zfs.ProviderConfig{
+			DatasetName: zfs.DefaultDatasetName,
+			Make:        zfs.DefaultMakeDev(volPath, log),
+			WorkingDir:  filepath.Join(volPath, "zfs"),
+		})
+	})
+	if err := volMan.OpenDB(); err != nil {
+		log.Error("error opening volume database, make sure flynn-host is not running", "err", err)
+		return err
+	}
 
 	// create a TUF client and update it
 	log.Info("initializing TUF client")
@@ -72,19 +86,25 @@ func runDownload(args *docopt.Args) error {
 	}
 	log.Info(fmt.Sprintf("downloading components with version %s", version))
 
+	d := downloader.New(client, volMan, version)
+
 	log.Info("downloading images")
-	if err := pinkerton.PullImagesWithClient(
-		client,
-		args.String["--repository"],
-		args.String["--driver"],
-		args.String["--root"],
-		version,
-		pinkerton.InfoPrinter(false),
-	); err != nil {
+	ch := make(chan *ct.ImagePullInfo)
+	go func() {
+		for info := range ch {
+			switch info.Type {
+			case ct.ImagePullTypeImage:
+				log.Info(fmt.Sprintf("pulling %s image", info.Name))
+			case ct.ImagePullTypeLayer:
+				log.Info(fmt.Sprintf("pulling %s layer %s (%s)",
+					info.Name, info.Layer.ID, units.BytesSize(float64(info.Layer.Length))))
+			}
+		}
+	}()
+	if err := d.DownloadImages(ch); err != nil {
+		log.Error("error downloading images", "err", err)
 		return err
 	}
-
-	d := downloader.New(client, version)
 
 	log.Info(fmt.Sprintf("downloading config to %s", configDir))
 	if _, err := d.DownloadConfig(configDir); err != nil {

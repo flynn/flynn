@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/url"
 	"strings"
 	"text/template"
 
@@ -40,7 +39,7 @@ export TUF_TIMESTAMP_PASSPHRASE="flynn-test"
 export GOPATH=~/go
 src="${GOPATH}/src/github.com/flynn/flynn"
 
-# send all output to stderr so only version.json is output to stdout
+# send all output to stderr so only images.json is output to stdout
 (
 
   # rebuild components.
@@ -52,20 +51,20 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   pushd "${src}" >/dev/null
   sed "s/{{TUF-ROOT-KEYS}}/$(tuf --dir test/release root-keys)/g" host/cli/root_keys.go.tmpl > host/cli/root_keys.go
   vpkg="github.com/flynn/flynn/pkg/version"
-  go build -o host/bin/flynn-host -ldflags="-X ${vpkg}.commit notdev -X ${vpkg}.branch dev -X ${vpkg}.tag v20160711.0-test -X ${vpkg}.dirty false" ./host
+  ldflags="-X ${vpkg}.commit=notdev -X ${vpkg}.branch=dev -X ${vpkg}.tag=v20160711.0-test -X ${vpkg}.dirty=false"
+  go build -o host/bin/flynn-host -ldflags="${ldflags}" ./host
   gzip -9 --keep --force host/bin/flynn-host
   sed "s/{{FLYNN-HOST-CHECKSUM}}/$(sha512sum host/bin/flynn-host.gz | cut -d " " -f 1)/g" script/install-flynn.tmpl > script/install-flynn
 
-  # create new images
-  test/scripts/wait-for-docker
-  for name in $(docker images | grep ^flynn | awk '{print $1}'); do
-    docker build -t $name - < <(echo -e "FROM $name\nRUN /bin/true")
+  # create new image manifests by adding some metadata
+  for name in $(jq -r 'keys | .[]' images.json); do
+    jq ".[\"${name}\"].manifest + {meta: {foo: \"bar\"}}" images.json > "image/bootstrapped/${name}.json"
   done
-
-  util/release/flynn-release manifest util/release/version_template.json > version.json
+  go build -o util/release/flynn-release -ldflags="${ldflags}" ./util/release
+  util/release/flynn-release manifest --image-dir "${src}/image/bootstrapped" util/release/images_template.json > images.json
   popd >/dev/null
 
-  "${src}/script/export-components" --no-compress "${src}/test/release"
+  "${src}/script/export-components" "${src}/test/release"
   "${src}/script/release-channel" --tuf-dir "${src}/test/release" --no-sync --no-changelog "stable" "v20160711.0-test"
 
   dir=$(mktemp --directory)
@@ -83,7 +82,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
     --exec "${src}/test/bin/flynn-test-file-server"
 ) >&2
 
-cat "${src}/version.json"
+cat "${src}/images.json"
 `))
 
 var installScript = template.Must(template.New("install-script").Parse(`
@@ -121,16 +120,16 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		}
 	}()
 
-	// boot the release cluster, release components to a blobstore and output the new version.json
+	// boot the release cluster, release components to a blobstore and output the new images.json
 	releaseCluster := s.addReleaseHosts(t)
 	buildHost := releaseCluster.Instances[0]
-	var versionJSON bytes.Buffer
+	var imagesJSON bytes.Buffer
 	var script bytes.Buffer
 	slugImageID := random.UUID()
 	releaseScript.Execute(&script, struct{ ControllerKey, SlugImageID string }{releaseCluster.ControllerKey, slugImageID})
-	t.Assert(buildHost.Run("bash -ex", &tc.Streams{Stdin: &script, Stdout: &versionJSON, Stderr: logWriter}), c.IsNil)
-	var versions map[string]string
-	t.Assert(json.Unmarshal(versionJSON.Bytes(), &versions), c.IsNil)
+	t.Assert(buildHost.Run("bash -ex", &tc.Streams{Stdin: &script, Stdout: &imagesJSON, Stderr: logWriter}), c.IsNil)
+	var images map[string]*ct.Artifact
+	t.Assert(json.Unmarshal(imagesJSON.Bytes(), &images), c.IsNil)
 
 	// install Flynn from the blobstore on the vanilla host
 	blobstore := struct{ Blobstore string }{buildHost.IP + ":8080"}
@@ -147,10 +146,16 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(strings.TrimSpace(hostVersion.String()), c.Equals, "v20160711.0-test")
 
 	// check rebuilt images were downloaded
-	for name, id := range versions {
-		expected := fmt.Sprintf("%s image %s downloaded", name, id)
+	assertInstallOutput := func(format string, v ...interface{}) {
+		expected := fmt.Sprintf(format, v...)
 		if !strings.Contains(installOutput.String(), expected) {
-			t.Fatalf(`expected install to download %s %s`, name, id)
+			t.Fatalf(`expected install to output %q`, expected)
+		}
+	}
+	for name, image := range images {
+		assertInstallOutput("pulling %s image", name)
+		for _, layer := range image.Manifest.Rootfs[0].Layers {
+			assertInstallOutput("pulling %s layer %s", name, layer.ID)
 		}
 	}
 
@@ -212,9 +217,9 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(updateHost.Run("bash -ex", &tc.Streams{Stdin: &script, Stdout: out, Stderr: out}), c.IsNil)
 
 	// check rebuilt images were downloaded
-	for name := range versions {
+	for name := range images {
 		for _, host := range releaseCluster.Instances[0:2] {
-			expected := fmt.Sprintf(`"pulled image" host=%s name=%s`, host.ID, name)
+			expected := fmt.Sprintf(`"pulling %s image" host=%s`, name, host.ID)
 			if !strings.Contains(updateOutput.String(), expected) {
 				t.Fatalf(`expected update to download %s on host %s`, name, host.ID)
 			}
@@ -222,9 +227,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	}
 
 	assertImage := func(uri, image string) {
-		u, err := url.Parse(uri)
-		t.Assert(err, c.IsNil)
-		t.Assert(u.Query().Get("id"), c.Equals, versions[image])
+		t.Assert(uri, c.Equals, images[image].URI)
 	}
 
 	// check system apps were deployed correctly
@@ -232,10 +235,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		if app.ImageOnly {
 			continue // we don't deploy ImageOnly updates
 		}
-		if app.Image == "" {
-			app.Image = "flynn/" + app.Name
-		}
-		debugf(t, "checking new %s release is using image %s", app.Name, versions[app.Image])
+		debugf(t, "checking new %s release is using image %s", app.Name, images[app.Image()].URI)
 		expected := fmt.Sprintf(`"finished deploy of system app" name=%s`, app.Name)
 		if !strings.Contains(updateOutput.String(), expected) {
 			t.Fatalf(`expected update to deploy %s`, app.Name)
@@ -246,7 +246,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		artifact, err := client.GetArtifact(release.ArtifactIDs[0])
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s artifact: %+v", app.Name, artifact)
-		assertImage(artifact.URI, app.Image)
+		assertImage(artifact.URI, app.Image())
 	}
 
 	// check gitreceive has the correct slug env vars
@@ -255,7 +255,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	for _, name := range []string{"slugbuilder", "slugrunner"} {
 		artifact, err := client.GetArtifact(gitreceive.Env[strings.ToUpper(name)+"_IMAGE_ID"])
 		t.Assert(err, c.IsNil)
-		assertImage(artifact.URI, "flynn/"+name)
+		assertImage(artifact.URI, name)
 	}
 
 	// check slug based app was deployed correctly
@@ -263,12 +263,12 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(err, c.IsNil)
 	imageArtifact, err = client.GetArtifact(release.ArtifactIDs[0])
 	t.Assert(err, c.IsNil)
-	assertImage(imageArtifact.URI, "flynn/slugrunner")
+	assertImage(imageArtifact.URI, "slugrunner")
 
 	// check Redis app was deployed correctly
 	release, err = client.GetAppRelease(resource.Env["FLYNN_REDIS"])
 	t.Assert(err, c.IsNil)
 	imageArtifact, err = client.GetArtifact(release.ArtifactIDs[0])
 	t.Assert(err, c.IsNil)
-	assertImage(imageArtifact.URI, "flynn/redis")
+	assertImage(imageArtifact.URI, "redis")
 }

@@ -67,10 +67,15 @@ func interpolateManifest(imageDir, imageRepository string, src io.Reader, dest i
 			}
 
 			artifact := &ct.Artifact{
-				Type:             ct.ArtifactTypeFlynn,
-				URI:              fmt.Sprintf("%s?target=/%s/images/%s.json", imageRepository, version.String(), name),
-				Manifest:         image,
-				LayerURLTemplate: "file:///var/lib/flynn/layer-cache/{id}.squashfs",
+				Type:     ct.ArtifactTypeFlynn,
+				URI:      fmt.Sprintf("%s?target=/images/%s.json", imageRepository, image.ID()),
+				Manifest: image,
+				Meta:     map[string]string{"flynn.component": name},
+			}
+			if version.Dev() {
+				artifact.LayerURLTemplate = "file:///var/lib/flynn/layer-cache/{id}.squashfs"
+			} else {
+				artifact.LayerURLTemplate = fmt.Sprintf("%s?target=/layers/{id}.squashfs", imageRepository)
 			}
 			data, err := json.Marshal(artifact)
 			if err != nil {

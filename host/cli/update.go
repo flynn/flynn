@@ -14,8 +14,8 @@ import (
 	"syscall"
 
 	"github.com/docker/docker/pkg/term"
+	"github.com/docker/go-units"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/tufutil"
@@ -30,9 +30,7 @@ func init() {
 usage: flynn-host update [options]
 
 Options:
-  -d --driver=<name>       image storage driver [default: aufs]
-  -r --root=<path>         image storage root [default: /var/lib/docker]
-  -u --repository=<uri>    image repository URI [default: https://dl.flynn.io/tuf]
+  -r --repository=<uri>    image repository URI [default: https://dl.flynn.io/tuf]
   -t --tuf-db=<path>       local TUF file [default: /etc/flynn/tuf.db]
   -b --bin-dir=<dir>       directory to download binaries to [default: /usr/local/bin]
   -c --config-dir=<dir>    directory to download config files to [default: /etc/flynn]
@@ -138,15 +136,13 @@ func runUpdate(args *docopt.Args) error {
 	}
 
 	var mtx sync.Mutex
-	images := make(map[string]string)
+	images := make(map[string]*ct.Artifact)
 	log.Info("pulling latest images on all hosts")
 	if err := eachHost(func(host *cluster.Host, log log15.Logger) error {
 		log.Info("pulling images")
-		ch := make(chan *layer.PullInfo)
+		ch := make(chan *ct.ImagePullInfo)
 		stream, err := host.PullImages(
 			args.String["--repository"],
-			args.String["--driver"],
-			args.String["--root"],
 			version.String(),
 			bytes.NewReader(tufDB),
 			ch,
@@ -157,14 +153,16 @@ func runUpdate(args *docopt.Args) error {
 		}
 		defer stream.Close()
 		for info := range ch {
-			if info.Type == layer.TypeLayer {
-				continue
+			switch info.Type {
+			case ct.ImagePullTypeImage:
+				log.Info(fmt.Sprintf("pulling %s image", info.Name))
+				mtx.Lock()
+				images[info.Name] = info.Artifact
+				mtx.Unlock()
+			case ct.ImagePullTypeLayer:
+				log.Info(fmt.Sprintf("pulling %s layer %s (%s)",
+					info.Name, info.Layer.ID, units.BytesSize(float64(info.Layer.Length))))
 			}
-			log.Info("pulled image", "name", info.Repo)
-			imageURI := fmt.Sprintf("%s?name=%s&id=%s", args.String["--repository"], info.Repo, info.ID)
-			mtx.Lock()
-			images[info.Repo] = imageURI
-			mtx.Unlock()
 		}
 		if err := stream.Err(); err != nil {
 			log.Error("error pulling images", "err", err)
@@ -228,9 +226,9 @@ func runUpdate(args *docopt.Args) error {
 		return err
 	}
 
-	updaterImage, ok := images["flynn/updater"]
+	updaterImage, ok := images["updater"]
 	if !ok {
-		e := "missing flynn/updater image"
+		e := "missing updater image"
 		log.Error(e)
 		return errors.New(e)
 	}
@@ -240,15 +238,9 @@ func runUpdate(args *docopt.Args) error {
 		return err
 	}
 
-	// TODO: get the latest updater image manifest and use here
-	artifact := &ct.Artifact{
-		Type:     ct.ArtifactTypeFlynn,
-		URI:      updaterImage,
-		Manifest: &ct.ImageManifest{},
-	}
 	// use a flag to determine whether to use a TTY log formatter because actually
 	// assigning a TTY to the job causes reading images via stdin to fail.
-	cmd := exec.Command(artifact, "/bin/updater", fmt.Sprintf("--tty=%t", term.IsTerminal(os.Stdout.Fd())))
+	cmd := exec.Command(updaterImage, "/bin/updater", fmt.Sprintf("--tty=%t", term.IsTerminal(os.Stdout.Fd())))
 	cmd.Stdin = bytes.NewReader(imageJSON)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

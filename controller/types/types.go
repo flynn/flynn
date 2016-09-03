@@ -1,10 +1,13 @@
 package types
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flynn/flynn/host/resource"
@@ -12,6 +15,7 @@ import (
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
 	"github.com/jtacoma/uritemplates"
+	"github.com/tent/canonical-json-go"
 )
 
 const RouteParentRefPrefix = "controller/apps/"
@@ -486,6 +490,18 @@ type ImageManifest struct {
 	Meta        map[string]string           `json:"meta,omitempty"`
 	Entrypoints map[string]*ImageEntrypoint `json:"entrypoints,omitempty"`
 	Rootfs      []*ImageRootfs              `json:"rootfs,omitempty"`
+
+	id     string
+	idOnce sync.Once
+}
+
+func (i *ImageManifest) ID() string {
+	i.idOnce.Do(func() {
+		data, _ := cjson.Marshal(i)
+		digest := sha256.Sum256(data)
+		i.id = hex.EncodeToString(digest[:])
+	})
+	return i.id
 }
 
 func (m *ImageManifest) DefaultEntrypoint() *ImageEntrypoint {
@@ -524,3 +540,17 @@ type ImageLayer struct {
 	Length int64             `json:"length,omitempty"`
 	Hashes map[string]string `json:"hashes,omitempty"`
 }
+
+type ImagePullInfo struct {
+	Name     string        `json:"name"`
+	Type     ImagePullType `json:"type"`
+	Artifact *Artifact     `json:"artifact"`
+	Layer    *ImageLayer   `json:"layer"`
+}
+
+type ImagePullType string
+
+const (
+	ImagePullTypeImage ImagePullType = "image"
+	ImagePullTypeLayer ImagePullType = "layer"
+)

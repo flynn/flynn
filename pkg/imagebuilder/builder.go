@@ -163,8 +163,14 @@ func (b *Builder) mksquashfs(dir string) (string, *ct.ImageLayer, error) {
 	}
 
 	sha512 := hex.EncodeToString(h.Sum(nil))
+
+	// use a truncated sha512 as the ID to avoid long file names when
+	// downloading layers from TUF repos (which prepend the full sha512
+	// to the file name)
+	id := sha512[0:20]
+
 	return tmp.Name(), &ct.ImageLayer{
-		ID:     sha512,
+		ID:     id,
 		Type:   ct.ImageLayerTypeSquashfs,
 		Length: length,
 		Hashes: map[string]string{"sha512": sha512},

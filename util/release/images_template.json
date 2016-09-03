@@ -1,0 +1,20 @@
+{
+  "flannel":        $image_artifact[flannel],
+  "discoverd":      $image_artifact[discoverd],
+  "postgresql":     $image_artifact[postgresql],
+  "controller":     $image_artifact[controller],
+  "blobstore":      $image_artifact[blobstore],
+  "router":         $image_artifact[router],
+  "gitreceive":     $image_artifact[gitreceive],
+  "slugbuilder":    $image_artifact[slugbuilder],
+  "slugrunner":     $image_artifact[slugrunner],
+  "taffy":          $image_artifact[taffy],
+  "dashboard":      $image_artifact[dashboard],
+  "updater":        $image_artifact[updater],
+  "logaggregator":  $image_artifact[logaggregator],
+  "status":         $image_artifact[status],
+  "redis":          $image_artifact[redis],
+  "mariadb":        $image_artifact[mariadb],
+  "docker-receive": $image_artifact[docker-receive],
+  "mongodb":        $image_artifact[mongodb]
+}

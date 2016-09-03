@@ -1,13 +1,18 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 
-	"github.com/flynn/docker-utils/registry"
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cliutil"
 	"github.com/flynn/go-docopt"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 func run(cmd *exec.Cmd) {
@@ -19,40 +24,124 @@ func run(cmd *exec.Cmd) {
 }
 
 func export(args *docopt.Args) {
-	var manifest map[string]string
+	log := log15.New()
+
+	log.Info("decoding manifest")
+	var manifest map[string]*ct.Artifact
 	if err := cliutil.DecodeJSONArg(args.String["<manifest>"], &manifest); err != nil {
-		log.Fatal(err)
+		log.Error("error decoding manifest", "err", err)
+		os.Exit(1)
 	}
 
-	reg := registry.Registry{Path: args.String["<dir>"]}
-	if err := reg.Init(); err != nil {
-		log.Fatal(err)
+	exporter := Exporter{
+		dir: args.String["<dir>"],
+		log: log15.New(),
 	}
 
-	images := make([]string, 0, len(manifest))
-	for name, id := range manifest {
-		tagged := name + ":latest"
-		run(exec.Command("docker", "tag", "--force", id, tagged))
-		images = append(images, tagged)
+	log.Info(fmt.Sprintf("exporting %d images to %s", len(manifest), exporter.dir))
+	if err := exporter.Export(manifest); err != nil {
+		log.Error("error exporting images", "err", err)
+		os.Exit(1)
+	}
+}
+
+type Exporter struct {
+	dir string
+	log log15.Logger
+}
+
+func (e *Exporter) Export(manifest map[string]*ct.Artifact) error {
+	if err := os.MkdirAll(e.dir, 0755); err != nil {
+		return err
 	}
 
-	cmd := exec.Command("docker", append([]string{"save"}, images...)...)
-	cmd.Stderr = os.Stderr
-	out, err := cmd.StdoutPipe()
+	for name, artifact := range manifest {
+		e.log.Info("exporting image", "name", name)
+		if err := e.exportImage(name, artifact); err != nil {
+			e.log.Error("error exporting image", "name", name, "err", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (e *Exporter) exportImage(name string, artifact *ct.Artifact) error {
+	log := e.log.New("name", name)
+
+	for _, rootfs := range artifact.Manifest.Rootfs {
+		for _, layer := range rootfs.Layers {
+			log.Info("exporting layer", "id", layer.ID)
+			if err := e.exportLayer(layer); err != nil {
+				log.Error("error exporting layer", "id", layer.ID, "err", err)
+				return err
+			}
+		}
+	}
+
+	path := e.imagePath(artifact.Manifest.ID())
+	if _, err := os.Stat(path); err == nil {
+		log.Info("manifest already exists")
+		return nil
+	}
+
+	log.Info("writing image manifest", "path", path)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		log.Error("error writing image manifest", "path", path, "err", err)
+		return err
+	}
+	image, err := os.Create(path)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("error writing image manifest", "path", path, "err", err)
+		return err
 	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
+	if err := json.NewEncoder(image).Encode(artifact.Manifest); err != nil {
+		log.Error("error writing image manifest", "path", path, "err", err)
+		return err
 	}
-	compress := true
-	if args.Bool["--no-compress"] {
-		compress = false
+
+	return nil
+}
+
+func (e *Exporter) exportLayer(layer *ct.ImageLayer) error {
+	if _, err := os.Stat(e.layerPath(layer)); err == nil {
+		e.log.Info("layer already exists", "id", layer.ID)
+		return nil
 	}
-	if err := registry.ExtractTarWithoutTarsums(&reg, out, compress); err != nil {
-		log.Fatal(err)
+
+	if layer.Type != ct.ImageLayerTypeSquashfs {
+		return fmt.Errorf("unknown layer type %q", layer.Type)
 	}
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
+
+	src, err := os.Open(filepath.Join("/var/lib/flynn/layer-cache", layer.ID+".squashfs"))
+	if err != nil {
+		return fmt.Errorf("error opening layer %q: %s", layer.ID, err)
 	}
+	defer src.Close()
+
+	if err := os.MkdirAll(filepath.Dir(e.layerPath(layer)), 0755); err != nil {
+		return fmt.Errorf("error creating output layer: %s", err)
+	}
+	dst, err := os.Create(e.layerPath(layer))
+	if err != nil {
+		return fmt.Errorf("error creating output layer: %s", err)
+	}
+	defer dst.Close()
+
+	n, err := io.Copy(dst, src)
+	if err != nil {
+		return err
+	} else if n != layer.Length {
+		return fmt.Errorf("error copying layer: expected to write %d bytes but copied %d", layer.Length, n)
+	}
+
+	return nil
+}
+
+func (e *Exporter) imagePath(id string) string {
+	return filepath.Join(e.dir, "images", id+".json")
+}
+
+func (e *Exporter) layerPath(layer *ct.ImageLayer) string {
+	return filepath.Join(e.dir, "layers", layer.ID+".squashfs")
 }

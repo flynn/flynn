@@ -19,7 +19,10 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 	zfs "github.com/mistifyio/go-zfs"
 	"github.com/rancher/sparse-tools/sparse"
+	"gopkg.in/inconshreveable/log15.v2"
 )
+
+const DefaultDatasetName = "flynn-default"
 
 // blockSize is the block size used when creating new zvols
 const blockSize = 8 * 1024
@@ -70,6 +73,24 @@ type ProviderConfig struct {
 type MakeDev struct {
 	BackingFilename string `json:"filename"`
 	Size            int64  `json:"size"`
+}
+
+func DefaultMakeDev(volPath string, log log15.Logger) *MakeDev {
+	// use a zpool backing file size of either 70% of the device on which
+	// volumes will reside, or 100GB if that can't be determined.
+	log.Info("determining ZFS zpool size")
+	var size int64
+	var dev syscall.Statfs_t
+	if err := syscall.Statfs(volPath, &dev); err == nil {
+		size = (dev.Bsize * int64(dev.Blocks) * 7) / 10
+	} else {
+		size = 100000000000
+	}
+	log.Info(fmt.Sprintf("using ZFS zpool size %d", size))
+	return &MakeDev{
+		BackingFilename: filepath.Join(volPath, "zfs/vdev/flynn-default-zpool.vdev"),
+		Size:            size,
+	}
 }
 
 func NewProvider(config *ProviderConfig) (volume.Provider, error) {
