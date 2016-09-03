@@ -10,7 +10,7 @@ all: toolchain
 	@$(GIT_DEV) $(GO_ENV) tup
 
 release: toolchain
-	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) tup
+	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) $(GO_ENV) tup
 
 clean:
 	git clean -Xdf -e '!.tup' -e '!.vagrant' -e '!script/custom-vagrant'
