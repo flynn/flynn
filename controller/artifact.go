@@ -116,16 +116,3 @@ func (r *ArtifactRepo) ListIDs(ids ...string) (map[string]*ct.Artifact, error) {
 	}
 	return artifacts, rows.Err()
 }
-
-func scanArtifacts(rows *pgx.Rows) (interface{}, error) {
-	var artifacts []*ct.Artifact
-	for rows.Next() {
-		artifact, err := scanArtifact(rows)
-		if err != nil {
-			rows.Close()
-			return nil, err
-		}
-		artifacts = append(artifacts, artifact)
-	}
-	return artifacts, rows.Err()
-}

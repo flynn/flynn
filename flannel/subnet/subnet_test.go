@@ -139,13 +139,6 @@ func (msr *mockSubnetRegistry) WatchSubnets(since uint64, stop chan bool) (*Resp
 	}
 }
 
-func (msr *mockSubnetRegistry) hasSubnet(sn string) bool {
-	msr.mtx.RLock()
-	defer msr.mtx.RUnlock()
-	_, ok := msr.subnets[sn]
-	return ok
-}
-
 func TestAcquireLease(t *testing.T) {
 	msr := newMockSubnetRegistry(0)
 	sm, err := NewSubnetManager(msr)

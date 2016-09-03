@@ -296,7 +296,6 @@ type tcpRoute struct {
 	addr    string
 	service *tcpService
 	rp      *proxy.ReverseProxy
-	mtx     sync.RWMutex
 }
 
 func (r *tcpRoute) Serve(started chan<- error) {

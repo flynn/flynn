@@ -586,7 +586,6 @@ func (TestSuite) TestStopJob(c *C) {
 		jobs       Jobs
 		shouldStop string
 		err        string
-		jobCheck   func(*Job)
 	}
 	for _, t := range []*test{
 		{

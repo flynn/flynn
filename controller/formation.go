@@ -17,10 +17,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-type formationKey struct {
-	AppID, ReleaseID string
-}
-
 // we are wrapping the client specified channel to send formation updates in order to safely interrupt
 // `sendUpdateSince` goroutine if an unsubscribe happens before it is completed. otherwise we can get
 // a panic due to sending to a closed channel. See https://github.com/flynn/flynn/issues/2175 for more

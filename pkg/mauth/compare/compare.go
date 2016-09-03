@@ -88,7 +88,6 @@ const (
 	IntegerOpLte IntegerOp = 4
 
 	integerOpMax = 4
-	integerLen   = 9
 )
 
 type Integer struct {

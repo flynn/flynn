@@ -85,15 +85,6 @@ type Process struct {
 	cancelSyncWait func()
 }
 
-type mgoLogger struct {
-	l log15.Logger
-}
-
-func (l mgoLogger) Output(calldepth int, s string) error {
-	l.l.Debug(s)
-	return nil
-}
-
 // NewProcess returns a new instance of Process.
 func NewProcess() *Process {
 	p := &Process{
@@ -427,15 +418,6 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 	return nil
 }
 
-func (p *Process) replSetSyncFrom(upstream *discoverd.Instance) error {
-	session, err := p.connectLocal()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-	return session.Run(bson.M{"replSetSyncFrom": upstream.Addr}, nil)
-}
-
 func (p *Process) replSetGetStatus() (*replSetStatus, error) {
 	session, err := p.connectLocal()
 	if err != nil {
@@ -605,12 +587,6 @@ func (p *Process) replSetInitiate() error {
 
 func (p *Process) addr() string {
 	return net.JoinHostPort(p.Host, p.Port)
-}
-
-func httpAddr(addr string) string {
-	host, p, _ := net.SplitHostPort(addr)
-	port, _ := strconv.Atoi(p)
-	return fmt.Sprintf("%s:%d", host, port+1)
 }
 
 func (p *Process) connectLocal() (*mgo.Session, error) {
@@ -903,13 +879,6 @@ func (p *Process) xlogPosFromStatus(member string, status *replSetStatus) (xlog.
 		}
 	}
 	return p.XLog().Zero(), fmt.Errorf("error getting xlog, couldn't find member in replSetStatus")
-}
-
-func (p *Process) runCmd(cmd *exec.Cmd) error {
-	p.Logger.Debug("running command", "fn", "runCmd", "cmd", cmd.Args)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
 
 func (p *Process) writeConfig(d configData) error {

@@ -324,22 +324,6 @@ func dockerPush(client controller.Client, repo, tag string) (*ct.Artifact, error
 
 }
 
-func dockerPull(repo, digest string) error {
-	cluster, err := getCluster()
-	if err != nil {
-		return err
-	}
-	host, err := cluster.DockerPushHost()
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command("docker", "pull", fmt.Sprintf("%s/%s@%s", host, repo, digest))
-	log.Printf("flynn: pulling Docker image with %q", strings.Join(cmd.Args, " "))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
 func dockerSave(tag string, tw *backup.TarWriter, progress backup.ProgressBar) error {
 	tmp, err := ioutil.TempFile("", "flynn-docker-save")
 	if err != nil {

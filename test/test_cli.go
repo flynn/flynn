@@ -96,18 +96,6 @@ func (s *CLISuite) TestAppWithNoRemote(t *c.C) {
 	testApp(s, t, "")
 }
 
-// TODO: share with cli/key.go
-func formatKeyID(s string) string {
-	buf := make([]byte, 0, len(s)+((len(s)-2)/2))
-	for i := range s {
-		buf = append(buf, s[i])
-		if (i+1)%2 == 0 && i != len(s)-1 {
-			buf = append(buf, ':')
-		}
-	}
-	return string(buf)
-}
-
 func (s *CLISuite) TestPs(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()

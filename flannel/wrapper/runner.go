@@ -8,11 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
-	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 )
@@ -27,11 +25,6 @@ type Config struct {
 		VNI  uint `json:",omitempty"`
 		Port uint `json:",omitempty"`
 	}
-}
-
-var networkConfigAttempts = attempt.Strategy{
-	Total: 10 * time.Minute,
-	Delay: 200 * time.Millisecond,
 }
 
 const serviceName = "flannel"

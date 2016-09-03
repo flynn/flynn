@@ -31,22 +31,8 @@ func gitURL(conf *cfg.Cluster, app string) string {
 	return gitHTTPURLPre(conf.GitURL) + app + gitURLSuffix
 }
 
-func gitSSHURLPre(gitHost string) string {
-	return "ssh://git@" + gitHost + "/"
-}
-
 func gitHTTPURLPre(url string) string {
 	return url + "/"
-}
-
-func mapOutput(out []byte, sep, term string) map[string]string {
-	m := make(map[string]string)
-	lines := strings.Split(string(out), term)
-	for _, line := range lines[:len(lines)-1] { // omit trailing ""
-		parts := strings.SplitN(line, sep, 2)
-		m[parts[0]] = parts[1]
-	}
-	return m
 }
 
 type remoteApp struct {

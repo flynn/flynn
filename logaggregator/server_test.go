@@ -13,11 +13,6 @@ import (
 	. "github.com/flynn/go-check"
 )
 
-const (
-	sampleLogLine1 = `120 <40>1 2012-11-30T06:45:26+00:00 host app web.1 - [flynn seq="1"] Starting process with command bundle exec rackup config.ru -p 24405`
-	sampleLogLine2 = `79 <40>1 2012-11-30T06:45:27+00:00 host app web.2 - [flynn seq="2"] 25 yay this is a message!!!` + "\n"
-)
-
 type ServerTestSuite struct{}
 
 var _ = Suite(&ServerTestSuite{})

@@ -198,10 +198,6 @@ func (h *Helper) addHost(t *c.C, service string) *tc.Instance {
 	return h.addHosts(t, 1, false, service)[0]
 }
 
-func (h *Helper) addVanillaHost(t *c.C) *tc.Instance {
-	return h.addHosts(t, 1, true, "router-api")[0]
-}
-
 func (h *Helper) addHosts(t *c.C, count int, vanilla bool, service string) []*tc.Instance {
 	debugf(t, "adding %d hosts", count)
 
