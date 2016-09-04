@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-const (
-	httpPath = "/srpc"
-)
-
 type StreamingArgs struct {
 	A     int
 	Count int

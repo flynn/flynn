@@ -54,12 +54,10 @@ type pgDataStore struct {
 }
 
 const (
-	routeTypeHTTP              = "http"
-	routeTypeTCP               = "tcp"
-	tableNameHTTP              = "http_routes"
-	tableNameTCP               = "tcp_routes"
-	tableNameCertificates      = "certificates"
-	tableNameRoutesCertificate = "route_certificates"
+	routeTypeHTTP = "http"
+	routeTypeTCP  = "tcp"
+	tableNameHTTP = "http_routes"
+	tableNameTCP  = "tcp_routes"
 )
 
 // NewPostgresDataStore returns a DataStore that stores route information in a

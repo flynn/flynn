@@ -33,7 +33,6 @@ import (
 	"time"
 
 	sigutil "github.com/docker/docker/pkg/signal"
-	"github.com/docker/libcontainer/user"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/health"
 	"github.com/flynn/flynn/host/resource"
@@ -335,23 +334,6 @@ func runRPCServer() {
 	logger.Info("starting RPC server", "fn", "runRPCServer")
 	fdrpc.ListenAndServe(SocketPath)
 	os.Exit(70)
-}
-
-func getCredential(c *Config) (*syscall.Credential, error) {
-	if c.User == "" {
-		return nil, nil
-	}
-	users, err := user.ParsePasswdFileFilter("/etc/passwd", func(u user.User) bool {
-		return u.Name == c.User
-	})
-	if err != nil || len(users) == 0 {
-		if err == nil {
-			err = errors.New("unknown user")
-		}
-		return nil, fmt.Errorf("Unable to find user %v: %v", c.User, err)
-	}
-
-	return &syscall.Credential{Uid: uint32(users[0].Uid), Gid: uint32(users[0].Gid)}, nil
 }
 
 func setupCommon(c *Config, log log15.Logger) error {

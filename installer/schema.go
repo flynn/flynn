@@ -86,9 +86,8 @@ type AzureCluster struct {
 	Size           string     `json:"size"`
 	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
 
-	base        *BaseCluster
-	client      *azure.Client
-	startScript string
+	base   *BaseCluster
+	client *azure.Client
 }
 
 type DigitalOceanDroplet struct {
@@ -112,9 +111,8 @@ type SSHCluster struct {
 	Targets     []*TargetServer `json:"targets" ql:"-"`
 	TargetsJSON string          `json:"-"`
 
-	base       *BaseCluster
-	sshAuth    []ssh.AuthMethod
 	knownHosts *knownhosts.KnownHosts
+	base       *BaseCluster
 }
 
 type BaseCluster struct {
@@ -146,7 +144,6 @@ type BaseCluster struct {
 	pendingPrompt     *Prompt
 	promptMtx         sync.Mutex
 	aborted           bool
-	done              bool
 	passwordPromptMtx sync.Mutex
 	passwordCache     map[string]string
 	stateMtx          sync.RWMutex

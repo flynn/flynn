@@ -29,21 +29,6 @@ func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID string, state ct.Job
 	t.Assert(job.State, c.Equals, state)
 }
 
-func jobEventsEqual(expected, actual ct.JobEvents) bool {
-	for typ, events := range expected {
-		diff, ok := actual[typ]
-		if !ok {
-			return false
-		}
-		for state, count := range events {
-			if diff[state] != count {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func (s *SchedulerSuite) TestScale(t *c.C) {
 	app, release := s.createApp(t)
 

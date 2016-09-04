@@ -25,7 +25,6 @@ import (
 )
 
 type ControllerSuite struct {
-	schemaPaths []string
 	schemaCache map[string]*jsonschema.Schema
 	Helper
 }

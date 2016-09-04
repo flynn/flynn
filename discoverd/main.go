@@ -285,15 +285,6 @@ func waitHostDNSConfig() (addr string, resolvers []string) {
 	return addr, status.Network.Resolvers
 }
 
-func inPeerList(peers []string, addr string) bool {
-	for _, peer := range peers {
-		if peer == addr {
-			return true
-		}
-	}
-	return false
-}
-
 // Join the consensus set, promoting ourselves from proxy to raft node.
 func (m *Main) Promote() error {
 	m.mu.Lock()

@@ -31,11 +31,6 @@ type generator struct {
 	resourceIds map[string]string
 }
 
-type example struct {
-	name string
-	f    func()
-}
-
 func main() {
 	conf, err := loadConfigFromEnv()
 	if err != nil {

@@ -18,15 +18,12 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
 )
-
-var clusterc = cluster.NewClient()
 
 func init() {
 	log.SetFlags(0)

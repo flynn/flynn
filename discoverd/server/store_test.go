@@ -837,18 +837,3 @@ func (s *MockStore) ServiceLeader(service string) (*discoverd.Instance, error) {
 func (s *MockStore) Subscribe(service string, sendCurrent bool, kinds discoverd.EventKind, ch chan *discoverd.Event) stream.Stream {
 	return s.SubscribeFn(service, sendCurrent, kinds, ch)
 }
-
-// MustRandomPort returns a random port.
-func MustRandomPort() string {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		panic(err)
-	}
-	defer ln.Close()
-
-	_, port, err := net.SplitHostPort(ln.Addr().String())
-	if err != nil {
-		panic(err)
-	}
-	return port
-}

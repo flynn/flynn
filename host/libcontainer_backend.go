@@ -30,7 +30,6 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pinkerton"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
@@ -44,7 +43,6 @@ import (
 
 const (
 	imageRoot         = "/var/lib/docker"
-	flynnRoot         = "/var/lib/flynn"
 	containerRoot     = "/var/lib/flynn/container"
 	defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 	defaultPartition  = "user"
@@ -117,7 +115,6 @@ type LibcontainerBackend struct {
 	pinkerton *pinkerton.Context
 	ipalloc   *ipallocator.IPAllocator
 
-	ifaceMTU   int
 	bridgeName string
 	bridgeAddr net.IP
 	bridgeNet  *net.IPNet
@@ -212,11 +209,6 @@ func readDockerImageConfig(id string) (*dockerImageConfig, error) {
 		return nil, err
 	}
 	return &res.Config, nil
-}
-
-var networkConfigAttempts = attempt.Strategy{
-	Total: 10 * time.Minute,
-	Delay: 200 * time.Millisecond,
 }
 
 // ConfigureNetworking is called once during host startup and sets up the local

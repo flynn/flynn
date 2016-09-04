@@ -1,14 +1,11 @@
 package main
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/flynn/flynn/logaggregator/buffer"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
-
-var errBufferFull = errors.New("feed buffer full")
 
 // Aggregator is a log aggregation server that collects syslog messages.
 type Aggregator struct {

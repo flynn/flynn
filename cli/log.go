@@ -89,10 +89,3 @@ func runLog(args *docopt.Args, client controller.Client) error {
 		}
 	}
 }
-
-func shorten(msg string, maxLength int) string {
-	if len(msg) > maxLength {
-		return msg[:maxLength]
-	}
-	return msg
-}

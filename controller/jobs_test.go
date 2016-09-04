@@ -106,21 +106,8 @@ func (s *S) TestJobGet(c *C) {
 	}
 }
 
-func newFakeLog(r io.Reader) *fakeLog {
-	return &fakeLog{r}
-}
-
-type fakeLog struct {
-	io.Reader
-}
-
 func fakeHostID() string {
 	return random.Hex(16)
-}
-
-func (l *fakeLog) Close() error { return nil }
-func (l *fakeLog) Write([]byte) (int, error) {
-	return 0, io.ErrUnexpectedEOF
 }
 
 func (s *S) TestKillJob(c *C) {

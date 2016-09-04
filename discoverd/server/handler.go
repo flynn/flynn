@@ -89,7 +89,6 @@ type Handler struct {
 	}
 	Store interface {
 		Leader() string
-		IsLeader() bool
 		AddService(service string, config *discoverd.ServiceConfig) error
 		RemoveService(service string) error
 		SetServiceMeta(service string, meta *discoverd.ServiceMeta) error

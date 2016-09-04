@@ -89,14 +89,6 @@ func (c *AzureCluster) SetDefaultsAndValidate() error {
 	return nil
 }
 
-func (c *AzureCluster) saveField(field string, value interface{}) error {
-	c.base.installer.dbMtx.Lock()
-	defer c.base.installer.dbMtx.Unlock()
-	return c.base.installer.txExec(fmt.Sprintf(`
-  UPDATE azure_clusters SET %s = $2 WHERE ClusterID == $1
-  `, field), c.ClusterID, value)
-}
-
 func (c *AzureCluster) Run() {
 	go func() {
 		defer c.base.handleDone()

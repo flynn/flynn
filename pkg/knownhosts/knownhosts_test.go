@@ -198,7 +198,6 @@ func (S) TestPatterns(c *C) {
 }
 
 func (S) TestMixedKeyTypes(c *C) {
-	const sep = " "
 	var input bytes.Buffer
 
 	ipAddress := "192.0.2.203"

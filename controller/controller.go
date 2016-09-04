@@ -28,7 +28,6 @@ import (
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 	"github.com/flynn/que-go"
-	"github.com/jackc/pgx"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -175,13 +174,12 @@ type logClient interface {
 }
 
 type handlerConfig struct {
-	db      *postgres.DB
-	cc      utils.ClusterClient
-	lc      logClient
-	rc      routerc.Client
-	pgxpool *pgx.ConnPool
-	keys    []string
-	caCert  []byte
+	db     *postgres.DB
+	cc     utils.ClusterClient
+	lc     logClient
+	rc     routerc.Client
+	keys   []string
+	caCert []byte
 }
 
 // NOTE: this is temporary until httphelper supports custom errors

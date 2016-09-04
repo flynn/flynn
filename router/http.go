@@ -457,11 +457,6 @@ func (s *HTTPListener) findRoute(host string, path string) *httpRoute {
 	return nil
 }
 
-func failAndClose(w http.ResponseWriter, code int) {
-	w.Header().Set("Connection", "close")
-	fail(w, code)
-}
-
 func fail(w http.ResponseWriter, code int) {
 	msg := []byte(http.StatusText(code) + "\n")
 	w.Header().Set("Content-Length", strconv.Itoa(len(msg)))

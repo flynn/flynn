@@ -10,7 +10,6 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 
@@ -46,9 +45,6 @@ type Cluster struct {
 	defaultInstances []*Instance
 	releaseInstances []*Instance
 
-	discMtx sync.Mutex
-	disc    *discoverd.Client
-
 	bc     BootConfig
 	vm     *VMManager
 	out    io.Writer
@@ -73,15 +69,6 @@ func (i instances) Get(id string) (*Instance, error) {
 		}
 	}
 	return nil, fmt.Errorf("no such host: %s", id)
-}
-
-func (c *Cluster) discoverdClient(ip string) *discoverd.Client {
-	c.discMtx.Lock()
-	defer c.discMtx.Unlock()
-	if c.disc == nil {
-		c.disc = discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", ip))
-	}
-	return c.disc
 }
 
 type Streams struct {
