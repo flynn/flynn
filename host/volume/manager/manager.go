@@ -12,7 +12,6 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/flynn/flynn/host/volume"
-	"github.com/flynn/flynn/pkg/random"
 )
 
 /*
@@ -202,10 +201,6 @@ func (m *Manager) GetVolume(id string) volume.Volume {
 func (m *Manager) ImportVolume(providerID string, data io.Reader, info *volume.Info) (volume.Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-
-	if info.ID == "" {
-		info.ID = random.UUID()
-	}
 
 	if _, ok := m.volumes[info.ID]; ok {
 		return nil, ErrVolumeExists

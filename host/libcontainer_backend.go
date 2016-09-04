@@ -713,8 +713,7 @@ func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, e
 }
 
 func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
-	volID := path.Join("squashfs", m.ID)
-	if vol := l.vman.GetVolume(volID); vol != nil {
+	if vol := l.vman.GetVolume(m.ID); vol != nil {
 		return vol.Location(), nil
 	}
 
@@ -769,7 +768,7 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 
 	// TODO: verify layer hashes before importing
 	vol, err := l.vman.ImportVolume("default", layer, &volume.Info{
-		ID:         volID,
+		ID:         m.ID,
 		Size:       size,
 		FSType:     "squashfs",
 		MountFlags: syscall.MS_RDONLY,

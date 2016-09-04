@@ -150,15 +150,11 @@ func NewProvider(config *ProviderConfig) (volume.Provider, error) {
 		config.WorkingDir = "/var/lib/flynn/volumes/zfs/"
 	}
 
-	p := &Provider{
+	return &Provider{
 		config:  config,
 		dataset: dataset,
 		volumes: make(map[string]*zfsVolume),
-	}
-	if err := p.createDataFilesystem(); err != nil {
-		return nil, err
-	}
-	return p, nil
+	}, nil
 }
 
 func (p *Provider) Kind() string {
@@ -170,7 +166,7 @@ func (p *Provider) newInfo(id string) *volume.Info {
 }
 
 func (p *Provider) NewVolume() (volume.Volume, error) {
-	id := path.Join("data", random.UUID())
+	id := random.UUID()
 	v := &zfsVolume{
 		info:      p.newInfo(id),
 		provider:  p,
@@ -194,7 +190,7 @@ var zvolOpenAttempts = attempt.Strategy{
 
 func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volume, error) {
 	if info.ID == "" {
-		info.ID = path.Join(info.FSType, random.UUID())
+		info.ID = random.UUID()
 	}
 	v := &zfsVolume{
 		info:      info,
@@ -621,14 +617,4 @@ func (v *zfsVolume) IsSnapshot() bool {
 
 func (v *zfsVolume) IsZvol() bool {
 	return v.dataset.Type == zfs.DatasetVolume
-}
-
-func (p *Provider) createDataFilesystem() error {
-	name := path.Join(p.dataset.Name, "data")
-	if _, err := zfs.GetDataset(name); err == nil {
-		return nil
-	}
-	_, err := zfs.CreateFilesystem(name, nil)
-	return err
-
 }
