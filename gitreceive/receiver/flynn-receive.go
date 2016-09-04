@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/go-units"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
@@ -31,7 +32,10 @@ func init() {
 
 var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 
-const blobstoreURL = "http://blobstore.discoverd"
+const (
+	blobstoreURL                = "http://blobstore.discoverd"
+	defaultSlugbuilderDiskLimit = 1 * units.GiB
+)
 
 func parsePairs(args *docopt.Args, str string) (map[string]string, error) {
 	pairs := args.All[str].([]string)
@@ -132,15 +136,23 @@ Options:
 			"flynn-controller.release":  prevRelease.ID,
 			"flynn-controller.type":     "slugbuilder",
 		},
+		Resources: resource.Defaults(),
 	}
 	if sb, ok := prevRelease.Processes["slugbuilder"]; ok {
 		job.Resources = sb.Resources
-	} else if rawLimit := os.Getenv("SLUGBUILDER_DEFAULT_MEMORY_LIMIT"); rawLimit != "" {
-		if limit, err := resource.ParseLimit(resource.TypeMemory, rawLimit); err == nil {
-			r := make(resource.Resources)
-			resource.SetDefaults(&r)
-			r[resource.TypeMemory] = resource.Spec{Limit: &limit, Request: &limit}
-			job.Resources = r
+	} else {
+		if rawLimit := os.Getenv("SLUGBUILDER_DEFAULT_MEMORY_LIMIT"); rawLimit != "" {
+			if limit, err := resource.ParseLimit(resource.TypeMemory, rawLimit); err == nil {
+				job.Resources[resource.TypeMemory] = resource.Spec{Limit: &limit, Request: &limit}
+			}
+		}
+
+		if rawLimit := os.Getenv("SLUGBUILDER_DEFAULT_DISK_LIMIT"); rawLimit != "" {
+			if limit, err := resource.ParseLimit(resource.TypeDisk, rawLimit); err == nil {
+				job.Resources[resource.TypeDisk] = resource.Spec{Limit: &limit, Request: &limit}
+			}
+		} else {
+			job.Resources.SetDiskLimit(defaultSlugbuilderDiskLimit)
 		}
 	}
 
