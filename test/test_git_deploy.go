@@ -72,7 +72,7 @@ func (s *GitDeploySuite) TestAppRecreation(t *c.C) {
 }
 
 func (s *GitDeploySuite) TestGoBuildpack(t *c.C) {
-	s.runBuildpackTest(t, "go-flynn-example", []string{"postgres"})
+	s.runBuildpackTest(t, "go-flynn-example", &buildpackOpts{Resources: []string{"postgres"}})
 }
 
 func (s *GitDeploySuite) TestNodejsBuildpack(t *c.C) {
@@ -88,23 +88,23 @@ func (s *GitDeploySuite) TestRubyBuildpack(t *c.C) {
 }
 
 func (s *GitDeploySuite) TestJavaBuildpack(t *c.C) {
-	s.runBuildpackTest(t, "java-flynn-example", nil)
+	s.runBuildpackTest(t, "java-flynn-example", &buildpackOpts{DiskLimit: "200MB"})
 }
 
 func (s *GitDeploySuite) TestClojureBuildpack(t *c.C) {
-	s.runBuildpackTest(t, "clojure-flynn-example", nil)
+	s.runBuildpackTest(t, "clojure-flynn-example", &buildpackOpts{DiskLimit: "200MB"})
 }
 
 func (s *GitDeploySuite) TestPlayBuildpack(t *c.C) {
-	s.runBuildpackTest(t, "play-flynn-example", nil)
+	s.runBuildpackTest(t, "play-flynn-example", &buildpackOpts{DiskLimit: "200MB"})
 }
 
 func (s *GitDeploySuite) TestPythonBuildpack(t *c.C) {
-	s.runBuildpackTest(t, "python-flynn-example", nil)
+	s.runBuildpackTest(t, "python-flynn-example", &buildpackOpts{DiskLimit: "200MB"})
 }
 
 func (s *GitDeploySuite) TestStaticBuildpack(t *c.C) {
-	s.runBuildpackTestWithResponsePattern(t, "static-flynn-example", nil, `Hello, Flynn!`)
+	s.runBuildpackTest(t, "static-flynn-example", &buildpackOpts{Pattern: `Hello, Flynn!`})
 }
 
 func (s *GitDeploySuite) TestPushTwice(t *c.C) {
@@ -115,17 +115,30 @@ func (s *GitDeploySuite) TestPushTwice(t *c.C) {
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 }
 
-func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []string) {
-	s.runBuildpackTestWithResponsePattern(t, name, resources, `Hello from Flynn on port \d+`)
+type buildpackOpts struct {
+	Pattern   string
+	Resources []string
+	DiskLimit string
 }
 
-func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string, resources []string, pat string) {
+func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, opts *buildpackOpts) {
+	if opts == nil {
+		opts = &buildpackOpts{}
+	}
+	if opts.Pattern == "" {
+		opts.Pattern = `Hello from Flynn on port \d+`
+	}
+
 	r := s.newGitRepo(t, "https://github.com/flynn-examples/"+name)
 
 	t.Assert(r.flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
 
-	for _, resource := range resources {
+	for _, resource := range opts.Resources {
 		t.Assert(r.flynn("resource", "add", resource), Succeeds)
+	}
+
+	if opts.DiskLimit != "" {
+		t.Assert(r.flynn("limit", "set", "web", fmt.Sprintf("disk=%s", opts.DiskLimit)), Succeeds)
 	}
 
 	watcher, err := s.controllerClient(t).WatchJobEvents(name, "")
@@ -165,12 +178,12 @@ func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string
 		if res.StatusCode != 200 {
 			return fmt.Errorf("Expected status 200, got %v", res.StatusCode)
 		}
-		m, err := regexp.MatchString(pat, string(contents))
+		m, err := regexp.MatchString(opts.Pattern, string(contents))
 		if err != nil {
 			return err
 		}
 		if !m {
-			return fmt.Errorf("Expected `%s`, got `%v`", pat, string(contents))
+			return fmt.Errorf("Expected `%s`, got `%v`", opts.Pattern, string(contents))
 		}
 		return nil
 	})
