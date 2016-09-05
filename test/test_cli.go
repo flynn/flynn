@@ -23,6 +23,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/attempt"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
 	c "github.com/flynn/go-check"
@@ -1372,7 +1373,7 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	// check the job is reachable with the app's name in discoverd
 	instances, err := s.discoverdClient(t).Instances(app.Name+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
-	res, err := http.Get("http://" + instances[0].Addr)
+	res, err := hh.RetryClient.Get("http://" + instances[0].Addr)
 	t.Assert(err, c.IsNil)
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
