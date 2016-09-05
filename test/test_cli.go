@@ -807,6 +807,8 @@ func (s *CLISuite) TestCluster(t *c.C) {
 }
 
 func (s *CLISuite) TestRelease(t *c.C) {
+	t.Skip("'release add' is deprecated and does not work on recent clusters")
+
 	releaseJSON := []byte(`{
 		"env": {"GLOBAL": "FOO"},
 		"processes": {
