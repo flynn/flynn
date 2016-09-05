@@ -178,7 +178,8 @@
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
           "args": ["/bin/start-flynn-controller", "controller"],
-          "service": "controller"
+          "service": "controller",
+          "resources": {"disk": {"request": 2147483648, "limit": 2147483648} }
         },
         "scheduler": {
           "args": ["/bin/start-flynn-controller", "scheduler"],
