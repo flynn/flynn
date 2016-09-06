@@ -37,6 +37,7 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
+	"github.com/golang/groupcache/singleflight"
 	"github.com/miekg/dns"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -143,7 +144,8 @@ type LibcontainerBackend struct {
 	globalStateMtx sync.Mutex
 	globalState    *libcontainerGlobalState
 
-	tmpfsCache *tmpfsCache
+	tmpfsCache  *tmpfsCache
+	layerLoader singleflight.Group
 }
 
 type Container struct {
@@ -713,72 +715,77 @@ func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, e
 }
 
 func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
-	if vol := l.vman.GetVolume(m.ID); vol != nil {
-		return vol.Location(), nil
-	}
-
-	if m.URL == "" {
-		return "", fmt.Errorf("squashfs layer not found and no URL set: %s", m.ID)
-	}
-
-	u, err := url.Parse(m.URL)
-	if err != nil {
-		return "", err
-	}
-
-	var layer io.ReadCloser
-	var size int64
-	switch u.Scheme {
-	case "file":
-		f, err := os.Open(u.Path)
-		if err != nil {
-			return "", fmt.Errorf("error getting squashfs layer %s: %s", m.URL, err)
+	path, err := l.layerLoader.Do(m.ID, func() (interface{}, error) {
+		if vol := l.vman.GetVolume(m.ID); vol != nil {
+			return vol.Location(), nil
 		}
-		stat, err := f.Stat()
-		if err != nil {
-			return "", fmt.Errorf("error getting size of squashfs layer %s: %s", m.URL, err)
+
+		if m.URL == "" {
+			return "", fmt.Errorf("squashfs layer not found and no URL set: %s", m.ID)
 		}
-		layer = f
-		size = stat.Size()
-	case "http", "https":
-		url, err := l.resolveDiscoverdURL(u)
+
+		u, err := url.Parse(m.URL)
 		if err != nil {
 			return "", err
 		}
-		res, err := http.Get(url)
-		if err != nil {
-			return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
-		}
-		if res.StatusCode != http.StatusOK {
-			return "", fmt.Errorf("error getting squashfs layer from %s: unexpected HTTP status %s", m.URL, res.Status)
-		}
-		s := res.Header.Get("Content-Length")
-		if s == "" {
-			return "", fmt.Errorf("missing Content-Length header in response from %s", m.URL)
-		}
-		size, err = strconv.ParseInt(s, 10, 64)
-		if err != nil {
-			return "", fmt.Errorf("error parsing Content-Length header from %s: %s", m.URL, err)
-		}
-		layer = res.Body
-	default:
-		return "", fmt.Errorf("unknown layer URI scheme: %s", u.Scheme)
-	}
-	defer layer.Close()
 
-	// TODO: verify layer hashes before importing
-	vol, err := l.vman.ImportVolume("default", layer, &volume.Info{
-		ID:         m.ID,
-		Size:       size,
-		FSType:     "squashfs",
-		MountFlags: syscall.MS_RDONLY,
+		var layer io.ReadCloser
+		var size int64
+		switch u.Scheme {
+		case "file":
+			f, err := os.Open(u.Path)
+			if err != nil {
+				return "", fmt.Errorf("error getting squashfs layer %s: %s", m.URL, err)
+			}
+			stat, err := f.Stat()
+			if err != nil {
+				return "", fmt.Errorf("error getting size of squashfs layer %s: %s", m.URL, err)
+			}
+			layer = f
+			size = stat.Size()
+		case "http", "https":
+			url, err := l.resolveDiscoverdURL(u)
+			if err != nil {
+				return "", err
+			}
+			res, err := http.Get(url)
+			if err != nil {
+				return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
+			}
+			if res.StatusCode != http.StatusOK {
+				return "", fmt.Errorf("error getting squashfs layer from %s: unexpected HTTP status %s", m.URL, res.Status)
+			}
+			s := res.Header.Get("Content-Length")
+			if s == "" {
+				return "", fmt.Errorf("missing Content-Length header in response from %s", m.URL)
+			}
+			size, err = strconv.ParseInt(s, 10, 64)
+			if err != nil {
+				return "", fmt.Errorf("error parsing Content-Length header from %s: %s", m.URL, err)
+			}
+			layer = res.Body
+		default:
+			return "", fmt.Errorf("unknown layer URI scheme: %s", u.Scheme)
+		}
+		defer layer.Close()
+
+		// TODO: verify layer hashes before importing
+		vol, err := l.vman.ImportVolume("default", layer, &volume.Info{
+			ID:         m.ID,
+			Size:       size,
+			FSType:     "squashfs",
+			MountFlags: syscall.MS_RDONLY,
+		})
+		if err != nil {
+			return "", fmt.Errorf("error importing squashfs layer: %s", err)
+		}
+
+		return vol.Location(), nil
 	})
-	// TODO: if the error if ErrVolumeExists, try getting the volume again
 	if err != nil {
-		return "", fmt.Errorf("error importing squashfs layer: %s", err)
+		return "", err
 	}
-
-	return vol.Location(), nil
+	return path.(string), nil
 }
 
 func (l *LibcontainerBackend) mountTmpfs(job *host.Job) (string, error) {
