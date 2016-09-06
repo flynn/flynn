@@ -497,6 +497,7 @@
               }
             }
           ],
+          "service": "gitreceive",
           "resources": {"disk": {"request": 2147483648, "limit": 2147483648} }
         }
       }
