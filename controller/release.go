@@ -207,7 +207,7 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 		return err
 	}
 
-	blobstoreFiles := make([]string, 0, len(artifacts))
+	fileURIs := make([]string, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		if err := tx.Exec("release_artifacts_delete", release.ID, artifact.ID); err != nil {
 			tx.Rollback()
@@ -224,27 +224,34 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 			continue
 		}
 
-		// TODO: if docker-receive artifact, delete via the registry to
-		//       remove the Docker files
+		// if the artifact is stored in the blobstore, delete both the image
+		// manifest and the contained layers
 		if artifact.Blobstore() {
-			blobstoreFiles = append(blobstoreFiles, artifact.URI)
+			fileURIs = append(fileURIs, artifact.URI)
 			if artifact.Manifest != nil && len(artifact.Manifest.Rootfs) > 0 {
 				for _, rootfs := range artifact.Manifest.Rootfs {
 					for _, layer := range rootfs.Layers {
-						blobstoreFiles = append(blobstoreFiles, artifact.LayerURL(layer))
+						fileURIs = append(fileURIs, artifact.LayerURL(layer))
 					}
 				}
 			}
 		}
+
+		// if the artifact was created by docker-receive, delete the docker
+		// image URI to clean up the registry files
+		if uri, ok := artifact.Meta["docker-receive.uri"]; ok {
+			fileURIs = append(fileURIs, uri)
+		}
+
 		if err := tx.Exec("artifact_delete", artifact.ID); err != nil {
 			tx.Rollback()
 			return err
 		}
 	}
 
-	// if there are no blobstore files to delete, just save a release
-	// deletion event and return
-	if len(blobstoreFiles) == 0 {
+	// if there are no files to delete, just save a release deletion event
+	// and return
+	if len(fileURIs) == 0 {
 		event := ct.ReleaseDeletionEvent{
 			ReleaseDeletion: &ct.ReleaseDeletion{
 				ReleaseID: release.ID,
@@ -269,7 +276,7 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 	}{
 		app.ID,
 		release.ID,
-		blobstoreFiles,
+		fileURIs,
 	})
 	if err != nil {
 		tx.Rollback()

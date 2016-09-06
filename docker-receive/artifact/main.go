@@ -97,6 +97,7 @@ func run(url string) error {
 		URI:  imageURL,
 		Meta: map[string]string{
 			"blobstore":                 "true",
+			"docker-receive.uri":        url,
 			"docker-receive.repository": ref.Name(),
 			"docker-receive.digest":     ref.ID(),
 		},
