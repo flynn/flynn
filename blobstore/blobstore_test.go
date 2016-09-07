@@ -94,6 +94,7 @@ func TestS3Filesystem(t *testing.T) {
 	testDelete(r, t)
 	testOffset(r, t, false)
 	testFilesystem(r, false, t)
+	testExternalBackendReplace(r, t)
 }
 
 func TestGCSFilesystem(t *testing.T) {
@@ -118,6 +119,7 @@ func TestGCSFilesystem(t *testing.T) {
 	testDelete(r, t)
 	testOffset(r, t, false)
 	testFilesystem(r, false, t)
+	testExternalBackendReplace(r, t)
 }
 
 func testList(r *data.FileRepo, t *testing.T) {
@@ -233,6 +235,48 @@ func testDelete(r *data.FileRepo, t *testing.T) {
 	assertNotExists("/dir/foo")
 	assertNotExists("/dir/foo.txt")
 	assertNotExists("/dir/bar.txt")
+}
+
+func testExternalBackendReplace(r *data.FileRepo, t *testing.T) {
+	put := func(path string) {
+		if err := r.Put(path, bytes.NewReader([]byte("data")), 0, "text/plain"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	get := func(path string) string {
+		file, err := r.Get("/replace.txt", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		redirect, ok := file.FileStream.(backend.Redirector)
+		if !ok {
+			t.Fatal("file stream is not a redirector")
+		}
+		url := redirect.RedirectURL()
+		res, err := http.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Fatalf("expected status 200, got %d", res.StatusCode)
+		}
+		return url
+	}
+
+	put("/replace.txt")
+	firstURL := get("/replace.txt")
+
+	put("/replace.txt")
+	res, err := http.Get(firstURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode == 200 {
+		t.Fatal("unexpected status 200")
+	}
+	get("/replace.txt")
 }
 
 func testOffset(r *data.FileRepo, t *testing.T, checkEtags bool) {
