@@ -257,7 +257,7 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 	d := downloader.New(client, h.host.vman, query.Get("version"))
 
 	log.Info("pulling images")
-	if err := d.DownloadImages(info); err != nil {
+	if err := d.DownloadImages(query.Get("config-dir"), info); err != nil {
 		log.Error("error pulling images", "err", err)
 		stream.CloseWithError(err)
 		return

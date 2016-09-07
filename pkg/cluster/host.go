@@ -179,10 +179,11 @@ func (c *Host) SendSnapshot(snapID string, assumeHaves []json.RawMessage) (io.Re
 }
 
 // PullImages pulls images from a TUF repository using the local TUF file in tufDB
-func (c *Host) PullImages(repository, version string, tufDB io.Reader, ch chan *ct.ImagePullInfo) (stream.Stream, error) {
+func (c *Host) PullImages(repository, configDir, version string, tufDB io.Reader, ch chan *ct.ImagePullInfo) (stream.Stream, error) {
 	header := http.Header{"Content-Type": {"application/octet-stream"}}
 	query := make(url.Values)
 	query.Set("repository", repository)
+	query.Set("config-dir", configDir)
 	query.Set("version", version)
 	path := "/host/pull/images?" + query.Encode()
 	return c.c.StreamWithHeader("POST", path, header, tufDB, ch)

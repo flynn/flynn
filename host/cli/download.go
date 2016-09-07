@@ -101,7 +101,7 @@ func runDownload(args *docopt.Args) error {
 			}
 		}
 	}()
-	if err := d.DownloadImages(ch); err != nil {
+	if err := d.DownloadImages(configDir, ch); err != nil {
 		log.Error("error downloading images", "err", err)
 		return err
 	}

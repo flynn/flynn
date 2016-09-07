@@ -143,6 +143,7 @@ func runUpdate(args *docopt.Args) error {
 		ch := make(chan *ct.ImagePullInfo)
 		stream, err := host.PullImages(
 			args.String["--repository"],
+			args.String["--config-dir"],
 			version.String(),
 			bytes.NewReader(tufDB),
 			ch,

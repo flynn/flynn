@@ -82,7 +82,7 @@ func (d *Downloader) DownloadConfig(dir string) (map[string]string, error) {
 	return paths, nil
 }
 
-func (d *Downloader) DownloadImages(info chan *ct.ImagePullInfo) error {
+func (d *Downloader) DownloadImages(dir string, info chan *ct.ImagePullInfo) error {
 	defer close(info)
 
 	path := filepath.Join(d.version, "images.json.gz")
@@ -98,8 +98,14 @@ func (d *Downloader) DownloadImages(info chan *ct.ImagePullInfo) error {
 	}
 	defer gz.Close()
 
+	out, err := os.Create(filepath.Join(dir, "images."+d.version+".json"))
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
 	var images map[string]*ct.Artifact
-	if err := json.NewDecoder(gz).Decode(&images); err != nil {
+	if err := json.NewDecoder(io.TeeReader(gz, out)).Decode(&images); err != nil {
 		return err
 	}
 

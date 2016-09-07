@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/pkg/term"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cliutil"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/go-docopt"
@@ -18,24 +19,27 @@ import (
 
 func init() {
 	Register("run", runRun, `
-usage: flynn-host run [options] [--] <image> <command> [<argument>...]
+usage: flynn-host run [options] [--] <artifact> <command> [<argument>...]
 
 Run an interactive job.
 
 Options:
 	--host=<host>        run on a specific host
 	--bind=<mountspecs>  bind mount a directory into the job (ex: /foo:/data,/bar:/baz)
+
+Example:
+	$ flynn-host run <(jq '.mongodb' images.json) mongo --version
+	MongoDB shell version: 3.2.9
 `)
 }
 
 func runRun(args *docopt.Args, client *cluster.Client) error {
-	// TODO: download <image> using temp tuf DB?
+	artifact := &ct.Artifact{}
+	if err := cliutil.DecodeJSONArg(args.String["<artifact>"], artifact); err != nil {
+		return err
+	}
 	cmd := exec.Cmd{
-		ImageArtifact: &ct.Artifact{
-			Type:     ct.ArtifactTypeFlynn,
-			URI:      args.String["<image>"],
-			Manifest: &ct.ImageManifest{},
-		},
+		ImageArtifact: artifact,
 		Job: &host.Job{
 			Config: host.ContainerConfig{
 				Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
