@@ -131,9 +131,11 @@ func SetupMountspecs(job *host.Job, artifacts []*ct.Artifact) {
 				continue
 			}
 			job.Mountspecs = append(job.Mountspecs, &host.Mountspec{
-				Type: host.MountspecTypeSquashfs,
-				ID:   layer.ID,
-				URL:  artifact.LayerURL(layer),
+				Type:   host.MountspecTypeSquashfs,
+				ID:     layer.ID,
+				URL:    artifact.LayerURL(layer),
+				Size:   layer.Length,
+				Hashes: layer.Hashes,
 			})
 		}
 	}

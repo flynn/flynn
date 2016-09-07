@@ -2,9 +2,13 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"net"
@@ -721,7 +725,24 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 		}
 
 		if m.URL == "" {
-			return "", fmt.Errorf("squashfs layer not found and no URL set: %s", m.ID)
+			return "", fmt.Errorf("error getting squashfs layer %s: missing URL", m.ID)
+		}
+
+		if len(m.Hashes) == 0 {
+			return "", fmt.Errorf("error getting squashfs layer %s: missing Hashes", m.ID)
+		}
+		hashes := make(map[string]hash.Hash, len(m.Hashes))
+		for algorithm := range m.Hashes {
+			var h hash.Hash
+			switch algorithm {
+			case "sha256":
+				h = sha256.New()
+			case "sha512":
+				h = sha512.New()
+			default:
+				return "", fmt.Errorf("error getting squashfs layer %s: unknown hash algorithm %q", m.ID, algorithm)
+			}
+			hashes[algorithm] = h
 		}
 
 		u, err := url.Parse(m.URL)
@@ -730,19 +751,13 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 		}
 
 		var layer io.ReadCloser
-		var size int64
 		switch u.Scheme {
 		case "file":
 			f, err := os.Open(u.Path)
 			if err != nil {
 				return "", fmt.Errorf("error getting squashfs layer %s: %s", m.URL, err)
 			}
-			stat, err := f.Stat()
-			if err != nil {
-				return "", fmt.Errorf("error getting size of squashfs layer %s: %s", m.URL, err)
-			}
 			layer = f
-			size = stat.Size()
 		case "http", "https":
 			url, err := l.resolveDiscoverdURL(u)
 			if err != nil {
@@ -755,24 +770,41 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 			if res.StatusCode != http.StatusOK {
 				return "", fmt.Errorf("error getting squashfs layer from %s: unexpected HTTP status %s", m.URL, res.Status)
 			}
-			s := res.Header.Get("Content-Length")
-			if s == "" {
-				return "", fmt.Errorf("missing Content-Length header in response from %s", m.URL)
-			}
-			size, err = strconv.ParseInt(s, 10, 64)
-			if err != nil {
-				return "", fmt.Errorf("error parsing Content-Length header from %s: %s", m.URL, err)
-			}
 			layer = res.Body
 		default:
 			return "", fmt.Errorf("unknown layer URI scheme: %s", u.Scheme)
 		}
 		defer layer.Close()
 
-		// TODO: verify layer hashes before importing
-		vol, err := l.vman.ImportVolume("default", layer, &volume.Info{
+		// write the layer to a temp file and verify it has the
+		// expected hashes
+		tmp, err := ioutil.TempFile("", "flynn-layer-")
+		if err != nil {
+			return "", err
+		}
+		defer os.Remove(tmp.Name())
+		defer tmp.Close()
+		r := io.LimitReader(layer, m.Size)
+		for _, hash := range hashes {
+			r = io.TeeReader(r, hash)
+		}
+		if _, err := io.Copy(tmp, r); err != nil {
+			return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
+		}
+		for algorithm, hash := range hashes {
+			actual := hex.EncodeToString(hash.Sum(nil))
+			expected := m.Hashes[algorithm]
+			if actual != expected {
+				return "", fmt.Errorf("error getting squashfs layer from %s: expected %s hash %q but got %q", m.URL, algorithm, expected, actual)
+			}
+		}
+
+		if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {
+			return "", fmt.Errorf("error seeking squashfs layer temp file: %s", err)
+		}
+		vol, err := l.vman.ImportVolume("default", tmp, &volume.Info{
 			ID:         m.ID,
-			Size:       size,
+			Size:       m.Size,
 			FSType:     "squashfs",
 			MountFlags: syscall.MS_RDONLY,
 		})

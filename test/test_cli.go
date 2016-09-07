@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1168,6 +1170,7 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	t.Assert(exec.Command("mksquashfs", t.MkDir(), tmp.Name(), "-noappend").Run(), c.IsNil)
 	slug, err := ioutil.ReadAll(tmp)
 	t.Assert(err, c.IsNil)
+	slugHash := sha512.Sum512(slug)
 	slugs := []string{
 		"http://blobstore.discoverd/layer/1.squashfs",
 		"http://blobstore.discoverd/layer/2.squashfs",
@@ -1192,7 +1195,7 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 					ID:     strconv.Itoa(i + 1),
 					Type:   ct.ImageLayerTypeSquashfs,
 					Length: int64(len(slug)),
-					Hashes: map[string]string{"sha512": strconv.Itoa(i)},
+					Hashes: map[string]string{"sha512": hex.EncodeToString(slugHash[:])},
 				}},
 			}},
 		}

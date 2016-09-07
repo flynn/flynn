@@ -72,9 +72,11 @@ type MountspecType string
 const MountspecTypeSquashfs MountspecType = "squashfs"
 
 type Mountspec struct {
-	Type MountspecType `json:"type,omitempty"`
-	ID   string        `json:"id,omitempty"`
-	URL  string        `json:"url,omitempty"`
+	Type   MountspecType     `json:"type,omitempty"`
+	ID     string            `json:"id,omitempty"`
+	URL    string            `json:"url,omitempty"`
+	Size   int64             `json:"size,omitempty"`
+	Hashes map[string]string `json:"hashes,omitempty"`
 }
 
 type JobResources struct {
