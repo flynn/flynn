@@ -124,6 +124,7 @@ type Artifact struct {
 	URI              string            `json:"uri,omitempty"`
 	Meta             map[string]string `json:"meta,omitempty"`
 	Manifest         *ImageManifest    `json:"manifest,omitempty"`
+	Hashes           map[string]string `json:"hashes,omitempty"`
 	LayerURLTemplate string            `json:"layer_url_template,omitempty"`
 	CreatedAt        *time.Time        `json:"created_at,omitempty"`
 }
@@ -491,17 +492,21 @@ type ImageManifest struct {
 	Entrypoints map[string]*ImageEntrypoint `json:"entrypoints,omitempty"`
 	Rootfs      []*ImageRootfs              `json:"rootfs,omitempty"`
 
-	id     string
-	idOnce sync.Once
+	hashes     map[string]string
+	hashesOnce sync.Once
 }
 
 func (i *ImageManifest) ID() string {
-	i.idOnce.Do(func() {
+	return i.Hashes()["sha256"]
+}
+
+func (i *ImageManifest) Hashes() map[string]string {
+	i.hashesOnce.Do(func() {
 		data, _ := cjson.Marshal(i)
 		digest := sha256.Sum256(data)
-		i.id = hex.EncodeToString(digest[:])
+		i.hashes = map[string]string{"sha256": hex.EncodeToString(digest[:])}
 	})
-	return i.id
+	return i.hashes
 }
 
 func (m *ImageManifest) DefaultEntrypoint() *ImageEntrypoint {

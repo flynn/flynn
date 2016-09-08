@@ -406,6 +406,7 @@ $$ LANGUAGE plpgsql`,
 		`DROP TRIGGER release_artifacts_trigger ON release_artifacts`,
 		`DROP FUNCTION check_release_artifacts()`,
 		`ALTER TABLE artifacts ADD COLUMN manifest jsonb`,
+		`ALTER TABLE artifacts ADD COLUMN hashes jsonb`,
 		`ALTER TABLE artifacts ADD COLUMN layer_url_template text`,
 		`CREATE FUNCTION check_artifact_manifest() RETURNS OPAQUE AS $$
 			BEGIN

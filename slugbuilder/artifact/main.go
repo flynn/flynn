@@ -109,6 +109,7 @@ func run(dir string) error {
 			"blobstore": "true",
 		},
 		Manifest:         manifest,
+		Hashes:           manifest.Hashes(),
 		LayerURLTemplate: "http://blobstore.discoverd/slugs/layers/{id}.squashfs",
 	}
 

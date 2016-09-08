@@ -29,6 +29,10 @@
       "description": "Image manifest",
       "type": "object"
     },
+    "hashes": {
+      "description": "Cryptographic hashes of the content stored at URI",
+      "type": "object"
+    },
     "layer_url_template": {
       "description": "Layer URL Template",
       "type": "string"

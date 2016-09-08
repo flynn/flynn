@@ -70,6 +70,7 @@ func interpolateManifest(imageDir, imageRepository string, src io.Reader, dest i
 				Type:     ct.ArtifactTypeFlynn,
 				URI:      fmt.Sprintf("%s?target=/images/%s.json", imageRepository, image.ID()),
 				Manifest: image,
+				Hashes:   image.Hashes(),
 				Meta:     map[string]string{"flynn.component": name},
 			}
 			if version.Dev() {

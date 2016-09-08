@@ -102,6 +102,7 @@ func run(url string) error {
 			"docker-receive.digest":     ref.ID(),
 		},
 		Manifest:         image,
+		Hashes:           image.Hashes(),
 		LayerURLTemplate: layerURLTemplate,
 	}
 	return client.CreateArtifact(artifact)
