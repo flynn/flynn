@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
-	"GoVersion": "go1.7",
+	"GoVersion": "go1.7.1",
 	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
