@@ -133,6 +133,9 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 				// generate a new job id, this is a new job
 				newJob := job.Dup()
 				newJob.ID = cluster.GenerateJobID(s.id, "")
+				if _, ok := newJob.Config.Env["FLYNN_JOB_ID"]; ok {
+					newJob.Config.Env["FLYNN_JOB_ID"] = newJob.ID
+				}
 				log.Printf("resurrecting %s as %s", job.ID, newJob.ID)
 				s.AddJob(newJob)
 				backend.Run(newJob, nil, nil)
