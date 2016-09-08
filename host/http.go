@@ -114,7 +114,7 @@ func (h *Host) ConfigureNetworking(config *host.NetworkConfig) {
 	log := h.log.New("fn", "ConfigureNetworking")
 
 	if config.JobID != "" {
-		log.Info("persisting flannel job_id")
+		log.Info("persisting flannel job_id", "job.id", config.JobID)
 		if err := h.state.SetPersistentSlot("flannel", config.JobID); err != nil {
 			log.Error("error assigning flannel to persistent slot")
 		}
@@ -140,7 +140,7 @@ func (h *Host) ConfigureDiscoverd(config *host.DiscoverdConfig) {
 	log := h.log.New("fn", "ConfigureDiscoverd")
 
 	if config.JobID != "" {
-		log.Info("persisting discoverd job_id")
+		log.Info("persisting discoverd job_id", "job.id", config.JobID)
 		if err := h.state.SetPersistentSlot("discoverd", config.JobID); err != nil {
 			log.Error("error assigning discoverd to persistent slot")
 		}
