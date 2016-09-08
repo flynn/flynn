@@ -8,7 +8,9 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/docker/docker/pkg/archive"
 	ct "github.com/flynn/flynn/controller/types"
@@ -121,12 +123,61 @@ func (b *Builder) createLayer(ids []string) (*ct.ImageLayer, error) {
 	}
 	defer os.RemoveAll(dir)
 	for _, id := range ids {
-		// TODO: AUFS whiteouts
 		diff, err := b.Context.Diff(id, "")
 		if err != nil {
 			return nil, err
 		}
 		if err := archive.Untar(diff, dir, &archive.TarOptions{}); err != nil {
+			return nil, err
+		}
+
+		// convert Docker AUFS whiteouts to overlay whiteouts.
+		//
+		// See the "whiteouts and opaque directories" section of the
+		// OverlayFS documentation for a description of the whiteout
+		// file formats:
+		// https://www.kernel.org/doc/Documentation/filesystems/overlayfs.txt
+		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.Mode().IsRegular() {
+				return nil
+			}
+
+			base := filepath.Base(path)
+			dir := filepath.Dir(path)
+
+			if base == archive.WhiteoutOpaqueDir {
+				if err := syscall.Setxattr(dir, "trusted.overlay.opaque", []byte{'y'}, 0); err != nil {
+					return err
+				}
+				if err := os.Remove(base); err != nil {
+					return err
+				}
+			}
+
+			if !strings.HasPrefix(base, archive.WhiteoutPrefix) {
+				return nil
+			}
+
+			// replace the file which the AUFS whiteout is hiding
+			// with an overlay whiteout file, and remove the AUFS
+			// whiteout
+			name := filepath.Join(dir, strings.TrimPrefix(base, archive.WhiteoutPrefix))
+			if err := os.RemoveAll(name); err != nil {
+				return err
+			}
+			if err := syscall.Mknod(name, syscall.S_IFCHR, 0); err != nil {
+				return err
+			}
+			stat := info.Sys().(*syscall.Stat_t)
+			if err := os.Chown(name, int(stat.Uid), int(stat.Gid)); err != nil {
+				return err
+			}
+			return os.Remove(path)
+		})
+		if err != nil {
 			return nil, err
 		}
 	}
