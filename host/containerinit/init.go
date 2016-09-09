@@ -609,6 +609,12 @@ func containerInitApp(c *Config, logFile *os.File) error {
 			return err
 		}
 
+		log.Info("creating FD proxies")
+		if err := createFDProxies(cmd); err != nil {
+			log.Error("error creating FD proxies", "err", err)
+			return err
+		}
+
 		if c.OpenStdin {
 			// Can't use cmd.StdinPipe() here, since in Go 1.2 it
 			// returns an io.WriteCloser with the underlying object
@@ -693,6 +699,40 @@ func newSocketPair(name string) (*os.File, *os.File, error) {
 		return nil, nil, err
 	}
 	return os.NewFile(uintptr(pair[0]), name), os.NewFile(uintptr(pair[1]), name), nil
+}
+
+// createFDProxies creates pipes at /dev/stdout and /dev/stderr and copies data
+// written to them to the job's stdout and stderr streams respectively.
+//
+// This is necessary (rather than just symlinking those paths to /proc/self/fd/{1,2})
+// because the standard streams are sockets, and calling open(2) on a socket
+// leads to an ENXIO error (see http://marc.info/?l=ast-users&m=120978595414993).
+func createFDProxies(cmd *exec.Cmd) error {
+	for path, dst := range map[string]*os.File{
+		"/dev/stdout": cmd.Stdout.(*os.File),
+		"/dev/stderr": cmd.Stderr.(*os.File),
+	} {
+		os.Remove(path)
+		if err := syscall.Mkfifo(path, 0666); err != nil {
+			return err
+		}
+		pipe, err := os.OpenFile(path, os.O_RDWR, os.ModeNamedPipe)
+		if err != nil {
+			return err
+		}
+		go func(dst *os.File) {
+			defer pipe.Close()
+			for {
+				// copy data from the pipe to dst using splice(2) (rather than io.Copy)
+				// to avoid a needless copy through user space
+				n, err := syscall.Splice(int(pipe.Fd()), nil, int(dst.Fd()), nil, 65535, 0)
+				if err != nil || n == 0 {
+					return
+				}
+			}
+		}(dst)
+	}
+	return nil
 }
 
 // print a full goroutine stack trace to the log fd on SIGUSR2

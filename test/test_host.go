@@ -349,6 +349,31 @@ func (s *HostSuite) TestResourceLimits(t *c.C) {
 	assertResourceLimits(t, out.String())
 }
 
+func (s *HostSuite) TestDevStdout(t *c.C) {
+	cmd := exec.CommandUsingCluster(
+		s.clusterClient(t),
+		exec.DockerImage(imageURIs["test-apps"]),
+		"sh", "-c", "echo foo > /dev/stdout; echo bar > /dev/stderr",
+	)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	runErr := make(chan error)
+	go func() {
+		runErr <- cmd.Run()
+	}()
+	select {
+	case err := <-runErr:
+		t.Assert(err, c.IsNil)
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for /dev/stdout job")
+	}
+
+	t.Assert(stdout.String(), c.Equals, "foo\n")
+	t.Assert(stderr.String(), c.Equals, "bar\n")
+}
+
 func (s *HostSuite) TestDevSHM(t *c.C) {
 	cmd := exec.CommandUsingCluster(
 		s.clusterClient(t),
