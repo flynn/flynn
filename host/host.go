@@ -250,25 +250,10 @@ func runDaemon(args *docopt.Args) {
 	switch volProvider {
 	case "zfs":
 		newVolProvider = func() (volume.Provider, error) {
-			// use a zpool backing file size of either 70% of the device on which
-			// volumes will reside, or 100GB if that can't be determined.
-			log.Info("determining ZFS zpool size")
-			var size int64
-			var dev syscall.Statfs_t
-			if err := syscall.Statfs(volPath, &dev); err == nil {
-				size = (dev.Bsize * int64(dev.Blocks) * 7) / 10
-			} else {
-				size = 100000000000
-			}
-			log.Info(fmt.Sprintf("using ZFS zpool size %d", size))
-
 			return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
-				DatasetName: "flynn-default",
-				Make: &zfsVolume.MakeDev{
-					BackingFilename: filepath.Join(volPath, "zfs/vdev/flynn-default-zpool.vdev"),
-					Size:            size,
-				},
-				WorkingDir: filepath.Join(volPath, "zfs"),
+				DatasetName: zfsVolume.DefaultDatasetName,
+				Make:        zfsVolume.DefaultMakeDev(volPath, log),
+				WorkingDir:  filepath.Join(volPath, "zfs"),
 			})
 		}
 	case "mock":

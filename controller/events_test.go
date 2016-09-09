@@ -193,9 +193,9 @@ func (s *S) TestStreamReleaseEvents(c *C) {
 				var eventArtifact *ct.Artifact
 				c.Assert(json.Unmarshal(e.Data, &eventArtifact), IsNil)
 				c.Assert(e.AppID, Equals, "")
-				c.Assert(e.ObjectID, Equals, release.ImageArtifactID())
+				c.Assert(e.ObjectID, Equals, release.ArtifactIDs[0])
 				c.Assert(eventArtifact, NotNil)
-				c.Assert(eventArtifact.ID, Equals, release.ImageArtifactID())
+				c.Assert(eventArtifact.ID, Equals, release.ArtifactIDs[0])
 				gotArtifact = true
 			case ct.EventTypeRelease:
 				var eventRelease *ct.Release

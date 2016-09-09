@@ -2,14 +2,20 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -28,16 +34,19 @@ import (
 	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
-	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
+	"github.com/golang/groupcache/singleflight"
 	"github.com/miekg/dns"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/rancher/sparse-tools/sparse"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -76,12 +85,12 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		libcontainer.InitArgs(os.Args[0], "libcontainer-init"),
 	)
 
-	pinkertonCtx, err := pinkerton.BuildContext("aufs", imageRoot)
-	if err != nil {
+	if err := setupCGroups(partitionCGroups); err != nil {
 		return nil, err
 	}
 
-	if err := setupCGroups(partitionCGroups); err != nil {
+	tmpfsCache, err := newTmpfsCache()
+	if err != nil {
 		return nil, err
 	}
 
@@ -90,7 +99,6 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		factory:             factory,
 		state:               state,
 		vman:                vman,
-		pinkerton:           pinkertonCtx,
 		logStreams:          make(map[string]map[string]*logmux.LogStream),
 		containers:          make(map[string]*Container),
 		defaultEnv:          make(map[string]string),
@@ -103,17 +111,17 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		partitionCGroups:    partitionCGroups,
 		logger:              logger,
 		globalState:         &libcontainerGlobalState{},
+		tmpfsCache:          tmpfsCache,
 	}, nil
 }
 
 type LibcontainerBackend struct {
-	InitPath  string
-	factory   libcontainer.Factory
-	state     *State
-	vman      *volumemanager.Manager
-	host      *Host
-	pinkerton *pinkerton.Context
-	ipalloc   *ipallocator.IPAllocator
+	InitPath string
+	factory  libcontainer.Factory
+	state    *State
+	vman     *volumemanager.Manager
+	host     *Host
+	ipalloc  *ipallocator.IPAllocator
 
 	bridgeName string
 	bridgeAddr net.IP
@@ -139,11 +147,15 @@ type LibcontainerBackend struct {
 
 	globalStateMtx sync.Mutex
 	globalState    *libcontainerGlobalState
+
+	tmpfsCache  *tmpfsCache
+	layerLoader singleflight.Group
 }
 
 type Container struct {
 	ID       string `json:"id"`
 	RootPath string `json:"root_path"`
+	TmpPath  string `json:"tmp_path"`
 	IP       net.IP `json:"ip"`
 
 	container libcontainer.Container
@@ -335,7 +347,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		return nil
 	}
 
-	log.Info("starting job", "job.artifact.uri", job.ImageArtifact.URI, "job.args", job.Config.Args)
+	log.Info("starting job", "job.args", job.Config.Args)
 
 	defer func() {
 		if err != nil {
@@ -389,41 +401,23 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		}
 	}()
 
-	log.Info("pulling image")
-	artifactURI, err := l.resolveDiscoverdURI(job.ImageArtifact.URI)
-	if err != nil {
-		log.Error("error resolving artifact URI", "err", err)
-		return err
-	}
-	// TODO(lmars): stream pull progress (maybe to the app log?)
-	imageID, err := l.pinkerton.PullDocker(artifactURI, ioutil.Discard)
-	if err != nil {
-		log.Error("error pulling image", "err", err)
-		return err
-	}
-
-	log.Info("reading image config")
-	imageConfig, err := readDockerImageConfig(imageID)
-	if err != nil {
-		log.Error("error reading image config", "err", err)
-		return err
-	}
-
-	log.Info("checking out image")
-	var rootPath string
-	// creating an AUFS mount can fail intermittently with EINVAL, so try a
-	// few times (see https://github.com/flynn/flynn/issues/2044)
-	for start := time.Now(); time.Since(start) < time.Second; time.Sleep(50 * time.Millisecond) {
-		rootPath, err = l.pinkerton.Checkout(job.ID, imageID)
-		if err == nil || !strings.HasSuffix(err.Error(), "invalid argument") {
-			break
+	log.Info("setting up rootfs")
+	rootPath := filepath.Join("/var/lib/flynn/image/mnt", job.ID)
+	tmpPath := filepath.Join("/var/lib/flynn/image/tmp", job.ID)
+	for _, path := range []string{rootPath, tmpPath} {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			log.Error("error setting up rootfs", "err", err)
+			return err
 		}
 	}
+	rootMount, err := l.rootOverlayMount(job)
 	if err != nil {
-		log.Error("error checking out image", "err", err)
+		log.Error("error setting up rootfs", "err", err)
 		return err
 	}
+
 	container.RootPath = rootPath
+	container.TmpPath = tmpPath
 
 	config := &configs.Config{
 		Rootfs:       rootPath,
@@ -448,7 +442,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			"/proc/sys", "/proc/sysrq-trigger", "/proc/irq", "/proc/bus",
 		},
 		Devices: configs.DefaultAutoCreatedDevices,
-		Mounts: []*configs.Mount{
+		Mounts: append([]*configs.Mount{rootMount}, []*configs.Mount{
 			{
 				Source:      "proc",
 				Destination: "/proc",
@@ -487,7 +481,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 				Device:      "cgroup",
 				Flags:       defaultMountFlags | syscall.MS_RDONLY,
 			},
-		},
+		}...),
 	}
 
 	if spec, ok := job.Resources[resource.TypeMaxFD]; ok && spec.Limit != nil && spec.Request != nil {
@@ -519,26 +513,32 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	if len(hostname) > 64 {
 		hostname = hostname[:64]
 	}
-	if err := os.MkdirAll(filepath.Join(rootPath, "etc"), 0755); err != nil {
-		log.Error("error creating /etc in container root", "err", err)
+	if err := os.MkdirAll(filepath.Join(tmpPath, "etc"), 0755); err != nil {
+		log.Error("error creating container /etc", "err", err)
 		return err
 	}
-	if err := writeHostname(filepath.Join(rootPath, "etc/hosts"), hostname); err != nil {
+	etcHosts := filepath.Join(tmpPath, "etc/hosts")
+	if err := writeHostname(etcHosts, hostname); err != nil {
 		log.Error("error writing hosts file", "err", err)
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(rootPath, ".container-shared"), 0700); err != nil {
-		log.Error("error createing .container-shared", "err", err)
+	sharedDir := filepath.Join(tmpPath, ".container-shared")
+	if err := os.MkdirAll(sharedDir, 0700); err != nil {
+		log.Error("error creating .container-shared", "err", err)
 		return err
 	}
 
-	addBindMount(config, l.InitPath, "/.containerinit", false)
-	addBindMount(config, l.resolvConf, "/etc/resolv.conf", false)
+	config.Mounts = append(config.Mounts,
+		bindMount(l.InitPath, "/.containerinit", false),
+		bindMount(l.resolvConf, "/etc/resolv.conf", false),
+		bindMount(etcHosts, "/etc/hosts", true),
+		bindMount(sharedDir, "/.container-shared", true),
+	)
 	for _, m := range job.Config.Mounts {
 		if m.Target == "" {
 			return errors.New("host: invalid empty mount target")
 		}
-		addBindMount(config, m.Target, m.Location, m.Writeable)
+		config.Mounts = append(config.Mounts, bindMount(m.Target, m.Location, m.Writeable))
 	}
 
 	// apply volumes
@@ -549,7 +549,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			log.Error("missing required volume", "volumeID", v.VolumeID, "err", err)
 			return err
 		}
-		addBindMount(config, vol.Location(), v.Target, v.Writeable)
+		config.Mounts = append(config.Mounts, bindMount(vol.Location(), v.Target, v.Writeable))
 	}
 
 	// mutating job state, take state write lock
@@ -580,35 +580,27 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	l.state.mtx.Unlock()
 
 	initConfig := &containerinit.Config{
-		Args:          job.Config.Args,
-		TTY:           job.Config.TTY,
-		OpenStdin:     job.Config.Stdin,
-		WorkDir:       job.Config.WorkingDir,
-		Resources:     job.Resources,
-		FileArtifacts: job.FileArtifacts,
+		Args:      job.Config.Args,
+		TTY:       job.Config.TTY,
+		OpenStdin: job.Config.Stdin,
+		WorkDir:   job.Config.WorkingDir,
+		Resources: job.Resources,
 	}
 	if !job.Config.HostNetwork {
 		initConfig.IP = container.IP.String() + "/24"
 		initConfig.Gateway = l.bridgeAddr.String()
 	}
-	if initConfig.WorkDir == "" {
-		initConfig.WorkDir = imageConfig.WorkingDir
-	}
 	if job.Config.Uid > 0 {
 		initConfig.User = strconv.Itoa(job.Config.Uid)
-	} else if imageConfig.User != "" {
-		// TODO: check and lookup user from image config
-	}
-	if len(job.Config.Args) == 0 {
-		initConfig.Args = append(imageConfig.Entrypoint, imageConfig.Cmd...)
 	}
 	for _, port := range job.Config.Ports {
 		initConfig.Ports = append(initConfig.Ports, port)
 	}
 
 	log.Info("writing config")
+	configPath := filepath.Join(tmpPath, ".containerconfig")
 	l.envMtx.RLock()
-	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), initConfig,
+	err = writeContainerConfig(configPath, initConfig,
 		map[string]string{
 			"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 			"TERM": "xterm",
@@ -625,6 +617,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		log.Error("error writing config", "err", err)
 		return err
 	}
+	config.Mounts = append(config.Mounts, bindMount(configPath, "/.containerconfig", false))
 
 	if job.Config.HostNetwork {
 		// allow host network jobs to configure the network
@@ -687,16 +680,182 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	return nil
 }
 
-// resolveDiscoverdURI resolves a discoverd host in the given URI to an address
-// using the configured discoverd URL as the host is likely not using discoverd
-// to resolve DNS queries
-func (l *LibcontainerBackend) resolveDiscoverdURI(uri string) (string, error) {
-	u, err := url.Parse(uri)
+func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, error) {
+	layers := make([]string, 0, len(job.Mountspecs)+1)
+	for _, spec := range job.Mountspecs {
+		if spec.Type != host.MountspecTypeSquashfs {
+			return nil, fmt.Errorf("unknown mountspec type: %q", spec.Type)
+		}
+		path, err := l.mountSquashfs(spec)
+		if err != nil {
+			return nil, err
+		}
+		layers = append(layers, path)
+	}
+	tmpfs, err := l.mountTmpfs(job)
+	if err != nil {
+		return nil, err
+	}
+	layers = append(layers, tmpfs)
+	dirs := make([]string, len(layers))
+	for i, layer := range layers {
+		// append mount paths in reverse order as overlay
+		// lower dirs are stacked from right to left
+		dirs[len(layers)-i-1] = layer
+	}
+	upperDir := filepath.Join(tmpfs, "overlay-upperdir")
+	workDir := filepath.Join(tmpfs, "overlay-workdir")
+	for _, dir := range []string{upperDir, workDir} {
+		if err := os.Mkdir(dir, 0755); err != nil {
+			return nil, err
+		}
+	}
+	return &configs.Mount{
+		Source:      "overlay",
+		Destination: "/",
+		Device:      "overlay",
+		Data:        fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(dirs[1:], ":"), upperDir, workDir),
+	}, nil
+}
+
+func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
+	path, err := l.layerLoader.Do(m.ID, func() (interface{}, error) {
+		if vol := l.vman.GetVolume(m.ID); vol != nil {
+			return vol.Location(), nil
+		}
+
+		if m.URL == "" {
+			return "", fmt.Errorf("error getting squashfs layer %s: missing URL", m.ID)
+		}
+
+		if len(m.Hashes) == 0 {
+			return "", fmt.Errorf("error getting squashfs layer %s: missing Hashes", m.ID)
+		}
+		hashes := make(map[string]hash.Hash, len(m.Hashes))
+		for algorithm := range m.Hashes {
+			var h hash.Hash
+			switch algorithm {
+			case "sha256":
+				h = sha256.New()
+			case "sha512":
+				h = sha512.New()
+			default:
+				return "", fmt.Errorf("error getting squashfs layer %s: unknown hash algorithm %q", m.ID, algorithm)
+			}
+			hashes[algorithm] = h
+		}
+
+		u, err := url.Parse(m.URL)
+		if err != nil {
+			return "", err
+		}
+
+		var layer io.ReadCloser
+		switch u.Scheme {
+		case "file":
+			f, err := os.Open(u.Path)
+			if err != nil {
+				return "", fmt.Errorf("error getting squashfs layer %s: %s", m.URL, err)
+			}
+			layer = f
+		case "http", "https":
+			url, err := l.resolveDiscoverdURL(u)
+			if err != nil {
+				return "", err
+			}
+			res, err := http.Get(url)
+			if err != nil {
+				return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
+			}
+			if res.StatusCode != http.StatusOK {
+				return "", fmt.Errorf("error getting squashfs layer from %s: unexpected HTTP status %s", m.URL, res.Status)
+			}
+			layer = res.Body
+		default:
+			return "", fmt.Errorf("unknown layer URI scheme: %s", u.Scheme)
+		}
+		defer layer.Close()
+
+		// write the layer to a temp file and verify it has the
+		// expected hashes
+		tmp, err := ioutil.TempFile("", "flynn-layer-")
+		if err != nil {
+			return "", err
+		}
+		defer os.Remove(tmp.Name())
+		defer tmp.Close()
+		r := io.LimitReader(layer, m.Size)
+		for _, hash := range hashes {
+			r = io.TeeReader(r, hash)
+		}
+		if _, err := io.Copy(tmp, r); err != nil {
+			return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
+		}
+		for algorithm, hash := range hashes {
+			actual := hex.EncodeToString(hash.Sum(nil))
+			expected := m.Hashes[algorithm]
+			if actual != expected {
+				return "", fmt.Errorf("error getting squashfs layer from %s: expected %s hash %q but got %q", m.URL, algorithm, expected, actual)
+			}
+		}
+
+		if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {
+			return "", fmt.Errorf("error seeking squashfs layer temp file: %s", err)
+		}
+		vol, err := l.vman.ImportVolume("default", tmp, &volume.Info{
+			ID:         m.ID,
+			Size:       m.Size,
+			FSType:     "squashfs",
+			MountFlags: syscall.MS_RDONLY,
+		})
+		if err != nil {
+			return "", fmt.Errorf("error importing squashfs layer: %s", err)
+		}
+
+		return vol.Location(), nil
+	})
 	if err != nil {
 		return "", err
 	}
+	return path.(string), nil
+}
+
+func (l *LibcontainerBackend) mountTmpfs(job *host.Job) (string, error) {
+	size := *resource.Defaults()[resource.TypeDisk].Limit
+	if spec, ok := job.Resources[resource.TypeDisk]; ok && spec.Limit != nil {
+		size = *spec.Limit
+	}
+
+	path, err := l.tmpfsCache.Create(size)
+	if err != nil {
+		return "", err
+	}
+
+	tmpfs, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer tmpfs.Close()
+
+	vol, err := l.vman.ImportVolume("default", sparse.NewBufferedFileIoProcessorByFP(tmpfs), &volume.Info{
+		ID:         job.ID,
+		Size:       size,
+		FSType:     "ext2",
+		MountFlags: syscall.MS_NOATIME,
+	})
+	if err != nil {
+		return "", fmt.Errorf("error importing tmpfs: %s", err)
+	}
+
+	return vol.Location(), nil
+}
+
+// resolveDiscoverdURL resolves a discoverd host in the given URL to an address
+// using the configured discoverd URL as the host is likely not using discoverd
+// to resolve DNS queries
+func (l *LibcontainerBackend) resolveDiscoverdURL(u *url.URL) (string, error) {
 	if !strings.HasSuffix(u.Host, ".discoverd") {
-		return uri, nil
+		return u.String(), nil
 	}
 
 	// ensure discoverd is configured
@@ -739,7 +898,7 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	var symlinked bool
 	var err error
 	symlink := "/tmp/containerinit-rpc." + c.job.ID
-	socketPath := path.Join(c.RootPath, containerinit.SocketPath)
+	socketPath := path.Join(c.TmpPath, containerinit.SocketPath)
 	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(time.Millisecond) {
 		if !symlinked {
 			// We can't connect to the socket file directly because
@@ -888,12 +1047,16 @@ func (c *Container) cleanup() error {
 	delete(c.l.logStreams, c.job.ID)
 	c.l.logStreamMtx.Unlock()
 
-	if err := c.l.pinkerton.Cleanup(c.job.ID); err != nil {
-		log.Error("error running pinkerton cleanup", "err", err)
-	}
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
 		c.l.ipalloc.ReleaseIP(c.l.bridgeNet, c.IP)
 	}
+
+	// remove the tmpfs volume (which has the same ID as the job)
+	if err := c.l.vman.DestroyVolume(c.job.ID); err != nil {
+		log.Error("error removing tmpfs volume", "err", err)
+	}
+
+	os.RemoveAll(c.TmpPath)
 	log.Info("finished cleanup")
 	return nil
 }
@@ -1289,17 +1452,17 @@ func (l *LibcontainerBackend) CloseLogs() (host.LogBuffers, error) {
 	return buffers, nil
 }
 
-func addBindMount(config *configs.Config, src, dest string, writeable bool) {
+func bindMount(src, dest string, writeable bool) *configs.Mount {
 	flags := syscall.MS_BIND | syscall.MS_REC
 	if !writeable {
 		flags |= syscall.MS_RDONLY
 	}
-	config.Mounts = append(config.Mounts, &configs.Mount{
+	return &configs.Mount{
 		Source:      src,
 		Destination: dest,
 		Device:      "bind",
 		Flags:       flags,
-	})
+	}
 }
 
 // Taken from Kubernetes:
@@ -1385,4 +1548,46 @@ func createCGroupPartition(name string, cpuShares int64) error {
 		return fmt.Errorf("error writing cgroup param: %s", err)
 	}
 	return nil
+}
+
+type tmpfsCache struct {
+	cache map[int64]string
+	mtx   sync.Mutex
+}
+
+func (t *tmpfsCache) Create(size int64) (string, error) {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
+	if path, ok := t.cache[size]; ok {
+		return path, nil
+	}
+
+	f, err := ioutil.TempFile("", "flynn-ext2-")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	shutdown.BeforeExit(func() { os.Remove(f.Name()) })
+
+	if err := f.Truncate(size); err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command("mkfs.ext2", "-F", "-L", "rootfs", "-m", "0", f.Name())
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("error creating ext2 filesystem: %s: %s", err, out)
+	}
+
+	t.cache[size] = f.Name()
+	return f.Name(), nil
+}
+
+func newTmpfsCache() (*tmpfsCache, error) {
+	c := &tmpfsCache{cache: make(map[int64]string)}
+	defaultSize := *resource.Defaults()[resource.TypeDisk].Limit
+	if _, err := c.Create(defaultSize); err != nil {
+		return nil, err
+	}
+	return c, nil
 }

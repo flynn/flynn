@@ -1,18 +1,10 @@
 #!/bin/bash
 set -eo pipefail
 
-if [[ "$1" == "-" ]]; then
-  slug_file="$1"
-else
-  slug_file=/tmp/slug.tgz
-  if [[ "$1" ]]; then
-    put_url="$1"
-  fi
-fi
-
 app_dir=/app
 env_dir=/tmp/env
 build_root=/tmp/build
+build_dir="${build_root}/app"
 cache_root=/tmp/cache
 buildpack_root=/tmp/buildpacks
 env_cookie=.ENV_DIR_bdca46b87df0537eaefe79bb632d37709ff1df18
@@ -20,30 +12,22 @@ env_cookie=.ENV_DIR_bdca46b87df0537eaefe79bb632d37709ff1df18
 mkdir -p ${app_dir}
 mkdir -p ${cache_root}
 mkdir -p ${buildpack_root}
-mkdir -p ${build_root}/.profile.d
-
-output_redirect() {
-  if [[ "${slug_file}" == "-" ]]; then
-    cat - 1>&2
-  else
-    cat -
-  fi
-}
+mkdir -p ${build_dir}/.profile.d
 
 echo_title() {
-  echo $'\e[1G----->' $* | output_redirect
+  echo $'\e[1G----->' $*
 }
 
 echo_normal() {
-  echo $'\e[1G      ' $* | output_redirect
+  echo $'\e[1G      ' $*
 }
 
 ensure_indent() {
   while read line; do
     if [[ "${line}" == --* ]]; then
-      echo $'\e[1G'${line} | output_redirect
+      echo $'\e[1G'${line}
     else
-      echo $'\e[1G      ' "${line}" | output_redirect
+      echo $'\e[1G      ' "${line}"
     fi
   done
 }
@@ -70,7 +54,7 @@ prune_slugignore() {
   # read slugignore into array
   local globs=()
   local paths=()
-  readarray -t globs < "${build_root}/.slugignore"
+  readarray -t globs < "${build_dir}/.slugignore"
   # for line in slugignore
   for glob in ${globs[@]}; do
     # strip whitespace
@@ -82,7 +66,7 @@ prune_slugignore() {
     # remove leading slash(es)
     glob="${glob#"${glob%%[!"/"]*}"}"
     # append to build root and add to array of paths to remove
-    paths=("${paths[@]}" ${build_root}/${glob})
+    paths=("${paths[@]}" ${build_dir}/${glob})
   done
   echo_title "Deleting ${#paths[@]} files matching .slugignore patterns."
   rm -rf ${paths[@]}
@@ -109,8 +93,8 @@ fi
 
 # In heroku, there are two separate directories, and some
 # buildpacks expect that.
-cp -r . ${build_root}
-chown -R nobody:nogroup ${app_dir} ${build_root} ${cache_root}
+cp -r . ${build_dir}
+chown -R nobody:nogroup ${app_dir} ${build_dir} ${cache_root}
 
 ## Buildpack fixes
 
@@ -149,7 +133,7 @@ export CURL_CONNECT_TIMEOUT=30
 export CURL_TIMEOUT=600
 
 # Remove files matched by .slugignore
-if [[ -f "${build_root}/.slugignore" ]]; then
+if [[ -f "${build_dir}/.slugignore" ]]; then
   prune_slugignore
 fi
 
@@ -172,10 +156,10 @@ if [[ -n "${BUILDPACK_URL}" ]]; then
     &> /dev/null
   buildpacks=($buildpack)
   selected_buildpack=${buildpack[0]}
-  buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}")
+  buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_dir}")
 else
   for buildpack in "${buildpacks[@]}"; do
-    buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}") \
+    buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_dir}") \
       && selected_buildpack="${buildpack}" \
       && break
   done
@@ -191,32 +175,32 @@ fi
 ## Buildpack compile
 if [[ -n "${envdir}" ]]; then
   run_unprivileged ${selected_buildpack}/bin/compile \
-    "${build_root}" \
+    "${build_dir}" \
     "${cache_root}" \
     "${env_dir}" \
     | ensure_indent
 else
   run_unprivileged ${selected_buildpack}/bin/compile \
-    "${build_root}" \
+    "${build_dir}" \
     "${cache_root}" \
     | ensure_indent
 fi
 
 run_unprivileged ${selected_buildpack}/bin/release \
-  "${build_root}" \
+  "${build_dir}" \
   "${cache_root}" \
-  > ${build_root}/.release
+  > ${build_dir}/.release
 
 ## Display process types
 
 echo_title "Discovering process types"
-if [[ -f "${build_root}/Procfile" ]]; then
-  types=$(ruby -r yaml -e "puts YAML.load_file('${build_root}/Procfile').keys.join(', ')")
+if [[ -f "${build_dir}/Procfile" ]]; then
+  types=$(ruby -r yaml -e "puts YAML.load_file('${build_dir}/Procfile').keys.join(', ')")
   echo_normal "Procfile declares types -> ${types}"
 fi
 default_types=""
-if [[ -s "${build_root}/.release" ]]; then
-  default_types=$(ruby -r yaml -e "puts (YAML.load_file('${build_root}/.release') || {}).fetch('default_process_types', {}).keys.join(', ')")
+if [[ -s "${build_dir}/.release" ]]; then
+  default_types=$(ruby -r yaml -e "puts (YAML.load_file('${build_dir}/.release') || {}).fetch('default_process_types', {}).keys.join(', ')")
   if [[ -n "${default_types}" ]]; then
     echo_normal "Default process types for ${buildpack_name} -> ${default_types}"
   fi
@@ -224,22 +208,7 @@ fi
 
 
 ## Produce slug
-tar \
-  --exclude='./.git' \
-  --use-compress-program=pigz \
-  -C ${build_root} \
-  -cf ${slug_file} \
-  . \
-  | cat
-
-if [[ "${slug_file}" != "-" ]]; then
-  slug_size=$(du -Sh "${slug_file}" | cut -f1)
-  echo_title "Compiled slug size is ${slug_size}"
-
-  if [[ ${put_url} ]]; then
-    curl -0 -o "$(mktemp)" -X PUT -T ${slug_file} "${put_url}"
-  fi
-fi
+/bin/create-artifact "${build_root}"
 
 if [[ -n "${BUILD_CACHE_URL}" ]]; then
   tar \

@@ -18,7 +18,6 @@ import (
 	"github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/cluster/client"
 	"github.com/flynn/go-check"
-	"github.com/fsouza/go-dockerclient"
 )
 
 var args *arg.Args
@@ -38,10 +37,6 @@ func main() {
 	defer shutdown.Exit()
 
 	var err error
-	if err = lookupImageURIs(); err != nil {
-		log.Fatalf("could not determine image ID: %s", err)
-	}
-
 	var res *check.Result
 	// defer exiting here so it runs after all other defers
 	defer func() {
@@ -116,28 +111,6 @@ func main() {
 		ConcurrencyLevel: args.Concurrency,
 	})
 	fmt.Println(res)
-}
-
-var imageURIs = map[string]string{
-	"test-apps":           "",
-	"postgresql":          "",
-	"controller-examples": "",
-}
-
-func lookupImageURIs() error {
-	d, err := docker.NewClient("unix:///var/run/docker.sock")
-	if err != nil {
-		return err
-	}
-	for name := range imageURIs {
-		fullName := "flynn/" + name
-		image, err := d.InspectImage(fullName)
-		if err != nil {
-			return err
-		}
-		imageURIs[name] = fmt.Sprintf("https://example.com?name=%s&id=%s", fullName, image.ID)
-	}
-	return nil
 }
 
 func createFlynnrc(c *cluster.Cluster) error {

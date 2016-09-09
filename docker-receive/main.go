@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,7 +17,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/docker-receive/blobstore"
-	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
 )
@@ -120,18 +121,30 @@ func (m *manifestService) Put(manifest *manifest.SignedManifest) error {
 		return err
 	}
 
-	return m.createArtifact(dgst)
+	return m.runArtifactJob(dgst)
 }
 
-func (m *manifestService) createArtifact(dgst digest.Digest) error {
-	return m.client.CreateArtifact(&ct.Artifact{
-		Type: host.ArtifactTypeDocker,
-		URI:  fmt.Sprintf("http://flynn:%s@docker-receive.discoverd?name=%s&id=%s", m.authKey, m.repository.Name(), dgst),
-		Meta: map[string]string{
-			"docker-receive.repository": m.repository.Name(),
-			"docker-receive.digest":     string(dgst),
-		},
-	})
+func (m *manifestService) runArtifactJob(dgst digest.Digest) error {
+	url := fmt.Sprintf("http://flynn:%s@docker-receive.discoverd?name=%s&id=%s", m.authKey, m.repository.Name(), dgst)
+	job := &ct.NewJob{
+		Args:       []string{"/bin/docker-artifact", url},
+		ReleaseID:  os.Getenv("FLYNN_RELEASE_ID"),
+		ReleaseEnv: true,
+	}
+	rwc, err := m.client.RunJobAttached(os.Getenv("FLYNN_APP_ID"), job)
+	if err != nil {
+		return err
+	}
+	defer rwc.Close()
+	attachClient := cluster.NewAttachClient(rwc)
+	var out bytes.Buffer
+	exitStatus, err := attachClient.Receive(&out, &out)
+	if err != nil {
+		return err
+	} else if exitStatus != 0 {
+		return fmt.Errorf("artifact job exited with non-zero exit status %d: output: %s", exitStatus, out.String())
+	}
+	return nil
 }
 
 // digestManifest is a modified version of:

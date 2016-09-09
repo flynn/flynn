@@ -9,14 +9,23 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	zfs "github.com/mistifyio/go-zfs"
+	"github.com/rancher/sparse-tools/sparse"
+	"gopkg.in/inconshreveable/log15.v2"
 )
+
+const DefaultDatasetName = "flynn-default"
+
+// blockSize is the block size used when creating new zvols
+const blockSize = 8 * 1024
 
 type zfsVolume struct {
 	info      *volume.Info
@@ -64,6 +73,24 @@ type ProviderConfig struct {
 type MakeDev struct {
 	BackingFilename string `json:"filename"`
 	Size            int64  `json:"size"`
+}
+
+func DefaultMakeDev(volPath string, log log15.Logger) *MakeDev {
+	// use a zpool backing file size of either 70% of the device on which
+	// volumes will reside, or 100GB if that can't be determined.
+	log.Info("determining ZFS zpool size")
+	var size int64
+	var dev syscall.Statfs_t
+	if err := syscall.Statfs(volPath, &dev); err == nil {
+		size = (dev.Bsize * int64(dev.Blocks) * 7) / 10
+	} else {
+		size = 100000000000
+	}
+	log.Info(fmt.Sprintf("using ZFS zpool size %d", size))
+	return &MakeDev{
+		BackingFilename: filepath.Join(volPath, "zfs/vdev/flynn-default-zpool.vdev"),
+		Size:            size,
+	}
 }
 
 func NewProvider(config *ProviderConfig) (volume.Provider, error) {
@@ -122,6 +149,7 @@ func NewProvider(config *ProviderConfig) (volume.Provider, error) {
 	if config.WorkingDir == "" {
 		config.WorkingDir = "/var/lib/flynn/volumes/zfs/"
 	}
+
 	return &Provider{
 		config:  config,
 		dataset: dataset,
@@ -133,10 +161,14 @@ func (p *Provider) Kind() string {
 	return "zfs"
 }
 
+func (p *Provider) newInfo(id string) *volume.Info {
+	return &volume.Info{ID: id, FSType: "zfs"}
+}
+
 func (p *Provider) NewVolume() (volume.Volume, error) {
 	id := random.UUID()
 	v := &zfsVolume{
-		info:      &volume.Info{ID: id},
+		info:      p.newInfo(id),
 		provider:  p,
 		basemount: p.mountPath(id),
 	}
@@ -151,6 +183,98 @@ func (p *Provider) NewVolume() (volume.Volume, error) {
 	return v, nil
 }
 
+var zvolOpenAttempts = attempt.Strategy{
+	Total: 10 * time.Second,
+	Delay: 10 * time.Millisecond,
+}
+
+func (p *Provider) ImportVolume(data io.Reader, info *volume.Info) (volume.Volume, error) {
+	if info.ID == "" {
+		info.ID = random.UUID()
+	}
+	v := &zfsVolume{
+		info:      info,
+		provider:  p,
+		basemount: p.mountPath(info.ID),
+	}
+
+	// align size to blockSize
+	size := (info.Size/blockSize + 1) * blockSize
+
+	opts := map[string]string{
+		"volblocksize": strconv.Itoa(blockSize),
+	}
+	if _, ok := data.(sparse.FileIoProcessor); ok {
+		opts["refreservation"] = "none"
+	}
+
+	var err error
+	v.dataset, err = zfs.CreateVolume(path.Join(v.provider.dataset.Name, info.ID), uint64(size), opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// open the zvol device, trying multiple times as the device node is
+	// created asynchronously
+	var dev *os.File
+	err = zvolOpenAttempts.Run(func() (err error) {
+		dev, err = os.OpenFile(p.zvolPath(info.ID), os.O_WRONLY, 0666)
+		return
+	})
+	if err != nil {
+		p.destroy(v)
+		return nil, err
+	}
+	defer dev.Close()
+
+	if f, ok := data.(sparse.FileIoProcessor); ok {
+		if err := p.copySparse(dev, f); err != nil {
+			p.destroy(v)
+			return nil, err
+		}
+	} else {
+		n, err := io.Copy(dev, data)
+		if err != nil {
+			p.destroy(v)
+			return nil, err
+		} else if n != info.Size {
+			p.destroy(v)
+			return nil, io.ErrShortWrite
+		}
+	}
+
+	if err = os.MkdirAll(v.basemount, 0755); err != nil {
+		p.destroy(v)
+		return nil, err
+	}
+
+	if err := syscall.Mount(dev.Name(), v.basemount, info.FSType, info.MountFlags, ""); err != nil {
+		p.destroy(v)
+		return nil, err
+	}
+
+	p.volumes[info.ID] = v
+	return v, nil
+}
+
+func (p *Provider) copySparse(dst io.WriteSeeker, src sparse.FileIoProcessor) error {
+	extents, err := sparse.GetFiemapExtents(src)
+	if err != nil {
+		return err
+	}
+
+	for _, x := range extents {
+		if _, err := dst.Seek(int64(x.Logical), os.SEEK_SET); err != nil {
+			return err
+		}
+		if _, err := io.Copy(dst, io.NewSectionReader(src, int64(x.Logical), int64(x.Length))); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (p *Provider) owns(vol volume.Volume) (*zfsVolume, error) {
 	zvol := p.volumes[vol.Info().ID]
 	if zvol == nil {
@@ -163,33 +287,43 @@ func (p *Provider) owns(vol volume.Volume) (*zfsVolume, error) {
 }
 
 func (p *Provider) mountPath(id string) string {
-	return filepath.Join(p.config.WorkingDir, "/mnt/", id)
+	return filepath.Join(p.config.WorkingDir, "mnt", id)
 }
 
-func (p *Provider) DestroyVolume(vol volume.Volume) error {
-	zvol, err := p.owns(vol)
+func (p *Provider) zvolPath(id string) string {
+	return filepath.Join("/dev/zvol", p.dataset.Name, id)
+}
+
+func (p *Provider) DestroyVolume(v volume.Volume) error {
+	vol, err := p.owns(v)
 	if err != nil {
 		return err
 	}
-	if vol.IsSnapshot() {
-		if err := syscall.Unmount(vol.Location(), 0); err != nil {
+	return p.destroy(vol)
+}
+
+func (p *Provider) destroy(vol *zfsVolume) error {
+	if vol.IsSnapshot() || vol.IsZvol() {
+		if err := syscall.Unmount(vol.basemount, 0); err != nil {
 			return err
 		}
-		os.Remove(vol.Location())
+		os.Remove(vol.basemount)
 	}
-	if err := zvol.dataset.Destroy(zfs.DestroyForceUmount); err != nil {
+	if err := vol.dataset.Destroy(zfs.DestroyForceUmount); err != nil {
 		for i := 0; i < 5 && err != nil && IsDatasetBusyError(err); i++ {
 			// sometimes zfs will claim to be busy as if files are still open even when all container processes are dead.
 			// usually this goes away, so retry a few times.
 			time.Sleep(1 * time.Second)
-			err = zvol.dataset.Destroy(zfs.DestroyForceUmount)
+			err = vol.dataset.Destroy(zfs.DestroyForceUmount)
 		}
 		if err != nil {
 			return err
 		}
 	}
-	os.Remove(zvol.basemount)
-	delete(p.volumes, vol.Info().ID)
+	if vol.basemount != "" {
+		os.Remove(vol.basemount)
+	}
+	delete(p.volumes, vol.info.ID)
 	return nil
 }
 
@@ -200,7 +334,7 @@ func (p *Provider) CreateSnapshot(vol volume.Volume) (volume.Volume, error) {
 	}
 	id := random.UUID()
 	snap := &zfsVolume{
-		info:      &volume.Info{ID: id},
+		info:      p.newInfo(id),
 		provider:  zvol.provider,
 		basemount: p.mountPath(id),
 	}
@@ -245,6 +379,15 @@ func (p *Provider) mountDataset(vol *zfsVolume) error {
 	if err = os.MkdirAll(vol.basemount, 0644); err != nil {
 		return fmt.Errorf("could not mount: %s", err)
 	}
+	if vol.IsZvol() {
+		return syscall.Mount(
+			p.zvolPath(vol.info.ID),
+			vol.basemount,
+			vol.info.FSType,
+			syscall.MS_RDONLY,
+			"",
+		)
+	}
 	var buf bytes.Buffer
 	var cmd *exec.Cmd
 	if vol.IsSnapshot() {
@@ -269,7 +412,7 @@ func (p *Provider) ForkVolume(vol volume.Volume) (volume.Volume, error) {
 	}
 	id := random.UUID()
 	v2 := &zfsVolume{
-		info:      &volume.Info{ID: id},
+		info:      p.newInfo(id),
 		provider:  zvol.provider,
 		basemount: p.mountPath(id),
 	}
@@ -405,7 +548,7 @@ func (p *Provider) ReceiveSnapshot(vol volume.Volume, input io.Reader) (volume.V
 	// reassemble as a flynn volume for return
 	id := random.UUID()
 	snap := &zfsVolume{
-		info:      &volume.Info{ID: id},
+		info:      p.newInfo(id),
 		provider:  zvol.provider,
 		dataset:   snapds,
 		basemount: p.mountPath(id),
@@ -470,4 +613,8 @@ func (v *zfsVolume) Info() *volume.Info {
 
 func (v *zfsVolume) IsSnapshot() bool {
 	return v.dataset.Type == zfs.DatasetSnapshot
+}
+
+func (v *zfsVolume) IsZvol() bool {
+	return v.dataset.Type == zfs.DatasetVolume
 }

@@ -55,7 +55,7 @@ func runRun(args *docopt.Args, client controller.Client) error {
 		if err != nil {
 			return err
 		}
-		if release.ImageArtifactID() == "" {
+		if len(release.ArtifactIDs) == 0 {
 			return errors.New("App release has no image, push a release first")
 		}
 		config.Release = release.ID
@@ -72,6 +72,7 @@ type runConfig struct {
 	Detached   bool
 	Release    string
 	ReleaseEnv bool
+	Artifacts  []string
 	Args       []string
 	Env        map[string]string
 	Stdin      io.Reader
@@ -83,12 +84,13 @@ type runConfig struct {
 
 func runJob(client controller.Client, config runConfig) error {
 	req := &ct.NewJob{
-		Args:       config.Args,
-		TTY:        config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
-		ReleaseID:  config.Release,
-		Env:        config.Env,
-		ReleaseEnv: config.ReleaseEnv,
-		DisableLog: config.DisableLog,
+		Args:        config.Args,
+		TTY:         config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
+		ReleaseID:   config.Release,
+		ArtifactIDs: config.Artifacts,
+		Env:         config.Env,
+		ReleaseEnv:  config.ReleaseEnv,
+		DisableLog:  config.DisableLog,
 	}
 
 	// ensure slug apps from old clusters use /runner/init

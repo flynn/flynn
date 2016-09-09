@@ -190,11 +190,9 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 }
 
 func populateFormationArtifacts(ef *ct.ExpandedFormation, artifacts map[string]*ct.Artifact) {
-	ef.ImageArtifact = artifacts[ef.Release.ImageArtifactID()]
-
-	ef.FileArtifacts = make([]*ct.Artifact, len(ef.Release.FileArtifactIDs()))
-	for i, id := range ef.Release.FileArtifactIDs() {
-		ef.FileArtifacts[i] = artifacts[id]
+	ef.Artifacts = make([]*ct.Artifact, len(ef.Release.ArtifactIDs))
+	for i, id := range ef.Release.ArtifactIDs {
+		ef.Artifacts[i] = artifacts[id]
 	}
 }
 
@@ -477,7 +475,7 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	if release.ImageArtifactID() == "" {
+	if len(release.ArtifactIDs) == 0 {
 		respondWithError(w, ct.ValidationError{Message: "release is not deployable"})
 		return
 	}

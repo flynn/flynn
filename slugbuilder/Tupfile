@@ -1,2 +1,4 @@
 include_rules
-: $(ROOT)/util/cedarish/<docker> |> !docker-cedarish |>
+: |> !go ./artifact |> bin/create-artifact
+: |> !go ./migrator |> bin/migrator
+: bin/create-artifact bin/migrator $(ROOT)/util/cedarish/<docker> |> !docker-cedarish |>

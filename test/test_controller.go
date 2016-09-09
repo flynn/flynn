@@ -114,7 +114,7 @@ func unmarshalControllerExample(data []byte) (map[string]interface{}, error) {
 }
 
 func (s *ControllerSuite) generateControllerExamples(t *c.C) map[string]interface{} {
-	cmd := exec.Command(exec.DockerImage(imageURIs["controller-examples"]), "/bin/flynn-controller-examples")
+	cmd := exec.Command(s.createArtifact(t, "controller-examples"), "/bin/flynn-controller-examples")
 	cmd.Env = map[string]string{
 		"CONTROLLER_KEY":      s.clusterConf(t).Key,
 		"SKIP_MIGRATE_DOMAIN": "true",
@@ -573,7 +573,7 @@ func (s *ControllerSuite) TestBackup(t *c.C) {
 		t.Assert(ok, c.Equals, true)
 		t.Assert(ef.App, c.Not(c.IsNil))
 		t.Assert(ef.Release, c.Not(c.IsNil))
-		t.Assert(ef.ImageArtifact, c.Not(c.IsNil))
+		t.Assert(ef.Artifacts, c.HasLen, 1)
 		t.Assert(ef.Processes, c.Not(c.IsNil))
 		t.Assert(ef.App.Name, c.Equals, name)
 	}

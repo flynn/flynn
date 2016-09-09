@@ -16,7 +16,6 @@ import (
 	"github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
 	g "github.com/flynn/flynn/pkg/examplegenerator"
 	"github.com/flynn/flynn/pkg/httprecorder"
 	"github.com/flynn/flynn/pkg/random"
@@ -281,8 +280,47 @@ func (e *generator) deleteApp() {
 
 func (e *generator) createArtifact() {
 	artifact := &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
+		Type: ct.ArtifactTypeFlynn,
 		URI:  e.resourceIds["SLUGRUNNER_IMAGE_URI"],
+		Manifest: &ct.ImageManifest{
+			Type: ct.ImageManifestTypeV1,
+			Meta: map[string]string{"foo": "bar"},
+			Entrypoints: map[string]*ct.ImageEntrypoint{
+				"_default": {
+					Env:        map[string]string{"key": "default-val"},
+					WorkingDir: "/",
+					Args:       []string{"bash"},
+				},
+				"web": {
+					Env:        map[string]string{"key": "other-val"},
+					WorkingDir: "/app",
+					Args:       []string{"/bin/web-server"},
+				},
+			},
+			Rootfs: []*ct.ImageRootfs{
+				{
+					Platform: &ct.ImagePlatform{
+						Architecture: "amd64",
+						OS:           "linux",
+					},
+					Layers: []*ct.ImageLayer{
+						{
+							ID:     "8f065abdf965e23fa22f",
+							Type:   ct.ImageLayerTypeSquashfs,
+							Length: 34570240,
+							Hashes: map[string]string{"sha512": "8f065abdf965e23fa22f0395f33effb6762c0e58768bd86bec7eda2b99b5656f3b0f1d3bb8316b775f7f8a5a3e8ce3defb7d2c9637c877ee211540fa274616ab"},
+						},
+						{
+							ID:     "efe6a3b8cc4d26524187",
+							Type:   ct.ImageLayerTypeSquashfs,
+							Length: 92368896,
+							Hashes: map[string]string{"sha512": "efe6a3b8cc4d26524187575b3792f54bcdd17c2dcd178db2c2c00a01329a1a2a02a9f081645723102b8e39424e2c11ebc8e222993bc9980b2b09190f9404557a"},
+						},
+					},
+				},
+			},
+		},
+		LayerURLTemplate: "https://dl.flynn.io/tuf?target=/layers/{id}.squashfs",
 	}
 	err := e.client.CreateArtifact(artifact)
 	if err != nil {

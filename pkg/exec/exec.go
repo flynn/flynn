@@ -7,6 +7,9 @@ import (
 	"io"
 	"io/ioutil"
 
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/schedutil"
@@ -22,7 +25,7 @@ type Cmd struct {
 
 	Args []string
 
-	ImageArtifact host.Artifact
+	ImageArtifact *ct.Artifact
 
 	Env map[string]string
 
@@ -32,6 +35,8 @@ type Cmd struct {
 	Stderr io.Writer
 
 	TermHeight, TermWidth uint16
+
+	Resources resource.Resources
 
 	// cluster is used to communicate with the layer 0 cluster
 	cluster ClusterClient
@@ -80,16 +85,16 @@ type Cmd struct {
 	stdinPipe *readyWriter
 }
 
-func DockerImage(uri string) host.Artifact {
-	return host.Artifact{Type: host.ArtifactTypeDocker, URI: uri}
+func Command(artifact *ct.Artifact, args ...string) *Cmd {
+	cmd := &Cmd{ImageArtifact: artifact, Args: args}
+	resource.SetDefaults(&cmd.Resources)
+	return cmd
 }
 
-func Command(artifact host.Artifact, args ...string) *Cmd {
-	return &Cmd{ImageArtifact: artifact, Args: args}
-}
-
-func Job(artifact host.Artifact, job *host.Job) *Cmd {
-	return &Cmd{ImageArtifact: artifact, Job: job}
+func Job(artifact *ct.Artifact, job *host.Job) *Cmd {
+	cmd := &Cmd{ImageArtifact: artifact, Job: job}
+	resource.SetDefaults(&cmd.Resources)
+	return cmd
 }
 
 type ClusterClient interface {
@@ -97,19 +102,19 @@ type ClusterClient interface {
 	Host(string) (*cluster.Host, error)
 }
 
-func CommandUsingCluster(c ClusterClient, artifact host.Artifact, args ...string) *Cmd {
+func CommandUsingCluster(c ClusterClient, artifact *ct.Artifact, args ...string) *Cmd {
 	command := Command(artifact, args...)
 	command.cluster = c
 	return command
 }
 
-func JobUsingCluster(c ClusterClient, artifact host.Artifact, job *host.Job) *Cmd {
+func JobUsingCluster(c ClusterClient, artifact *ct.Artifact, job *host.Job) *Cmd {
 	command := Job(artifact, job)
 	command.cluster = c
 	return command
 }
 
-func JobUsingHost(h *cluster.Host, artifact host.Artifact, job *host.Job) *Cmd {
+func JobUsingHost(h *cluster.Host, artifact *ct.Artifact, job *host.Job) *Cmd {
 	command := Job(artifact, job)
 	command.HostID = h.ID()
 	command.host = h
@@ -185,26 +190,25 @@ func (c *Cmd) Start() error {
 	// otherwise generate one from the fields on exec.Cmd that mirror stdlib's os.exec.
 	if c.Job == nil {
 		c.Job = &host.Job{
-			ImageArtifact: &c.ImageArtifact,
 			Config: host.ContainerConfig{
 				Args:  c.Args,
 				TTY:   c.TTY,
 				Env:   c.Env,
 				Stdin: c.Stdin != nil || c.stdinPipe != nil,
 			},
-			Metadata: c.Meta,
+			Metadata:  c.Meta,
+			Resources: c.Resources,
 		}
 		// if attaching to stdout / stderr, avoid round tripping the
 		// streams via on-disk log files.
 		if c.Stdout != nil || c.Stderr != nil {
 			c.Job.Config.DisableLog = true
 		}
-	} else {
-		c.Job.ImageArtifact = &c.ImageArtifact
 	}
 	if c.Job.ID == "" {
 		c.Job.ID = cluster.GenerateJobID(c.HostID, "")
 	}
+	utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
 
 	if c.host == nil {
 		var err error

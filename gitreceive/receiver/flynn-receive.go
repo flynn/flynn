@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/go-units"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
@@ -31,7 +32,10 @@ func init() {
 
 var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 
-const blobstoreURL = "http://blobstore.discoverd"
+const (
+	blobstoreURL                = "http://blobstore.discoverd"
+	defaultSlugbuilderDiskLimit = 1 * units.GiB
+)
 
 func parsePairs(args *docopt.Args, str string) (map[string]string, error) {
 	pairs := args.All[str].([]string)
@@ -102,7 +106,7 @@ Options:
 
 	fmt.Printf("-----> Building %s...\n", app.Name)
 
-	jobEnv := make(map[string]string)
+	jobEnv := make(map[string]string, 6)
 	jobEnv["BUILD_CACHE_URL"] = fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID)
 	if buildpackURL, ok := env["BUILDPACK_URL"]; ok {
 		jobEnv["BUILDPACK_URL"] = buildpackURL
@@ -114,11 +118,13 @@ Options:
 			jobEnv[k] = v
 		}
 	}
-	slugURL := fmt.Sprintf("%s/%s/slug.tgz", blobstoreURL, random.UUID())
+	slugImageID := random.UUID()
+	jobEnv["CONTROLLER_KEY"] = os.Getenv("CONTROLLER_KEY")
+	jobEnv["SLUG_IMAGE_ID"] = slugImageID
 
 	job := &host.Job{
 		Config: host.ContainerConfig{
-			Args:       []string{"/tmp/builder/build.sh", slugURL},
+			Args:       []string{"/tmp/builder/build.sh"},
 			Env:        jobEnv,
 			Stdin:      true,
 			DisableLog: true,
@@ -130,19 +136,27 @@ Options:
 			"flynn-controller.release":  prevRelease.ID,
 			"flynn-controller.type":     "slugbuilder",
 		},
+		Resources: resource.Defaults(),
 	}
 	if sb, ok := prevRelease.Processes["slugbuilder"]; ok {
 		job.Resources = sb.Resources
-	} else if rawLimit := os.Getenv("SLUGBUILDER_DEFAULT_MEMORY_LIMIT"); rawLimit != "" {
-		if limit, err := resource.ParseLimit(resource.TypeMemory, rawLimit); err == nil {
-			r := make(resource.Resources)
-			resource.SetDefaults(&r)
-			r[resource.TypeMemory] = resource.Spec{Limit: &limit, Request: &limit}
-			job.Resources = r
+	} else {
+		if rawLimit := os.Getenv("SLUGBUILDER_DEFAULT_MEMORY_LIMIT"); rawLimit != "" {
+			if limit, err := resource.ParseLimit(resource.TypeMemory, rawLimit); err == nil {
+				job.Resources[resource.TypeMemory] = resource.Spec{Limit: &limit, Request: &limit}
+			}
+		}
+
+		if rawLimit := os.Getenv("SLUGBUILDER_DEFAULT_DISK_LIMIT"); rawLimit != "" {
+			if limit, err := resource.ParseLimit(resource.TypeDisk, rawLimit); err == nil {
+				job.Resources[resource.TypeDisk] = resource.Spec{Limit: &limit, Request: &limit}
+			}
+		} else {
+			job.Resources.SetDiskLimit(defaultSlugbuilderDiskLimit)
 		}
 	}
 
-	cmd := exec.Job(*slugBuilder.HostArtifact(), job)
+	cmd := exec.Job(slugBuilder, job)
 	var output bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
@@ -173,17 +187,8 @@ Options:
 
 	fmt.Printf("-----> Creating release...\n")
 
-	slugArtifact := &ct.Artifact{
-		Type: host.ArtifactTypeFile,
-		URI:  slugURL,
-		Meta: map[string]string{"blobstore": "true"},
-	}
-	if err := client.CreateArtifact(slugArtifact); err != nil {
-		return fmt.Errorf("Error creating slug artifact: %s", err)
-	}
-
 	release := &ct.Release{
-		ArtifactIDs: []string{slugRunnerID, slugArtifact.ID},
+		ArtifactIDs: []string{slugRunnerID, slugImageID},
 		Env:         prevRelease.Env,
 		Meta:        prevRelease.Meta,
 	}
