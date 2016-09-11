@@ -28,10 +28,11 @@ const (
 )
 
 type BootConfig struct {
-	User     string
-	Kernel   string
-	Network  string
-	NatIface string
+	User       string
+	Kernel     string
+	Network    string
+	NatIface   string
+	BackupsDir string
 }
 
 type Cluster struct {
@@ -120,6 +121,7 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 		Drives: map[string]*VMDrive{
 			"hda": {FS: rootFS, COW: true, Temp: false},
 		},
+		BackupsDir: c.bc.BackupsDir,
 	})
 	if err != nil {
 		return build.Drive("hda").FS, err
@@ -266,6 +268,7 @@ func (c *Cluster) startVMs(typ ClusterType, rootFS string, count int, initial bo
 			Drives: map[string]*VMDrive{
 				"hda": {FS: rootFS, COW: true, Temp: true},
 			},
+			BackupsDir: c.bc.BackupsDir,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("error creating instance %d: %s", i, err)
@@ -464,6 +467,7 @@ sudo start-stop-daemon \
   daemon \
   --id {{ .ID }} \
   --external-ip {{ .IP }} \
+  --listen-ip {{ .IP }} \
   --force \
   --peer-ips {{ .Peers }} \
   --max-job-concurrency 8 \
@@ -495,8 +499,8 @@ func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 	var cmdErr error
 	go func() {
 		command := fmt.Sprintf(
-			"CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s flynn-host bootstrap --json --min-hosts=%d --peer-ips=%s /etc/flynn-bootstrap.json",
-			c.ClusterDomain, c.ControllerKey, len(instances), strings.Join(ips, ","),
+			"CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s DISCOVERD=%s:1111 flynn-host bootstrap --json --min-hosts=%d --peer-ips=%s /etc/flynn-bootstrap.json",
+			c.ClusterDomain, c.ControllerKey, inst.IP, len(instances), strings.Join(ips, ","),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: c.out})
 		wr.Close()

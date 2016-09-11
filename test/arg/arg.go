@@ -37,6 +37,7 @@ func Parse() *Args {
 	flag.StringVar(&args.BootConfig.Kernel, "kernel", "rootfs/vmlinuz", "path to the Linux binary")
 	flag.StringVar(&args.BootConfig.Network, "network", "10.52.0.1/24", "the network to use for vms")
 	flag.StringVar(&args.BootConfig.NatIface, "nat", "eth0", "the interface to provide NAT to vms")
+	flag.StringVar(&args.BootConfig.BackupsDir, "backups-dir", "", "directory containing historic cluster backups")
 	flag.StringVar(&args.RootFS, "rootfs", "rootfs/rootfs.img", "filesystem image to use with QEMU")
 	flag.StringVar(&args.CLI, "cli", "flynn", "path to flynn-cli binary")
 	flag.StringVar(&args.FlynnHost, "flynn-host", "../host/bin/flynn-host", "path to flynn-host binary")

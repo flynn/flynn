@@ -346,12 +346,17 @@ git config --global user.name "CI"
 
 cd test
 
+# mount the backups dir
+sudo mkdir -p /mnt/backups
+sudo mount -t 9p -o trans=virtio backupsfs /mnt/backups
+
 cmd="bin/flynn-test \
   --flynnrc $HOME/.flynnrc \
   --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .Cluster.ID }} \
   --cli $(pwd)/../cli/bin/flynn \
   --flynn-host $(pwd)/../host/bin/flynn-host \
   --router-ip {{ .Cluster.RouterIP }} \
+  --backups-dir "/mnt/backups" \
   --debug"
 
 timeout --signal=QUIT --kill-after=10 35m $cmd

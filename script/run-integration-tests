@@ -106,6 +106,7 @@ main() {
     "--flynnrc ${FLYNNRC}"
     "--cli ${flynn}"
     "--flynn-host ${flynn_host}"
+    "--backups-dir" "${ROOT}/backups"
     "--debug"
   )
 
