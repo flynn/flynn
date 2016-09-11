@@ -12,6 +12,7 @@ import (
 
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/ctxhelper"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/jackc/pgx"
 	"github.com/julienschmidt/httprouter"
@@ -19,6 +20,8 @@ import (
 )
 
 type ErrorCode string
+
+var RetryClient = &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
 
 const (
 	NotFoundErrorCode           ErrorCode = "not_found"
