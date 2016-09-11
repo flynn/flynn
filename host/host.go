@@ -190,6 +190,10 @@ func runDaemon(args *docopt.Args) {
 		maxJobConcurrency = m
 	}
 
+	if path, err := filepath.Abs(flynnInit); err == nil {
+		flynnInit = path
+	}
+
 	var partitionCGroups = make(map[string]int64) // name -> cpu shares
 	for _, p := range strings.Split(args.String["--partitions"], " ") {
 		nameShares := strings.Split(p, "=cpu_shares:")
