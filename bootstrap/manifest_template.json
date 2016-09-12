@@ -58,7 +58,8 @@
     "release": {
       "env": {
         "DISCOVERD": "none",
-        "BACKEND": "{{ getenv \"FLANNEL_BACKEND\" }}"
+        "BACKEND": "{{ getenv \"FLANNEL_BACKEND\" }}",
+        "NETWORK": "{{ getenv \"FLANNEL_NETWORK\" }}"
       },
       "processes": {
         "app": {

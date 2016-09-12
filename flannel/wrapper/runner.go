@@ -35,7 +35,10 @@ func main() {
 	if backend := os.Getenv("BACKEND"); backend != "" {
 		config.Backend.Type = backend
 	}
-	flag.StringVar(&config.Network, "network", "100.100.0.0/16", "container network")
+	config.Network = os.Getenv("NETWORK")
+	if config.Network == "" {
+		config.Network = "100.100.0.0/16"
+	}
 	flag.StringVar(&config.SubnetMin, "subnet-min", "", "container network min subnet")
 	flag.StringVar(&config.SubnetMax, "subnet-max", "", "container network max subnet")
 	flag.UintVar(&config.SubnetLen, "subnet-len", 0, "container network subnet length")
