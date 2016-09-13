@@ -20,6 +20,7 @@ import (
 	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/host/volume/api"
 	"github.com/flynn/flynn/host/volume/manager"
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -320,6 +321,7 @@ func runDaemon(args *docopt.Args) {
 		state:   state,
 		backend: backend,
 		vman:    vman,
+		volAPI:  volumeapi.NewHTTPAPI(vman),
 		discMan: discoverdManager,
 		log:     logger.New("host.id", hostID),
 
