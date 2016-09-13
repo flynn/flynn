@@ -28,14 +28,15 @@ type VMManager struct {
 }
 
 type VMConfig struct {
-	Kernel string
-	User   int
-	Group  int
-	Memory string
-	Cores  int
-	Drives map[string]*VMDrive
-	Args   []string
-	Out    io.Writer `json:"-"`
+	Kernel     string
+	User       int
+	Group      int
+	Memory     string
+	Cores      int
+	Drives     map[string]*VMDrive
+	Args       []string
+	Out        io.Writer `json:"-"`
+	BackupsDir string
 
 	netFS string
 }
@@ -138,6 +139,7 @@ func (i *Instance) Start() error {
 		"-netdev", "tap,id=vmnic,ifname="+i.tap.Name+",script=no,downscript=no",
 		"-device", "virtio-net,netdev=vmnic,mac="+macaddr,
 		"-virtfs", "fsdriver=local,path="+i.netFS+",security_model=passthrough,readonly,mount_tag=netfs",
+		"-virtfs", "fsdriver=local,path="+i.BackupsDir+",security_model=passthrough,readonly,mount_tag=backupsfs",
 		"-nographic",
 	)
 	if i.Memory != "" {

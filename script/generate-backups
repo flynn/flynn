@@ -1,0 +1,133 @@
+#!/bin/bash
+
+set -e
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [options] DIR
+
+Generate backups from historically versioned clusters into DIR.
+
+OPTIONS:
+  -h, --help    Show this message
+  -f, --force   Create the backups even if they exist
+USAGE
+}
+
+main() {
+  local force=false
+
+  while true; do
+    case "$1" in
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -f | --force)
+        force=true
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  if [[ $# -ne 1 ]]; then
+    usage
+    exit 1
+  fi
+
+  local dir=$1
+
+  local tmp="$(mktemp --directory)"
+  trap "rm -rf ${tmp}" EXIT
+
+  local src="${tmp}/src"
+  clone_app "${src}"
+
+  export FLYNNRC="${tmp}/flynnrc"
+  local app="nodejs"
+
+  for version in "v20160309.0" "v20160423.0" "v20160624.1" "v20160721.2" "v20160814.0"; do
+    local out="${dir}/${version}-nodejs-redis.tar"
+
+    if [[ -e "${out}" ]] && ! $force; then
+      info "backup of ${version} already exists"
+      continue
+    fi
+
+    bootstrap_cluster "${version}"
+    git_deploy_app
+    add_redis_resource
+    backup_cluster "${out}"
+  done
+}
+
+clone_app() {
+  local path=$1
+
+  info "cloning Node.js example app"
+  git clone "https://github.com/flynn-examples/nodejs-flynn-example.git" "${path}"
+}
+
+bootstrap_cluster() {
+  local version=$1
+
+  local out="${tmp}/bootstrap-${version}.txt"
+
+  info "bootstrapping ${version} cluster"
+  local cluster_add=$("${ROOT}/script/bootstrap-flynn" --version "${version}" &> >(tee "${out}") | tail -3 | head -1)
+
+  if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
+    warn "bootstrap failed:"
+    cat "${out}"
+    fail "bootstrap failed"
+  fi
+
+  flynn cluster remove default
+
+  if [[ "${version:1:8}" -ge "20160609" ]]; then
+    flynn cluster add --docker ${cluster_add:18}
+  else
+    flynn cluster add ${cluster_add:18}
+  fi
+}
+
+git_deploy_app() {
+  info "deploying app using 'git push'"
+
+  pushd "${src}" >/dev/null
+
+  flynn create --yes "${app}"
+
+  local out="${tmp}/git-push-${version}.txt"
+  if ! git push flynn master &> "${out}"; then
+    warn "git push failed:"
+    cat "${out}"
+    fail "git push failed"
+  fi
+
+  popd >/dev/null
+}
+
+add_redis_resource() {
+  info "adding Redis resource"
+  flynn -a "${app}" resource add redis
+}
+
+backup_cluster() {
+  local file=$1
+
+  info "backing up cluster to ${file}"
+  flynn cluster backup --file "${file}"
+}
+
+flynn() {
+  "${ROOT}/cli/bin/flynn" $@
+}
+
+main $@

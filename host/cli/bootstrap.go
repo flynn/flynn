@@ -223,6 +223,40 @@ $function$;
 		return fmt.Errorf("error decoding manifest json: %s", err)
 	}
 
+	// add new env vars to system apps
+	for _, step := range manifestSteps {
+		var release *ct.Release
+		switch step.ID {
+		case "discoverd":
+			release = data.Discoverd.Release
+		case "flannel":
+			release = data.Flannel.Release
+		case "postgres":
+			release = data.Postgres.Release
+		case "mariadb":
+			if data.MariaDB != nil {
+				release = data.MariaDB.Release
+			}
+		case "mongodb":
+			if data.MongoDB != nil {
+				release = data.MongoDB.Release
+			}
+		case "controller":
+			release = data.Controller.Release
+		}
+		if release == nil {
+			continue
+		}
+		for key, val := range step.Release.Env {
+			if _, ok := release.Env[key]; !ok {
+				if len(release.Env) == 0 {
+					release.Env = make(map[string]string)
+				}
+				release.Env[key] = val
+			}
+		}
+	}
+
 	artifactURIs := make(map[string]string)
 	updateProcArgs := func(f *ct.ExpandedFormation, step *manifestStep) {
 		for typ, proc := range step.Release.Processes {
