@@ -1,4 +1,4 @@
 include_rules
 : |> !go |> bin/docker-receive
 : $(ROOT)/util/ca-certs/ca-certs.pem |> !cp |> bin/ca-certs.pem
-: bin/docker-receive bin/ca-certs.pem |> !docker-bootstrapped |>
+: bin/docker-receive bin/ca-certs.pem |> !image-bootstrapped |>

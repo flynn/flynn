@@ -1,16 +1,20 @@
 package types
 
 import (
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
+	"github.com/tent/canonical-json-go"
 )
 
 const RouteParentRefPrefix = "controller/apps/"
@@ -466,4 +470,68 @@ type AppGarbageCollection struct {
 type AppGarbageCollectionEvent struct {
 	AppGarbageCollection *AppGarbageCollection `json:"app_garbage_collection"`
 	Error                string                `json:"error"`
+}
+
+type ImageManifestType string
+
+const ImageManifestTypeV1 ImageManifestType = "application/vnd.flynn.image.manifest.v1+json"
+
+type ImageManifest struct {
+	Type        ImageManifestType           `json:"_type"`
+	Meta        map[string]string           `json:"meta,omitempty"`
+	Entrypoints map[string]*ImageEntrypoint `json:"entrypoints,omitempty"`
+	Rootfs      []*ImageRootfs              `json:"rootfs,omitempty"`
+
+	hashes     map[string]string
+	hashesOnce sync.Once
+}
+
+func (i *ImageManifest) ID() string {
+	return i.Hashes()["sha512_256"]
+}
+
+func (i *ImageManifest) Hashes() map[string]string {
+	i.hashesOnce.Do(func() {
+		data, _ := cjson.Marshal(i)
+		digest := sha512.Sum512_256(data)
+		i.hashes = map[string]string{"sha512_256": hex.EncodeToString(digest[:])}
+	})
+	return i.hashes
+}
+
+func (m *ImageManifest) DefaultEntrypoint() *ImageEntrypoint {
+	return m.Entrypoints["_default"]
+}
+
+type ImageEntrypoint struct {
+	Env               map[string]string `json:"env,omitempty"`
+	WorkingDir        string            `json:"cwd,omitempty"`
+	Args              []string          `json:"args,omitempty"`
+	LinuxCapabilities []string          `json:"linux_capabilities,omitempty"`
+}
+
+type ImageRootfs struct {
+	Platform *ImagePlatform `json:"platform,omitempty"`
+	Layers   []*ImageLayer  `json:"layers,omitempty"`
+}
+
+var DefaultImagePlatform = &ImagePlatform{
+	Architecture: "amd64",
+	OS:           "linux",
+}
+
+type ImagePlatform struct {
+	Architecture string `json:"architecture,omitempty"`
+	OS           string `json:"os,omitempty"`
+}
+
+type ImageLayerType string
+
+const ImageLayerTypeSquashfs ImageLayerType = "application/vnd.flynn.image.squashfs.v1"
+
+type ImageLayer struct {
+	ID     string            `json:"id,omitempty"`
+	Type   ImageLayerType    `json:"type,omitempty"`
+	Length int64             `json:"length,omitempty"`
+	Hashes map[string]string `json:"hashes,omitempty"`
 }

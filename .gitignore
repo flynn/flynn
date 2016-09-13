@@ -10,3 +10,4 @@ util/_toolchain/go
 *.swp
 *.test
 /tmp
+/image
