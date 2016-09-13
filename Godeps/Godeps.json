@@ -858,6 +858,10 @@
 			"Rev": "fca8c8854093a154ff1eb580aae10276ad6b1b5f"
 		},
 		{
+			"ImportPath": "github.com/golang/groupcache/singleflight",
+			"Rev": "a6b377e3400b08991b80d6805d627f347f983866"
+		},
+		{
 			"ImportPath": "github.com/golang/protobuf/proto",
 			"Rev": "78b168c14fc28c8c711844d210f7ab845083e3b1"
 		},
@@ -912,6 +916,11 @@
 			"ImportPath": "github.com/jmespath/go-jmespath",
 			"Comment": "0.2.2-12-g0b12d6b",
 			"Rev": "0b12d6b521d83fc7f755e7cfc1b1fbdd35a01a74"
+		},
+		{
+			"ImportPath": "github.com/jtacoma/uritemplates",
+			"Comment": "v1.0.0",
+			"Rev": "307ae868f90f4ee1b73ebe4596e0394237dacce8"
 		},
 		{
 			"ImportPath": "github.com/jteeuwen/go-bindata",
@@ -1066,6 +1075,10 @@
 		{
 			"ImportPath": "github.com/pkg/browser",
 			"Rev": "5a9dc85e4de606c9e32b769c9ff17fed84f687f9"
+		},
+		{
+			"ImportPath": "github.com/rancher/sparse-tools/sparse",
+			"Rev": "9cac891ad8a2029146df905ae09622eb1de8b19c"
 		},
 		{
 			"ImportPath": "github.com/rnd42/go-jsonpointer",
