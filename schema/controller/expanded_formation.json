@@ -18,10 +18,7 @@
     "release": {
       "$ref": "/schema/controller/release#"
     },
-    "artifact": {
-      "$ref": "/schema/controller/artifact#"
-    },
-    "file_artifacts": {
+    "artifacts": {
       "type": "array",
       "items": {
         "$ref": "/schema/controller/artifact#"

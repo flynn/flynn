@@ -1,29 +1,33 @@
 package types
 
 import (
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
+	"github.com/jtacoma/uritemplates"
+	"github.com/tent/canonical-json-go"
 )
 
 const RouteParentRefPrefix = "controller/apps/"
 
 type ExpandedFormation struct {
-	App           *App                         `json:"app,omitempty"`
-	Release       *Release                     `json:"release,omitempty"`
-	ImageArtifact *Artifact                    `json:"artifact,omitempty"`
-	FileArtifacts []*Artifact                  `json:"file_artifacts,omitempty"`
-	Processes     map[string]int               `json:"processes,omitempty"`
-	Tags          map[string]map[string]string `json:"tags,omitempty"`
-	UpdatedAt     time.Time                    `json:"updated_at,omitempty"`
-	Deleted       bool                         `json:"deleted,omitempty"`
+	App       *App                         `json:"app,omitempty"`
+	Release   *Release                     `json:"release,omitempty"`
+	Artifacts []*Artifact                  `json:"artifacts,omitempty"`
+	Processes map[string]int               `json:"processes,omitempty"`
+	Tags      map[string]map[string]string `json:"tags,omitempty"`
+	UpdatedAt time.Time                    `json:"updated_at,omitempty"`
+	Deleted   bool                         `json:"deleted,omitempty"`
 }
 
 type App struct {
@@ -65,27 +69,6 @@ type Release struct {
 	LegacyArtifactID string `json:"artifact,omitempty"`
 }
 
-func (r *Release) ImageArtifactID() string {
-	if len(r.ArtifactIDs) > 0 {
-		return r.ArtifactIDs[0]
-	}
-	return r.LegacyArtifactID
-}
-
-func (r *Release) SetImageArtifactID(id string) {
-	if len(r.ArtifactIDs) == 0 {
-		r.ArtifactIDs = []string{id}
-	}
-	r.ArtifactIDs[0] = id
-}
-
-func (r *Release) FileArtifactIDs() []string {
-	if len(r.ArtifactIDs) < 1 {
-		return nil
-	}
-	return r.ArtifactIDs[1:len(r.ArtifactIDs)]
-}
-
 func (r *Release) IsGitDeploy() bool {
 	return r.Meta["git"] == "true"
 }
@@ -124,19 +107,57 @@ type VolumeReq struct {
 	DeleteOnStop bool   `json:"delete_on_stop"`
 }
 
+type ArtifactType string
+
+const (
+	// ArtifactTypeFlynn is the type of artifact which references a Flynn
+	// image manifest
+	ArtifactTypeFlynn ArtifactType = "flynn"
+
+	// DeprecatedArtifactTypeFile is a deprecated artifact type which was
+	// used to reference slugs when they used to be tarballs stored in the
+	// blobstore (they are now squashfs based Flynn images)
+	DeprecatedArtifactTypeFile ArtifactType = "file"
+
+	// DeprecatedArtifactTypeDocker is a deprecated artifact type which
+	// used to reference a pinkerton-compatible Docker URI used to pull
+	// Docker images from a Docker registry (they are now converted to
+	// squashfs based Flynn images either at build time or at push time by
+	// docker-receive)
+	DeprecatedArtifactTypeDocker ArtifactType = "docker"
+)
+
 type Artifact struct {
-	ID        string            `json:"id,omitempty"`
-	Type      host.ArtifactType `json:"type,omitempty"`
-	URI       string            `json:"uri,omitempty"`
-	Meta      map[string]string `json:"meta,omitempty"`
-	CreatedAt *time.Time        `json:"created_at,omitempty"`
+	ID               string            `json:"id,omitempty"`
+	Type             ArtifactType      `json:"type,omitempty"`
+	URI              string            `json:"uri,omitempty"`
+	Meta             map[string]string `json:"meta,omitempty"`
+	RawManifest      json.RawMessage   `json:"manifest,omitempty"`
+	Hashes           map[string]string `json:"hashes,omitempty"`
+	Size             int64             `json:"size,omitempty"`
+	LayerURLTemplate string            `json:"layer_url_template,omitempty"`
+	CreatedAt        *time.Time        `json:"created_at,omitempty"`
+
+	manifest     *ImageManifest
+	manifestOnce sync.Once
 }
 
-func (a *Artifact) HostArtifact() *host.Artifact {
-	return &host.Artifact{
-		URI:  a.URI,
-		Type: a.Type,
+func (a *Artifact) Manifest() *ImageManifest {
+	a.manifestOnce.Do(func() {
+		a.manifest = &ImageManifest{}
+		json.Unmarshal(a.RawManifest, a.manifest)
+	})
+	return a.manifest
+}
+
+func (a *Artifact) LayerURL(layer *ImageLayer) string {
+	tmpl, err := uritemplates.Parse(a.LayerURLTemplate)
+	if err != nil {
+		return ""
 	}
+	values := map[string]interface{}{"id": layer.ID}
+	expanded, _ := tmpl.Expand(values)
+	return expanded
 }
 
 func (a *Artifact) Blobstore() bool {
@@ -253,19 +274,19 @@ const (
 )
 
 type NewJob struct {
-	ReleaseID  string             `json:"release,omitempty"`
-	ArtifactID string             `json:"artifact,omitempty"`
-	ReleaseEnv bool               `json:"release_env,omitempty"`
-	Args       []string           `json:"args,omitempty"`
-	Env        map[string]string  `json:"env,omitempty"`
-	Meta       map[string]string  `json:"meta,omitempty"`
-	TTY        bool               `json:"tty,omitempty"`
-	Columns    int                `json:"tty_columns,omitempty"`
-	Lines      int                `json:"tty_lines,omitempty"`
-	DisableLog bool               `json:"disable_log,omitempty"`
-	Resources  resource.Resources `json:"resources,omitempty"`
-	Data       bool               `json:"data,omitempty"`
-	Partition  PartitionType      `json:"partition,omitempty"`
+	ReleaseID   string             `json:"release,omitempty"`
+	ArtifactIDs []string           `json:"artifacts,omitempty"`
+	ReleaseEnv  bool               `json:"release_env,omitempty"`
+	Args        []string           `json:"args,omitempty"`
+	Env         map[string]string  `json:"env,omitempty"`
+	Meta        map[string]string  `json:"meta,omitempty"`
+	TTY         bool               `json:"tty,omitempty"`
+	Columns     int                `json:"tty_columns,omitempty"`
+	Lines       int                `json:"tty_lines,omitempty"`
+	DisableLog  bool               `json:"disable_log,omitempty"`
+	Resources   resource.Resources `json:"resources,omitempty"`
+	Data        bool               `json:"data,omitempty"`
+	Partition   PartitionType      `json:"partition,omitempty"`
 
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
 	DeprecatedCmd        []string `json:"cmd,omitempty"`
@@ -477,3 +498,87 @@ type AppGarbageCollectionEvent struct {
 	AppGarbageCollection *AppGarbageCollection `json:"app_garbage_collection"`
 	Error                string                `json:"error"`
 }
+
+type ImageManifestType string
+
+const ImageManifestTypeV1 ImageManifestType = "application/vnd.flynn.image.manifest.v1+json"
+
+type ImageManifest struct {
+	Type        ImageManifestType           `json:"_type"`
+	Meta        map[string]string           `json:"meta,omitempty"`
+	Entrypoints map[string]*ImageEntrypoint `json:"entrypoints,omitempty"`
+	Rootfs      []*ImageRootfs              `json:"rootfs,omitempty"`
+
+	hashes     map[string]string
+	hashesOnce sync.Once
+}
+
+func (i *ImageManifest) ID() string {
+	return i.Hashes()["sha512_256"]
+}
+
+func (i ImageManifest) RawManifest() json.RawMessage {
+	data, _ := cjson.Marshal(i)
+	return data
+}
+
+func (i *ImageManifest) Hashes() map[string]string {
+	i.hashesOnce.Do(func() {
+		digest := sha512.Sum512_256(i.RawManifest())
+		i.hashes = map[string]string{"sha512_256": hex.EncodeToString(digest[:])}
+	})
+	return i.hashes
+}
+
+func (m *ImageManifest) DefaultEntrypoint() *ImageEntrypoint {
+	return m.Entrypoints["_default"]
+}
+
+type ImageEntrypoint struct {
+	Env               map[string]string `json:"env,omitempty"`
+	WorkingDir        string            `json:"cwd,omitempty"`
+	Args              []string          `json:"args,omitempty"`
+	LinuxCapabilities []string          `json:"linux_capabilities,omitempty"`
+	Uid               *uint32           `json:"uid,omitempty"`
+	Gid               *uint32           `json:"gid,omitempty"`
+}
+
+type ImageRootfs struct {
+	Platform *ImagePlatform `json:"platform,omitempty"`
+	Layers   []*ImageLayer  `json:"layers,omitempty"`
+}
+
+var DefaultImagePlatform = &ImagePlatform{
+	Architecture: "amd64",
+	OS:           "linux",
+}
+
+type ImagePlatform struct {
+	Architecture string `json:"architecture,omitempty"`
+	OS           string `json:"os,omitempty"`
+}
+
+type ImageLayerType string
+
+const ImageLayerTypeSquashfs ImageLayerType = "application/vnd.flynn.image.squashfs.v1"
+
+type ImageLayer struct {
+	ID     string            `json:"id,omitempty"`
+	Type   ImageLayerType    `json:"type,omitempty"`
+	Length int64             `json:"length,omitempty"`
+	Hashes map[string]string `json:"hashes,omitempty"`
+}
+
+type ImagePullInfo struct {
+	Name     string        `json:"name"`
+	Type     ImagePullType `json:"type"`
+	Artifact *Artifact     `json:"artifact"`
+	Layer    *ImageLayer   `json:"layer"`
+}
+
+type ImagePullType string
+
+const (
+	ImagePullTypeImage ImagePullType = "image"
+	ImagePullTypeLayer ImagePullType = "layer"
+)

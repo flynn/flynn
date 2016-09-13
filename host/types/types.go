@@ -13,12 +13,12 @@ const TagPrefix = "tag:"
 type Job struct {
 	ID string `json:"id,omitempty"`
 
+	Mountspecs []*Mountspec `json:"mountspecs,omitempty"`
+
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	ImageArtifact *Artifact          `json:"artifact,omitempty"`
-	FileArtifacts []*Artifact        `json:"file_artifacts,omitempty"`
-	Resources     resource.Resources `json:"resources,omitempty"`
-	Partition     string             `json:"partition,omitempty"`
+	Resources resource.Resources `json:"resources,omitempty"`
+	Partition string             `json:"partition,omitempty"`
 
 	Config ContainerConfig `json:"config,omitempty"`
 
@@ -67,6 +67,18 @@ func (j *Job) Dup() *Job {
 	return &job
 }
 
+type MountspecType string
+
+const MountspecTypeSquashfs MountspecType = "squashfs"
+
+type Mountspec struct {
+	Type   MountspecType     `json:"type,omitempty"`
+	ID     string            `json:"id,omitempty"`
+	URL    string            `json:"url,omitempty"`
+	Size   int64             `json:"size,omitempty"`
+	Hashes map[string]string `json:"hashes,omitempty"`
+}
+
 type JobResources struct {
 	Memory int `json:"memory,omitempty"` // in KiB
 }
@@ -81,7 +93,8 @@ type ContainerConfig struct {
 	Volumes     []VolumeBinding   `json:"volumes,omitempty"`
 	Ports       []Port            `json:"ports,omitempty"`
 	WorkingDir  string            `json:"working_dir,omitempty"`
-	Uid         int               `json:"uid,omitempty"`
+	Uid         *uint32           `json:"uid,omitempty"`
+	Gid         *uint32           `json:"gid,omitempty"`
 	HostNetwork bool              `json:"host_network,omitempty"`
 	DisableLog  bool              `json:"disable_log,omitempty"`
 }
@@ -117,8 +130,11 @@ func (x ContainerConfig) Merge(y ContainerConfig) ContainerConfig {
 	if y.WorkingDir != "" {
 		x.WorkingDir = y.WorkingDir
 	}
-	if y.Uid != 0 {
+	if y.Uid != nil {
 		x.Uid = y.Uid
+	}
+	if y.Gid != nil {
+		x.Gid = y.Gid
 	}
 	x.HostNetwork = x.HostNetwork || y.HostNetwork
 	return x
@@ -175,18 +191,6 @@ type VolumeBinding struct {
 	Writeable    bool   `json:"writeable"`
 	DeleteOnStop bool   `json:"delete_on_stop"`
 }
-
-type Artifact struct {
-	URI  string       `json:"url,omitempty"`
-	Type ArtifactType `json:"type,omitempty"`
-}
-
-type ArtifactType string
-
-const (
-	ArtifactTypeDocker ArtifactType = "docker"
-	ArtifactTypeFile   ArtifactType = "file"
-)
 
 type Host struct {
 	ID string `json:"id,omitempty"`

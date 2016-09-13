@@ -35,7 +35,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	// start partial logger job
 	cmd := exec.JobUsingHost(
 		client,
-		exec.DockerImage(imageURIs["test-apps"]),
+		s.createArtifact(t, "test-apps"),
 		&host.Job{
 			Config: host.ContainerConfig{Args: []string{"/bin/partial-logger"}},
 			Metadata: map[string]string{

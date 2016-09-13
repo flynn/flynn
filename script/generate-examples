@@ -58,10 +58,12 @@ main() {
 
   info "generating ${component} examples..." >&2
 
-  imageid=`sudo docker images --no-trunc -q flynn/${component}-examples | tr -d '\r\n'`
-  imageurl="https://dl.flynn.io/images?name=flynn/${component}-examples&id=$imageid"
+  local artifact="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[controller-examples]')"
 
-  ${ROOT}/host/bin/flynn-host run --bind="${ROOT}/docs/api-examples:/data" $imageurl sh -c "CONTROLLER_KEY=${CONTROLLER_KEY} PORT=${port} /bin/flynn-${component}-examples /data/${component}.json"
+  ${ROOT}/host/bin/flynn-host run \
+    --bind="${ROOT}/docs/api-examples:/data" \
+    <(echo "${artifact}") \
+    sh -c "CONTROLLER_KEY=${CONTROLLER_KEY} PORT=${port} /bin/flynn-${component}-examples /data/${component}.json"
 }
 
 main $@

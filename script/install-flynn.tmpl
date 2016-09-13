@@ -42,6 +42,10 @@ main() {
     fail "this script is only compatible with Ubuntu 14.04 LTS, Trusty Tahr"
   fi
 
+  if ! check_overlayfs; then
+    fail "OverlayFS is either missing or does not support multiple lower directories, consider upgrading your kernel to at least 3.19"
+  fi
+
   check_installed "curl" "sha512sum"
 
   local install=true
@@ -252,6 +256,46 @@ do_remove() {
   run rm -rf /usr/local/bin/flynn* /var/lib/flynn /etc/flynn
 
   info "Flynn successfully removed"
+}
+
+# check_overlayfs checks that OverlayFS is present and supports multiple
+# lower directories
+check_overlayfs() {
+  if ! modprobe "overlay"; then
+    return 1
+  fi
+
+  if ! grep -q "overlay$" /proc/filesystems; then
+    return 1
+  fi
+
+  local dir="$(mktemp --directory)"
+  trap "rm -rf ${dir}" EXIT
+
+  local lower1="${dir}/lower1"
+  mkdir "${lower1}"
+  echo "1" > "${lower1}/1"
+
+  local lower2="${dir}/lower2"
+  mkdir "${lower2}"
+  echo "2" > "${lower2}/2"
+
+  local upper="${dir}/upper"
+  mkdir "${upper}"
+
+  local work="${dir}/work"
+  mkdir "${work}"
+
+  local mnt="${dir}/mnt"
+  mkdir "${mnt}"
+
+  if ! mount -t overlay -o "lowerdir=${lower2}:${lower1},upperdir=${upper},workdir=${work}" overlay "${mnt}"; then
+    return 1
+  fi
+  trap "umount ${mnt}" EXIT
+
+  # check that both lower files are accessible via the mount
+  [[ -s "${mnt}/1" ]] && [[ -s "${mnt}/2" ]]
 }
 
 check_installed() {

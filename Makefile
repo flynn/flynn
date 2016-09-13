@@ -14,6 +14,7 @@ release: toolchain
 
 clean:
 	git clean -Xdf -e '!.tup' -e '!.vagrant' -e '!script/custom-vagrant'
+	sudo rm -rf "/var/lib/flynn/layer-cache"
 
 test: test-unit test-integration
 

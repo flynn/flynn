@@ -8,6 +8,8 @@ import (
 	"github.com/flynn/flynn/pkg/typeconv"
 )
 
+const DefaultTempDiskSize int64 = 100 * units.MiB
+
 type Spec struct {
 	// Request, if set, is the amount of resource a job expects to consume,
 	// so the job should only be placed on a host with at least this amount
@@ -33,6 +35,10 @@ const (
 	// practice, a 1000 milliCPU limit is equivalent to 1024 CPU shares.
 	TypeCPU Type = "cpu"
 
+	// TypeTempDisk specifies the available disk space in bytes of the
+	// temporary root disk of the container.
+	TypeTempDisk = "temp_disk"
+
 	// TypeMaxFD specifies a value one greater than the maximum file
 	// descriptor number that can be opened inside a container.
 	TypeMaxFD Type = "max_fd"
@@ -43,12 +49,17 @@ const (
 )
 
 var defaults = Resources{
-	TypeMemory: {Request: typeconv.Int64Ptr(1 * units.GiB), Limit: typeconv.Int64Ptr(1 * units.GiB)},
-	TypeCPU:    {Limit: typeconv.Int64Ptr(1000)}, // results in Linux default of 1024 shares
-	TypeMaxFD:  {Request: typeconv.Int64Ptr(10000), Limit: typeconv.Int64Ptr(10000)},
+	TypeMemory:   {Request: typeconv.Int64Ptr(1 * units.GiB), Limit: typeconv.Int64Ptr(1 * units.GiB)},
+	TypeCPU:      {Limit: typeconv.Int64Ptr(1000)}, // results in Linux default of 1024 shares
+	TypeTempDisk: {Request: typeconv.Int64Ptr(DefaultTempDiskSize), Limit: typeconv.Int64Ptr(DefaultTempDiskSize)},
+	TypeMaxFD:    {Request: typeconv.Int64Ptr(10000), Limit: typeconv.Int64Ptr(10000)},
 }
 
 type Resources map[Type]Spec
+
+func (r Resources) SetLimit(typ Type, size int64) {
+	r[typ] = Spec{Request: typeconv.Int64Ptr(size), Limit: typeconv.Int64Ptr(size)}
+}
 
 func Defaults() Resources {
 	r := make(Resources)
@@ -83,7 +94,7 @@ func ToType(s string) (Type, bool) {
 
 func ParseLimit(typ Type, s string) (int64, error) {
 	switch typ {
-	case TypeMemory:
+	case TypeMemory, TypeTempDisk:
 		return units.RAMInBytes(s)
 	default:
 		return units.FromHumanSize(s)
@@ -92,7 +103,7 @@ func ParseLimit(typ Type, s string) (int64, error) {
 
 func FormatLimit(typ Type, limit int64) string {
 	switch typ {
-	case TypeMemory:
+	case TypeMemory, TypeTempDisk:
 		return byteSize(limit)
 	default:
 		return strconv.FormatInt(limit, 10)
