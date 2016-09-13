@@ -1130,6 +1130,14 @@
 			"Rev": "a57a12c1b1d8aa37cf2f9da4fa7657b1f1fed88c"
 		},
 		{
+			"ImportPath": "golang.org/x/crypto/acme",
+			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/acme/autocert",
+			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+		},
+		{
 			"ImportPath": "golang.org/x/crypto/curve25519",
 			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
 		},
@@ -1175,6 +1183,10 @@
 		},
 		{
 			"ImportPath": "golang.org/x/net/http2/hpack",
+			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+		},
+		{
+			"ImportPath": "golang.org/x/net/idna",
 			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
 		},
 		{
@@ -1231,6 +1243,10 @@
 		},
 		{
 			"ImportPath": "google.golang.org/api/internal",
+			"Rev": "a69f0f19d246419bb931b0ac8f4f8d3f3e6d4feb"
+		},
+		{
+			"ImportPath": "google.golang.org/api/iterator",
 			"Rev": "a69f0f19d246419bb931b0ac8f4f8d3f3e6d4feb"
 		},
 		{
@@ -1390,14 +1406,6 @@
 		{
 			"ImportPath": "gopkg.in/yaml.v2",
 			"Rev": "a83829b6f1293c91addabc89d0571c246397bbf4"
-		},
-		{
-			"ImportPath": "google.golang.org/api/iterator",
-			"Rev": "a69f0f19d246419bb931b0ac8f4f8d3f3e6d4feb"
-		},
-		{
-			"ImportPath": "golang.org/x/net/idna",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
 		}
 	]
 }
