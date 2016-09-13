@@ -98,6 +98,7 @@ timeout --signal=QUIT --kill-after=10 10m bash -ex <<-SCRIPT
 cd ~/go/src/github.com/flynn/flynn
 tuf --dir test/release root-keys | tuf-client init --store /tmp/tuf.db http://{{ .Blobstore }}/tuf
 echo stable | sudo tee /etc/flynn/channel.txt
+export DISCOVERD="{{ .Discoverd }}"
 flynn-host update --repository http://{{ .Blobstore }}/tuf --tuf-db /tmp/tuf.db
 SCRIPT
 `))
@@ -130,10 +131,10 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(json.Unmarshal(versionJSON.Bytes(), &versions), c.IsNil)
 
 	// install Flynn from the blobstore on the vanilla host
-	blobstore := struct{ Blobstore string }{buildHost.IP + ":8080"}
+	blobstoreAddr := buildHost.IP + ":8080"
 	installHost := releaseCluster.Instances[3]
 	var script bytes.Buffer
-	installScript.Execute(&script, blobstore)
+	installScript.Execute(&script, map[string]string{"Blobstore": blobstoreAddr})
 	var installOutput bytes.Buffer
 	out := io.MultiWriter(logWriter, &installOutput)
 	t.Assert(installHost.Run("sudo bash -ex", &tc.Streams{Stdin: &script, Stdout: out, Stderr: out}), c.IsNil)
@@ -153,7 +154,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 
 	// installing on an instance with Flynn running should fail
 	script.Reset()
-	installScript.Execute(&script, blobstore)
+	installScript.Execute(&script, map[string]string{"Blobstore": blobstoreAddr})
 	installOutput.Reset()
 	err := buildHost.Run("sudo bash -ex", &tc.Streams{Stdin: &script, Stdout: out, Stderr: out})
 	if err == nil || !strings.Contains(installOutput.String(), "ERROR: Flynn is already installed.") {
@@ -203,7 +204,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	// run a cluster update from the blobstore
 	updateHost := releaseCluster.Instances[1]
 	script.Reset()
-	updateScript.Execute(&script, blobstore)
+	updateScript.Execute(&script, map[string]string{"Blobstore": blobstoreAddr, "Discoverd": updateHost.IP + ":1111"})
 	var updateOutput bytes.Buffer
 	out = io.MultiWriter(logWriter, &updateOutput)
 	t.Assert(updateHost.Run("bash -ex", &tc.Streams{Stdin: &script, Stdout: out, Stderr: out}), c.IsNil)
