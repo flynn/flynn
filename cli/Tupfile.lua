@@ -5,9 +5,9 @@ tup.export("GIT_BRANCH")
 tup.export("GIT_TAG")
 tup.export("GIT_DIRTY")
 
-tup.rule({"../util/assetbuilder/*", "../util/cedarish/<docker>"},
-          "^ docker build installer-builder^ cat ../log/docker-cedarish.log > /dev/null && ../util/assetbuilder/build.sh image installer | tee %o",
-          {"../log/docker-installer-builder.log", "<docker>"})
+tup.rule({"../util/assetbuilder/*", "../util/cedarish/<image>"},
+          "^ docker build installer-builder^ cat ../image/cedarish.json > /dev/null && ../util/assetbuilder/build.sh image installer | tee %o",
+          {"../log/docker-installer-builder.log", "<image>"})
 
 tup.rule("../util/_toolchain/go/bin/go build -o ../installer/bin/go-bindata ../vendor/github.com/jteeuwen/go-bindata/go-bindata",
           {"../installer/bin/go-bindata"})
