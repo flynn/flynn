@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	c "github.com/flynn/go-check"
 )
@@ -51,19 +52,21 @@ var sireniaPostgres = sireniaDatabase{
 	hostKey:    "PGHOST",
 	initDb: func(t *c.C, r *ct.Release, d *sireniaDeploy) {
 		db := postgres.Wait(&postgres.Conf{
-			Service:  d.name,
-			User:     "flynn",
-			Password: r.Env["PGPASSWORD"],
-			Database: "postgres",
+			Discoverd: discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", routerIP)),
+			Service:   d.name,
+			User:      "flynn",
+			Password:  r.Env["PGPASSWORD"],
+			Database:  "postgres",
 		}, nil)
 		dbname := "deploy-test"
 		t.Assert(db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER = "flynn"`, dbname)), c.IsNil)
 		db.Close()
 		db = postgres.Wait(&postgres.Conf{
-			Service:  d.name,
-			User:     "flynn",
-			Password: r.Env["PGPASSWORD"],
-			Database: dbname,
+			Discoverd: discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", routerIP)),
+			Service:   d.name,
+			User:      "flynn",
+			Password:  r.Env["PGPASSWORD"],
+			Database:  dbname,
 		}, nil)
 		defer db.Close()
 		t.Assert(db.Exec(`CREATE TABLE deploy_test ( data text)`), c.IsNil)
@@ -71,10 +74,11 @@ var sireniaPostgres = sireniaDatabase{
 	assertWriteable: func(t *c.C, r *ct.Release, d *sireniaDeploy) {
 		dbname := "deploy-test"
 		db := postgres.Wait(&postgres.Conf{
-			Service:  d.name,
-			User:     "flynn",
-			Password: r.Env["PGPASSWORD"],
-			Database: dbname,
+			Discoverd: discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", routerIP)),
+			Service:   d.name,
+			User:      "flynn",
+			Password:  r.Env["PGPASSWORD"],
+			Database:  dbname,
 		}, nil)
 		defer db.Close()
 		debug(t, "writing to postgres database")

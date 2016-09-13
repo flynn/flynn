@@ -22,10 +22,11 @@ const (
 )
 
 type Conf struct {
-	Service  string
-	User     string
-	Password string
-	Database string
+	Discoverd *discoverd.Client
+	Service   string
+	User      string
+	Password  string
+	Database  string
 }
 
 var connectAttempts = attempt.Strategy{
@@ -47,8 +48,11 @@ func Wait(conf *Conf, afterConn func(*pgx.Conn) error) *DB {
 			Database: os.Getenv("PGDATABASE"),
 		}
 	}
+	if conf.Discoverd == nil {
+		conf.Discoverd = discoverd.DefaultClient
+	}
 	events := make(chan *discoverd.Event)
-	stream, err := discoverd.NewService(conf.Service).Watch(events)
+	stream, err := conf.Discoverd.Service(conf.Service).Watch(events)
 	if err != nil {
 		shutdown.Fatal(err)
 	}

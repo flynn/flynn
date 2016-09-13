@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -17,15 +19,18 @@ import (
 const snapshotContentType = "application/vnd.zfs.snapshot-stream"
 
 type HTTPAPI struct {
-	cluster *cluster.Client
-	vman    *volumemanager.Manager
+	vman *volumemanager.Manager
+
+	cluster atomic.Value // *cluster.Client
 }
 
-func NewHTTPAPI(cluster *cluster.Client, vman *volumemanager.Manager) *HTTPAPI {
-	return &HTTPAPI{
-		cluster: cluster,
-		vman:    vman,
-	}
+func NewHTTPAPI(vman *volumemanager.Manager) *HTTPAPI {
+	return &HTTPAPI{vman: vman}
+}
+
+func (api *HTTPAPI) ConfigureClusterClient(discoverdURL string) {
+	disc := discoverd.NewClientWithURL(discoverdURL)
+	api.cluster.Store(cluster.NewClientWithServices(disc.Service))
 }
 
 func (api *HTTPAPI) RegisterRoutes(r *httprouter.Router) {
@@ -148,6 +153,12 @@ func (api *HTTPAPI) Snapshot(w http.ResponseWriter, r *http.Request, ps httprout
 }
 
 func (api *HTTPAPI) Pull(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	cluster := api.cluster.Load().(*cluster.Client)
+	if cluster == nil {
+		httphelper.ServiceUnavailableError(w, "cluster client is not configured")
+		return
+	}
+
 	volumeID := ps.ByName("volume_id")
 
 	pull := &volume.PullCoordinate{}
@@ -156,7 +167,7 @@ func (api *HTTPAPI) Pull(w http.ResponseWriter, r *http.Request, ps httprouter.P
 		return
 	}
 
-	hostClient, err := api.cluster.Host(pull.HostID)
+	hostClient, err := cluster.Host(pull.HostID)
 	if err != nil {
 		httphelper.Error(w, err)
 		return

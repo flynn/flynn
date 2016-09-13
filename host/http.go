@@ -21,7 +21,6 @@ import (
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pinkerton/layer"
-	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -37,6 +36,7 @@ type Host struct {
 	backend Backend
 	vman    *volumemanager.Manager
 	discMan *DiscoverdManager
+	volAPI  *volumeapi.HTTPAPI
 	id      string
 	url     string
 
@@ -160,6 +160,10 @@ func (h *Host) ConfigureDiscoverd(config *host.DiscoverdConfig) {
 	h.status.Discoverd = config
 	h.backend.SetDiscoverdConfig(h.status.Discoverd)
 	h.statusMtx.Unlock()
+
+	if config.URL != "" {
+		h.volAPI.ConfigureClusterClient(config.URL)
+	}
 }
 
 type jobAPI struct {
@@ -561,8 +565,7 @@ func (h *Host) ServeHTTP() {
 	}
 	jobAPI.RegisterRoutes(r)
 
-	volAPI := volumeapi.NewHTTPAPI(cluster.NewClient(), h.vman)
-	volAPI.RegisterRoutes(r)
+	h.volAPI.RegisterRoutes(r)
 
 	go http.Serve(h.listener, httphelper.ContextInjector("host", httphelper.NewRequestLogger(r)))
 }
