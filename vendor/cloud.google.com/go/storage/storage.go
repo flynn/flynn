@@ -38,6 +38,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/api/transport"
 
@@ -51,7 +52,7 @@ var (
 	ErrObjectNotExist = errors.New("storage: object doesn't exist")
 
 	// Done is returned by iterators in this package when they have no more items.
-	Done = errors.New("storage: no more results")
+	Done = iterator.Done
 )
 
 const userAgent = "gcloud-golang-storage/20151204"
@@ -436,6 +437,52 @@ func (o *ObjectHandle) CopyTo(ctx context.Context, dst *ObjectHandle, attrs *Obj
 	return newObject(obj), nil
 }
 
+// ComposeFrom concatenates the provided slice of source objects into a new
+// object whose destination is the receiver. The provided attrs, if not nil,
+// are used to set the attributes on the newly-created object. All source
+// objects must reside within the same bucket as the destination.
+func (o *ObjectHandle) ComposeFrom(ctx context.Context, srcs []*ObjectHandle, attrs *ObjectAttrs) (*ObjectAttrs, error) {
+	if o.bucket == "" || o.object == "" {
+		return nil, errors.New("storage: the destination bucket and object names must be non-empty")
+	}
+	if len(srcs) == 0 {
+		return nil, errors.New("storage: at least one source object must be specified")
+	}
+
+	req := &raw.ComposeRequest{}
+	if attrs != nil {
+		req.Destination = attrs.toRawObject(o.bucket)
+		req.Destination.Name = o.object
+	}
+
+	for _, src := range srcs {
+		if src.bucket != o.bucket {
+			return nil, fmt.Errorf("storage: all source objects must be in bucket %q, found %q", o.bucket, src.bucket)
+		}
+		if src.object == "" {
+			return nil, errors.New("storage: all source object names must be non-empty")
+		}
+		srcObj := &raw.ComposeRequestSourceObjects{
+			Name: src.object,
+		}
+		if err := applyConds("ComposeFrom source", src.conds, composeSourceObj{srcObj}); err != nil {
+			return nil, err
+		}
+		req.SourceObjects = append(req.SourceObjects, srcObj)
+	}
+
+	call := o.c.raw.Objects.Compose(o.bucket, o.object, req).Context(ctx)
+	if err := applyConds("ComposeFrom destination", o.conds, call); err != nil {
+		return nil, err
+	}
+
+	obj, err := call.Do()
+	if err != nil {
+		return nil, err
+	}
+	return newObject(obj), nil
+}
+
 // NewReader creates a new Reader to read the contents of the
 // object.
 // ErrObjectNotExist will be returned if the object is not found.
@@ -674,6 +721,12 @@ type ObjectAttrs struct {
 	// For buckets with versioning enabled, changing an object's
 	// metadata does not change this property. This field is read-only.
 	Updated time.Time
+
+	// Prefix is set only for ObjectAttrs which represent synthetic "directory
+	// entries" when iterating over buckets using Query.Delimiter. See
+	// ObjectIterator.Next. When set, no other fields in ObjectAttrs will be
+	// populated.
+	Prefix string
 }
 
 // convertTime converts a time in RFC3339 format to time.Time.
@@ -753,6 +806,8 @@ type Query struct {
 	// Cursor is a previously-returned page token
 	// representing part of the larger set of results to view.
 	// Optional.
+	//
+	// Deprecated: Use ObjectIterator.PageInfo().Token instead.
 	Cursor string
 
 	// MaxResults is the maximum number of items plus prefixes
@@ -760,7 +815,7 @@ type Query struct {
 	// fewer total results may be returned than requested.
 	// The default page limit is used if it is negative or zero.
 	//
-	// Deprecated. Use ObjectIterator.SetPageSize.
+	// Deprecated: Use ObjectIterator.PageInfo().MaxSize instead.
 	MaxResults int
 }
 
@@ -874,6 +929,24 @@ func (c objectsGetCall) IfMetagenerationMatch(gen int64) {
 }
 func (c objectsGetCall) IfMetagenerationNotMatch(gen int64) {
 	appendParam(c.req, "ifMetagenerationNotMatch", fmt.Sprint(gen))
+}
+
+// composeSourceObj wraps a *raw.ComposeRequestSourceObjects, but adds the methods
+// that modifyCall searches for by name.
+type composeSourceObj struct {
+	src *raw.ComposeRequestSourceObjects
+}
+
+func (c composeSourceObj) Generation(gen int64) {
+	c.src.Generation = gen
+}
+
+func (c composeSourceObj) IfGenerationMatch(gen int64) {
+	// It's safe to overwrite ObjectPreconditions, since its only field is
+	// IfGenerationMatch.
+	c.src.ObjectPreconditions = &raw.ComposeRequestSourceObjectsObjectPreconditions{
+		IfGenerationMatch: gen,
+	}
 }
 
 // TODO(jbd): Add storage.objects.watch.
