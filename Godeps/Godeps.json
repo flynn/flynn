@@ -45,14 +45,6 @@
 			"Rev": "5701be89e7d3cdcbc48504241b9c66ef085f759d"
 		},
 		{
-			"ImportPath": "github.com/agl/ed25519",
-			"Rev": "d2b94fd789ea21d12fac1a4443dd3a3f79cda72c"
-		},
-		{
-			"ImportPath": "github.com/agl/ed25519/edwards25519",
-			"Rev": "d2b94fd789ea21d12fac1a4443dd3a3f79cda72c"
-		},
-		{
 			"ImportPath": "github.com/armon/go-metrics",
 			"Rev": "b2d95e5291cdbc26997d1301a5e467ecbb240e25"
 		},
@@ -416,11 +408,6 @@
 			"Rev": "6ba799b69ed19ebc0c8ef8325ccaf5d105facfc5"
 		},
 		{
-			"ImportPath": "github.com/docker/distribution/registry/storage/driver/filesystem",
-			"Comment": "v2.1.0-rc.0-21-g6ba799b",
-			"Rev": "6ba799b69ed19ebc0c8ef8325ccaf5d105facfc5"
-		},
-		{
 			"ImportPath": "github.com/docker/distribution/registry/storage/driver/middleware",
 			"Comment": "v2.1.0-rc.0-21-g6ba799b",
 			"Rev": "6ba799b69ed19ebc0c8ef8325ccaf5d105facfc5"
@@ -736,11 +723,6 @@
 			"Rev": "4940cee052ece5a8b2ea477699e7bb232de1e1f8"
 		},
 		{
-			"ImportPath": "github.com/docker/libcontainer/user",
-			"Comment": "v1.4.0-20-g4940cee",
-			"Rev": "4940cee052ece5a8b2ea477699e7bb232de1e1f8"
-		},
-		{
 			"ImportPath": "github.com/docker/libnetwork/ipallocator",
 			"Comment": "v0.2-551-ge57c67d",
 			"Rev": "e57c67d6bf5709b38ddb9cf9e10d1d1417e94712"
@@ -758,16 +740,6 @@
 		{
 			"ImportPath": "github.com/docker/libtrust",
 			"Rev": "c54fbb67c1f1e68d7d6f8d2ad7c9360404616a41"
-		},
-		{
-			"ImportPath": "github.com/flynn/docker-utils/registry",
-			"Comment": "1.1.1-44-ge2c404a",
-			"Rev": "e2c404ac90257ec1e2295708ae753d5057acc698"
-		},
-		{
-			"ImportPath": "github.com/flynn/docker-utils/version",
-			"Comment": "1.1.1-44-ge2c404a",
-			"Rev": "e2c404ac90257ec1e2295708ae753d5057acc698"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-check",
@@ -827,10 +799,6 @@
 			"Rev": "165e62b6a7aefaaa964b678ee167abeaa152c47e"
 		},
 		{
-			"ImportPath": "github.com/fsouza/go-dockerclient",
-			"Rev": "adb861704259d548b45e08b5dd7b7c80efcd82e6"
-		},
-		{
 			"ImportPath": "github.com/garyburd/redigo/internal",
 			"Rev": "836b6e58b3358112c8291565d01c35b8764070d7"
 		},
@@ -856,6 +824,10 @@
 		{
 			"ImportPath": "github.com/golang/glog",
 			"Rev": "fca8c8854093a154ff1eb580aae10276ad6b1b5f"
+		},
+		{
+			"ImportPath": "github.com/golang/groupcache/singleflight",
+			"Rev": "a6b377e3400b08991b80d6805d627f347f983866"
 		},
 		{
 			"ImportPath": "github.com/golang/protobuf/proto",
@@ -912,6 +884,11 @@
 			"ImportPath": "github.com/jmespath/go-jmespath",
 			"Comment": "0.2.2-12-g0b12d6b",
 			"Rev": "0b12d6b521d83fc7f755e7cfc1b1fbdd35a01a74"
+		},
+		{
+			"ImportPath": "github.com/jtacoma/uritemplates",
+			"Comment": "v1.0.0",
+			"Rev": "307ae868f90f4ee1b73ebe4596e0394237dacce8"
 		},
 		{
 			"ImportPath": "github.com/jteeuwen/go-bindata",
@@ -1068,6 +1045,10 @@
 			"Rev": "5a9dc85e4de606c9e32b769c9ff17fed84f687f9"
 		},
 		{
+			"ImportPath": "github.com/rancher/sparse-tools/sparse",
+			"Rev": "9cac891ad8a2029146df905ae09622eb1de8b19c"
+		},
+		{
 			"ImportPath": "github.com/rnd42/go-jsonpointer",
 			"Rev": "0480215403db768c5bf6db30d82908043c58422c"
 		},
@@ -1115,11 +1096,6 @@
 		{
 			"ImportPath": "github.com/vaughan0/go-ini",
 			"Rev": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1"
-		},
-		{
-			"ImportPath": "github.com/vbatts/docker-utils/sum",
-			"Comment": "1.2.1-8-gb851c03",
-			"Rev": "b851c03ddae1db30a4acf5e4cc5e31b6a671af35"
 		},
 		{
 			"ImportPath": "github.com/vbatts/tar-split/archive/tar",
