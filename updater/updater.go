@@ -5,14 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/flynn/updater/types"
@@ -41,7 +39,7 @@ func run() error {
 		log.SetHandler(log15.StreamHandler(colorable.NewColorableStdout(), log15.TerminalFormat()))
 	}
 
-	var images map[string]string
+	var images map[string]*ct.Artifact
 	if err := json.NewDecoder(os.Stdin).Decode(&images); err != nil {
 		log.Error("error decoding images", "err", err)
 		return err
@@ -86,7 +84,6 @@ func run() error {
 	}
 
 	log.Info("validating images")
-	uris := make(map[string]string, len(updater.SystemApps))
 	for _, app := range updater.SystemApps {
 		if v := version.Parse(statuses[app.Name].Version); !v.Dev && app.MinVersion != "" && v.Before(version.Parse(app.MinVersion)) {
 			log.Info(
@@ -96,39 +93,25 @@ func run() error {
 			)
 			continue
 		}
-		if app.Image == "" {
-			app.Image = "flynn/" + app.Name
-		}
-		uri, ok := images[app.Image]
-		if !ok {
-			err := fmt.Errorf("missing image: %s", app.Image)
+		if _, ok := images[app.Name]; !ok {
+			err := fmt.Errorf("missing image: %s", app.Name)
 			log.Error(err.Error())
 			return err
 		}
-		uris[app.Name] = uri
 	}
 
 	log.Info("creating new image artifacts")
-	redisImage = &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
-		URI:  uris["redis"],
-	}
+	redisImage = images["redis"]
 	if err := client.CreateArtifact(redisImage); err != nil {
 		log.Error("error creating redis image artifact", "err", err)
 		return err
 	}
-	slugRunner = &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
-		URI:  uris["slugrunner"],
-	}
+	slugRunner = images["slugrunner"]
 	if err := client.CreateArtifact(slugRunner); err != nil {
 		log.Error("error creating slugrunner image artifact", "err", err)
 		return err
 	}
-	slugBuilder = &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
-		URI:  uris["slugbuilder"],
-	}
+	slugBuilder = images["slugbuilder"]
 	if err := client.CreateArtifact(slugBuilder); err != nil {
 		log.Error("error creating slugbuilder image artifact", "err", err)
 		return err
@@ -138,14 +121,6 @@ func run() error {
 	for _, appInfo := range updater.SystemApps {
 		if appInfo.ImageOnly {
 			continue // skip ImageOnly updates
-		}
-		if _, ok := uris[appInfo.Name]; !ok {
-			log.Info(
-				"skipped deploy of system app",
-				"reason", "image not updated",
-				"app", appInfo.Name,
-			)
-			continue
 		}
 		log := log.New("name", appInfo.Name)
 		log.Info("starting deploy of system app")
@@ -162,7 +137,7 @@ func run() error {
 			log.Error("error getting app", "err", err)
 			return err
 		}
-		if err := deployApp(client, app, uris[appInfo.Name], appInfo.UpdateRelease, log); err != nil {
+		if err := deployApp(client, app, images[appInfo.Name], appInfo.UpdateRelease, log); err != nil {
 			if e, ok := err.(errDeploySkipped); ok {
 				log.Info(
 					"skipped deploy of system app",
@@ -187,7 +162,7 @@ func run() error {
 
 		if app.RedisAppliance() {
 			log.Info("starting deploy of Redis app")
-			if err := deployApp(client, app, redisImage.URI, nil, log); err != nil {
+			if err := deployApp(client, app, redisImage, nil, log); err != nil {
 				if e, ok := err.(errDeploySkipped); ok {
 					log.Info("skipped deploy of Redis app", "reason", e.reason)
 					continue
@@ -203,7 +178,7 @@ func run() error {
 		}
 
 		log.Info("starting deploy of app to update slugrunner")
-		if err := deployApp(client, app, slugRunner.URI, nil, log); err != nil {
+		if err := deployApp(client, app, slugRunner, nil, log); err != nil {
 			if e, ok := err.(errDeploySkipped); ok {
 				log.Info("skipped deploy of app", "reason", e.reason)
 				continue
@@ -223,41 +198,38 @@ func (e errDeploySkipped) Error() string {
 	return e.reason
 }
 
-func deployApp(client controller.Client, app *ct.App, uri string, updateFn updater.UpdateReleaseFn, log log15.Logger) error {
+func deployApp(client controller.Client, app *ct.App, image *ct.Artifact, updateFn updater.UpdateReleaseFn, log log15.Logger) error {
 	release, err := client.GetAppRelease(app.ID)
 	if err != nil {
 		log.Error("error getting release", "err", err)
 		return err
 	}
-	artifact, err := client.GetArtifact(release.ImageArtifactID())
+	if len(release.ArtifactIDs) == 0 {
+		return errDeploySkipped{"release has no artifacts"}
+	}
+	artifact, err := client.GetArtifact(release.ArtifactIDs[0])
 	if err != nil {
 		log.Error("error getting release artifact", "err", err)
 		return err
 	}
-	if !app.System() {
-		u, err := url.Parse(artifact.URI)
-		if err != nil {
-			return err
-		}
-		if u.Query().Get("name") != "flynn/slugrunner" {
+	if !app.System() && release.IsGitDeploy() {
+		if artifact.Meta["flynn.component"] != "slugrunner" {
 			return errDeploySkipped{"app not using slugrunner image"}
 		}
 	}
-	skipDeploy := artifact.URI == uri
+	skipDeploy := artifact.Manifest().ID() == image.Manifest().ID()
 	if updateImageIDs(release.Env) {
 		skipDeploy = false
 	}
 	if skipDeploy {
 		return errDeploySkipped{"app is already using latest images"}
 	}
-	artifact.ID = ""
-	artifact.URI = uri
-	if err := client.CreateArtifact(artifact); err != nil {
+	if err := client.CreateArtifact(image); err != nil {
 		log.Error("error creating artifact", "err", err)
 		return err
 	}
 	release.ID = ""
-	release.SetImageArtifactID(artifact.ID)
+	release.ArtifactIDs[0] = image.ID
 	if updateFn != nil {
 		updateFn(release)
 	}

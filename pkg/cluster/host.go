@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
-	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -190,12 +190,11 @@ func (c *Host) SendSnapshot(snapID string, assumeHaves []json.RawMessage) (io.Re
 }
 
 // PullImages pulls images from a TUF repository using the local TUF file in tufDB
-func (c *Host) PullImages(repository, driver, root, version string, tufDB io.Reader, ch chan<- *layer.PullInfo) (stream.Stream, error) {
+func (c *Host) PullImages(repository, configDir, version string, tufDB io.Reader, ch chan *ct.ImagePullInfo) (stream.Stream, error) {
 	header := http.Header{"Content-Type": {"application/octet-stream"}}
 	query := make(url.Values)
 	query.Set("repository", repository)
-	query.Set("driver", driver)
-	query.Set("root", root)
+	query.Set("config-dir", configDir)
 	query.Set("version", version)
 	path := "/host/pull/images?" + query.Encode()
 	return c.c.StreamWithHeader("POST", path, header, tufDB, ch)

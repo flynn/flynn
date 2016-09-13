@@ -7,11 +7,9 @@ import (
 type SystemApp struct {
 	Name          string
 	MinVersion    string          // minimum version this updater binary is capable of updating
-	Image         string          // image name if not same as flynn/<name>, ignored if empty
 	ImageOnly     bool            // no application, just update the image
 	UpdateRelease UpdateReleaseFn // function to migrate changes to release
 	Optional      bool            // This system component is optional and may not be present
-
 }
 
 type UpdateReleaseFn func(r *ct.Release)
@@ -31,8 +29,7 @@ var SystemApps = []SystemApp{
 	{Name: "controller"},
 	{Name: "logaggregator"},
 	{
-		Name:  "postgres",
-		Image: "flynn/postgresql",
+		Name: "postgres",
 		UpdateRelease: func(r *ct.Release) {
 			r.Env["SIRENIA_PROCESS"] = "postgres"
 		},

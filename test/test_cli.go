@@ -1,10 +1,10 @@
 package main
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
-	"compress/gzip"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,8 +24,8 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
 	c "github.com/flynn/go-check"
@@ -810,19 +810,28 @@ func (s *CLISuite) TestCluster(t *c.C) {
 }
 
 func (s *CLISuite) TestRelease(t *c.C) {
-	releaseJSON := []byte(`{
-		"env": {"GLOBAL": "FOO"},
-		"processes": {
+	app := s.newCliTestApp(t)
+	defer app.cleanup()
+
+	release := &ct.Release{
+		ArtifactIDs: []string{s.createArtifact(t, "test-apps").ID},
+		Env:         map[string]string{"GLOBAL": "FOO"},
+		Processes: map[string]ct.ProcessType{
 			"echoer": {
-				"args": ["/bin/echoer"],
-				"env": {"ECHOER_ONLY": "BAR"}
+				Args: []string{"/bin/echoer"},
+				Env:  map[string]string{"ECHOER_ONLY": "BAR"},
 			},
 			"env": {
-				"args": ["sh", "-c", "env; while true; do sleep 60; done"],
-				"env": {"ENV_ONLY": "BAZ"}
-			}
-		}
-	}`)
+				Args: []string{"sh", "-c", "env; while true; do sleep 60; done"},
+				Env:  map[string]string{"ENV_ONLY": "BAZ"},
+			},
+		},
+	}
+	client := s.controllerClient(t)
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.SetAppRelease(app.id, release.ID), c.IsNil)
+
+	updateFile := filepath.Join(t.MkDir(), "updates.json")
 	updateJSON := []byte(`{
 		"processes": {
 			"echoer": {
@@ -833,6 +842,9 @@ func (s *CLISuite) TestRelease(t *c.C) {
 			}
 		}
 	}`)
+	t.Assert(ioutil.WriteFile(updateFile, updateJSON, 0644), c.IsNil)
+	t.Assert(app.flynn("release", "update", updateFile), Succeeds)
+
 	resultJSON := []byte(`{
 		"env": {"GLOBAL": "FOO"},
 		"processes": {
@@ -851,27 +863,6 @@ func (s *CLISuite) TestRelease(t *c.C) {
 			}
 		}
 	}`)
-	release := &ct.Release{}
-	t.Assert(json.Unmarshal(releaseJSON, &release), c.IsNil)
-	for typ, proc := range release.Processes {
-		resource.SetDefaults(&proc.Resources)
-		release.Processes[typ] = proc
-	}
-
-	addFile, err := ioutil.TempFile("", "")
-	t.Assert(err, c.IsNil)
-	addFile.Write(releaseJSON)
-	addFile.Close()
-
-	app := s.newCliTestApp(t)
-	defer app.cleanup()
-	t.Assert(app.flynn("release", "add", "-f", addFile.Name(), imageURIs["test-apps"]), Succeeds)
-
-	r1, err := s.controller.GetAppRelease(app.name)
-	t.Assert(err, c.IsNil)
-	t.Assert(r1.Env, c.DeepEquals, release.Env)
-	t.Assert(r1.Processes, c.DeepEquals, release.Processes)
-
 	result := &ct.Release{}
 	t.Assert(json.Unmarshal(resultJSON, &result), c.IsNil)
 	for typ, proc := range result.Processes {
@@ -879,24 +870,17 @@ func (s *CLISuite) TestRelease(t *c.C) {
 		result.Processes[typ] = proc
 	}
 
-	updateFile, err := ioutil.TempFile("", "")
+	release, err := s.controller.GetAppRelease(app.name)
 	t.Assert(err, c.IsNil)
-	updateFile.Write(updateJSON)
-	updateFile.Close()
-
-	t.Assert(app.flynn("release", "update", updateFile.Name()), Succeeds)
-
-	r2, err := s.controller.GetAppRelease(app.name)
-	t.Assert(err, c.IsNil)
-	t.Assert(r2.Env, c.DeepEquals, result.Env)
-	t.Assert(r2.Processes, c.DeepEquals, result.Processes)
+	t.Assert(release.Env, c.DeepEquals, result.Env)
+	t.Assert(release.Processes, c.DeepEquals, result.Processes)
 
 	scaleCmd := app.flynn("scale", "--no-wait", "env=1", "foo=1")
 	t.Assert(scaleCmd, c.Not(Succeeds))
 	t.Assert(scaleCmd, OutputContains, "ERROR: unknown process types: \"foo\"")
 
 	// create a job watcher for the new release
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.name, r2.ID)
+	watcher, err := client.WatchJobEvents(app.name, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -979,11 +963,20 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	t.Assert(r.flynn("mysql", "console", "--", "-e",
 		"CREATE TABLE foos (data TEXT); INSERT INTO foos (data) VALUES ('foobar')"), Succeeds)
 
+	// grab the slug details
+	client := s.controllerClient(t)
+	release, err := client.GetAppRelease(srcApp)
+	t.Assert(err, c.IsNil)
+	artifact, err := client.GetArtifact(release.ArtifactIDs[1])
+	t.Assert(err, c.IsNil)
+	slugLayer := artifact.Manifest().Rootfs[0].Layers[0]
+
 	// export app
 	t.Assert(r.flynn("export", "-f", file), Succeeds)
 	assertExportContains(t, file,
-		"app.json", "routes.json", "release.json", "artifact.json",
-		"formation.json", "slug.tar.gz", "postgres.dump", "mysql.dump",
+		"app.json", "routes.json", "release.json", "artifacts.json",
+		slugLayer.ID+".layer", "formation.json",
+		"postgres.dump", "mysql.dump",
 	)
 
 	// remove db tables from source app
@@ -1003,7 +996,7 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	t.Assert(query, SuccessfulOutputContains, "foobar")
 
 	// wait for it to start
-	_, err := s.discoverdClient(t).Instances(dstApp+"-web", 10*time.Second)
+	_, err = s.discoverdClient(t).Instances(dstApp+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
 }
 
@@ -1108,22 +1101,25 @@ func (s *CLISuite) TestReleaseDelete(t *c.C) {
 	t.Assert(res.Output, c.Equals, "Release scaled down for app but not fully deleted (still associated with 1 other apps)\n")
 
 	// check the slug artifact still exists
-	slugArtifact, err := client.GetArtifact(releases[1].FileArtifactIDs()[0])
+	slugArtifact, err := client.GetArtifact(releases[1].ArtifactIDs[1])
 	t.Assert(err, c.IsNil)
 	s.assertURI(t, slugArtifact.URI, http.StatusOK)
+	slugLayerURL := slugArtifact.LayerURL(slugArtifact.Manifest().Rootfs[0].Layers[0])
+	s.assertURI(t, slugLayerURL, http.StatusOK)
 
 	// check the inital release can now be deleted
 	res = r.flynn("-a", otherApp.ID, "release", "delete", "--yes", releases[1].ID)
 	t.Assert(res, Succeeds)
-	t.Assert(res.Output, c.Equals, fmt.Sprintf("Deleted release %s (deleted 1 files)\n", releases[1].ID))
+	t.Assert(res.Output, c.Equals, fmt.Sprintf("Deleted release %s (deleted 2 files)\n", releases[1].ID))
 
 	// check the slug artifact was deleted
 	_, err = client.GetArtifact(slugArtifact.ID)
 	t.Assert(err, c.Equals, controller.ErrNotFound)
 	s.assertURI(t, slugArtifact.URI, http.StatusNotFound)
+	s.assertURI(t, slugLayerURL, http.StatusNotFound)
 
 	// check the image artifact was not deleted (since it is shared between both releases)
-	_, err = client.GetArtifact(releases[1].ImageArtifactID())
+	_, err = client.GetArtifact(releases[1].ArtifactIDs[0])
 	t.Assert(err, c.IsNil)
 }
 
@@ -1170,33 +1166,57 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	t.Assert(client.CreateApp(app), c.IsNil)
 
 	// create an image artifact
-	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: imageURIs["test-apps"]}
-	t.Assert(client.CreateArtifact(imageArtifact), c.IsNil)
+	imageArtifact := s.createArtifact(t, "test-apps")
 
 	// create 5 slug artifacts
-	var slug bytes.Buffer
-	gz := gzip.NewWriter(&slug)
-	t.Assert(tar.NewWriter(gz).Close(), c.IsNil)
-	t.Assert(gz.Close(), c.IsNil)
+	tmp, err := ioutil.TempFile("", "squashfs-")
+	t.Assert(err, c.IsNil)
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+	t.Assert(exec.Command("mksquashfs", t.MkDir(), tmp.Name(), "-noappend").Run(), c.IsNil)
+	slug, err := ioutil.ReadAll(tmp)
+	t.Assert(err, c.IsNil)
+	slugHash := sha512.Sum512(slug)
 	slugs := []string{
-		"http://blobstore.discoverd/1/slug.tgz",
-		"http://blobstore.discoverd/2/slug.tgz",
-		"http://blobstore.discoverd/3/slug.tgz",
-		"http://blobstore.discoverd/4/slug.tgz",
-		"http://blobstore.discoverd/5/slug.tgz",
+		"http://blobstore.discoverd/layer/1.squashfs",
+		"http://blobstore.discoverd/layer/2.squashfs",
+		"http://blobstore.discoverd/layer/3.squashfs",
+		"http://blobstore.discoverd/layer/4.squashfs",
+		"http://blobstore.discoverd/layer/5.squashfs",
 	}
 	slugArtifacts := make([]*ct.Artifact, len(slugs))
-	for i, uri := range slugs {
-		req, err := http.NewRequest("PUT", uri, bytes.NewReader(slug.Bytes()))
+	put := func(url string, data []byte) {
+		req, err := http.NewRequest("PUT", url, bytes.NewReader(data))
 		t.Assert(err, c.IsNil)
 		res, err := http.DefaultClient.Do(req)
 		t.Assert(err, c.IsNil)
 		res.Body.Close()
 		t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+	}
+	for i, layerURL := range slugs {
+		manifest := &ct.ImageManifest{
+			Type: ct.ImageManifestTypeV1,
+			Rootfs: []*ct.ImageRootfs{{
+				Layers: []*ct.ImageLayer{{
+					ID:     strconv.Itoa(i + 1),
+					Type:   ct.ImageLayerTypeSquashfs,
+					Length: int64(len(slug)),
+					Hashes: map[string]string{"sha512": hex.EncodeToString(slugHash[:])},
+				}},
+			}},
+		}
+		data := manifest.RawManifest()
+		url := fmt.Sprintf("http://blobstore.discoverd/image/%s.json", manifest.ID())
+		put(url, data)
+		put(layerURL, slug)
 		artifact := &ct.Artifact{
-			Type: host.ArtifactTypeFile,
-			URI:  uri,
-			Meta: map[string]string{"blobstore": "true"},
+			Type:             ct.ArtifactTypeFlynn,
+			URI:              url,
+			Meta:             map[string]string{"blobstore": "true"},
+			RawManifest:      data,
+			Hashes:           manifest.Hashes(),
+			Size:             int64(len(data)),
+			LayerURLTemplate: "http://blobstore.discoverd/layer/{id}.squashfs",
 		}
 		t.Assert(client.CreateArtifact(artifact), c.IsNil)
 		slugArtifacts[i] = artifact
@@ -1221,6 +1241,7 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 			Processes: map[string]ct.ProcessType{
 				"app": {Args: []string{"/bin/pingserv"}, Ports: []ct.Port{{Proto: "tcp"}}},
 			},
+			Meta: map[string]string{"git": "true"},
 		}
 		t.Assert(client.CreateRelease(release), c.IsNil)
 		procs := map[string]int{"app": 0}
@@ -1287,9 +1308,8 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	t.Assert(list, c.HasLen, maxInactiveSlugReleases+2)
 	distinctSlugs := make(map[string]struct{}, len(list))
 	for _, release := range list {
-		files := release.FileArtifactIDs()
-		t.Assert(files, c.HasLen, 1)
-		distinctSlugs[files[0]] = struct{}{}
+		t.Assert(release.ArtifactIDs, c.HasLen, 2)
+		distinctSlugs[release.ArtifactIDs[1]] = struct{}{}
 	}
 	t.Assert(distinctSlugs, c.HasLen, maxInactiveSlugReleases+1)
 
@@ -1364,7 +1384,7 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	// check the job is reachable with the app's name in discoverd
 	instances, err := s.discoverdClient(t).Instances(app.Name+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
-	res, err := http.Get("http://" + instances[0].Addr)
+	res, err := hh.RetryClient.Get("http://" + instances[0].Addr)
 	t.Assert(err, c.IsNil)
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
@@ -1383,6 +1403,17 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "app=1"), Succeeds)
 	defer flynn(t, "/", "-a", app.Name, "scale", "app=0")
 
+	// grab the Flynn image layers
+	release, err := client.GetAppRelease(app.ID)
+	t.Assert(err, c.IsNil)
+	artifact, err := client.GetArtifact(release.ArtifactIDs[0])
+	t.Assert(err, c.IsNil)
+	layers := artifact.Manifest().Rootfs[0].Layers
+	layerNames := make([]string, len(layers))
+	for i, layer := range layers {
+		layerNames[i] = layer.ID + ".layer"
+	}
+
 	// check exporting to stdout works
 	file := filepath.Join(t.MkDir(), "export.tar")
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("%s -a %s export > %s", args.CLI, app.Name, file))
@@ -1395,23 +1426,16 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("error exporting docker app to stdout: %s: %s", err, stderr.String())
 	}
-	assertExportContains(t, file,
-		"app.json", "routes.json", "release.json", "artifact.json",
-		"formation.json", "docker-image.tar", "docker-image.json",
-	)
+	exportFiles := append([]string{
+		"app.json", "routes.json", "release.json", "artifacts.json",
+	}, append(layerNames, "formation.json")...)
+	assertExportContains(t, file, exportFiles...)
 
 	// export the app directly to the file
 	t.Assert(flynn(t, "/", "-a", app.Name, "export", "-f", file), Succeeds)
-	assertExportContains(t, file,
-		"app.json", "routes.json", "release.json", "artifact.json",
-		"formation.json", "docker-image.tar", "docker-image.json",
-	)
+	assertExportContains(t, file, exportFiles...)
 
 	// delete the image from the registry
-	release, err := client.GetAppRelease(app.Name)
-	t.Assert(err, c.IsNil)
-	artifact, err := client.GetArtifact(release.ImageArtifactID())
-	t.Assert(err, c.IsNil)
 	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
 	t.Assert(err, c.IsNil)
 	uri := fmt.Sprintf("http://%s/v2/%s/manifests/%s", u.Host, app.Name, artifact.Meta["docker-receive.digest"])

@@ -1,4 +1,4 @@
 include_rules
 : $(ROOT)/gitreceive/flynn-receiver |> !cp |> bin/flynn-receiver
 : |> !go ./ |> bin/taffy
-: bin/* |> !docker-bootstrapped |>
+: bin/* |> !image-bootstrapped |>

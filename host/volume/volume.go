@@ -1,5 +1,7 @@
 package volume
 
+import "io"
+
 /*
 	A Volume is a persistent and sharable filesystem.  Unlike most of the filesystem in a job's
 	container, which is ephemeral and is discarded after job termination, Volumes can be used to
@@ -31,8 +33,13 @@ type Volume interface {
 	It is a serializable structure intended for API use.
 */
 type Info struct {
-	// Volumes have a unique identifier.
-	// These are guid formatted (v4, random); selected by the server;
-	// and though not globally sync'd, entropy should be high enough to be unique.
 	ID string `json:"id"`
+}
+
+type Filesystem struct {
+	ID         string    `json:"id"`
+	Data       io.Reader `json:"-"`
+	Size       int64     `json:"size"`
+	Type       string    `json:"type"`
+	MountFlags uintptr   `json:"flags"`
 }

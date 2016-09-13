@@ -102,8 +102,12 @@ Options:
 
 	fmt.Printf("-----> Building %s...\n", app.Name)
 
-	jobEnv := make(map[string]string)
-	jobEnv["BUILD_CACHE_URL"] = fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID)
+	slugImageID := random.UUID()
+	jobEnv := map[string]string{
+		"BUILD_CACHE_URL": fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID),
+		"CONTROLLER_KEY":  os.Getenv("CONTROLLER_KEY"),
+		"SLUG_IMAGE_ID":   slugImageID,
+	}
 	if buildpackURL, ok := env["BUILDPACK_URL"]; ok {
 		jobEnv["BUILDPACK_URL"] = buildpackURL
 	} else if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
@@ -114,11 +118,10 @@ Options:
 			jobEnv[k] = v
 		}
 	}
-	slugURL := fmt.Sprintf("%s/%s/slug.tgz", blobstoreURL, random.UUID())
 
 	job := &host.Job{
 		Config: host.ContainerConfig{
-			Args:       []string{"/tmp/builder/build.sh", slugURL},
+			Args:       []string{"/builder/build.sh"},
 			Env:        jobEnv,
 			Stdin:      true,
 			DisableLog: true,
@@ -130,19 +133,18 @@ Options:
 			"flynn-controller.release":  prevRelease.ID,
 			"flynn-controller.type":     "slugbuilder",
 		},
+		Resources: resource.Defaults(),
 	}
 	if sb, ok := prevRelease.Processes["slugbuilder"]; ok {
 		job.Resources = sb.Resources
 	} else if rawLimit := os.Getenv("SLUGBUILDER_DEFAULT_MEMORY_LIMIT"); rawLimit != "" {
 		if limit, err := resource.ParseLimit(resource.TypeMemory, rawLimit); err == nil {
-			r := make(resource.Resources)
-			resource.SetDefaults(&r)
-			r[resource.TypeMemory] = resource.Spec{Limit: &limit, Request: &limit}
-			job.Resources = r
+			job.Resources[resource.TypeMemory] = resource.Spec{Limit: &limit, Request: &limit}
 		}
 	}
 
-	cmd := exec.Job(*slugBuilder.HostArtifact(), job)
+	cmd := exec.Job(slugBuilder, job)
+	cmd.Volumes = []*ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}}
 	var output bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
@@ -183,17 +185,8 @@ Options:
 
 	fmt.Printf("-----> Creating release...\n")
 
-	slugArtifact := &ct.Artifact{
-		Type: host.ArtifactTypeFile,
-		URI:  slugURL,
-		Meta: map[string]string{"blobstore": "true"},
-	}
-	if err := client.CreateArtifact(slugArtifact); err != nil {
-		return fmt.Errorf("Error creating slug artifact: %s", err)
-	}
-
 	release := &ct.Release{
-		ArtifactIDs: []string{slugRunnerID, slugArtifact.ID},
+		ArtifactIDs: []string{slugRunnerID, slugImageID},
 		Env:         releaseEnv,
 		Meta:        prevRelease.Meta,
 	}
@@ -321,6 +314,7 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) e
 	defer pipe.Close()
 	tr := tar.NewReader(stdin)
 	tw := tar.NewWriter(pipe)
+	defer tw.Close()
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -330,7 +324,6 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) e
 		if err != nil {
 			return err
 		}
-		hdr.Name = path.Join("app", hdr.Name)
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
 		}
@@ -341,7 +334,7 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) e
 	// append env dir
 	for key, value := range env {
 		hdr := &tar.Header{
-			Name:    path.Join("env", key),
+			Name:    path.Join(".ENV_DIR_bdca46b87df0537eaefe79bb632d37709ff1df18", key),
 			Mode:    0644,
 			ModTime: time.Now(),
 			Size:    int64(len(value)),
@@ -354,11 +347,5 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) e
 			return err
 		}
 	}
-	hdr := &tar.Header{
-		Name:    ".ENV_DIR_bdca46b87df0537eaefe79bb632d37709ff1df18",
-		Mode:    0400,
-		ModTime: time.Now(),
-		Size:    0,
-	}
-	return tw.WriteHeader(hdr)
+	return nil
 }

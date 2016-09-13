@@ -91,11 +91,15 @@ func (c *FakeControllerClient) getExpandedFormation(appID, releaseID string) (*c
 	for typ, n := range formation.Processes {
 		procs[typ] = n
 	}
+	artifacts := make([]*ct.Artifact, 0, len(c.artifacts))
+	for _, artifact := range c.artifacts {
+		artifacts = append(artifacts, artifact)
+	}
 	return &ct.ExpandedFormation{
-		App:           app,
-		Release:       release,
-		ImageArtifact: c.artifacts[release.ImageArtifactID()],
-		Processes:     procs,
+		App:       app,
+		Release:   release,
+		Artifacts: artifacts,
+		Processes: procs,
 	}, nil
 }
 
@@ -195,12 +199,15 @@ func (c *FakeControllerClient) FormationListActive() ([]*ct.ExpandedFormation, e
 			if !ok {
 				continue
 			}
-			artifact := c.artifacts[release.ImageArtifactID()]
+			artifacts := make([]*ct.Artifact, 0, len(c.artifacts))
+			for _, artifact := range c.artifacts {
+				artifacts = append(artifacts, artifact)
+			}
 			formations = append(formations, &ct.ExpandedFormation{
-				App:           app,
-				Release:       release,
-				ImageArtifact: artifact,
-				Processes:     procs,
+				App:       app,
+				Release:   release,
+				Artifacts: artifacts,
+				Processes: procs,
 			})
 		}
 	}

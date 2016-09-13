@@ -77,12 +77,15 @@ func (a *DeployAppAction) Run(s *State) error {
 		}
 	}
 
-	if err := client.CreateArtifact(a.ImageArtifact); err != nil {
-		return err
+	a.Release.ArtifactIDs = make([]string, len(a.Artifacts))
+	for i, artifact := range a.Artifacts {
+		if err := client.CreateArtifact(artifact); err != nil {
+			return err
+		}
+		a.Release.ArtifactIDs[i] = artifact.ID
 	}
-	as.ImageArtifact = a.ImageArtifact
+	as.Artifacts = a.Artifacts
 
-	a.Release.ArtifactIDs = []string{a.ImageArtifact.ID}
 	if err := client.CreateRelease(a.Release); err != nil {
 		return err
 	}

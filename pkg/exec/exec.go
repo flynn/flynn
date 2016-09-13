@@ -7,6 +7,8 @@ import (
 	"io"
 	"io/ioutil"
 
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/schedutil"
@@ -22,9 +24,11 @@ type Cmd struct {
 
 	Args []string
 
-	ImageArtifact host.Artifact
+	ImageArtifact *ct.Artifact
 
 	Env map[string]string
+
+	Volumes []*ct.VolumeReq
 
 	Stdin io.Reader
 
@@ -80,15 +84,11 @@ type Cmd struct {
 	stdinPipe *readyWriter
 }
 
-func DockerImage(uri string) host.Artifact {
-	return host.Artifact{Type: host.ArtifactTypeDocker, URI: uri}
-}
-
-func Command(artifact host.Artifact, args ...string) *Cmd {
+func Command(artifact *ct.Artifact, args ...string) *Cmd {
 	return &Cmd{ImageArtifact: artifact, Args: args}
 }
 
-func Job(artifact host.Artifact, job *host.Job) *Cmd {
+func Job(artifact *ct.Artifact, job *host.Job) *Cmd {
 	return &Cmd{ImageArtifact: artifact, Job: job}
 }
 
@@ -97,19 +97,19 @@ type ClusterClient interface {
 	Host(string) (*cluster.Host, error)
 }
 
-func CommandUsingCluster(c ClusterClient, artifact host.Artifact, args ...string) *Cmd {
+func CommandUsingCluster(c ClusterClient, artifact *ct.Artifact, args ...string) *Cmd {
 	command := Command(artifact, args...)
 	command.cluster = c
 	return command
 }
 
-func JobUsingCluster(c ClusterClient, artifact host.Artifact, job *host.Job) *Cmd {
+func JobUsingCluster(c ClusterClient, artifact *ct.Artifact, job *host.Job) *Cmd {
 	command := Job(artifact, job)
 	command.cluster = c
 	return command
 }
 
-func JobUsingHost(h *cluster.Host, artifact host.Artifact, job *host.Job) *Cmd {
+func JobUsingHost(h *cluster.Host, artifact *ct.Artifact, job *host.Job) *Cmd {
 	command := Job(artifact, job)
 	command.HostID = h.ID()
 	command.host = h
@@ -185,7 +185,6 @@ func (c *Cmd) Start() error {
 	// otherwise generate one from the fields on exec.Cmd that mirror stdlib's os.exec.
 	if c.Job == nil {
 		c.Job = &host.Job{
-			ImageArtifact: &c.ImageArtifact,
 			Config: host.ContainerConfig{
 				Args:  c.Args,
 				TTY:   c.TTY,
@@ -199,8 +198,6 @@ func (c *Cmd) Start() error {
 		if c.Stdout != nil || c.Stderr != nil {
 			c.Job.Config.DisableLog = true
 		}
-	} else {
-		c.Job.ImageArtifact = &c.ImageArtifact
 	}
 	if c.Job.ID == "" {
 		c.Job.ID = cluster.GenerateJobID(c.HostID, "")
@@ -213,6 +210,14 @@ func (c *Cmd) Start() error {
 			return err
 		}
 	}
+
+	for _, vol := range c.Volumes {
+		if _, err := utils.ProvisionVolume(vol, c.host, c.Job); err != nil {
+			return err
+		}
+	}
+
+	utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
 
 	if c.Stdout != nil || c.Stderr != nil || c.Stdin != nil || c.stdinPipe != nil {
 		req := &host.AttachReq{
