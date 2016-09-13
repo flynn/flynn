@@ -19,13 +19,15 @@ import (
 	c "github.com/flynn/go-check"
 )
 
-type BackupSuite struct {
+// Prefix the suite with "ZZ" so that it runs after all other tests as it is
+// pretty disruptive
+type ZZBackupSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&BackupSuite{})
+var _ = c.Suite(&ZZBackupSuite{})
 
-func (s *BackupSuite) TestClusterBackups(t *c.C) {
+func (s *ZZBackupSuite) TestClusterBackups(t *c.C) {
 	if args.BootConfig.BackupsDir == "" {
 		t.Skip("--backups-dir not set")
 	}
@@ -41,7 +43,7 @@ func (s *BackupSuite) TestClusterBackups(t *c.C) {
 	}
 }
 
-func (s *BackupSuite) testClusterBackup(t *c.C, index int, path string) {
+func (s *ZZBackupSuite) testClusterBackup(t *c.C, index int, path string) {
 	debugf(t, "restoring cluster backup %s", filepath.Base(path))
 
 	// boot the cluster using an RFC 5737 TEST-NET IP, avoiding conflicts
