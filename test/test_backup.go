@@ -23,7 +23,7 @@ type BackupSuite struct {
 	Helper
 }
 
-var _ = c.ConcurrentSuite(&BackupSuite{})
+var _ = c.Suite(&BackupSuite{})
 
 func (s *BackupSuite) TestClusterBackups(t *c.C) {
 	if args.BootConfig.BackupsDir == "" {
