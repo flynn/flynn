@@ -429,7 +429,10 @@ func (s *Scheduler) SyncJobs() (err error) {
 		log.Error("error getting controller active jobs", "err", err)
 		return err
 	}
+	activeControllerJobs := make(map[string]struct{}, len(jobs))
 	for _, job := range jobs {
+		activeControllerJobs[job.UUID] = struct{}{}
+
 		j, ok := s.jobs[job.UUID]
 		if !ok {
 			// the controller job is unknown, and since we are in sync with
@@ -452,6 +455,18 @@ func (s *Scheduler) SyncJobs() (err error) {
 			job.State == ct.JobStateStarting && j.State != JobStateStarting ||
 			job.State == ct.JobStateUp && j.State != JobStateRunning {
 			s.persistJob(j)
+		}
+	}
+
+	// ensure any active in-memory jobs are also active in the controller
+	// (the two may diverge if for example a previous persistence of the
+	// job's state failed with a non-retryable error)
+	for _, job := range s.jobs {
+		if job.State != JobStatePending && job.State != JobStateStarting && job.State != JobStateRunning {
+			continue
+		}
+		if _, active := activeControllerJobs[job.ID]; !active {
+			s.persistJob(job)
 		}
 	}
 
