@@ -53,10 +53,12 @@ main() {
   local app="nodejs"
 
   for version in "v20160309.0" "v20160423.0" "v20160624.1" "v20160721.2" "v20160814.0"; do
-    local out="${dir}/${version}-nodejs-redis.tar"
+    local name="${version}-nodejs-redis.tar"
+    local out="${dir}/${name}"
 
+    info "generating ${name}"
     if [[ -e "${out}" ]] && ! $force; then
-      info "backup of ${version} already exists"
+      info "backup ${name} already exists"
       continue
     fi
 
@@ -65,6 +67,10 @@ main() {
     add_redis_resource
     backup_cluster "${out}"
   done
+
+  backup_mysql_cluster
+
+  backup_mongodb_cluster
 }
 
 clone_app() {
@@ -72,6 +78,40 @@ clone_app() {
 
   info "cloning Node.js example app"
   git clone "https://github.com/flynn-examples/nodejs-flynn-example.git" "${path}"
+}
+
+backup_mysql_cluster() {
+  local version="v20160814.0"
+  local name="${version}-nodejs-mysql.tar"
+  local out="${dir}/${name}"
+
+  info "generating ${name}"
+  if [[ -e "${out}" ]] && ! $force; then
+    info "backup ${name} already exists"
+    continue
+  fi
+
+  bootstrap_cluster "${version}"
+  git_deploy_app
+  add_mysql_resource
+  backup_cluster "${out}"
+}
+
+backup_mongodb_cluster() {
+  local version="v20160814.0"
+  local name="${version}-nodejs-mongodb.tar"
+  local out="${dir}/${name}"
+
+  info "generating ${name}"
+  if [[ -e "${out}" ]] && ! $force; then
+    info "backup ${name} already exists"
+    continue
+  fi
+
+  bootstrap_cluster "${version}"
+  git_deploy_app
+  add_mongodb_resource
+  backup_cluster "${out}"
 }
 
 bootstrap_cluster() {
@@ -119,6 +159,18 @@ add_redis_resource() {
   flynn -a "${app}" resource add redis
 }
 
+add_mysql_resource() {
+  info "adding MySQL resource"
+  flynn -a "${app}" resource add mysql
+  flynn -a "${app}" mysql console -- -e "CREATE TABLE foos (data TEXT); INSERT INTO foos (data) VALUES ('foobar')"
+}
+
+add_mongodb_resource() {
+  info "adding MongoDB resource"
+  flynn -a "${app}" resource add mongodb
+  flynn -a "${app}" mongodb mongo -- --eval 'db.foos.insert({data: "foobar"})'
+}
+
 backup_cluster() {
   local file=$1
 
@@ -127,7 +179,7 @@ backup_cluster() {
 }
 
 flynn() {
-  "${ROOT}/cli/bin/flynn" $@
+  "${ROOT}/cli/bin/flynn" "$@"
 }
 
 main $@
