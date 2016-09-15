@@ -45,7 +45,7 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 			Args: []string{
 				"bash",
 				"-c",
-				fmt.Sprintf("set -o pipefail; /usr/bin/mysqldump -h %s -u %s --all-databases | gzip -9", mysqlRelease.Env["MYSQL_HOST"], mysqlRelease.Env["MYSQL_USER"]),
+				fmt.Sprintf("set -o pipefail; /usr/bin/mysqldump -h %s -u %s --all-databases --flush-privileges | gzip -9", mysqlRelease.Env["MYSQL_HOST"], mysqlRelease.Env["MYSQL_USER"]),
 			},
 			Env: map[string]string{
 				"MYSQL_PWD": mysqlRelease.Env["MYSQL_PWD"],
