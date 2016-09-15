@@ -184,17 +184,11 @@ func (m Manifest) RunWithState(ch chan<- *StepInfo, state *State) (*State, error
 	return state, nil
 }
 
-func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config, only []string) error {
-	defer close(ch)
+func UnmarshalManifest(manifestData []byte, only []string) (Manifest, error) {
 	var manifest Manifest
 	var steps []json.RawMessage
 	if err := json.Unmarshal(manifestData, &steps); err != nil {
-		return err
-	}
-
-	cfg.Singleton = cfg.MinHosts == 1
-	if s := os.Getenv("SINGLETON"); s != "" {
-		cfg.Singleton = s == "true"
+		return nil, err
 	}
 
 	skipStep := func(step Step) bool {
@@ -212,24 +206,38 @@ func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config, only []string) er
 	for _, s := range steps {
 		var step Step
 		if err := json.Unmarshal(s, &step.StepMeta); err != nil {
-			return err
+			return nil, err
 		}
 		if skipStep(step) {
 			continue
 		}
 		actionType, ok := registeredActions[step.StepMeta.Action]
 		if !ok {
-			return fmt.Errorf("bootstrap: unknown action %q", step.StepMeta.Action)
+			return manifest, fmt.Errorf("bootstrap: unknown action %q", step.StepMeta.Action)
 		}
 		step.Action = reflect.New(actionType).Interface().(Action)
 
 		if err := json.Unmarshal(s, &step.Action); err != nil {
-			return err
+			return nil, err
 		}
 		manifest = append(manifest, step)
 	}
+	return manifest, nil
+}
 
-	_, err := manifest.Run(ch, cfg)
+func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config, only []string) error {
+	defer close(ch)
+	manifest, err := UnmarshalManifest(manifestData, only)
+	if err != nil {
+		return err
+	}
+
+	cfg.Singleton = cfg.MinHosts == 1
+	if s := os.Getenv("SINGLETON"); s != "" {
+		cfg.Singleton = s == "true"
+	}
+
+	_, err = manifest.Run(ch, cfg)
 	return err
 }
 
