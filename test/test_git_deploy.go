@@ -362,3 +362,26 @@ func (s *GitDeploySuite) TestProcfileChange(t *c.C) {
 		t.Assert(r.git("push", "flynn", "master"), Succeeds)
 	}
 }
+
+func (s *GitDeploySuite) TestCustomPort(t *c.C) {
+	r := s.newGitRepo(t, "http")
+	name := "custom-port"
+	t.Assert(r.flynn("create", name), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// Update release with a different port
+	cc := s.controllerClient(t)
+	release, err := cc.GetAppRelease(name)
+	t.Assert(err, c.IsNil)
+	release.ID = ""
+	release.Processes["web"].Ports[0].Port = 9090
+	t.Assert(cc.CreateRelease(release), c.IsNil)
+	t.Assert(cc.DeployAppRelease(name, release.ID, nil), c.IsNil)
+
+	// Deploy again, check that port stays the same
+	t.Assert(r.git("commit", "-m", "foo", "--allow-empty"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	release, err = cc.GetAppRelease(name)
+	t.Assert(err, c.IsNil)
+	t.Assert(release.Processes["web"].Ports[0].Port, c.Equals, 9090)
+}

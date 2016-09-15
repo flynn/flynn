@@ -203,7 +203,7 @@ Options:
 	for _, t := range types {
 		proc := prevRelease.Processes[t]
 		proc.Args = []string{"/runner/init", "start", t}
-		if t == "web" || strings.HasSuffix(t, "-web") {
+		if (t == "web" || strings.HasSuffix(t, "-web")) && proc.Service == "" {
 			proc.Service = app.Name + "-" + t
 			proc.Ports = []ct.Port{{
 				Port:  8080,
