@@ -225,39 +225,6 @@ $function$;
 		return fmt.Errorf("error decoding manifest json: %s", err)
 	}
 
-	// add new env vars to system apps
-	for _, step := range manifestSteps {
-		var release *ct.Release
-		switch step.ID {
-		case "discoverd":
-			release = data.Discoverd.Release
-		case "flannel":
-			release = data.Flannel.Release
-		case "postgres":
-			release = data.Postgres.Release
-		case "mariadb":
-			if data.MariaDB != nil {
-				release = data.MariaDB.Release
-			}
-		case "mongodb":
-			if data.MongoDB != nil {
-				release = data.MongoDB.Release
-			}
-		case "controller":
-			release = data.Controller.Release
-		}
-		if release == nil {
-			continue
-		}
-		for key, val := range step.Release.Env {
-			if _, ok := release.Env[key]; !ok {
-				if len(release.Env) == 0 {
-					release.Env = make(map[string]string)
-				}
-				release.Env[key] = val
-			}
-		}
-	}
 	manifestStepMap := make(map[string]bootstrap.Step, len(manifestSteps))
 	steps, err := bootstrap.UnmarshalManifest(manifest, nil)
 	if err != nil {
@@ -378,6 +345,15 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 			StepMeta: bootstrap.StepMeta{ID: id, Action: name},
 			Action:   action,
 		}
+	}
+
+	// ensure flannel has NETWORK set if required
+	if network := os.Getenv("FLANNEL_NETWORK"); network != "" {
+		data.Flannel.Release.Env["NETWORK"] = network
+		sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE releases SET env = pg_temp.json_object_update_key(env, 'NETWORK', '%s')
+WHERE release_id = (SELECT release_id FROM apps WHERE name = 'flannel');
+		`, network))
 	}
 
 	// start discoverd/flannel/postgres/mariadb
