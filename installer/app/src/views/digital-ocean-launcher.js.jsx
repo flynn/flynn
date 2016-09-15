@@ -6,7 +6,7 @@ import { green as GreenBtnCSS, disabled as DisabledBtnCSS } from './css/button';
 import Sheet from './css/sheet';
 
 var sizeInBytes = function (str) {
-	var m = str.match(/^(\d+)([a-z]+)$/);
+	var m = str.match(/^\D*(\d+)([a-z]+)$/);
 	var n = parseInt(m[1], 10);
 	var u = m[2];
 
