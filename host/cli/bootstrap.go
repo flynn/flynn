@@ -296,6 +296,23 @@ $$;`, step.Artifact.URI, step.ID))
 		data.MongoDB.ImageArtifact.URI = artifactURIs["mongodb"]
 	}
 
+	// set TELEMETRY_CLUSTER_ID
+	telemetryClusterID := random.UUID()
+	sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE releases SET env = jsonb_set(env, '{TELEMETRY_CLUSTER_ID}', '%q')
+WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller');
+`, telemetryClusterID))
+	data.Controller.Release.Env["TELEMETRY_CLUSTER_ID"] = telemetryClusterID
+
+	// set TELEMETRY_BOOTSTRAP_ID if unset
+	if data.Controller.Release.Env["TELEMETRY_BOOTSTRAP_ID"] == "" {
+		sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE releases SET env = jsonb_set(env, '{TELEMETRY_BOOTSTRAP_ID}', '%q')
+WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller');
+`, telemetryClusterID))
+		data.Controller.Release.Env["TELEMETRY_BOOTSTRAP_ID"] = telemetryClusterID
+	}
+
 	// create the slugbuilder artifact if gitreceive still references
 	// SLUGBUILDER_IMAGE_URI (in which case there is no slugbuilder
 	// artifact in the database)
