@@ -136,6 +136,11 @@
     "data": "{{ getenv \"CONTROLLER_KEY\" }}"
   },
   {
+    "id": "bootstrap-id",
+    "action": "gen-random",
+    "encoding": "uuid"
+  },
+  {
     "id": "dashboard-session-secret",
     "action": "gen-random"
   },
@@ -182,7 +187,9 @@
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
         "NAME_SEED": "{{ (index .StepData \"name-seed\").Data }}",
-        "CA_CERT": "{{ (index .StepData \"controller-cert\").CACert }}"
+        "CA_CERT": "{{ (index .StepData \"controller-cert\").CACert }}",
+        "TELEMETRY_BOOTSTRAP_ID": "{{ (index .StepData \"bootstrap-id\").Data }}",
+        "TELEMETRY_CLUSTER_ID": "{{ (index .StepData \"bootstrap-id\").Data }}"
       },
       "processes": {
         "web": {

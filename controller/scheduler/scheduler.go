@@ -63,6 +63,7 @@ type Scheduler struct {
 	syncHosts             chan struct{}
 	hostChecks            chan struct{}
 	rectify               chan struct{}
+	sendTelemetry         chan struct{}
 	hostEvents            chan *discoverd.Event
 	formationEvents       chan *ct.ExpandedFormation
 	putJobs               chan *ct.Job
@@ -110,6 +111,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		hostChecks:            make(chan struct{}, 1),
 		rectifyBatch:          make(map[utils.FormationKey]struct{}),
 		rectify:               make(chan struct{}, 1),
+		sendTelemetry:         make(chan struct{}, 1),
 		formationEvents:       make(chan *ct.ExpandedFormation, eventBufferSize),
 		hostEvents:            make(chan *discoverd.Event, eventBufferSize),
 		putJobs:               make(chan *ct.Job, eventBufferSize),
@@ -305,6 +307,7 @@ func (s *Scheduler) Run() error {
 	s.tickSyncJobs(30 * time.Second)
 	s.tickSyncFormations(time.Minute)
 	s.tickSyncHosts(10 * time.Second)
+	s.tickSendTelemetry()
 
 	for {
 		select {
@@ -381,6 +384,8 @@ func (s *Scheduler) Run() error {
 			s.SyncJobs()
 		case <-s.syncHosts:
 			s.SyncHosts()
+		case <-s.sendTelemetry:
+			s.SendTelemetry()
 		case <-s.pause:
 			<-s.resume
 		}
@@ -939,6 +944,7 @@ func (s *Scheduler) HandleLeaderChange(isLeader bool) {
 		s.SyncFormations()
 		s.SyncJobs()
 		s.rectifyAll()
+		s.triggerSendTelemetry()
 	} else {
 		log.Info("handling leader demotion")
 	}

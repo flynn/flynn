@@ -41,6 +41,8 @@ func (a *GenRandomAction) Run(s *State) error {
 			data = base64.StdEncoding.EncodeToString(random.Bytes(a.Length))
 		case "base64safe":
 			data = random.Base64(a.Length)
+		case "uuid":
+			data = random.UUID()
 		default:
 			return fmt.Errorf("bootstrap: unknown random type: %q", a.Encoding)
 		}
