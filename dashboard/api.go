@@ -69,7 +69,7 @@ func APIHandler(conf *Config) http.Handler {
 
 	return httphelper.ContextInjector("dashboard",
 		httphelper.NewRequestLogger(
-			api.CorsHandler(router)))
+			api.ContentSecurityHandler(api.CorsHandler(router))))
 }
 
 type API struct {
@@ -145,6 +145,16 @@ func (api *API) CorsHandler(main http.Handler) http.Handler {
 		}
 		main.ServeHTTP(w, req)
 	}))
+}
+
+func (api *API) ContentSecurityHandler(main http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Add("Content-Security-Policy", fmt.Sprintf("default-src 'none'; connect-src 'self' %s %s api.github.com; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' *.githubusercontent.com", api.conf.ControllerDomain, api.conf.StatusDomain))
+		w.Header().Add("X-Content-Type-Options", "nosniff")
+		w.Header().Add("X-Frame-Options", "DENY")
+		w.Header().Add("X-XSS-Protection", "1; mode=block")
+		main.ServeHTTP(w, req)
+	})
 }
 
 func (api *API) ServeStatic(ctx context.Context, w http.ResponseWriter, req *http.Request, path string) {
@@ -250,7 +260,7 @@ func (api *API) GetConfig(ctx context.Context, w http.ResponseWriter, req *http.
 	config := baseConfig
 
 	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", api.conf.ControllerDomain)
-	config.Endpoints["cluster_status"] = fmt.Sprintf("https://status.%s", api.conf.DefaultRouteDomain)
+	config.Endpoints["cluster_status"] = fmt.Sprintf("https://%s", api.conf.StatusDomain)
 	config.Endpoints["cert"] = fmt.Sprintf("http://%s/ca-cert", api.conf.ControllerDomain)
 	config.DefaultRouteDomain = api.conf.DefaultRouteDomain
 	config.GithubAPIURL = api.conf.GithubAPIURL
