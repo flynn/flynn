@@ -487,8 +487,21 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string, lo
 	return reg.Register(), nil
 }
 
-func babySit(process *os.Process) int {
+func babySit(process *os.Process, hbs []discoverd.Heartbeater) int {
 	log := logger.New("fn", "babySit")
+
+	var shutdownOnce sync.Once
+	hbDone := make(chan struct{})
+	closeHBs := func() {
+		for _, hb := range hbs {
+			if err := hb.Close(); err != nil {
+				log.Error("error closing heartbeater", "err", err)
+			} else {
+				log.Info("closed heartbeater")
+			}
+		}
+		close(hbDone)
+	}
 
 	// Forward all signals to the app
 	sigchan := make(chan os.Signal, 1)
@@ -498,6 +511,9 @@ func babySit(process *os.Process) int {
 			log.Info("received signal", "type", sig)
 			if sig == syscall.SIGCHLD {
 				continue
+			}
+			if sig == syscall.SIGTERM || sig == syscall.SIGINT {
+				go shutdownOnce.Do(closeHBs)
 			}
 			log.Info("forwarding signal to command", "type", sig)
 			process.Signal(sig)
@@ -514,10 +530,19 @@ func babySit(process *os.Process) int {
 		}
 	}
 
+	// Ensure that the heartbeaters are closed even if the app wasn't signaled
+	shutdownOnce.Do(closeHBs)
+	select {
+	case <-hbDone:
+	case <-time.After(5 * time.Second):
+		log.Error("timed out waiting for heartbeaters to close")
+	}
+
 	if wstatus.Signaled() {
 		log.Info("command exited due to signal")
 		return 0
 	}
+
 	return wstatus.ExitStatus()
 }
 
@@ -679,12 +704,9 @@ func containerInitApp(c *Config, logFile *os.File) error {
 		}
 		hbs = append(hbs, hb)
 	}
-	exitCode := babySit(init.process)
+	exitCode := babySit(init.process, hbs)
 	log.Info("command exited", "status", exitCode)
 	init.mtx.Lock()
-	for _, hb := range hbs {
-		hb.Close()
-	}
 	init.changeState(StateExited, "", exitCode)
 	init.mtx.Unlock() // Allow calls
 
