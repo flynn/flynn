@@ -6,6 +6,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/stream"
 	c "github.com/flynn/go-check"
 )
 
@@ -14,6 +15,20 @@ type DeployerSuite struct {
 }
 
 var _ = c.ConcurrentSuite(&DeployerSuite{})
+
+type testDeploy struct {
+	t            *c.C
+	deployment   *ct.Deployment
+	deployEvents chan *ct.DeploymentEvent
+	deployStream stream.Stream
+	jobEvents    chan *ct.Job
+	jobStream    stream.Stream
+}
+
+func (t *testDeploy) cleanup() {
+	t.jobStream.Close()
+	t.deployStream.Close()
+}
 
 func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App, *ct.Release) {
 	app, release := s.createApp(t)
@@ -36,7 +51,7 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App
 	return app, release
 }
 
-func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service string) *ct.Deployment {
+func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service string) *testDeploy {
 	app, release := s.createRelease(t, process, strategy)
 
 	if service != "" {
@@ -72,13 +87,58 @@ func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service stri
 		}
 	}
 
+	client := s.controllerClient(t)
+	jobEvents := make(chan *ct.Job)
+	jobStream, err := client.StreamJobEvents(app.ID, jobEvents)
+	t.Assert(err, c.IsNil)
+
 	// create a new release for the deployment
 	release.ID = ""
-	t.Assert(s.controllerClient(t).CreateRelease(release), c.IsNil)
+	t.Assert(client.CreateRelease(release), c.IsNil)
 
-	deployment, err := s.controllerClient(t).CreateDeployment(app.ID, release.ID)
+	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
-	return deployment
+	debugf(t, "created deployment %s", deployment.ID)
+	debugf(t, "deploying from release %s to %s", deployment.OldReleaseID, deployment.NewReleaseID)
+
+	deployEvents := make(chan *ct.DeploymentEvent)
+	deployStream, err := client.StreamDeployment(deployment, deployEvents)
+	t.Assert(err, c.IsNil)
+
+	return &testDeploy{
+		t:            t,
+		deployment:   deployment,
+		deployEvents: deployEvents,
+		deployStream: deployStream,
+		jobEvents:    jobEvents,
+		jobStream:    jobStream,
+	}
+}
+
+func (t *testDeploy) waitForDeploymentEvents(expected []*ct.DeploymentEvent) {
+	waitForDeploymentEvents(t.t, t.deployEvents, expected)
+}
+
+func (t *testDeploy) waitForJobDownEvents(releaseID, typ string, expected int) {
+	debugf(t.t, "waiting for %d job down events", expected)
+	actual := 0
+	for {
+		select {
+		case event, ok := <-t.jobEvents:
+			if !ok {
+				t.t.Fatal("job event stream closed unexpectedly")
+			}
+			debugf(t.t, "got job event: %s %s %s", event.ReleaseID, event.Type, event.State)
+			if event.ReleaseID == releaseID && event.Type == typ && event.State == ct.JobStateDown {
+				actual++
+			}
+			if actual == expected {
+				return
+			}
+		case <-time.After(60 * time.Second):
+			t.t.Fatal("timed out waiting for job down events")
+		}
+	}
 }
 
 func waitForDeploymentEvents(t *c.C, stream chan *ct.DeploymentEvent, expected []*ct.DeploymentEvent) {
@@ -115,15 +175,12 @@ loop:
 }
 
 func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
-	deployment := s.createDeployment(t, "printer", "one-by-one", "")
-	events := make(chan *ct.DeploymentEvent)
-	stream, err := s.controllerClient(t).StreamDeployment(deployment, events)
-	t.Assert(err, c.IsNil)
-	defer stream.Close()
-	releaseID := deployment.NewReleaseID
-	oldReleaseID := deployment.OldReleaseID
+	d := s.createDeployment(t, "printer", "one-by-one", "")
+	defer d.cleanup()
+	releaseID := d.deployment.NewReleaseID
+	oldReleaseID := d.deployment.OldReleaseID
 
-	expected := []*ct.DeploymentEvent{
+	d.waitForDeploymentEvents([]*ct.DeploymentEvent{
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateUp, Status: "running"},
@@ -134,20 +191,16 @@ func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateStopping, Status: "running"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "complete"},
-	}
-	waitForDeploymentEvents(t, events, expected)
+	})
 }
 
 func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
-	deployment := s.createDeployment(t, "printer", "all-at-once", "")
-	events := make(chan *ct.DeploymentEvent)
-	stream, err := s.controllerClient(t).StreamDeployment(deployment, events)
-	t.Assert(err, c.IsNil)
-	defer stream.Close()
-	releaseID := deployment.NewReleaseID
-	oldReleaseID := deployment.OldReleaseID
+	d := s.createDeployment(t, "printer", "all-at-once", "")
+	defer d.cleanup()
+	releaseID := d.deployment.NewReleaseID
+	oldReleaseID := d.deployment.OldReleaseID
 
-	expected := []*ct.DeploymentEvent{
+	d.waitForDeploymentEvents([]*ct.DeploymentEvent{
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
@@ -155,23 +208,19 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateUp, Status: "running"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateStopping, Status: "running"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateStopping, Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "complete"},
-	}
-	waitForDeploymentEvents(t, events, expected)
+	})
+
+	d.waitForJobDownEvents(oldReleaseID, "printer", 2)
 }
 
 func (s *DeployerSuite) TestServiceEvents(t *c.C) {
-	deployment := s.createDeployment(t, "echoer", "all-at-once", "echo-service")
-	events := make(chan *ct.DeploymentEvent)
-	stream, err := s.controllerClient(t).StreamDeployment(deployment, events)
-	t.Assert(err, c.IsNil)
-	defer stream.Close()
-	releaseID := deployment.NewReleaseID
-	oldReleaseID := deployment.OldReleaseID
+	d := s.createDeployment(t, "echoer", "all-at-once", "echo-service")
+	defer d.cleanup()
+	releaseID := d.deployment.NewReleaseID
+	oldReleaseID := d.deployment.OldReleaseID
 
-	expected := []*ct.DeploymentEvent{
+	d.waitForDeploymentEvents([]*ct.DeploymentEvent{
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
 		{ReleaseID: releaseID, JobType: "echoer", JobState: ct.JobStateStarting, Status: "running"},
 		{ReleaseID: releaseID, JobType: "echoer", JobState: ct.JobStateStarting, Status: "running"},
@@ -179,11 +228,10 @@ func (s *DeployerSuite) TestServiceEvents(t *c.C) {
 		{ReleaseID: releaseID, JobType: "echoer", JobState: ct.JobStateUp, Status: "running"},
 		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: ct.JobStateStopping, Status: "running"},
 		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: ct.JobStateStopping, Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: ct.JobStateDown, Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: ct.JobStateDown, Status: "running"},
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "complete"},
-	}
-	waitForDeploymentEvents(t, events, expected)
+	})
+
+	d.waitForJobDownEvents(oldReleaseID, "echoer", 2)
 }
 
 func (s *DeployerSuite) assertRolledBack(t *c.C, deployment *ct.Deployment, processes map[string]int) {
@@ -317,7 +365,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	stream, err := client.StreamDeployment(deployment, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
-	expected := make([]*ct.DeploymentEvent, 0, 4*totalJobs+1)
+	expected := make([]*ct.DeploymentEvent, 0, 3*totalJobs+1)
 	appendEvents := func(releaseID string, state ct.JobState, count int) {
 		for i := 0; i < count; i++ {
 			event := &ct.DeploymentEvent{
@@ -333,9 +381,9 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	appendEvents(deployment.NewReleaseID, ct.JobStateStarting, totalJobs)
 	appendEvents(deployment.NewReleaseID, ct.JobStateUp, totalJobs)
 	appendEvents(deployment.OldReleaseID, ct.JobStateStopping, totalJobs)
-	appendEvents(deployment.OldReleaseID, ct.JobStateDown, totalJobs)
 	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "complete"})
 	waitForDeploymentEvents(t, events, expected)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"omni": {ct.JobStateDown: totalJobs}}, scaleTimeout, nil), c.IsNil)
 
 	// deploy using one-by-one and check we get the correct events
 	app.Strategy = "one-by-one"

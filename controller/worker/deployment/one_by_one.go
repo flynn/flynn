@@ -122,14 +122,11 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 		log.Error("error scaling old formation down to zero", "err", err)
 		return ErrSkipRollback{err.Error()}
 	}
-	if diff.Count() > 0 {
-		log.Info(fmt.Sprintf("waiting for %d job down event(s)", diff.Count()), "diff", diff)
-		if err := d.waitForJobEvents(d.OldReleaseID, diff, log); err != nil {
-			log.Error("error waiting for job down events", "diff", diff, "err", err)
-			return ErrSkipRollback{err.Error()}
-		}
-	}
 
+	// treat the deployment as finished now (rather than potentially
+	// waiting for the jobs to actually stop) as we can trust that the
+	// scheduler will actually kill the jobs, so no need to delay the
+	// deployment.
 	log.Info("finished one-by-one deployment")
 	return nil
 }

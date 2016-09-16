@@ -65,28 +65,22 @@ func (d *DeployJob) deployAllAtOnce() error {
 		}
 	}
 
-	// the new jobs have now started and they are up, so return
-	// ErrSkipRollback from here on out if an error occurs (rolling
-	// back doesn't make a ton of sense because it involves
-	// stopping the new working jobs).
 	log = log.New("release_id", d.OldReleaseID)
 	log.Info("scaling old formation to zero")
 	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.OldReleaseID,
 	}); err != nil {
+		// the new jobs have now started and they are up, so return
+		// ErrSkipRollback (rolling back doesn't make a ton of sense
+		// because it involves stopping the new working jobs).
 		log.Error("error scaling old formation to zero", "err", err)
 		return ErrSkipRollback{err.Error()}
 	}
 
-	if expected.Count() > 0 {
-		log.Info("waiting for job events", "expected", expected)
-		if err := d.waitForJobEvents(d.OldReleaseID, expected, log); err != nil {
-			log.Error("error waiting for job events", "err", err)
-			return ErrSkipRollback{err.Error()}
-		}
-	}
-
+	// treat the deployment as finished now (rather than waiting for the
+	// jobs to actually stop) as we can trust that the scheduler will
+	// actually kill the jobs, so no need to delay the deployment.
 	log.Info("finished all-at-once deployment")
 	return nil
 }
