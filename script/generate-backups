@@ -88,7 +88,7 @@ backup_mysql_cluster() {
   info "generating ${name}"
   if [[ -e "${out}" ]] && ! $force; then
     info "backup ${name} already exists"
-    continue
+    return
   fi
 
   bootstrap_cluster "${version}"
@@ -105,7 +105,7 @@ backup_mongodb_cluster() {
   info "generating ${name}"
   if [[ -e "${out}" ]] && ! $force; then
     info "backup ${name} already exists"
-    continue
+    return
   fi
 
   bootstrap_cluster "${version}"
