@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +42,7 @@ import (
 	"github.com/flynn/tail"
 	"github.com/julienschmidt/httprouter"
 	"github.com/thoj/go-ircevent"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 var logBucket = "flynn-ci-logs"
@@ -179,6 +181,12 @@ func (r *Runner) start() error {
 		return errors.New("GITHUB_TOKEN not set")
 	}
 
+	am := autocert.Manager{
+		Prompt:     autocert.AcceptTOS,
+		Cache:      autocert.DirCache(args.TLSDir),
+		HostPolicy: autocert.HostWhitelist(args.Domain),
+	}
+
 	awsAuth, err := aws.EnvCreds()
 	if err != nil {
 		return err
@@ -239,12 +247,14 @@ func (r *Runner) start() error {
 	router.DELETE("/cluster/:cluster/:host", r.clusterAPI(r.removeHost))
 
 	srv := &http.Server{
-		Addr:      args.ListenAddr,
-		Handler:   router,
-		TLSConfig: tlsconfig.SecureCiphers(nil),
+		Addr:    args.ListenAddr,
+		Handler: router,
+		TLSConfig: tlsconfig.SecureCiphers(&tls.Config{
+			GetCertificate: am.GetCertificate,
+		}),
 	}
 	log.Println("Listening on", args.ListenAddr, "...")
-	if err := srv.ListenAndServeTLS(args.TLSCert, args.TLSKey); err != nil {
+	if err := srv.ListenAndServeTLS("", ""); err != nil {
 		return fmt.Errorf("ListenAndServeTLS: %s", err)
 	}
 

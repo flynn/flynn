@@ -20,8 +20,8 @@ type Args struct {
 	BuildRootFS      bool
 	DBPath           string
 	ListenAddr       string
-	TLSCert          string
-	TLSKey           string
+	TLSDir           string
+	Domain           string
 	AssetsDir        string
 	Run              string
 	Gist             bool
@@ -45,8 +45,8 @@ func Parse() *Args {
 	flag.StringVar(&args.RouterIP, "router-ip", "127.0.0.1", "IP address of the router")
 	flag.StringVar(&args.DBPath, "db", "flynn-test.db", "path to BoltDB database to store pending builds")
 	flag.StringVar(&args.ListenAddr, "listen", ":443", "runner https listen address")
-	flag.StringVar(&args.TLSCert, "tls-cert", "", "TLS certificate")
-	flag.StringVar(&args.TLSKey, "tls-key", "", "TLS key")
+	flag.StringVar(&args.TLSDir, "tls-dir", "", "TLS certificate cache directory")
+	flag.StringVar(&args.Domain, "domain", "", "HTTP host that runner will be on")
 	flag.StringVar(&args.AssetsDir, "assets", "runner/assets", "path to the runner assets dir")
 	flag.StringVar(&args.Run, "run", "", "regular expression selecting which tests and/or suites to run")
 	flag.StringVar(&args.ClusterAPI, "cluster-api", "", "cluster-api endpoint for adding and removing hosts")

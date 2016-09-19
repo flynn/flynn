@@ -83,15 +83,17 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	codec    Codec
-	cp       Compressor
-	dc       Decompressor
-	bs       backoffStrategy
-	balancer Balancer
-	block    bool
-	insecure bool
-	timeout  time.Duration
-	copts    transport.ConnectOptions
+	unaryInt  UnaryClientInterceptor
+	streamInt StreamClientInterceptor
+	codec     Codec
+	cp        Compressor
+	dc        Decompressor
+	bs        backoffStrategy
+	balancer  Balancer
+	block     bool
+	insecure  bool
+	timeout   time.Duration
+	copts     transport.ConnectOptions
 }
 
 // DialOption configures how we set up the connection.
@@ -215,19 +217,48 @@ func WithUserAgent(s string) DialOption {
 	}
 }
 
+// WithUnaryInterceptor returns a DialOption that specifies the interceptor for unary RPCs.
+func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
+	return func(o *dialOptions) {
+		o.unaryInt = f
+	}
+}
+
+// WithStreamInterceptor returns a DialOption that specifies the interceptor for streaming RPCs.
+func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
+	return func(o *dialOptions) {
+		o.streamInt = f
+	}
+}
+
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
 
-// DialContext creates a client connection to the given target
-// using the supplied context.
-func DialContext(ctx context.Context, target string, opts ...DialOption) (*ClientConn, error) {
+// DialContext creates a client connection to the given target. ctx can be used to
+// cancel or expire the pending connecting. Once this function returns, the
+// cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
+// to terminate all the pending operations after this function returns.
+// This is the EXPERIMENTAL API.
+func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[Address]*addrConn),
 	}
-	cc.ctx, cc.cancel = context.WithCancel(ctx)
+	cc.ctx, cc.cancel = context.WithCancel(context.Background())
+	defer func() {
+		select {
+		case <-ctx.Done():
+			conn, err = nil, ctx.Err()
+		default:
+		}
+
+		if err != nil {
+			cc.Close()
+		}
+	}()
+
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
@@ -240,30 +271,30 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 		cc.dopts.bs = DefaultBackoffConfig
 	}
 
-	var (
-		ok    bool
-		addrs []Address
-	)
-	if cc.dopts.balancer == nil {
-		// Connect to target directly if balancer is nil.
-		addrs = append(addrs, Address{Addr: target})
-	} else {
-		if err := cc.dopts.balancer.Start(target); err != nil {
-			return nil, err
-		}
-		ch := cc.dopts.balancer.Notify()
-		if ch == nil {
-			// There is no name resolver installed.
-			addrs = append(addrs, Address{Addr: target})
-		} else {
-			addrs, ok = <-ch
-			if !ok || len(addrs) == 0 {
-				return nil, errNoAddr
-			}
-		}
-	}
+	var ok bool
 	waitC := make(chan error, 1)
 	go func() {
+		var addrs []Address
+		if cc.dopts.balancer == nil {
+			// Connect to target directly if balancer is nil.
+			addrs = append(addrs, Address{Addr: target})
+		} else {
+			if err := cc.dopts.balancer.Start(target); err != nil {
+				waitC <- err
+				return
+			}
+			ch := cc.dopts.balancer.Notify()
+			if ch == nil {
+				// There is no name resolver installed.
+				addrs = append(addrs, Address{Addr: target})
+			} else {
+				addrs, ok = <-ch
+				if !ok || len(addrs) == 0 {
+					waitC <- errNoAddr
+					return
+				}
+			}
+		}
 		for _, a := range addrs {
 			if err := cc.resetAddrConn(a, false, nil); err != nil {
 				waitC <- err
@@ -277,16 +308,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 		timeoutCh = time.After(cc.dopts.timeout)
 	}
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case err := <-waitC:
 		if err != nil {
-			cc.Close()
 			return nil, err
 		}
-	case <-cc.ctx.Done():
-		cc.Close()
-		return nil, cc.ctx.Err()
 	case <-timeoutCh:
-		cc.Close()
 		return nil, ErrClientConnTimeout
 	}
 	// If balancer is nil or balancer.Notify() is nil, ok will be false here.
@@ -294,11 +322,16 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 	if ok {
 		go cc.lbWatcher()
 	}
-	colonPos := strings.LastIndex(target, ":")
-	if colonPos == -1 {
-		colonPos = len(target)
+	creds := cc.dopts.copts.TransportCredentials
+	if creds != nil && creds.Info().ServerName != "" {
+		cc.authority = creds.Info().ServerName
+	} else {
+		colonPos := strings.LastIndex(target, ":")
+		if colonPos == -1 {
+			colonPos = len(target)
+		}
+		cc.authority = target[:colonPos]
 	}
-	cc.authority = target[:colonPos]
 	return cc, nil
 }
 
