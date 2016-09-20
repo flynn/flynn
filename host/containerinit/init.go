@@ -513,7 +513,8 @@ func babySit(process *os.Process, hbs []discoverd.Heartbeater) int {
 				continue
 			}
 			if sig == syscall.SIGTERM || sig == syscall.SIGINT {
-				go shutdownOnce.Do(closeHBs)
+				shutdownOnce.Do(closeHBs)
+				time.Sleep(2 * time.Second)
 			}
 			log.Info("forwarding signal to command", "type", sig)
 			process.Signal(sig)
