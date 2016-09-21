@@ -1,31 +1,48 @@
 package main
 
 import (
-	"flag"
 	"log"
+	"strconv"
 	"sync"
 
 	"github.com/flynn/flynn/blobstore/data"
 	"github.com/flynn/flynn/pkg/postgres"
+	docopt "github.com/flynn/go-docopt"
 )
 
-func main() {
-	concurrency := flag.Int("concurrency", 4, "number of parallel file deletions to run at a time")
-	flag.Parse()
+func init() {
+	register("cleanup", runCleanup, `
+usage: flynn-blobstore cleanup [-c <concurrency>]
+
+Delete file blobs that were already moved to a different backend from the default backend. 
+
+Options:
+     -c, --concurrency=<concurrency>  number of parallel file deletions to run at a time. [default: 4]
+`)
+}
+
+func runCleanup(args *docopt.Args) error {
+	concurrency, err := strconv.Atoi(args.String["--concurrency"])
+	if err != nil {
+		return err
+	}
+	if concurrency < 1 {
+		concurrency = 4
+	}
 
 	db := postgres.Wait(nil, nil)
 	repo, err := data.NewFileRepoFromEnv(db)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	files, err := repo.ListDeletedFilesForCleanup()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	var wg sync.WaitGroup
-	tokens := make(chan struct{}, *concurrency)
+	tokens := make(chan struct{}, concurrency)
 	for i, f := range files {
 		if f.Backend == nil {
 			log.Printf("[%d/%d] Skipping %s (%s) because backend is not configured", i+1, len(files), f.FileInfo.Name, f.ID)
@@ -46,4 +63,5 @@ func main() {
 	db.Close()
 
 	log.Printf("Done.")
+	return nil
 }

@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path"
 	"sort"
 	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/flynn/flynn/blobstore/backend"
 	"github.com/flynn/flynn/blobstore/data"
@@ -16,6 +19,8 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
+	"github.com/flynn/flynn/pkg/version"
+	docopt "github.com/flynn/go-docopt"
 )
 
 func errorResponse(w http.ResponseWriter, err error) {
@@ -106,23 +111,56 @@ func handler(r *data.FileRepo) http.Handler {
 func main() {
 	defer shutdown.Exit()
 
+	usage := `
+usage: flynn-blobstore <command> [<args>...]
+
+Commands:
+        help        show usage for a specific command
+        cleanup     delete file blobs from default backend 
+        migrate     move file blobs from default backend to a different backend
+        server      run blobstore HTTP server
+
+See 'flynn-blobstore help <command>' for more information on a specific command.
+`[1:]
+	args, _ := docopt.Parse(usage, nil, true, version.String(), true)
+
+	cmd := args.String["<command>"]
+	cmdArgs := args.All["<args>"].([]string)
+
+	if cmd == "help" {
+		if len(cmdArgs) == 0 { // `flynn-blobstore help`
+			fmt.Println(usage)
+			return
+		} else { // `flynn-blobstore help <command>`
+			cmd = cmdArgs[0]
+			cmdArgs = []string{"--help"}
+		}
+	}
+
+	if err := runCommand(cmd, cmdArgs); err != nil {
+		log.Println(err)
+		shutdown.ExitWithCode(1)
+	}
+}
+
+func runServer(_ *docopt.Args) error {
 	addr := ":" + os.Getenv("PORT")
 
 	db := postgres.Wait(nil, nil)
 	if err := dbMigrations.Migrate(db); err != nil {
-		shutdown.Fatalf("error running DB migrations: %s", err)
+		return fmt.Errorf("error running DB migrations: %s", err)
 	}
 
 	mux := http.NewServeMux()
 
 	repo, err := data.NewFileRepoFromEnv(db)
 	if err != nil {
-		shutdown.Fatal(err)
+		return err
 	}
 
 	hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
 	if err != nil {
-		shutdown.Fatal(err)
+		return err
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
@@ -137,7 +175,7 @@ func main() {
 	}))
 
 	h := httphelper.ContextInjector("blobstore", httphelper.NewRequestLogger(mux))
-	shutdown.Fatal(http.ListenAndServe(addr, h))
+	return http.ListenAndServe(addr, h)
 }
 
 var dbMigrations = postgres.NewMigrations()
@@ -196,4 +234,40 @@ $$ LANGUAGE plpgsql`,
 		$$ LANGUAGE plpgsql`,
 		`CREATE TRIGGER delete_file BEFORE UPDATE OF deleted_at ON files FOR EACH ROW EXECUTE PROCEDURE delete_file()`,
 	)
+
+	register("server", runServer, `
+usage: flynn-blobstore server
+
+Run blobstore HTTP server.
+`)
+}
+
+type command struct {
+	usage string
+	f     func(args *docopt.Args) error
+}
+
+var commands = make(map[string]*command)
+
+func register(cmd string, f func(args *docopt.Args) error, usage string) *command {
+	c := &command{usage: strings.TrimLeftFunc(usage, unicode.IsSpace), f: f}
+	commands[cmd] = c
+	return c
+}
+
+func runCommand(name string, args []string) (err error) {
+	argv := make([]string, 1, 1+len(args))
+	argv[0] = name
+	argv = append(argv, args...)
+
+	cmd, ok := commands[name]
+	if !ok {
+		return fmt.Errorf("%s is not a flynn-blobstore command. See 'flynn-blobstore help'", name)
+	}
+	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", false)
+	if err != nil {
+		return err
+	}
+
+	return cmd.f(parsedArgs)
 }
