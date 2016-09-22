@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -27,16 +28,26 @@ func TestDocker(t *testing.T) {
 		t.Skip("pinkerton: must be root to create AUFS mounts")
 	}
 
-	// start Docker registry using test files
+	// extract the registry files
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := filepath.Join(cwd, "test", "files")
+	tmp, err := ioutil.TempDir("", "pinkerton-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+	cmd := exec.Command("tar", "xf", filepath.Join(cwd, "test", "files.tar"), "-C", tmp)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("error extracting registry files: %s: %s", out, err)
+	}
+
+	// start Docker registry using test files
 	config := configuration.Configuration{
 		Storage: configuration.Storage{
 			"filesystem": configuration.Parameters{
-				"rootdirectory": root,
+				"rootdirectory": tmp,
 			},
 		},
 	}
@@ -46,11 +57,6 @@ func TestDocker(t *testing.T) {
 	defer srv.Close()
 
 	// create context
-	tmp, err := ioutil.TempDir("", "pinkerton-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmp)
 	ctx, err := BuildContext("aufs", tmp)
 	if err != nil {
 		t.Fatal(err)

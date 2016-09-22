@@ -20,4 +20,10 @@ docker build -t 127.0.0.1:8080/pinkerton-test ./image
 docker push 127.0.0.1:8080/pinkerton-test
 ```
 
-The registry files will now be in the `files` directory.
+Archive the `files` directory:
+
+```shell
+tar cf files.tar -C files .
+```
+
+The registry files will now be in the `files.tar` file.
