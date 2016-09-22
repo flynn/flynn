@@ -69,7 +69,7 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	// migrate slug to external backend
 	u, err := url.Parse(artifact.URI)
 	t.Assert(err, c.IsNil)
-	migration := flynn(t, "/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore-migrate", "--", "-delete", "-prefix", u.Path)
+	migration := flynn(t, "/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore", "migrate", "--delete", "--prefix", u.Path)
 	t.Assert(migration, Succeeds)
 	t.Assert(migration, OutputContains, "Moving "+u.Path)
 	t.Assert(migration, OutputContains, "from postgres to "+name)
@@ -114,7 +114,7 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	t.Assert(run(t, exec.Command("docker", "push", tag)), Succeeds)
 
 	// migrate blobs back to postgres
-	migration = flynn(t, "/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore-migrate", "--", "-delete")
+	migration = flynn(t, "/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore", "migrate", "--delete")
 	t.Assert(migration, Succeeds)
 	t.Assert(migration, OutputContains, fmt.Sprintf("from %s to postgres", name))
 

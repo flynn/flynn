@@ -138,7 +138,7 @@ Finally, migrate the existing blobs from Postgres to S3 and remove them from
 Postgres:
 
 ```text
-flynn -a blobstore run /bin/flynn-blobstore-migrate -delete
+flynn -a blobstore run /bin/flynn-blobstore migrate --delete
 ```
 
 ### Google Cloud Storage
@@ -167,7 +167,7 @@ Finally, migrate the existing blobs from Postgres to Cloud Storage and
 remove them from Postgres:
 
 ```text
-flynn -a blobstore run /bin/flynn-blobstore-migrate -delete
+flynn -a blobstore run /bin/flynn-blobstore migrate --delete
 ```
 
 ## DNS and Load Balancing

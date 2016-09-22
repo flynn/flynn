@@ -1,35 +1,54 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"log"
-	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
 	"github.com/flynn/flynn/blobstore/data"
 	"github.com/flynn/flynn/pkg/postgres"
+	docopt "github.com/flynn/go-docopt"
 )
 
-func main() {
-	deleteFiles := flag.Bool("delete", false, "enable deletion of files from source backend")
-	concurrency := flag.Int("concurrency", 4, "number of parallel file moves to run at a time")
-	prefix := flag.String("prefix", "", "only migrate files with a name that starts with this prefix")
-	flag.Parse()
+func init() {
+	register("migrate", runMigrate, `
+usage: flynn-blobstore migrate [-c <concurrency>] [--delete] [-p <prefix>]
+
+Move file blobs from default backend to a different backend.
+
+Options:
+     -c, --concurrency=<concurrency>  number of parallel file moves to run at a time. [default: 4]
+     --delete                         enable deletion of files from source backend. [default: false]   
+     -p, --prefix=<prefix>            only migrate files with a name that starts with this prefix. [default: ]
+`)
+}
+
+func runMigrate(args *docopt.Args) error {
+	deleteFiles := args.Bool["--delete"]
+	concurrency, err := strconv.Atoi(args.String["--concurrency"])
+	if err != nil {
+		return err
+	}
+	if concurrency < 1 {
+		concurrency = 4
+	}
+	prefix := args.String["--prefix"]
 
 	db := postgres.Wait(nil, nil)
 	repo, err := data.NewFileRepoFromEnv(db)
 	if err != nil {
-		log.Fatal(err)
+		return nil
 	}
 
-	files, err := repo.ListFilesExcludingDefaultBackend(*prefix)
+	files, err := repo.ListFilesExcludingDefaultBackend(prefix)
 	if err != nil {
-		log.Fatal(err)
+		return nil
 	}
 
 	var wg sync.WaitGroup
-	tokens := make(chan struct{}, *concurrency)
+	tokens := make(chan struct{}, concurrency)
 	var errorCount int64
 
 	dest := repo.DefaultBackend().Name()
@@ -38,7 +57,7 @@ func main() {
 		tokens <- struct{}{}
 		wg.Add(1)
 		go func(f data.BackendFile) {
-			if err := moveFile(db, repo, f, *deleteFiles); err != nil {
+			if err := moveFile(db, repo, f, deleteFiles); err != nil {
 				log.Printf("Error moving %s (%s): %s", f.FileInfo.Name, f.ID, err)
 				atomic.AddInt64(&errorCount, 1)
 			}
@@ -50,11 +69,11 @@ func main() {
 	wg.Wait()
 	db.Close()
 	if errorCount > 0 {
-		log.Printf("Finished with %d errors", errorCount)
-		os.Exit(1)
-	} else {
-		log.Printf("Finished with no errors.")
+		return fmt.Errorf("Finished with %d errors", errorCount)
 	}
+
+	log.Printf("Finished with no errors.")
+	return nil
 }
 
 func moveFile(db *postgres.DB, repo *data.FileRepo, f data.BackendFile, delete bool) error {
