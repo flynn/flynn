@@ -25,6 +25,7 @@ import (
 	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
+	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 	tuf "github.com/flynn/go-tuf/client"
 	"github.com/julienschmidt/httprouter"
@@ -289,7 +290,7 @@ func (h *jobAPI) PullBinariesAndConfig(w http.ResponseWriter, r *http.Request, p
 	}
 	opts := &tuf.HTTPRemoteOptions{
 		UserAgent: fmt.Sprintf("flynn-host/%s %s-%s pull", version.String(), runtime.GOOS, runtime.GOARCH),
-		Retries:   tuf.DefaultHTTPRetries,
+		Retries:   tufutil.DefaultHTTPRetries,
 	}
 	log.Info("creating remote TUF store")
 	remote, err := tuf.HTTPRemoteStore(query.Get("repository"), opts)

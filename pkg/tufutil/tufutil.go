@@ -7,9 +7,15 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"time"
 
 	tuf "github.com/flynn/go-tuf/client"
 )
+
+var DefaultHTTPRetries = &tuf.HTTPRemoteRetries{
+	Delay: time.Second,
+	Total: 30 * time.Second,
+}
 
 func Download(client *tuf.Client, path string) (io.ReadCloser, error) {
 	tmp, err := NewTempFile()
