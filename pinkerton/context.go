@@ -245,7 +245,7 @@ func PullImages(tufDB, repository, driver, root, ver string, progress chan<- lay
 	}
 	opts := &tuf.HTTPRemoteOptions{
 		UserAgent: fmt.Sprintf("pinkerton/%s %s-%s pull", version.String(), runtime.GOOS, runtime.GOARCH),
-		Retries:   tuf.DefaultHTTPRetries,
+		Retries:   tufutil.DefaultHTTPRetries,
 	}
 	remote, err := tuf.HTTPRemoteStore(repository, opts)
 	if err != nil {

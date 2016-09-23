@@ -106,7 +106,7 @@ func runDownload(args *docopt.Args) error {
 func tufHTTPOpts(name string) *tuf.HTTPRemoteOptions {
 	return &tuf.HTTPRemoteOptions{
 		UserAgent: fmt.Sprintf("flynn-host/%s %s-%s %s", version.String(), runtime.GOOS, runtime.GOARCH, name),
-		Retries:   tuf.DefaultHTTPRetries,
+		Retries:   tufutil.DefaultHTTPRetries,
 	}
 }
 
