@@ -230,7 +230,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	release := data.(*ct.Release)
-	if release.ImageArtifactID() == "" {
+	if newJob.ArtifactID == "" && release.ImageArtifactID() == "" {
 		httphelper.ValidationError(w, "release.ImageArtifact", "must be set")
 		return
 	}
@@ -286,7 +286,14 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Args) > 0 {
 		job.Config.Args = newJob.Args
 	}
-	if len(release.ArtifactIDs) > 0 {
+	if newJob.ArtifactID != "" {
+		artifact, err := c.artifactRepo.Get(newJob.ArtifactID)
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		job.ImageArtifact = artifact.(*ct.Artifact).HostArtifact()
+	} else if len(release.ArtifactIDs) > 0 {
 		artifacts, err := c.artifactRepo.ListIDs(release.ArtifactIDs...)
 		if err != nil {
 			respondWithError(w, err)

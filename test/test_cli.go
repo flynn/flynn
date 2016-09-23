@@ -1006,6 +1006,29 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	t.Assert(err, c.IsNil)
 }
 
+// TestExportBuildpackOutput tests that exporting a slug based app which
+// outputs data before running commands (e.g. because the buildpack added a
+// profile script which prints something) succeeds.
+//
+// See https://github.com/flynn/flynn/issues/3351
+func (s *CLISuite) TestExportBuildpackOutput(t *c.C) {
+	// create app
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create"), Succeeds)
+
+	// create a profile script which prints some output when running the
+	// slug
+	t.Assert(r.sh("mkdir .profile.d && echo echo foo > .profile.d/echo.sh"), Succeeds)
+	t.Assert(r.git("add", ".profile.d/echo.sh"), Succeeds)
+	t.Assert(r.git("commit", "-m", "echo script"), Succeeds)
+
+	// release the app
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// check that exporting the app works
+	t.Assert(r.flynn("export", "-f", "/dev/null"), Succeeds)
+}
+
 func (s *CLISuite) TestRemote(t *c.C) {
 	remoteApp := "remote-" + random.String(8)
 	customRemote := random.String(8)

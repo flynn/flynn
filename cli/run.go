@@ -71,6 +71,7 @@ type runConfig struct {
 	App        string
 	Detached   bool
 	Release    string
+	Artifact   string
 	ReleaseEnv bool
 	Args       []string
 	Env        map[string]string
@@ -86,6 +87,7 @@ func runJob(client controller.Client, config runConfig) error {
 		Args:       config.Args,
 		TTY:        config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
 		ReleaseID:  config.Release,
+		ArtifactID: config.Artifact,
 		Env:        config.Env,
 		ReleaseEnv: config.ReleaseEnv,
 		DisableLog: config.DisableLog,

@@ -244,6 +244,7 @@ func JobDownEvents(count int) map[JobState]int {
 
 type NewJob struct {
 	ReleaseID  string             `json:"release,omitempty"`
+	ArtifactID string             `json:"artifact,omitempty"`
 	ReleaseEnv bool               `json:"release_env,omitempty"`
 	Args       []string           `json:"args,omitempty"`
 	Env        map[string]string  `json:"env,omitempty"`
