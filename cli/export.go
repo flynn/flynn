@@ -213,6 +213,12 @@ func runExport(args *docopt.Args, client controller.Client) error {
 			Stdout:     reqW,
 			Stderr:     ioutil.Discard,
 		}
+
+		// use just the slugrunner image as we don't need the
+		// extracted slug to run curl, and this also prevents
+		// the slug from interfering (e.g. logging output)
+		config.Artifact = release.ArtifactIDs[0]
+
 		if bar != nil {
 			config.Stdout = io.MultiWriter(config.Stdout, bar)
 		}
