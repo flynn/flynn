@@ -44,7 +44,7 @@ type Config struct {
 	WaitUpstream bool
 }
 
-type Postgres struct {
+type Process struct {
 	// dbMtx is locked while db is being changed
 	dbMtx sync.RWMutex
 	db    *pgx.ConnPool
@@ -87,8 +87,8 @@ type Postgres struct {
 
 const checkInterval = 100 * time.Millisecond
 
-func NewPostgres(c Config) state.Database {
-	p := &Postgres{
+func NewProcess(c Config) *Process {
+	p := &Process{
 		id:             c.ID,
 		log:            c.Logger,
 		singleton:      c.Singleton,
@@ -132,35 +132,35 @@ func NewPostgres(c Config) state.Database {
 	return p
 }
 
-func (p *Postgres) XLog() xlog.XLog {
+func (p *Process) XLog() xlog.XLog {
 	return pgxlog.PgXLog{}
 }
 
-func (p *Postgres) running() bool {
+func (p *Process) running() bool {
 	return p.runningVal.Load().(bool)
 }
 
-func (p *Postgres) setRunning(running bool) {
+func (p *Process) setRunning(running bool) {
 	p.runningVal.Store(running)
 }
 
-func (p *Postgres) config() *state.Config {
+func (p *Process) config() *state.Config {
 	return p.configVal.Load().(*state.Config)
 }
 
-func (p *Postgres) setConfig(config *state.Config) {
+func (p *Process) setConfig(config *state.Config) {
 	p.configVal.Store(config)
 }
 
-func (p *Postgres) syncedDownstream() *discoverd.Instance {
+func (p *Process) syncedDownstream() *discoverd.Instance {
 	return p.syncedDownstreamVal.Load().(*discoverd.Instance)
 }
 
-func (p *Postgres) setSyncedDownstream(inst *discoverd.Instance) {
+func (p *Process) setSyncedDownstream(inst *discoverd.Instance) {
 	p.syncedDownstreamVal.Store(inst)
 }
 
-func (p *Postgres) Info() (*client.DatabaseInfo, error) {
+func (p *Process) Info() (*client.DatabaseInfo, error) {
 	res := &client.DatabaseInfo{
 		Config:           p.config(),
 		Running:          p.running(),
@@ -182,7 +182,7 @@ func (p *Postgres) Info() (*client.DatabaseInfo, error) {
 	return res, err
 }
 
-func (p *Postgres) Reconfigure(config *state.Config) error {
+func (p *Process) Reconfigure(config *state.Config) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -209,7 +209,7 @@ func (p *Postgres) Reconfigure(config *state.Config) error {
 	return p.reconfigure(config)
 }
 
-func (p *Postgres) Start() error {
+func (p *Process) Start() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -226,7 +226,7 @@ func (p *Postgres) Start() error {
 	return p.reconfigure(nil)
 }
 
-func (p *Postgres) Stop() error {
+func (p *Process) Stop() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -236,7 +236,7 @@ func (p *Postgres) Stop() error {
 	return p.stop()
 }
 
-func (p *Postgres) XLogPosition() (xlog.Position, error) {
+func (p *Process) XLogPosition() (xlog.Position, error) {
 	p.dbMtx.RLock()
 	defer p.dbMtx.RUnlock()
 
@@ -253,7 +253,7 @@ func (p *Postgres) XLogPosition() (xlog.Position, error) {
 	return xlog.Position(res), err
 }
 
-func (p *Postgres) userExists() (bool, error) {
+func (p *Process) userExists() (bool, error) {
 	p.dbMtx.RLock()
 	defer p.dbMtx.RUnlock()
 
@@ -265,7 +265,7 @@ func (p *Postgres) userExists() (bool, error) {
 	return res.Valid, err
 }
 
-func (p *Postgres) isReadWrite() (bool, error) {
+func (p *Process) isReadWrite() (bool, error) {
 	p.dbMtx.RLock()
 	defer p.dbMtx.RUnlock()
 
@@ -277,11 +277,11 @@ func (p *Postgres) isReadWrite() (bool, error) {
 	return res == "off", err
 }
 
-func (p *Postgres) Ready() <-chan state.DatabaseEvent {
+func (p *Process) Ready() <-chan state.DatabaseEvent {
 	return p.events
 }
 
-func (p *Postgres) reconfigure(config *state.Config) (err error) {
+func (p *Process) reconfigure(config *state.Config) (err error) {
 	log := p.log.New("fn", "reconfigure")
 
 	defer func() {
@@ -336,7 +336,7 @@ func (p *Postgres) reconfigure(config *state.Config) (err error) {
 	return p.assumeStandby(config.Upstream, config.Downstream)
 }
 
-func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
+func (p *Process) assumePrimary(downstream *discoverd.Instance) (err error) {
 	log := p.log.New("fn", "assumePrimary")
 	if downstream != nil {
 		log = log.New("downstream", downstream.Addr)
@@ -429,7 +429,7 @@ func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
 	return nil
 }
 
-func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error {
+func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error {
 	log := p.log.New("fn", "assumeStandby", "upstream", upstream.Addr)
 	log.Info("starting up as standby")
 
@@ -503,7 +503,7 @@ func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error
 // waiting for an upstream which has gone down.
 var upstreamTimeout = 10 * time.Second
 
-func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
+func (p *Process) waitForUpstream(upstream *discoverd.Instance) error {
 	log := p.log.New("fn", "waitForUpstream", "upstream", upstream.Addr)
 	log.Info("waiting for upstream to come online")
 	client := client.NewClient(upstream.Addr)
@@ -526,7 +526,7 @@ func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
 	}
 }
 
-func (p *Postgres) updateSync(downstream *discoverd.Instance) error {
+func (p *Process) updateSync(downstream *discoverd.Instance) error {
 	log := p.log.New("fn", "updateSync", "downstream", downstream.Addr)
 	log.Info("changing sync")
 
@@ -550,7 +550,7 @@ func (p *Postgres) updateSync(downstream *discoverd.Instance) error {
 	return nil
 }
 
-func (p *Postgres) start() error {
+func (p *Process) start() error {
 	log := p.log.New("fn", "start", "data_dir", p.dataDir, "bin_dir", p.binDir)
 	log.Info("starting postgres")
 
@@ -615,7 +615,7 @@ func (p *Postgres) start() error {
 	}
 }
 
-func (p *Postgres) stop() error {
+func (p *Process) stop() error {
 	log := p.log.New("fn", "stop")
 	log.Info("stopping postgres")
 
@@ -655,12 +655,12 @@ func (p *Postgres) stop() error {
 	return errors.New("unable to kill postgres")
 }
 
-func (p *Postgres) sighup() error {
+func (p *Process) sighup() error {
 	p.log.Debug("reloading daemon configuration", "fn", "sighup")
 	return p.daemon.Process.Signal(syscall.SIGHUP)
 }
 
-func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
+func (p *Process) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 
@@ -775,7 +775,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 
 var ErrNoReplicationStatus = errors.New("no replication status")
 
-func (p *Postgres) checkReplStatus(name string) (sent, flushed xlog.Position, err error) {
+func (p *Process) checkReplStatus(name string) (sent, flushed xlog.Position, err error) {
 	log := p.log.New("fn", "checkReplStatus", "name", name)
 	log.Debug("checking replication status")
 
@@ -803,7 +803,7 @@ WHERE application_name = $1`, name).Scan(&s, &f)
 //
 // This method should only be called by the primary of a shard. Standbys will
 // not need to initialize, as they will restore from an already running primary.
-func (p *Postgres) initDB() error {
+func (p *Process) initDB() error {
 	log := p.log.New("fn", "initDB", "dir", p.dataDir)
 	log.Debug("starting initDB")
 
@@ -819,14 +819,14 @@ func (p *Postgres) initDB() error {
 
 	return p.writeHBAConf()
 }
-func (p *Postgres) runCmd(cmd *exec.Cmd) error {
+func (p *Process) runCmd(cmd *exec.Cmd) error {
 	p.log.Debug("running command", "fn", "runCmd", "cmd", cmd.Args)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func (p *Postgres) writeConfig(d configData) error {
+func (p *Process) writeConfig(d configData) error {
 	d.ID = p.id
 	d.Port = p.port
 	d.ExtWhitelist = p.extWhitelist
@@ -839,7 +839,7 @@ func (p *Postgres) writeConfig(d configData) error {
 	return configTemplate.Execute(f, d)
 }
 
-func (p *Postgres) writeRecoveryConf(upstream *discoverd.Instance) error {
+func (p *Process) writeRecoveryConf(upstream *discoverd.Instance) error {
 	data := recoveryData{
 		TriggerFile: p.triggerPath(),
 		PrimaryInfo: fmt.Sprintf(
@@ -856,31 +856,31 @@ func (p *Postgres) writeRecoveryConf(upstream *discoverd.Instance) error {
 	return recoveryConfTemplate.Execute(f, data)
 }
 
-func (p *Postgres) writeHBAConf() error {
+func (p *Process) writeHBAConf() error {
 	return ioutil.WriteFile(p.hbaConfPath(), hbaConf, 0644)
 }
 
-func (p *Postgres) configPath() string {
+func (p *Process) configPath() string {
 	return p.dataPath("postgresql.conf")
 }
 
-func (p *Postgres) recoveryConfPath() string {
+func (p *Process) recoveryConfPath() string {
 	return p.dataPath("recovery.conf")
 }
 
-func (p *Postgres) hbaConfPath() string {
+func (p *Process) hbaConfPath() string {
 	return p.dataPath("pg_hba.conf")
 }
 
-func (p *Postgres) triggerPath() string {
+func (p *Process) triggerPath() string {
 	return p.dataPath("promote.trigger")
 }
 
-func (p *Postgres) binPath(file string) string {
+func (p *Process) binPath(file string) string {
 	return filepath.Join(p.binDir, file)
 }
 
-func (p *Postgres) dataPath(file string) string {
+func (p *Process) dataPath(file string) string {
 	return filepath.Join(p.dataDir, file)
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -22,6 +23,10 @@ func main() {
 	}
 	singleton := os.Getenv("SINGLETON") == "true"
 	password := os.Getenv("PGPASSWORD")
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "5433"
+	}
 
 	const dataDir = "/data"
 	idFile := filepath.Join(dataDir, "instance_id")
@@ -55,7 +60,7 @@ func main() {
 
 	log := log15.New("app", "postgres")
 
-	pg := postgresql.NewPostgres(postgresql.Config{
+	process := postgresql.NewProcess(postgresql.Config{
 		ID:           id,
 		Singleton:    singleton,
 		DataDir:      filepath.Join(dataDir, "db"),
@@ -68,10 +73,17 @@ func main() {
 	})
 	dd := sd.NewDiscoverd(discoverd.DefaultClient.Service(serviceName), log.New("component", "discoverd"))
 
-	peer := state.NewPeer(inst, id, postgresql.IDKey, singleton, dd, pg, log.New("component", "peer"))
+	peer := state.NewPeer(inst, id, postgresql.IDKey, singleton, dd, process, log.New("component", "peer"))
 	shutdown.BeforeExit(func() { peer.Close() })
 
 	go peer.Run()
-	shutdown.Fatal(postgresql.ServeHTTP(pg.(*postgresql.Postgres), peer, hb, log.New("component", "http")))
+
+	handler := postgresql.NewHandler()
+	handler.Process = process
+	handler.Peer = peer
+	handler.Heartbeater = hb
+	handler.Logger = log.New("component", "http")
+
+	shutdown.Fatal(http.ListenAndServe(":"+httpPort, handler))
 	// TODO(titanous): clean shutdown of postgres
 }
