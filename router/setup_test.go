@@ -20,7 +20,6 @@ import (
 )
 
 func init() {
-	cache.TestMode = true
 	listenFunc = net.Listen
 }
 
@@ -151,41 +150,37 @@ func discoverdRegisterTCP(c *C, l *TCPListener, addr string) func() {
 func discoverdRegisterTCPService(c *C, l *TCPListener, name, addr string) func() {
 	dc := l.discoverd.(discoverdClient)
 	sc := l.services[name].sc
-	return discoverdRegister(c, dc, sc.(serviceCache), name, addr)
+	return discoverdRegister(c, dc, sc, name, addr)
 }
 
 func discoverdRegisterHTTP(c *C, l *HTTPListener, addr string) func() {
 	return discoverdRegisterHTTPService(c, l, "test", addr)
 }
 
-type serviceCache interface {
-	cache.ServiceCache
-	Watch(bool) (chan *discoverd.Event, func())
-}
-
 func discoverdRegisterHTTPService(c *C, l *HTTPListener, name, addr string) func() {
 	dc := l.discoverd.(discoverdClient)
 	sc := l.services[name].sc
-	return discoverdRegister(c, dc, sc.(serviceCache), name, addr)
+	return discoverdRegister(c, dc, sc, name, addr)
 }
 
 func discoverdSetLeaderHTTP(c *C, l *HTTPListener, name, id string) {
 	dc := l.discoverd.(discoverdClient)
-	sc := l.services[name].sc.(serviceCache)
+	sc := l.services[name].sc
 	discoverdSetLeader(c, dc, sc, name, id)
 }
 
 func discoverdSetLeaderTCP(c *C, l *TCPListener, name, id string) {
 	dc := l.discoverd.(discoverdClient)
-	sc := l.services[name].sc.(serviceCache)
+	sc := l.services[name].sc
 	discoverdSetLeader(c, dc, sc, name, id)
 }
 
-func discoverdSetLeader(c *C, dc discoverdClient, sc serviceCache, name, id string) {
+func discoverdSetLeader(c *C, dc discoverdClient, sc *cache.ServiceCache, name, id string) {
 	done := make(chan struct{})
 	go func() {
-		events, unwatch := sc.Watch(true)
-		defer unwatch()
+		events := make(chan *discoverd.Event)
+		stream := sc.Watch(events, true)
+		defer stream.Close()
 		for event := range events {
 			if event.Kind == discoverd.EventKindLeader && event.Instance.ID == id {
 				close(done)
@@ -202,11 +197,12 @@ func discoverdSetLeader(c *C, dc discoverdClient, sc serviceCache, name, id stri
 	}
 }
 
-func discoverdRegister(c *C, dc discoverdClient, sc serviceCache, name, addr string) func() {
+func discoverdRegister(c *C, dc discoverdClient, sc *cache.ServiceCache, name, addr string) func() {
 	done := make(chan struct{})
 	go func() {
-		events, unwatch := sc.Watch(true)
-		defer unwatch()
+		events := make(chan *discoverd.Event)
+		stream := sc.Watch(events, true)
+		defer stream.Close()
 		for event := range events {
 			if event.Kind == discoverd.EventKindUp && event.Instance.Addr == addr {
 				close(done)
@@ -224,13 +220,14 @@ func discoverdRegister(c *C, dc discoverdClient, sc serviceCache, name, addr str
 	return discoverdUnregisterFunc(c, hb, sc)
 }
 
-func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc serviceCache) func() {
+func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc *cache.ServiceCache) func() {
 	return func() {
 		done := make(chan struct{})
 		started := make(chan struct{})
 		go func() {
-			events, unwatch := sc.Watch(false)
-			defer unwatch()
+			events := make(chan *discoverd.Event)
+			stream := sc.Watch(events, false)
+			defer stream.Close()
 			close(started)
 			for event := range events {
 				if event.Kind == discoverd.EventKindDown && event.Instance.Addr == hb.Addr() {
