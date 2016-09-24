@@ -604,7 +604,8 @@
     "cert_step": "controller-cert",
     "type": "http",
     "service": "gitreceive",
-    "domain": "git.{{ getenv \"CLUSTER_DOMAIN\" }}"
+    "domain": "git.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": true
   },
   {
     "id": "docker-receive-route",
@@ -613,7 +614,8 @@
     "cert_step": "controller-cert",
     "type": "http",
     "service": "docker-receive",
-    "domain": "docker.{{ getenv \"CLUSTER_DOMAIN\" }}"
+    "domain": "docker.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": true
   },
   {
     "id": "controller-route",
@@ -622,7 +624,8 @@
     "cert_step": "controller-cert",
     "type": "http",
     "service": "controller",
-    "domain": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}"
+    "domain": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": false
   },
   {
     "id": "controller-route-wait",
@@ -729,7 +732,8 @@
     "cert_step": "controller-cert",
     "type": "http",
     "service": "dashboard-web",
-    "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
+    "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": true
   },
   {
     "id": "status",
@@ -769,7 +773,8 @@
     "app_step": "status",
     "type": "http",
     "service": "status-web",
-    "domain": "status.{{ getenv \"CLUSTER_DOMAIN\" }}"
+    "domain": "status.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": true
   },
   {
     "id": "redis-wait",

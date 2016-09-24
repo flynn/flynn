@@ -94,8 +94,9 @@ func (r *AppRepo) Add(data interface{}) error {
 
 	if !app.System() && r.defaultDomain != "" {
 		route := (&router.HTTPRoute{
-			Domain:  fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
-			Service: app.Name + "-web",
+			Domain:        fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
+			Service:       app.Name + "-web",
+			DrainBackends: true,
 		}).ToRoute()
 		if err := createRoute(r.db, r.router, app.ID, route); err != nil {
 			log.Printf("Error creating default route for %s: %s", app.Name, err)

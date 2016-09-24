@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
@@ -64,7 +65,8 @@ type Client interface {
 	// ListRoutes returns a list of routes. If parentRef is not empty, routes
 	// are filtered by the reference (ex: "controller/apps/myapp").
 	ListRoutes(parentRef string) ([]*router.Route, error)
-	StreamEvents(output chan *router.StreamEvent) (stream.Stream, error)
+	// StreamEvents streams router events with the given options
+	StreamEvents(opts *router.StreamEventsOptions, output chan *router.StreamEvent) (stream.Stream, error)
 
 	// CreateCert creates a new route certificate.
 	CreateCert(*router.Certificate) error
@@ -108,8 +110,17 @@ func (c *client) ListRoutes(parentRef string) ([]*router.Route, error) {
 	return res, err
 }
 
-func (c *client) StreamEvents(output chan *router.StreamEvent) (stream.Stream, error) {
-	return c.ResumingStream("GET", "/events", output)
+func (c *client) StreamEvents(opts *router.StreamEventsOptions, output chan *router.StreamEvent) (stream.Stream, error) {
+	if opts == nil {
+		opts = &router.StreamEventsOptions{
+			EventTypes: []router.EventType{router.EventTypeRouteSet, router.EventTypeRouteRemove},
+		}
+	}
+	types := make([]string, len(opts.EventTypes))
+	for i, t := range opts.EventTypes {
+		types[i] = string(t)
+	}
+	return c.ResumingStream("GET", "/events?types="+strings.Join(types, ","), output)
 }
 
 func (c *client) CreateCert(cert *router.Certificate) error {

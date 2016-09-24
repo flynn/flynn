@@ -19,8 +19,8 @@ import (
 func init() {
 	register("route", runRoute, `
 usage: flynn route
-       flynn route add http [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--leader] [--no-leader] <domain>
-       flynn route add tcp [-s <service>] [-p <port>] [--leader]
+       flynn route add http [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--leader] [--no-leader] [--no-drain-backends] <domain>
+       flynn route add tcp [-s <service>] [-p <port>] [--leader] [--no-drain-backends]
        flynn route update <id> [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--no-sticky] [--leader] [--no-leader]
        flynn route remove <id>
 
@@ -35,6 +35,7 @@ Options:
 	--leader                   enable leader-only routing mode
 	--no-leader                disable leader-only routing mode (update only)
 	-p, --port=<port>          port to accept traffic on (tcp only)
+	--no-drain-backends        don't wait for in-flight requests to complete before stopping backends
 
 Commands:
 	With no arguments, shows a list of routes.
@@ -127,9 +128,10 @@ func runRouteAddTCP(args *docopt.Args, client controller.Client) error {
 	}
 
 	hr := &router.TCPRoute{
-		Service: service,
-		Port:    port,
-		Leader:  args.Bool["--leader"],
+		Service:       service,
+		Port:          port,
+		Leader:        args.Bool["--leader"],
+		DrainBackends: !args.Bool["--no-drain-backends"],
 	}
 
 	r := hr.ToRoute()
@@ -165,6 +167,7 @@ func runRouteAddHTTP(args *docopt.Args, client controller.Client) error {
 		Sticky:        args.Bool["--sticky"],
 		Leader:        args.Bool["--leader"],
 		Path:          u.Path,
+		DrainBackends: !args.Bool["--no-drain-backends"],
 	}
 	route := hr.ToRoute()
 	if err := client.CreateRoute(mustApp(), route); err != nil {

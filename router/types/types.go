@@ -61,6 +61,12 @@ type Route struct {
 
 	// Port is the TCP port to listen on for TCP Routes.
 	Port int32 `json:"port,omitempty"`
+
+	// DrainBackends is whether or not to track requests and trigger
+	// drain events on backend shutdown when all requests have completed
+	// (used by the scheduler to only stop jobs once all requests have
+	// completed).
+	DrainBackends bool `json:"drain_backends,omitempty"`
 }
 
 func (r Route) FormattedID() string {
@@ -69,12 +75,13 @@ func (r Route) FormattedID() string {
 
 func (r Route) HTTPRoute() *HTTPRoute {
 	return &HTTPRoute{
-		ID:        r.ID,
-		ParentRef: r.ParentRef,
-		Service:   r.Service,
-		Leader:    r.Leader,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
+		ID:            r.ID,
+		ParentRef:     r.ParentRef,
+		Service:       r.Service,
+		Leader:        r.Leader,
+		DrainBackends: r.DrainBackends,
+		CreatedAt:     r.CreatedAt,
+		UpdatedAt:     r.UpdatedAt,
 
 		Domain:        r.Domain,
 		Certificate:   r.Certificate,
@@ -87,12 +94,13 @@ func (r Route) HTTPRoute() *HTTPRoute {
 
 func (r Route) TCPRoute() *TCPRoute {
 	return &TCPRoute{
-		ID:        r.ID,
-		ParentRef: r.ParentRef,
-		Service:   r.Service,
-		Leader:    r.Leader,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
+		ID:            r.ID,
+		ParentRef:     r.ParentRef,
+		Service:       r.Service,
+		Leader:        r.Leader,
+		DrainBackends: r.DrainBackends,
+		CreatedAt:     r.CreatedAt,
+		UpdatedAt:     r.UpdatedAt,
 
 		Port: int(r.Port),
 	}
@@ -100,12 +108,13 @@ func (r Route) TCPRoute() *TCPRoute {
 
 // HTTPRoute is an HTTP Route.
 type HTTPRoute struct {
-	ID        string
-	ParentRef string
-	Service   string
-	Leader    bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID            string
+	ParentRef     string
+	Service       string
+	Leader        bool
+	DrainBackends bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 
 	Domain        string
 	Certificate   *Certificate `json:"certificate,omitempty"`
@@ -126,13 +135,14 @@ func (r HTTPRoute) MarshalJSON() ([]byte, error) {
 func (r HTTPRoute) ToRoute() *Route {
 	return &Route{
 		// common fields
-		Type:      "http",
-		ID:        r.ID,
-		ParentRef: r.ParentRef,
-		Service:   r.Service,
-		Leader:    r.Leader,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
+		Type:          "http",
+		ID:            r.ID,
+		ParentRef:     r.ParentRef,
+		Service:       r.Service,
+		Leader:        r.Leader,
+		DrainBackends: r.DrainBackends,
+		CreatedAt:     r.CreatedAt,
+		UpdatedAt:     r.UpdatedAt,
 
 		// http-specific fields
 		Domain:        r.Domain,
@@ -146,12 +156,13 @@ func (r HTTPRoute) ToRoute() *Route {
 
 // TCPRoute is a TCP Route.
 type TCPRoute struct {
-	ID        string
-	ParentRef string
-	Service   string
-	Leader    bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID            string
+	ParentRef     string
+	Service       string
+	Leader        bool
+	DrainBackends bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 
 	Port int
 }
@@ -166,27 +177,50 @@ func (r TCPRoute) MarshalJSON() ([]byte, error) {
 
 func (r TCPRoute) ToRoute() *Route {
 	return &Route{
-		Type:      "tcp",
-		ID:        r.ID,
-		ParentRef: r.ParentRef,
-		Service:   r.Service,
-		Leader:    r.Leader,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
+		Type:          "tcp",
+		ID:            r.ID,
+		ParentRef:     r.ParentRef,
+		Service:       r.Service,
+		Leader:        r.Leader,
+		DrainBackends: r.DrainBackends,
+		CreatedAt:     r.CreatedAt,
+		UpdatedAt:     r.UpdatedAt,
 
 		Port: int32(r.Port),
 	}
 }
 
+type EventType string
+
+const (
+	EventTypeRouteSet       EventType = "set"
+	EventTypeRouteRemove    EventType = "remove"
+	EventTypeBackendUp      EventType = "backend-up"
+	EventTypeBackendDown    EventType = "backend-down"
+	EventTypeBackendDrained EventType = "backend-drained"
+)
+
 type Event struct {
-	Event string
-	ID    string
-	Route *Route
-	Error error
+	Event   EventType
+	ID      string
+	Route   *Route
+	Backend *Backend
+	Error   error
+}
+
+type Backend struct {
+	Service string `json:"service"`
+	Addr    string `json:"addr"`
+	JobID   string `json:"job_id"`
 }
 
 type StreamEvent struct {
-	Event string `json:"event"`
-	Route *Route `json:"route,omitempty"`
-	Error error  `json:"error,omitempty"`
+	Event   EventType `json:"event"`
+	Route   *Route    `json:"route,omitempty"`
+	Backend *Backend  `json:"backend,omitempty"`
+	Error   error     `json:"error,omitempty"`
+}
+
+type StreamEventsOptions struct {
+	EventTypes []EventType
 }

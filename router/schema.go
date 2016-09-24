@@ -210,6 +210,11 @@ CREATE TRIGGER notify_route_certificates_update
 	AFTER INSERT OR UPDATE OR DELETE ON route_certificates
 	FOR EACH ROW EXECUTE PROCEDURE notify_route_certificates_update()`,
 	)
+	migrations.Add(6,
+		`ALTER TABLE tcp_routes ADD COLUMN drain_backends boolean NOT NULL DEFAULT TRUE`,
+		`ALTER TABLE http_routes ADD COLUMN drain_backends boolean NOT NULL DEFAULT TRUE`,
+		`UPDATE http_routes SET drain_backends = false WHERE service = 'controller'`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
