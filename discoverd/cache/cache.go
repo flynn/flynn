@@ -9,23 +9,16 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
-var TestMode = false
-
-type ServiceCache interface {
-	LeaderAddr() []string
-	Addrs() []string
-	Close() error
-}
-
-func New(s discoverd.Service) (ServiceCache, error) {
-	d := &serviceCache{
+func New(s discoverd.Service) (*ServiceCache, error) {
+	d := &ServiceCache{
 		addrs: make(map[string]struct{}),
 		stop:  make(chan struct{}),
+		done:  make(chan struct{}),
 	}
 	return d, d.start(s)
 }
 
-type serviceCache struct {
+type ServiceCache struct {
 	stream stream.Stream
 
 	sync.RWMutex
@@ -36,6 +29,7 @@ type serviceCache struct {
 	watchers map[chan *discoverd.Event]struct{}
 
 	stop chan struct{}
+	done chan struct{}
 }
 
 var connectAttempts = attempt.Strategy{
@@ -43,7 +37,7 @@ var connectAttempts = attempt.Strategy{
 	Delay: 500 * time.Millisecond,
 }
 
-func (d *serviceCache) start(s discoverd.Service) (err error) {
+func (d *ServiceCache) start(s discoverd.Service) (err error) {
 	// use a function to create the watcher so we can reconnect if it closes
 	// unexpectedly (ideally the discoverd client would use a ResumingStream
 	// but service events do not yet support it).
@@ -59,6 +53,7 @@ func (d *serviceCache) start(s discoverd.Service) (err error) {
 	var once sync.Once
 	current := make(chan error)
 	go func() {
+		defer close(d.done)
 		for {
 			select {
 			case <-d.stop:
@@ -99,12 +94,12 @@ func (d *serviceCache) start(s discoverd.Service) (err error) {
 	return <-current
 }
 
-func (d *serviceCache) Close() error {
+func (d *ServiceCache) Close() error {
 	close(d.stop)
 	return d.stream.Close()
 }
 
-func (d *serviceCache) Addrs() []string {
+func (d *ServiceCache) Addrs() []string {
 	d.RLock()
 	defer d.RUnlock()
 	res := make([]string, 0, len(d.addrs))
@@ -114,7 +109,7 @@ func (d *serviceCache) Addrs() []string {
 	return res
 }
 
-func (d *serviceCache) LeaderAddr() []string {
+func (d *ServiceCache) LeaderAddr() []string {
 	d.RLock()
 	defer d.RUnlock()
 	if d.leaderAddr == "" {
@@ -123,10 +118,7 @@ func (d *serviceCache) LeaderAddr() []string {
 	return []string{d.leaderAddr}
 }
 
-func (d *serviceCache) broadcast(e *discoverd.Event) {
-	if !TestMode {
-		return
-	}
+func (d *ServiceCache) broadcast(e *discoverd.Event) {
 	d.RLock()
 	defer d.RUnlock()
 	for watcher := range d.watchers {
@@ -134,33 +126,51 @@ func (d *serviceCache) broadcast(e *discoverd.Event) {
 	}
 }
 
-// This method is only used by the test suite
-func (d *serviceCache) Watch(current bool) (chan *discoverd.Event, func()) {
+func (d *ServiceCache) Watch(ch chan *discoverd.Event, current bool) stream.Stream {
 	d.Lock()
 	if d.watchers == nil {
 		d.watchers = make(map[chan *discoverd.Event]struct{})
 	}
-	ch := make(chan *discoverd.Event)
 	d.watchers[ch] = struct{}{}
+	stream := stream.New()
 	go func() {
+		defer func() {
+			d.Lock()
+			defer d.Unlock()
+			delete(d.watchers, ch)
+		}()
+
 		if current {
 			for addr := range d.addrs {
-				ch <- &discoverd.Event{
+				select {
+				case ch <- &discoverd.Event{
 					Kind:     discoverd.EventKindUp,
 					Instance: &discoverd.Instance{Addr: addr},
+				}:
+				case <-stream.StopCh:
+					go func() {
+						for range ch {
+						}
+					}()
+					d.Unlock()
+					return
+				case <-d.done:
+					close(ch)
+					d.Unlock()
+					return
 				}
 			}
 		}
 		d.Unlock()
+		select {
+		case <-stream.StopCh:
+			go func() {
+				for range ch {
+				}
+			}()
+		case <-d.done:
+			close(ch)
+		}
 	}()
-	return ch, func() {
-		go func() {
-			for range ch {
-			}
-		}()
-		d.Lock()
-		defer d.Unlock()
-		delete(d.watchers, ch)
-		close(ch)
-	}
+	return stream
 }
