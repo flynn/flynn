@@ -975,6 +975,14 @@ func (l *LibcontainerBackend) Signal(id string, sig int) error {
 	return container.Signal(sig)
 }
 
+func (l *LibcontainerBackend) DiscoverdDeregister(id string) error {
+	container, err := l.getContainer(id)
+	if err != nil {
+		return err
+	}
+	return container.DiscoverdDeregister()
+}
+
 func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 	client, err := l.getContainer(req.Job.Job.ID)
 	if err != nil {

@@ -27,6 +27,7 @@ type Backend interface {
 	Stop(string) error
 	JobExists(id string) bool
 	Signal(string, int) error
+	DiscoverdDeregister(string) error
 	ResizeTTY(id string, height, width uint16) error
 	Attach(*AttachRequest) error
 	Cleanup([]string) error
@@ -59,6 +60,7 @@ func (MockBackend) Run(*host.Job, *RunConfig, *RateLimitBucket) error { return n
 func (MockBackend) Stop(string) error                                 { return nil }
 func (MockBackend) JobExists(string) bool                             { return false }
 func (MockBackend) Signal(string, int) error                          { return nil }
+func (MockBackend) DiscoverdDeregister(string) error                  { return nil }
 func (MockBackend) ResizeTTY(id string, height, width uint16) error   { return nil }
 func (MockBackend) Attach(*AttachRequest) error                       { return nil }
 func (MockBackend) Cleanup([]string) error                            { return nil }
