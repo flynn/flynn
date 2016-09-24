@@ -55,6 +55,7 @@ func (s *S) TestJobListActive(c *C) {
 		createJob(ct.JobStatePending),
 		createJob(ct.JobStateStarting),
 		createJob(ct.JobStateUp),
+		createJob(ct.JobStateStopping),
 		createJob(ct.JobStateDown),
 		createJob(ct.JobStatePending),
 		createJob(ct.JobStateStarting),
@@ -63,11 +64,11 @@ func (s *S) TestJobListActive(c *C) {
 
 	list, err := s.c.JobListActive()
 	c.Assert(err, IsNil)
-	c.Assert(list, HasLen, 6)
+	c.Assert(list, HasLen, 7)
 
-	// check that we only get jobs with a pending, starting or up state,
-	// most recently updated first
-	expected := []*ct.Job{jobs[6], jobs[5], jobs[4], jobs[2], jobs[1], jobs[0]}
+	// check that we only get jobs with a pending, starting, up or stopping
+	// state, most recently updated first
+	expected := []*ct.Job{jobs[7], jobs[6], jobs[5], jobs[3], jobs[2], jobs[1], jobs[0]}
 	for i, job := range expected {
 		actual := list[i]
 		c.Assert(actual.UUID, Equals, job.UUID)

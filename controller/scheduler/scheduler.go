@@ -458,7 +458,8 @@ func (s *Scheduler) SyncJobs() (err error) {
 		// persist the job if it has a different in-memory state
 		if job.State == ct.JobStatePending && j.State != JobStatePending ||
 			job.State == ct.JobStateStarting && j.State != JobStateStarting ||
-			job.State == ct.JobStateUp && j.State != JobStateRunning {
+			job.State == ct.JobStateUp && j.State != JobStateRunning ||
+			job.State == ct.JobStateStopping {
 			s.persistJob(j)
 		}
 	}
@@ -1512,6 +1513,7 @@ func (s *Scheduler) stopJob(job *Job) error {
 	// still trying to start the job, in which case it will get an
 	// ErrJobNotPending error on the next call to PlaceJob
 	job.State = JobStateStopping
+	s.persistJob(job)
 
 	log.Info("requesting host to stop job", "host.id", job.HostID)
 	// call host.StopJob in a goroutine so it doesn't block the main

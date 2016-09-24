@@ -36,7 +36,7 @@
     },
     "state": {
       "type": "string",
-      "enum": ["pending", "starting", "up", "down", "crashed", "failed"]
+      "enum": ["pending", "starting", "up", "stopping", "down", "crashed", "failed"]
     },
     "cmd": {
       "$ref": "/schema/controller/common#/definitions/cmd"
