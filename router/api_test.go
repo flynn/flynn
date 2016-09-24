@@ -235,7 +235,7 @@ func (s *S) TestStreamEvents(c *C) {
 	tcpl := srv.listeners[1].(*TCPListener)
 
 	events := make(chan *router.StreamEvent)
-	stream, err := client.StreamEvents(events)
+	stream, err := client.StreamEvents(nil, events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
@@ -245,7 +245,7 @@ func (s *S) TestStreamEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		c.Assert(e.Event, Equals, "set")
+		c.Assert(e.Event, Equals, router.EventTypeRouteSet)
 		c.Assert(e.Route.ID, Equals, r.ID)
 		c.Assert(e.Route.Type, Equals, "http")
 		c.Assert(e.Error, IsNil)
@@ -259,7 +259,7 @@ func (s *S) TestStreamEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		c.Assert(e.Event, Equals, "remove")
+		c.Assert(e.Event, Equals, router.EventTypeRouteRemove)
 		c.Assert(e.Route.ID, Equals, r.ID)
 		c.Assert(e.Route.Type, Equals, "http")
 		c.Assert(e.Error, IsNil)
@@ -273,7 +273,7 @@ func (s *S) TestStreamEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		c.Assert(e.Event, Equals, "set")
+		c.Assert(e.Event, Equals, router.EventTypeRouteSet)
 		c.Assert(e.Route.ID, Equals, tcpr.ID)
 		c.Assert(e.Route.Type, Equals, "tcp")
 		c.Assert(e.Error, IsNil)
@@ -287,7 +287,7 @@ func (s *S) TestStreamEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		c.Assert(e.Event, Equals, "remove")
+		c.Assert(e.Event, Equals, router.EventTypeRouteRemove)
 		c.Assert(e.Route.ID, Equals, tcpr.ID)
 		c.Assert(e.Route.Type, Equals, "tcp")
 		c.Assert(e.Error, IsNil)

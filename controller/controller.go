@@ -129,7 +129,7 @@ func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}
 	}
 
 	events := make(chan *router.StreamEvent)
-	s, err := rc.StreamEvents(events)
+	s, err := rc.StreamEvents(nil, events)
 	if err != nil {
 		return err
 	}

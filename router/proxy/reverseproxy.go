@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	stickyCookie = "_backend"
+	stickyCookie         = "_backend"
+	ctxKeyRequestTracker = "_request_tracker"
 )
 
 // onExitFlushLoop is a callback set by tests to detect the state of the
@@ -51,22 +52,30 @@ type ReverseProxy struct {
 	// If zero, no periodic flushing is done.
 	FlushInterval time.Duration
 
+	RequestTracker RequestTracker
+
 	// Logger is the logger for the proxy.
 	Logger log15.Logger
+}
+
+type RequestTracker interface {
+	TrackRequestStart(backend string)
+	TrackRequestDone(backend string)
 }
 
 // NewReverseProxy initializes a new ReverseProxy with a callback to get
 // backends, a stickyKey for encrypting sticky session cookies, and a flag
 // sticky to enable sticky sessions.
-func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool, l log15.Logger) *ReverseProxy {
+func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool, rt RequestTracker, l log15.Logger) *ReverseProxy {
 	return &ReverseProxy{
 		transport: &transport{
 			getBackends:       bf,
 			stickyCookieKey:   stickyKey,
 			useStickySessions: sticky,
 		},
-		FlushInterval: 10 * time.Millisecond,
-		Logger:        l,
+		FlushInterval:  10 * time.Millisecond,
+		RequestTracker: rt,
+		Logger:         l,
 	}
 }
 
@@ -85,6 +94,8 @@ func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, re
 		p.serveUpgrade(rw, l, outreq)
 		return
 	}
+
+	ctx = context.WithValue(ctx, ctxKeyRequestTracker, p.RequestTracker)
 
 	// CloseNotify can trigger early with HTTP/1.1 pipelined requests. Since
 	// there is no way to detect if a request is pipelined, we instead check if
@@ -116,13 +127,14 @@ func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, re
 		}()
 	}
 
-	res, err := transport.RoundTrip(ctx, outreq, l)
+	res, backend, err := transport.RoundTrip(ctx, outreq, l)
 	if err != nil {
 		rw.WriteHeader(http.StatusServiceUnavailable)
 		rw.Write(serviceUnavailable)
 		return
 	}
 	defer res.Body.Close()
+	defer p.RequestTracker.TrackRequestDone(backend)
 
 	prepareResponseHeaders(res)
 	p.writeResponse(rw, res)

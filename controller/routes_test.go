@@ -69,7 +69,7 @@ func (r *fakeRouter) UpdateRoute(route *router.Route) error {
 	return nil
 }
 
-func (r *fakeRouter) StreamEvents(output chan *router.StreamEvent) (stream.Stream, error) {
+func (r *fakeRouter) StreamEvents(opts *router.StreamEventsOptions, output chan *router.StreamEvent) (stream.Stream, error) {
 	return &fakeStream{}, nil
 }
 

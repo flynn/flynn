@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/types"
@@ -34,7 +35,7 @@ type HTTPListener struct {
 	mtx      sync.RWMutex
 	domains  map[string]*node
 	routes   map[string]*httpRoute
-	services map[string]*httpService
+	services map[string]*service
 
 	discoverd DiscoverdClient
 	ds        DataStore
@@ -95,7 +96,7 @@ func (s *HTTPListener) Start() error {
 
 	s.routes = make(map[string]*httpRoute)
 	s.domains = make(map[string]*node)
-	s.services = make(map[string]*httpService)
+	s.services = make(map[string]*service)
 
 	if s.cookieKey == nil {
 		s.cookieKey = &[32]byte{}
@@ -292,7 +293,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	if service != nil && service.name != r.Service {
 		service.refs--
 		if service.refs <= 0 {
-			service.sc.Close()
+			service.Close()
 			delete(h.l.services, service.name)
 		}
 		service = nil
@@ -303,10 +304,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 			return err
 		}
 
-		service = &httpService{
-			name: r.Service,
-			sc:   sc,
-		}
+		service = newService(r.Service, sc, h.l.wm, r.DrainBackends)
 		h.l.services[r.Service] = service
 	}
 	service.refs++
@@ -316,7 +314,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	} else {
 		bf = service.sc.Addrs
 	}
-	r.rp = proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky, logger)
+	r.rp = proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky, service, logger)
 	r.service = service
 	h.l.routes[data.ID] = r
 	if data.Path == "/" {
@@ -333,7 +331,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		}
 	}
 
-	go h.l.wm.Send(&router.Event{Event: "set", ID: r.Domain, Route: r.ToRoute()})
+	go h.l.wm.Send(&router.Event{Event: router.EventTypeRouteSet, ID: r.Domain, Route: r.ToRoute()})
 	return nil
 }
 
@@ -362,7 +360,7 @@ func (h *httpSyncHandler) Remove(id string) error {
 			tree.Remove(r.Path)
 		}
 	}
-	go h.l.wm.Send(&router.Event{Event: "remove", ID: id, Route: r.ToRoute()})
+	go h.l.wm.Send(&router.Event{Event: router.EventTypeRouteRemove, ID: id, Route: r.ToRoute()})
 	return nil
 }
 
@@ -482,15 +480,104 @@ type httpRoute struct {
 	*router.HTTPRoute
 
 	keypair *tls.Certificate
-	service *httpService
+	service *service
 	rp      *proxy.ReverseProxy
 }
 
 // A service definition: name, and set of backends.
-type httpService struct {
-	name string
-	sc   cache.ServiceCache
-	refs int
+type service struct {
+	name   string
+	sc     *cache.ServiceCache
+	refs   int
+	wm     *WatchManager
+	stream stream.Stream
+	reqs   map[string]int64
+	cond   *sync.Cond
+}
+
+func newService(name string, sc *cache.ServiceCache, wm *WatchManager, trackBackends bool) *service {
+	s := &service{
+		name: name,
+		sc:   sc,
+		wm:   wm,
+	}
+	if trackBackends {
+		events := make(chan *discoverd.Event)
+		s.stream = sc.Watch(events, true)
+		s.reqs = make(map[string]int64)
+		s.cond = sync.NewCond(&sync.Mutex{})
+		go s.watchBackends(events)
+	}
+	return s
+}
+
+func (s *service) TrackRequestStart(backend string) {
+	if s.reqs == nil {
+		return
+	}
+	s.cond.L.Lock()
+	s.reqs[backend]++
+	s.cond.L.Unlock()
+}
+
+func (s *service) TrackRequestDone(backend string) {
+	if s.reqs == nil {
+		return
+	}
+	s.cond.L.Lock()
+	s.reqs[backend]--
+	if s.reqs[backend] == 0 {
+		s.cond.Broadcast()
+	}
+	s.cond.L.Unlock()
+}
+
+func (s *service) Close() {
+	if s.stream != nil {
+		s.stream.Close()
+	}
+	s.sc.Close()
+}
+
+func (s *service) watchBackends(events chan *discoverd.Event) {
+	for event := range events {
+		go s.handleBackendEvent(event)
+	}
+}
+
+func (s *service) handleBackendEvent(event *discoverd.Event) {
+	if event.Instance == nil {
+		return
+	}
+	backend := &router.Backend{
+		Service: s.name,
+		Addr:    event.Instance.Addr,
+		JobID:   event.Instance.Meta["FLYNN_JOB_ID"],
+	}
+	switch event.Kind {
+	case discoverd.EventKindUp:
+		s.wm.Send(&router.Event{
+			Event:   router.EventTypeBackendUp,
+			Backend: backend,
+		})
+	case discoverd.EventKindDown:
+		s.wm.Send(&router.Event{
+			Event:   router.EventTypeBackendDown,
+			Backend: backend,
+		})
+
+		// wait for in-flight requests to finish then send a
+		// drained event
+		s.cond.L.Lock()
+		for s.reqs[backend.Addr] > 0 {
+			s.cond.Wait()
+		}
+		s.cond.L.Unlock()
+		s.wm.Send(&router.Event{
+			Event:   router.EventTypeBackendDrained,
+			Backend: backend,
+		})
+	}
 }
 
 func (r *httpRoute) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *http.Request) {

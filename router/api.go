@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -301,20 +302,31 @@ func (api *API) StreamEvents(ctx context.Context, w http.ResponseWriter, req *ht
 	httpEvents := make(chan *router.Event)
 	tcpEvents := make(chan *router.Event)
 	sseEvents := make(chan *router.StreamEvent)
-	go httpListener.Watch(httpEvents)
-	go tcpListener.Watch(tcpEvents)
+	go httpListener.Watch(httpEvents, true)
+	go tcpListener.Watch(tcpEvents, true)
 	defer httpListener.Unwatch(httpEvents)
 	defer tcpListener.Unwatch(tcpEvents)
+
+	reqTypes := strings.Split(req.URL.Query().Get("types"), ",")
+	eventTypes := make(map[router.EventType]struct{}, len(reqTypes))
+	for _, typ := range reqTypes {
+		eventTypes[router.EventType(typ)] = struct{}{}
+	}
+
 	sendEvents := func(events chan *router.Event) {
 		for {
 			e, ok := <-events
 			if !ok {
 				return
 			}
+			if _, ok := eventTypes[e.Event]; !ok {
+				continue
+			}
 			sseEvents <- &router.StreamEvent{
-				Event: e.Event,
-				Route: e.Route,
-				Error: e.Error,
+				Event:   e.Event,
+				Route:   e.Route,
+				Backend: e.Backend,
+				Error:   e.Error,
 			}
 		}
 	}

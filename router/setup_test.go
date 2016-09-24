@@ -123,9 +123,9 @@ func (s *S) TearDownTest(c *C) {
 
 const waitTimeout = time.Second
 
-func waitForEvent(c *C, w Watcher, event string, id string) func() *router.Event {
+func waitForEvent(c *C, w Watcher, event router.EventType, id string) func() *router.Event {
 	ch := make(chan *router.Event)
-	w.Watch(ch)
+	w.Watch(ch, false)
 	return func() *router.Event {
 		defer w.Unwatch(ch)
 		for {

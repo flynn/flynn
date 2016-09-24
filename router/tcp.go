@@ -32,7 +32,7 @@ type TCPListener struct {
 	listeners map[int]net.Listener
 
 	mtx      sync.RWMutex
-	services map[string]*tcpService
+	services map[string]*service
 	routes   map[string]*tcpRoute
 	ports    map[int]*tcpRoute
 	closed   bool
@@ -106,7 +106,7 @@ func (l *TCPListener) Start() error {
 	}
 	l.DataStoreReader = l.ds
 
-	l.services = make(map[string]*tcpService)
+	l.services = make(map[string]*service)
 	l.routes = make(map[string]*tcpRoute)
 	l.ports = make(map[int]*tcpRoute)
 	l.listeners = make(map[int]net.Listener)
@@ -220,7 +220,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	if service != nil && service.name != r.Service {
 		service.refs--
 		if service.refs <= 0 {
-			service.sc.Close()
+			service.Close()
 			delete(h.l.services, service.name)
 		}
 		service = nil
@@ -231,10 +231,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 			return err
 		}
 
-		service = &tcpService{
-			name: r.Service,
-			sc:   sc,
-		}
+		service = newService(r.Service, sc, h.l.wm, r.DrainBackends)
 		h.l.services[r.Service] = service
 	}
 	r.service = service
@@ -244,7 +241,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	} else {
 		bf = service.sc.Addrs
 	}
-	r.rp = proxy.NewReverseProxy(bf, nil, false, logger)
+	r.rp = proxy.NewReverseProxy(bf, nil, false, service, logger)
 	if listener, ok := h.l.listeners[r.Port]; ok {
 		r.l = listener
 		delete(h.l.listeners, r.Port)
@@ -261,7 +258,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	h.l.routes[data.ID] = r
 	h.l.ports[r.Port] = r
 
-	go h.l.wm.Send(&router.Event{Event: "set", ID: data.ID, Route: r.ToRoute()})
+	go h.l.wm.Send(&router.Event{Event: router.EventTypeRouteSet, ID: data.ID, Route: r.ToRoute()})
 	return nil
 }
 
@@ -285,7 +282,7 @@ func (h *tcpSyncHandler) Remove(id string) error {
 
 	delete(h.l.routes, id)
 	delete(h.l.ports, r.Port)
-	go h.l.wm.Send(&router.Event{Event: "remove", ID: id, Route: r.ToRoute()})
+	go h.l.wm.Send(&router.Event{Event: router.EventTypeRouteRemove, ID: id, Route: r.ToRoute()})
 	return nil
 }
 
@@ -294,7 +291,7 @@ type tcpRoute struct {
 	*router.TCPRoute
 	l       net.Listener
 	addr    string
-	service *tcpService
+	service *service
 	rp      *proxy.ReverseProxy
 }
 
@@ -336,12 +333,6 @@ func (r *tcpRoute) Close() {
 		fd.Close()
 	}
 	r.l.Close()
-}
-
-type tcpService struct {
-	name string
-	sc   cache.ServiceCache
-	refs int
 }
 
 func (r *tcpRoute) ServeConn(conn net.Conn) {
