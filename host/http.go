@@ -104,6 +104,18 @@ func (h *Host) SignalJob(id string, sig int) error {
 	return h.backend.Signal(id, sig)
 }
 
+func (h *Host) DiscoverdDeregisterJob(id string) error {
+	log := h.log.New("fn", "DiscoverdDeregisterJob", "job.id", id)
+
+	job := h.state.GetJob(id)
+	if job == nil {
+		log.Warn("job not found")
+		return ErrNotFound
+	}
+	log.Info("deregistering job")
+	return h.backend.DiscoverdDeregister(id)
+}
+
 func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 	ch := h.state.AddListener(id)
 	defer h.state.RemoveListener(id, ch)
@@ -209,6 +221,15 @@ func (h *jobAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 func (h *jobAPI) StopJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	id := ps.ByName("id")
 	if err := h.host.StopJob(id); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	w.WriteHeader(200)
+}
+
+func (h *jobAPI) DiscoverdDeregisterJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	id := ps.ByName("id")
+	if err := h.host.DiscoverdDeregisterJob(id); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
@@ -543,6 +564,7 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.GET("/host/jobs/:id", h.GetJob)
 	r.PUT("/host/jobs/:id", h.AddJob)
 	r.DELETE("/host/jobs/:id", h.StopJob)
+	r.PUT("/host/jobs/:id/discoverd-deregister", h.DiscoverdDeregisterJob)
 	r.PUT("/host/jobs/:id/signal/:signal", h.SignalJob)
 	r.POST("/host/pull/images", h.PullImages)
 	r.POST("/host/pull/binaries", h.PullBinariesAndConfig)

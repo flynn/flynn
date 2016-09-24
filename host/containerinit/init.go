@@ -162,12 +162,17 @@ func (c *Client) Signal(signal int) error {
 	return err
 }
 
+func (c *Client) DiscoverdDeregister() error {
+	return c.c.Call("ContainerInit.DiscoverdDeregister", struct{}{}, &struct{}{})
+}
+
 func newContainerInit(c *Config, logFile *os.File) *ContainerInit {
 	return &ContainerInit{
-		resume:    make(chan struct{}),
-		streams:   make(map[chan StateChange]struct{}),
-		openStdin: c.OpenStdin,
-		logFile:   logFile,
+		resume:     make(chan struct{}),
+		deregister: make(chan struct{}),
+		streams:    make(map[chan StateChange]struct{}),
+		openStdin:  c.OpenStdin,
+		logFile:    logFile,
 	}
 }
 
@@ -187,6 +192,9 @@ type ContainerInit struct {
 
 	streams    map[chan StateChange]struct{}
 	streamsMtx sync.RWMutex
+
+	deregister     chan struct{}
+	deregisterOnce sync.Once
 }
 
 func (c *ContainerInit) GetState(arg *struct{}, status *State) error {
@@ -207,6 +215,11 @@ func (c *ContainerInit) Signal(sig int, res *struct{}) error {
 	if err := c.process.Signal(syscall.Signal(sig)); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (c *ContainerInit) DiscoverdDeregister(arg, res *struct{}) error {
+	c.deregisterOnce.Do(func() { close(c.deregister) })
 	return nil
 }
 
@@ -487,7 +500,7 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string, lo
 	return reg.Register(), nil
 }
 
-func babySit(process *os.Process, hbs []discoverd.Heartbeater) int {
+func babySit(init *ContainerInit, hbs []discoverd.Heartbeater) int {
 	log := logger.New("fn", "babySit")
 
 	var shutdownOnce sync.Once
@@ -503,6 +516,13 @@ func babySit(process *os.Process, hbs []discoverd.Heartbeater) int {
 		close(hbDone)
 	}
 
+	// Close the heartbeaters if requested to do so
+	go func() {
+		<-init.deregister
+		log.Info("received deregister request")
+		shutdownOnce.Do(closeHBs)
+	}()
+
 	// Forward all signals to the app
 	sigchan := make(chan os.Signal, 1)
 	sigutil.CatchAll(sigchan)
@@ -514,10 +534,9 @@ func babySit(process *os.Process, hbs []discoverd.Heartbeater) int {
 			}
 			if sig == syscall.SIGTERM || sig == syscall.SIGINT {
 				shutdownOnce.Do(closeHBs)
-				time.Sleep(2 * time.Second)
 			}
 			log.Info("forwarding signal to command", "type", sig)
-			process.Signal(sig)
+			init.process.Signal(sig)
 		}
 	}()
 
@@ -526,7 +545,7 @@ func babySit(process *os.Process, hbs []discoverd.Heartbeater) int {
 	var wstatus syscall.WaitStatus
 	for {
 		pid, err := syscall.Wait4(-1, &wstatus, 0, nil)
-		if err == nil && pid == process.Pid {
+		if err == nil && pid == init.process.Pid {
 			break
 		}
 	}
@@ -705,7 +724,7 @@ func containerInitApp(c *Config, logFile *os.File) error {
 		}
 		hbs = append(hbs, hb)
 	}
-	exitCode := babySit(init.process, hbs)
+	exitCode := babySit(init, hbs)
 	log.Info("command exited", "status", exitCode)
 	init.mtx.Lock()
 	init.changeState(StateExited, "", exitCode)

@@ -123,6 +123,10 @@ func (c *FakeHostClient) StopJob(id string) error {
 	}
 }
 
+func (c *FakeHostClient) DiscoverdDeregisterJob(id string) error {
+	return nil
+}
+
 func (c *FakeHostClient) stop(id string) error {
 	job := c.Jobs[id]
 	delete(c.Jobs, id)
