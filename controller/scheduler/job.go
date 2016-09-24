@@ -153,6 +153,8 @@ func (j *Job) ControllerJob() *ct.Job {
 		job.State = ct.JobStateStarting
 	case JobStateRunning:
 		job.State = ct.JobStateUp
+	case JobStateStopping:
+		job.State = ct.JobStateStopping
 	case JobStateStopped:
 		job.State = ct.JobStateDown
 	}

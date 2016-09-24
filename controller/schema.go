@@ -402,6 +402,9 @@ $$ LANGUAGE plpgsql`,
 		) r
 		WHERE release_id = r.id`,
 	)
+	migrations.Add(21,
+		`INSERT INTO job_states (name) VALUES ('stopping')`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
