@@ -1,4 +1,4 @@
-package main
+package postgresql
 
 import (
 	"errors"
@@ -23,6 +23,10 @@ import (
 	"github.com/flynn/flynn/pkg/sirenia/xlog"
 	"github.com/jackc/pgx"
 	"gopkg.in/inconshreveable/log15.v2"
+)
+
+const (
+	IDKey = "POSTGRES_ID"
 )
 
 type Config struct {
@@ -300,7 +304,7 @@ func (p *Postgres) reconfigure(config *state.Config) (err error) {
 
 	// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
 	if p.configApplied && p.running() && p.config() != nil && config != nil &&
-		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.Meta[pgIdKey] == p.config().Upstream.Meta[pgIdKey] {
+		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.Meta[IDKey] == p.config().Upstream.Meta[IDKey] {
 		log.Info("nothing to do", "reason", "becoming sync with same upstream")
 		return nil
 	}
@@ -454,7 +458,7 @@ func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error
 			"--pgdata", p.dataDir,
 			"--dbname", fmt.Sprintf(
 				"host=%s port=%s user=flynn password=%s application_name=%s",
-				upstream.Host(), upstream.Port(), p.password, upstream.Meta[pgIdKey],
+				upstream.Host(), upstream.Port(), p.password, upstream.Meta[IDKey],
 			),
 			"--xlog-method=stream",
 			"--progress",
@@ -528,7 +532,7 @@ func (p *Postgres) updateSync(downstream *discoverd.Instance) error {
 
 	config := configData{
 		ReadOnly: true,
-		Sync:     downstream.Meta[pgIdKey],
+		Sync:     downstream.Meta[IDKey],
 	}
 
 	if err := p.writeConfig(config); err != nil {
@@ -676,7 +680,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 		lastFlushed := p.XLog().Zero()
 		log := p.log.New(
 			"fn", "waitForSync",
-			"sync_name", inst.Meta[pgIdKey],
+			"sync_name", inst.Meta[IDKey],
 			"start_time", log15.Lazy{func() time.Time { return startTime }},
 			"last_flushed", log15.Lazy{func() xlog.Position { return lastFlushed }},
 		)
@@ -708,7 +712,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 				return
 			}
 
-			sent, flushed, err := p.checkReplStatus(inst.Meta[pgIdKey])
+			sent, flushed, err := p.checkReplStatus(inst.Meta[IDKey])
 			if err != nil {
 				// If we can't query the replication state, we just keep trying.
 				// We do not count this as part of the replication timeout.
@@ -756,7 +760,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 
 		if enableWrites {
 			// sync caught up, enable write transactions
-			if err := p.writeConfig(configData{Sync: inst.Meta[pgIdKey]}); err != nil {
+			if err := p.writeConfig(configData{Sync: inst.Meta[IDKey]}); err != nil {
 				log.Error("error writing postgres.conf", "err", err)
 				return
 			}
