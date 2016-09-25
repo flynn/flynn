@@ -2,9 +2,11 @@ package main
 
 import (
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 
+	"github.com/flynn/flynn/appliance/postgresql"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
@@ -14,10 +16,6 @@ import (
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
-const (
-	pgIdKey = "POSTGRES_ID"
-)
-
 func main() {
 	serviceName := os.Getenv("FLYNN_POSTGRES")
 	if serviceName == "" {
@@ -25,6 +23,10 @@ func main() {
 	}
 	singleton := os.Getenv("SINGLETON") == "true"
 	password := os.Getenv("PGPASSWORD")
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "5433"
+	}
 
 	const dataDir = "/data"
 	idFile := filepath.Join(dataDir, "instance_id")
@@ -48,7 +50,7 @@ func main() {
 	}
 	inst := &discoverd.Instance{
 		Addr: ":5432",
-		Meta: map[string]string{pgIdKey: id},
+		Meta: map[string]string{postgresql.IDKey: id},
 	}
 	hb, err := discoverd.DefaultClient.RegisterInstance(serviceName, inst)
 	if err != nil {
@@ -58,7 +60,7 @@ func main() {
 
 	log := log15.New("app", "postgres")
 
-	pg := NewPostgres(Config{
+	process := postgresql.NewProcess(postgresql.Config{
 		ID:           id,
 		Singleton:    singleton,
 		DataDir:      filepath.Join(dataDir, "db"),
@@ -71,10 +73,17 @@ func main() {
 	})
 	dd := sd.NewDiscoverd(discoverd.DefaultClient.Service(serviceName), log.New("component", "discoverd"))
 
-	peer := state.NewPeer(inst, id, pgIdKey, singleton, dd, pg, log.New("component", "peer"))
+	peer := state.NewPeer(inst, id, postgresql.IDKey, singleton, dd, process, log.New("component", "peer"))
 	shutdown.BeforeExit(func() { peer.Close() })
 
 	go peer.Run()
-	shutdown.Fatal(ServeHTTP(pg.(*Postgres), peer, hb, log.New("component", "http")))
+
+	handler := postgresql.NewHandler()
+	handler.Process = process
+	handler.Peer = peer
+	handler.Heartbeater = hb
+	handler.Logger = log.New("component", "http")
+
+	shutdown.Fatal(http.ListenAndServe(":"+httpPort, handler))
 	// TODO(titanous): clean shutdown of postgres
 }

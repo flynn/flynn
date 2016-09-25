@@ -1,4 +1,4 @@
-package main
+package postgresql
 
 import (
 	"errors"
@@ -31,51 +31,50 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 		OpTimeout: 30 * time.Second,
 	}
 
-	pg := NewPostgres(cfg)
-	err := pg.Reconfigure(&state.Config{Role: state.RolePrimary})
+	p := NewProcess(cfg)
+	err := p.Reconfigure(&state.Config{Role: state.RolePrimary})
 	c.Assert(err, IsNil)
 
-	err = pg.Start()
+	err = p.Start()
 	c.Assert(err, IsNil)
-	defer pg.Stop()
+	defer p.Stop()
 
-	conn := connect(c, pg, "postgres")
+	conn := connect(c, p, "postgres")
 	_, err = conn.Exec("CREATE DATABASE test")
 	conn.Close()
 	c.Assert(err, IsNil)
 
-	err = pg.Stop()
+	err = p.Stop()
 	c.Assert(err, IsNil)
 
 	// ensure that we can start a new instance from the same directory
-	pg = NewPostgres(cfg)
-	err = pg.Reconfigure(&state.Config{Role: state.RolePrimary})
+	p = NewProcess(cfg)
+	err = p.Reconfigure(&state.Config{Role: state.RolePrimary})
 	c.Assert(err, IsNil)
-	c.Assert(pg.Start(), IsNil)
-	defer pg.Stop()
+	c.Assert(p.Start(), IsNil)
+	defer p.Stop()
 
-	conn = connect(c, pg, "test")
+	conn = connect(c, p, "test")
 	_, err = conn.Exec("CREATE DATABASE foo")
 	conn.Close()
 	c.Assert(err, IsNil)
 
-	err = pg.Stop()
+	err = p.Stop()
 	c.Assert(err, IsNil)
 }
 
-func instance(pg state.Database) *discoverd.Instance {
-	p := pg.(*Postgres)
+func instance(p *Process) *discoverd.Instance {
 	return &discoverd.Instance{
 		ID:   p.id,
 		Addr: "127.0.0.1:" + p.port,
-		Meta: map[string]string{pgIdKey: p.id},
+		Meta: map[string]string{IDKey: p.id},
 	}
 }
 
 var newPort uint32 = 6510
 
-func newPostgres(c *C, n int) state.Database {
-	return NewPostgres(Config{
+func NewTestProcess(c *C, n int) *Process {
+	return NewProcess(Config{
 		ID:        fmt.Sprintf("node%d", n),
 		DataDir:   c.MkDir(),
 		Port:      strconv.Itoa(int(atomic.AddUint32(&newPort, 1))),
@@ -83,8 +82,8 @@ func newPostgres(c *C, n int) state.Database {
 	})
 }
 
-func connect(c *C, s state.Database, db string) *pgx.Conn {
-	port, _ := strconv.Atoi(s.(*Postgres).port)
+func connect(c *C, p *Process, db string) *pgx.Conn {
+	port, _ := strconv.Atoi(p.port)
 	conn, err := pgx.Connect(pgx.ConnConfig{
 		Host:     "127.0.0.1",
 		Port:     uint16(port),
@@ -96,7 +95,7 @@ func connect(c *C, s state.Database, db string) *pgx.Conn {
 	return conn
 }
 
-func pgConfig(role state.Role, upstream, downstream state.Database) *state.Config {
+func pgConfig(role state.Role, upstream, downstream *Process) *state.Config {
 	c := &state.Config{Role: role}
 	if upstream != nil {
 		c.Upstream = instance(upstream)
@@ -165,10 +164,10 @@ var syncAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func waitReplSync(c *C, pg state.Database, n int) {
+func waitReplSync(c *C, p *Process, n int) {
 	id := fmt.Sprintf("node%d", n)
 	err := syncAttempts.Run(func() error {
-		info, err := pg.(*Postgres).Info()
+		info, err := p.Info()
 		if err != nil {
 			return err
 		}
@@ -177,7 +176,7 @@ func waitReplSync(c *C, pg state.Database, n int) {
 		}
 		return nil
 	})
-	c.Assert(err, IsNil, Commentf("up:%s down:%s", pg.(*Postgres).id, id))
+	c.Assert(err, IsNil, Commentf("up:%s down:%s", p.id, id))
 }
 
 func waitRecovered(c *C, conn *pgx.Conn) {
@@ -196,10 +195,10 @@ func waitRecovered(c *C, conn *pgx.Conn) {
 }
 
 func (PostgresSuite) TestIntegration(c *C) {
-	node1 := newPostgres(c, 1) // primary
-	node2 := newPostgres(c, 2) // sync
-	node3 := newPostgres(c, 3) // async
-	node4 := newPostgres(c, 4) // second async
+	node1 := NewTestProcess(c, 1) // primary
+	node2 := NewTestProcess(c, 2) // sync
+	node3 := NewTestProcess(c, 3) // async
+	node4 := NewTestProcess(c, 4) // second async
 
 	// Start a primary
 	err := node1.Reconfigure(pgConfig(state.RolePrimary, nil, node2))
@@ -226,7 +225,7 @@ func (PostgresSuite) TestIntegration(c *C) {
 	// try to query primary until it comes up as read-write
 	waitReadWrite(c, node1Conn)
 
-	for _, n := range []state.Database{node1, node2} {
+	for _, n := range []*Process{node1, node2} {
 		pos, err := n.XLogPosition()
 		c.Assert(err, IsNil)
 		c.Assert(pos, Not(Equals), "")
@@ -325,10 +324,10 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 func (PostgresSuite) TestRemoveNodes(c *C) {
 	// start a chain of four nodes
-	node1 := newPostgres(c, 1)
-	node2 := newPostgres(c, 2)
-	node3 := newPostgres(c, 3)
-	node4 := newPostgres(c, 4)
+	node1 := NewTestProcess(c, 1)
+	node2 := NewTestProcess(c, 2)
+	node3 := NewTestProcess(c, 3)
+	node4 := NewTestProcess(c, 4)
 	err := node1.Reconfigure(pgConfig(state.RolePrimary, nil, node2))
 	c.Assert(err, IsNil)
 	c.Assert(node1.Start(), IsNil)
