@@ -11,12 +11,18 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	dt "github.com/flynn/flynn/discoverd/types"
 	"github.com/flynn/flynn/pkg/httpclient"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
 	"gopkg.in/inconshreveable/log15.v2"
+)
+
+const (
+	requestDeadline = 10 * time.Second
+	retryInterval   = 100 * time.Millisecond
 )
 
 var ErrTimedOut = errors.New("discoverd: timed out waiting for instances")
@@ -207,46 +213,48 @@ func (c *Client) Do(method string, path string, in, out interface{}, streamReq b
 		}
 	}
 
-	errors := make([]string, 0, len(servers))
-	for _, hc := range orderedServers {
-		var rsp *http.Response
-		if streamReq {
-			h := http.Header{"Accept": []string{"text/event-stream"}}
-			rsp, err = hc.RawReq(method, path, h, in, nil)
-			if err == nil {
-				res = httpclient.Stream(rsp, out)
+	errs := make([]string, 0, len(servers))
+	for startTime := time.Now(); time.Since(startTime) < requestDeadline; time.Sleep(retryInterval) {
+		for _, hc := range orderedServers {
+			var rsp *http.Response
+			if streamReq {
+				h := http.Header{"Accept": []string{"text/event-stream"}}
+				rsp, err = hc.RawReq(method, path, h, in, nil)
+				if err == nil {
+					res = httpclient.Stream(rsp, out)
+				}
+			} else {
+				h := http.Header{"Accept": []string{"application/json"}}
+				rsp, err = hc.RawReq(method, path, h, in, out)
+				if err == nil && out == nil {
+					rsp.Body.Close()
+				}
 			}
-		} else {
-			h := http.Header{"Accept": []string{"application/json"}}
-			rsp, err = hc.RawReq(method, path, h, in, out)
-			if err == nil && out == nil {
-				rsp.Body.Close()
+			// If we consider the error not to be an issue with the request but rather
+			// a transient network/server error then we try again with a different server
+			if err != nil && isRetryable(err) {
+				errs = append(errs, err.Error())
+				continue
+			} else if err != nil {
+				return nil, err
 			}
+			// If the pinned server failed to fulfill our request then update the pin
+			// We don't update the pin on leader requests
+			if hc.Host != pinned && !leaderReq {
+				c.updatePin(hc.Host)
+			}
+			peers := rsp.Header.Get("Discoverd-Current-Peers")
+			idx := rsp.Header.Get("Discoverd-Current-Index")
+			if i, err := strconv.ParseUint(idx, 10, 64); err == nil && i > 0 && peers != "" {
+				c.updateServers(strings.Split(peers, ","), i)
+			}
+			return res, nil
 		}
-		// If we consider the error not to be an issue with the request but rather
-		// a transient network/server error then we try again with a different server
-		if err != nil && isNetError(err) {
-			errors = append(errors, err.Error())
-			continue
-		} else if err != nil {
-			return nil, err
-		}
-		// If the pinned server failed to fulfill our request then update the pin
-		// We don't update the pin on leader requests
-		if hc.Host != pinned && !leaderReq {
-			c.updatePin(hc.Host)
-		}
-		peers := rsp.Header.Get("Discoverd-Current-Peers")
-		idx := rsp.Header.Get("Discoverd-Current-Index")
-		if i, err := strconv.ParseUint(idx, 10, 64); err == nil && i > 0 && peers != "" {
-			c.updateServers(strings.Split(peers, ","), i)
-		}
-		return res, nil
 	}
-	return nil, fmt.Errorf("Error sending HTTP request, errors: %s", strings.Join(errors, ","))
+	return nil, fmt.Errorf("Error sending HTTP request, errors: %s", strings.Join(errs, ","))
 }
 
-func isNetError(err error) bool {
+func isRetryable(err error) bool {
 	switch err.(type) {
 	case *net.OpError:
 		return true
@@ -256,12 +264,7 @@ func isNetError(err error) bool {
 	if err == io.EOF {
 		return true
 	}
-	if e, ok := err.(hh.JSONError); ok {
-		if e.Code == hh.ServiceUnavailableErrorCode {
-			return true
-		}
-	}
-	return false
+	return hh.IsRetryableError(err)
 }
 
 func (c *Client) Stream(method string, path string, in, out interface{}) (stream.Stream, error) {
