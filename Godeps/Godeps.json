@@ -12,6 +12,11 @@
 			"Rev": "ad5712971bbdaf7fdc85f9b6ab1bce82eadc9119"
 		},
 		{
+			"ImportPath": "github.com/Azure/azure-sdk-for-go/storage",
+			"Comment": "v4.0.0-beta-8-g63d3f3e",
+			"Rev": "63d3f3e3b12ffb726ba3f72fef1aa8c1c7cd1012"
+		},
+		{
 			"ImportPath": "github.com/Azure/go-ansiterm",
 			"Rev": "70b2c90b260171e829f1ebd7c17f600c11858dbe"
 		},
