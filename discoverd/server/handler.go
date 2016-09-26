@@ -426,7 +426,7 @@ func (h *Handler) serveStream(w http.ResponseWriter, params httprouter.Params, k
 func (h *Handler) serveGetRaftLeader(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	leader := h.Store.Leader()
 	if leader == "" {
-		hh.Error(w, ErrNoKnownLeader)
+		hh.ServiceUnavailableError(w, ErrNoKnownLeader.Error())
 		return
 	}
 
@@ -475,7 +475,7 @@ func (h *Handler) redirectToLeader(w http.ResponseWriter, r *http.Request) {
 	// Find the current leader.
 	leader := h.Store.Leader()
 	if leader == "" {
-		hh.Error(w, ErrNoKnownLeader)
+		hh.ServiceUnavailableError(w, ErrNoKnownLeader.Error())
 		return
 	}
 
