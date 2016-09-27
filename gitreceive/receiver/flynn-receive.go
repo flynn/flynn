@@ -147,13 +147,23 @@ Options:
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
 
-	if len(prevRelease.Env) > 0 {
+	releaseEnv := make(map[string]string, len(env))
+	if prevRelease.Env != nil {
+		for k, v := range prevRelease.Env {
+			releaseEnv[k] = v
+		}
+	}
+	for k, v := range env {
+		releaseEnv[k] = v
+	}
+
+	if len(releaseEnv) > 0 {
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
 			return err
 		}
 		go func() {
-			if err := appendEnvDir(os.Stdin, stdin, prevRelease.Env); err != nil {
+			if err := appendEnvDir(os.Stdin, stdin, releaseEnv); err != nil {
 				log.Fatalln("ERROR:", err)
 			}
 		}()
@@ -184,17 +194,11 @@ Options:
 
 	release := &ct.Release{
 		ArtifactIDs: []string{slugRunnerID, slugArtifact.ID},
-		Env:         prevRelease.Env,
+		Env:         releaseEnv,
 		Meta:        prevRelease.Meta,
 	}
 	if release.Meta == nil {
 		release.Meta = make(map[string]string, len(meta))
-	}
-	if release.Env == nil {
-		release.Env = make(map[string]string, len(env))
-	}
-	for k, v := range env {
-		release.Env[k] = v
 	}
 	for k, v := range meta {
 		release.Meta[k] = v

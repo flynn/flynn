@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"os/exec"
+	"path/filepath"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
 	c "github.com/flynn/go-check"
 )
 
@@ -52,4 +56,34 @@ func (s *GitreceiveSuite) TestSlugbuilderLimit(t *c.C) {
 	t.Assert(push, OutputContains, "524288000")
 
 	t.Assert(r.flynn("-a", "gitreceive", "env", "unset", "SLUGBUILDER_DEFAULT_MEMORY_LIMIT"), Succeeds)
+}
+
+func (s *GitreceiveSuite) TestDeployWithEnv(t *c.C) {
+	appDir := filepath.Join("apps", "env-dir")
+	client := s.controllerClient(t)
+	app := &ct.App{}
+	t.Assert(client.CreateApp(app), c.IsNil)
+	debugf(t, "created app %s (%s)", app.Name, app.ID)
+
+	tarResult := run(t, exec.Command("sh", "-c", fmt.Sprintf("tar --create --directory %s .", appDir)))
+
+	env := map[string]string{
+		"FOO":           "BAR",
+		"BUILDPACK_URL": "git@github.com:kr/heroku-buildpack-inline.git",
+	}
+	args := []string{"-a", "gitreceive", "run", "/bin/flynn-receiver", app.Name, "test-rev"}
+	for k, v := range env {
+		args = append(args, "--env")
+		args = append(args, fmt.Sprintf("%s=%s", k, v))
+	}
+	cmd := flynnCmd(appDir, args...)
+	cmd.Stdin = tarResult.OutputBuf
+	result := run(t, cmd)
+
+	t.Assert(result, Succeeds)
+	t.Assert(result, OutputContains, "BAR")
+	t.Assert(result.Err, c.IsNil)
+
+	t.Assert(tarResult, Succeeds)
+	t.Assert(tarResult.Err, c.IsNil)
 }
