@@ -165,15 +165,13 @@ func (r *Runner) start() error {
 	}
 	r.runEnv["TEST_RUNNER_AUTH_KEY"] = r.authKey
 
-	if c := os.Getenv("BLOBSTORE_S3_CONFIG"); c != "" {
-		r.runEnv["BLOBSTORE_S3_CONFIG"] = c
-	} else {
-		return errors.New("BLOBSTORE_S3_CONFIG not set")
-	}
-	if c := os.Getenv("BLOBSTORE_GCS_CONFIG"); c != "" {
-		r.runEnv["BLOBSTORE_GCS_CONFIG"] = c
-	} else {
-		return errors.New("BLOBSTORE_GCS_CONFIG not set")
+	for _, s := range []string{"S3", "GCS", "AZURE"} {
+		name := fmt.Sprintf("BLOBSTORE_%s_CONFIG", s)
+		if c := os.Getenv(name); c != "" {
+			r.runEnv[name] = c
+		} else {
+			return fmt.Errorf("%s not set", name)
+		}
 	}
 
 	r.githubToken = os.Getenv("GITHUB_TOKEN")
