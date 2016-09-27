@@ -76,8 +76,9 @@ $ sudo rm /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev
 Flynn stores binary blobs like compiled applications, git repo archives,
 buildpack caches, and Docker image layers using the blobstore component. The
 blobstore supports multiple backends: Postgres, [Amazon
-S3](https://aws.amazon.com/s3/), and [Google Cloud
-Storage](https://cloud.google.com/storage/).
+S3](https://aws.amazon.com/s3/), [Google Cloud
+Storage](https://cloud.google.com/storage/), and [Microsoft Azure
+Storage](https://azure.microsoft.com/en-us/services/storage/blobs/).
 
 By default, the blobstore uses the built-in Postgres appliance to store these
 blobs. This works well for light workloads and is the default configuration
@@ -169,6 +170,30 @@ remove them from Postgres:
 ```text
 flynn -a blobstore run /bin/flynn-blobstore migrate --delete
 ```
+
+### Microsoft Azure Storage
+
+To migrate to the Azure Storage backend, you first need to create a storage
+account and container. After setting those up, you should have an account name,
+account key, and container name, which can be used to configure the backend:
+
+```text
+flynn -a blobstore env set BACKEND_AZUREMAIN="backend=azure account_key=xxx \
+account_name=yyy container=flynnblobstore"
+
+flynn -a blobstore env set DEFAULT_BACKEND=azuremain
+```
+
+If the credentials are invalid, the first command will fail, and you can check the
+logs with `flynn -a blobstore log`.
+
+Finally, migrate the existing blobs from Postgres to Azure Storage and
+remove them from Postgres:
+
+```text
+flynn -a blobstore run /bin/flynn-blobstore migrate --delete
+```
+
 
 ## DNS and Load Balancing
 

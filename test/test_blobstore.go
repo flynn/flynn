@@ -46,6 +46,17 @@ func (s *BlobstoreSuite) TestBlobstoreBackendGCS(t *c.C) {
 	s.testBlobstoreBackend(t, "gcs", ".+google.+", fmt.Sprintf(`"BACKEND_GCS=backend=gcs bucket=%s"`, data.Bucket), `"BACKEND_GCS_KEY=$BLOBSTORE_GCS_CONFIG"`)
 }
 
+func (s *BlobstoreSuite) TestBlobstoreBackendAzure(t *c.C) {
+	s3Config := os.Getenv("BLOBSTORE_AZURE_CONFIG")
+	if s3Config == "" {
+		// BLOBSTORE_AZURE_CONFIG should be set to a valid configuration like:
+		// backend=azure account_name=xxx account_key=xxx container=blobstore-ci
+		t.Skip("missing BLOBSTORE_AZURE_CONFIG env var")
+	}
+
+	s.testBlobstoreBackend(t, "azure", ".+blob.core.windows.net.+", `"BACKEND_AZURE=$BLOBSTORE_AZURE_CONFIG"`)
+}
+
 func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern string, env ...string) {
 	r := s.newGitRepo(t, "http")
 	t.Assert(r.flynn("create", "blobstore-backend-test-"+name), Succeeds)

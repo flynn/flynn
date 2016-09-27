@@ -122,6 +122,25 @@ func TestGCSFilesystem(t *testing.T) {
 	testExternalBackendReplace(r, t)
 }
 
+func TestAzureFilesystem(t *testing.T) {
+	cfg := os.Getenv("BLOBSTORE_AZURE_CONFIG")
+	if cfg == "" {
+		t.Skip("Azure not configured")
+	}
+	db := initDB(t)
+	defer db.Close()
+	b, err := backend.NewAzure("azure-test", parseBackendEnv(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := data.NewFileRepo(db, []backend.Backend{b}, "azure-test")
+	testList(r, t)
+	testDelete(r, t)
+	testOffset(r, t, false)
+	testFilesystem(r, false, t)
+	testExternalBackendReplace(r, t)
+}
+
 func testList(r *data.FileRepo, t *testing.T) {
 	srv := httptest.NewServer(handler(r))
 	defer srv.Close()
@@ -360,7 +379,7 @@ func testFilesystem(r *data.FileRepo, testMeta bool, t *testing.T) {
 				t.Errorf("Expected 404 for non-existent file, got %d", res.StatusCode)
 			}
 
-			data := random.Hex(16)
+			data := strings.Repeat(random.Hex(15), 350000)
 			req, err := http.NewRequest("PUT", path, strings.NewReader(data))
 			if err != nil {
 				t.Fatal(err)
@@ -399,8 +418,8 @@ func testFilesystem(r *data.FileRepo, testMeta bool, t *testing.T) {
 			if res.StatusCode != 200 {
 				t.Errorf("Expected 200 for HEAD, got %d", res.StatusCode)
 			}
-			if cl := res.Header.Get("Content-Length"); cl != "32" {
-				t.Errorf(`Expected Content-Length to be "32", got %q`, cl)
+			if cl := res.Header.Get("Content-Length"); cl != "10500000" {
+				t.Errorf(`Expected Content-Length to be "10500000", got %q`, cl)
 			}
 			if testMeta {
 				if ct := res.Header.Get("Content-Type"); ct != "text/plain" {
