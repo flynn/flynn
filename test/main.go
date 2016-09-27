@@ -217,9 +217,10 @@ func setupDockerPush() error {
 }
 
 type CmdResult struct {
-	Cmd    []string
-	Output string
-	Err    error
+	Cmd       []string
+	Output    string
+	OutputBuf io.Reader
+	Err       error
 }
 
 func flynnEnv(path string) []string {
@@ -265,9 +266,10 @@ func run(t *check.C, cmd *exec.Cmd) *CmdResult {
 	}
 	err := cmd.Run()
 	res := &CmdResult{
-		Cmd:    cmd.Args,
-		Err:    err,
-		Output: out.String(),
+		Cmd:       cmd.Args,
+		Err:       err,
+		Output:    out.String(),
+		OutputBuf: &out,
 	}
 	if !args.Stream {
 		t.Log(res.Output)
