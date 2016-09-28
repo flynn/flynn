@@ -4,4 +4,5 @@ include_rules
 : |> !go ./signal |> bin/signal
 : |> !go ./ish |> bin/ish
 : |> !go ./partial-logger |> bin/partial-logger
+: |> !go ./http-blocker |> bin/http-blocker
 : bin/* |> docker build -t flynn/test-apps . |>

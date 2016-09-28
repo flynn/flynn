@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -11,7 +15,10 @@ import (
 	"github.com/flynn/flynn/host/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/typeconv"
+	routerc "github.com/flynn/flynn/router/client"
+	"github.com/flynn/flynn/router/types"
 	c "github.com/flynn/go-check"
 )
 
@@ -716,4 +723,144 @@ loop:
 		"scheduler": len(hosts),
 	}}
 	t.Assert(actual, c.DeepEquals, expected)
+}
+
+func (s *SchedulerSuite) TestGracefulShutdown(t *c.C) {
+	app, release := s.createApp(t)
+	client := s.controllerClient(t)
+
+	debug(t, "scaling to blocker=1")
+	watcher, err := client.WatchJobEvents(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+	t.Assert(client.PutFormation(&ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"blocker": 1},
+	}), c.IsNil)
+	var jobID string
+	err = watcher.WaitFor(ct.JobEvents{"blocker": ct.JobUpEvents(1)}, scaleTimeout, func(job *ct.Job) error {
+		jobID = job.ID
+		return nil
+	})
+	t.Assert(err, c.IsNil)
+	jobs, err := s.discoverdClient(t).Instances("test-http-blocker", 10*time.Second)
+	t.Assert(err, c.IsNil)
+	t.Assert(jobs, c.HasLen, 1)
+	jobAddr := jobs[0].Addr
+
+	debug(t, "subscribing to backend events from all routers")
+	routers, err := s.discoverdClient(t).Instances("router-api", 10*time.Second)
+	t.Assert(err, c.IsNil)
+	routerEvents := make(chan *router.StreamEvent)
+	for _, r := range routers {
+		events := make(chan *router.StreamEvent)
+		stream, err := routerc.NewWithAddr(r.Addr).StreamEvents(&router.StreamEventsOptions{
+			EventTypes: []router.EventType{
+				router.EventTypeBackendUp,
+				router.EventTypeBackendDown,
+				router.EventTypeBackendDrained,
+			},
+		}, events)
+		t.Assert(err, c.IsNil)
+		defer stream.Close()
+		go func(router *discoverd.Instance) {
+			for event := range events {
+				if event.Backend != nil && event.Backend.JobID == jobID {
+					debugf(t, "got %s router event from %s", event.Event, router.Host())
+					routerEvents <- event
+				}
+			}
+		}(r)
+	}
+
+	debug(t, "adding HTTP route with backend drain enabled")
+	route := &router.HTTPRoute{
+		Domain:        random.String(32) + ".com",
+		Service:       "test-http-blocker",
+		DrainBackends: true,
+	}
+	t.Assert(client.CreateRoute(app.ID, route.ToRoute()), c.IsNil)
+
+	waitForRouterEvents := func(typ router.EventType) {
+		debugf(t, "waiting for %d router %s events", len(routers), typ)
+		count := 0
+		for {
+			select {
+			case event := <-routerEvents:
+				if event.Event != typ {
+					t.Fatal("expected %s router event, got %s", typ, event.Event)
+				}
+				count++
+				if count == len(routers) {
+					return
+				}
+			case <-time.After(30 * time.Second):
+				t.Fatalf("timed out waiting for router %s events", typ)
+			}
+		}
+	}
+	waitForRouterEvents(router.EventTypeBackendUp)
+
+	debug(t, "making blocked HTTP request through each router")
+	reqErrs := make(chan error)
+	for _, router := range routers {
+		req, err := http.NewRequest("GET", "http://"+router.Host()+"/block", nil)
+		t.Assert(err, c.IsNil)
+		req.Host = route.Domain
+		res, err := http.DefaultClient.Do(req)
+		t.Assert(err, c.IsNil)
+		t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+		go func() {
+			defer res.Body.Close()
+			data, err := ioutil.ReadAll(res.Body)
+			if err == nil && !bytes.Equal(data, []byte("done")) {
+				err = fmt.Errorf("unexpected response: %q", data)
+			}
+			reqErrs <- err
+		}()
+	}
+
+	debug(t, "scaling to blocker=0")
+	t.Assert(client.PutFormation(&ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"blocker": 0},
+	}), c.IsNil)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"blocker": {ct.JobStateStopping: 1}}, scaleTimeout, nil), c.IsNil)
+	waitForRouterEvents(router.EventTypeBackendDown)
+
+	debug(t, "checking new HTTP requests return 503")
+	for _, router := range routers {
+		req, err := http.NewRequest("GET", "http://"+router.Host()+"/ping", nil)
+		t.Assert(err, c.IsNil)
+		req.Host = route.Domain
+		res, err := http.DefaultClient.Do(req)
+		t.Assert(err, c.IsNil)
+		res.Body.Close()
+		t.Assert(res.StatusCode, c.Equals, http.StatusServiceUnavailable)
+	}
+
+	debug(t, "checking blocked HTTP requests are still blocked")
+	select {
+	case err := <-reqErrs:
+		t.Fatal(err)
+	default:
+	}
+
+	debug(t, "unblocking HTTP requests")
+	res, err := http.Get("http://" + jobAddr + "/unblock")
+	t.Assert(err, c.IsNil)
+	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+
+	debug(t, "checking the blocked HTTP requests completed without error")
+	for range routers {
+		if err := <-reqErrs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	waitForRouterEvents(router.EventTypeBackendDrained)
+
+	debug(t, "waiting for the job to exit")
+	t.Assert(watcher.WaitFor(ct.JobEvents{"blocker": ct.JobDownEvents(1)}, scaleTimeout, nil), c.IsNil)
 }
