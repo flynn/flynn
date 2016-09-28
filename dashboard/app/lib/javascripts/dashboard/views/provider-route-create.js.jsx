@@ -7,7 +7,8 @@ import Modal from 'Modal';
 var providersStoreID = 'default';
 var appRoutesStoreID = function (state) {
 	return {
-		appId: state.providerApp.id
+		appId: state.providerApp.id,
+		routeTypes: ['tcp']
 	};
 };
 
