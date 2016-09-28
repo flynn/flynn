@@ -11,9 +11,9 @@ import (
 
 func New(s discoverd.Service) (*ServiceCache, error) {
 	d := &ServiceCache{
-		addrs: make(map[string]struct{}),
-		stop:  make(chan struct{}),
-		done:  make(chan struct{}),
+		instances: make(map[string]*discoverd.Instance),
+		stop:      make(chan struct{}),
+		done:      make(chan struct{}),
 	}
 	return d, d.start(s)
 }
@@ -23,7 +23,7 @@ type ServiceCache struct {
 
 	sync.RWMutex
 	leaderAddr string
-	addrs      map[string]struct{}
+	instances  map[string]*discoverd.Instance
 
 	// used by the test suite
 	watchers map[chan *discoverd.Event]struct{}
@@ -70,11 +70,11 @@ func (d *ServiceCache) start(s discoverd.Service) (err error) {
 				switch event.Kind {
 				case discoverd.EventKindUp, discoverd.EventKindUpdate:
 					d.Lock()
-					d.addrs[event.Instance.Addr] = struct{}{}
+					d.instances[event.Instance.ID] = event.Instance
 					d.Unlock()
 				case discoverd.EventKindDown:
 					d.Lock()
-					delete(d.addrs, event.Instance.Addr)
+					delete(d.instances, event.Instance.ID)
 					d.Unlock()
 				case discoverd.EventKindLeader:
 					d.Lock()
@@ -102,9 +102,9 @@ func (d *ServiceCache) Close() error {
 func (d *ServiceCache) Addrs() []string {
 	d.RLock()
 	defer d.RUnlock()
-	res := make([]string, 0, len(d.addrs))
-	for addr := range d.addrs {
-		res = append(res, addr)
+	res := make([]string, 0, len(d.instances))
+	for _, inst := range d.instances {
+		res = append(res, inst.Addr)
 	}
 	return res
 }
@@ -141,11 +141,11 @@ func (d *ServiceCache) Watch(ch chan *discoverd.Event, current bool) stream.Stre
 		}()
 
 		if current {
-			for addr := range d.addrs {
+			for _, inst := range d.instances {
 				select {
 				case ch <- &discoverd.Event{
 					Kind:     discoverd.EventKindUp,
-					Instance: &discoverd.Instance{Addr: addr},
+					Instance: inst,
 				}:
 				case <-stream.StopCh:
 					go func() {
