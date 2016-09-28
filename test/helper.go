@@ -180,6 +180,16 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 					"NAME": app.Name,
 				},
 			},
+			"blocker": {
+				Args: []string{"/bin/http-blocker"},
+				Ports: []ct.Port{{
+					Proto: "tcp",
+					Service: &host.Service{
+						Name:   "test-http-blocker",
+						Create: true,
+					},
+				}},
+			},
 		},
 	}
 	t.Assert(client.CreateRelease(release), c.IsNil)
