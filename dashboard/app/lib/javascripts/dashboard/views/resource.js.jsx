@@ -12,7 +12,8 @@ import EditEnv from 'dashboard/views/edit-env';
 var appsStoreID = null;
 var appRoutesStoreID = function (props) {
 	return {
-		appId: props.resourceApp ? props.resourceApp.id : props.providerApp.id
+		appId: props.resourceApp ? props.resourceApp.id : props.providerApp.id,
+		routeTypes: ['tcp']
 	};
 };
 var resourceAddAppStoreID = 'default';

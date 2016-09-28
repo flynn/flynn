@@ -12,8 +12,10 @@ var AppRoutes = Store.createClass({
 	},
 
 	willInitialize: function () {
+		var routeTypes = this.id.routeTypes;
 		this.props = {
-			appId: this.id.appId
+			appId: this.id.appId,
+			routeTypes: Array.isArray(routeTypes) ? routeTypes : ['http']
 		};
 	},
 
@@ -75,12 +77,13 @@ var AppRoutes = Store.createClass({
 	},
 
 	__fetchRoutes: function () {
+		var routeTypes = this.props.routeTypes;
 		return this.__getClient().getAppRoutes(this.props.appId).then(function (args) {
 			var res = args[0];
 			this.setState({
 				fetched: true,
 				routes: res.filter(function (route) {
-					return route.type === 'http';
+					return routeTypes.indexOf(route.type) !== -1;
 				})
 			});
 		}.bind(this));
