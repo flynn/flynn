@@ -6,6 +6,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/stream"
 	c "github.com/flynn/go-check"
 )
@@ -358,7 +359,14 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	t.Assert(client.UpdateApp(app), c.IsNil)
 	release.ID = ""
 	t.Assert(client.CreateRelease(release), c.IsNil)
-	deployment, err = client.CreateDeployment(app.ID, release.ID)
+	// try creating the deployment multiple times to avoid getting a
+	// "Cannot create deploy, one is already in progress" error (there
+	// is no guarantee the previous deploy has finished yet)
+	attempts := attempt.Strategy{Total: 10 * time.Second, Delay: 100 * time.Millisecond}
+	err = attempts.Run(func() (err error) {
+		deployment, err = client.CreateDeployment(app.ID, release.ID)
+		return
+	})
 	t.Assert(err, c.IsNil)
 	events = make(chan *ct.DeploymentEvent)
 	stream, err = client.StreamDeployment(deployment, events)
