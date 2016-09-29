@@ -100,6 +100,8 @@ Commands:
   fix                        Fix a broken cluster
   tags                       Manage flynn-host daemon tags
   discover                   Return low-level information about a service
+  promote                    Promotes a Flynn node to a member of the consensus cluster
+  demote                     Demotes a Flynn node, removing it from the consensus cluster
 
 See 'flynn-host help <command>' for more information on a specific command.
 `
