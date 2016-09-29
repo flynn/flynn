@@ -64,13 +64,6 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 				nlog.Error("error scaling new formation up by one", "type", typ, "err", err)
 				return err
 			}
-			for i := 0; i < diff; i++ {
-				d.deployEvents <- ct.DeploymentEvent{
-					ReleaseID: d.NewReleaseID,
-					JobState:  ct.JobStateStarting,
-					JobType:   typ,
-				}
-			}
 			nlog.Info(fmt.Sprintf("waiting for %d job up event(s)", diff), "type", typ)
 			if err := waitJobs(d.NewReleaseID, ct.JobEvents{typ: ct.JobUpEvents(diff)}, nlog); err != nil {
 				nlog.Error("error waiting for job up events", "err", err)
@@ -86,13 +79,6 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 			}); err != nil {
 				olog.Error("error scaling old formation down by one", "type", typ, "err", err)
 				return err
-			}
-			for i := 0; i < diff; i++ {
-				d.deployEvents <- ct.DeploymentEvent{
-					ReleaseID: d.OldReleaseID,
-					JobState:  ct.JobStateStopping,
-					JobType:   typ,
-				}
 			}
 
 			olog.Info(fmt.Sprintf("waiting for %d job down event(s)", diff), "type", typ)

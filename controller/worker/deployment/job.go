@@ -290,7 +290,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 			return
 		}
 
-		// don't send duplicate events
+		// ignore duplicate events
 		if _, ok := d.knownJobStates[jobIDState{jobID, state}]; ok {
 			return
 		}
@@ -300,11 +300,6 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 			actual[typ] = make(map[ct.JobState]int)
 		}
 		actual[typ][state] += 1
-		d.deployEvents <- ct.DeploymentEvent{
-			ReleaseID: releaseID,
-			JobState:  state,
-			JobType:   typ,
-		}
 	}
 
 	jobEvents := d.ReleaseJobEvents(releaseID)

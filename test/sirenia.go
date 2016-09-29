@@ -303,18 +303,21 @@ loop:
 			if e.JobState != ct.JobStateUp && e.JobState != ct.JobStateDown {
 				continue
 			}
-			switch e.JobType {
-			case procName:
+			if e.JobType == procName {
 				// move on if we have seen all the expected events
 				if expectedIndex >= len(expected) {
 					continue
 				}
 				skipped := assertNextState(expected[expectedIndex:])
 				expectedIndex += 1 + skipped
-			case "web":
-				if e.JobState == ct.JobStateUp && e.ReleaseID == newRelease {
-					newWebJobs++
-				}
+			}
+		case e, ok := <-jobEvents:
+			if !ok {
+				t.Fatalf("unexpected close of job event stream: %s", jobStream.Err())
+			}
+			debugf(t, "got job event: %s %s %s", e.Type, e.ID, e.State)
+			if e.Type == "web" && e.State == ct.JobStateUp && e.ReleaseID == newRelease {
+				newWebJobs++
 			}
 		}
 	}
