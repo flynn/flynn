@@ -74,7 +74,7 @@ token:
 
 # Open dashboard in browser
 dashboard:
-	@open http://dashboard.${CLUSTER_DOMAIN}?token=${$(MAKE) token}
+	@URL=http://dashboard.${CLUSTER_DOMAIN}?token=${$(MAKE) token} && xdg-open $$URL || open $$URL
 
 # Run a command in the VM via SSH
 ssh-cmd:
