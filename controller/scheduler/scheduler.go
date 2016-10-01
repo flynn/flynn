@@ -1423,6 +1423,13 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Format
 		log.Info("adding new formation", "processes", ef.Processes)
 		formation = s.formations.Add(NewFormation(ef))
 	} else {
+		// ignore stale formation changes
+		if formation.UpdatedAt.After(ef.UpdatedAt) {
+			log.Warn("ignoring stale formation change", "diff", formation.UpdatedAt.Sub(ef.UpdatedAt))
+			return
+		}
+		formation.UpdatedAt = ef.UpdatedAt
+
 		diff := Processes(ef.Processes).Diff(formation.OriginalProcesses)
 		if diff.IsEmpty() && utils.FormationTagsEqual(formation.Tags, ef.Tags) {
 			return
