@@ -1,10 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/flynn/flynn/controller/schema"
@@ -17,69 +17,19 @@ import (
 	"golang.org/x/net/context"
 )
 
-// we are wrapping the client specified channel to send formation updates in order to safely interrupt
-// `sendUpdateSince` goroutine if an unsubscribe happens before it is completed. otherwise we can get
-// a panic due to sending to a closed channel. See https://github.com/flynn/flynn/issues/2175 for more
-// details on this subject.
-type FormationSubscription struct {
-	mtx sync.RWMutex
-	ch  chan *ct.ExpandedFormation
-	err error
-}
-
-func (f *FormationSubscription) Notify(ef *ct.ExpandedFormation) bool {
-	f.mtx.RLock()
-	defer f.mtx.RUnlock()
-	if f.ch == nil {
-		return false
-	}
-	f.ch <- ef
-	return true
-}
-
-func (f *FormationSubscription) NotifyCurrent() {
-	f.Notify(&ct.ExpandedFormation{})
-}
-
-func (f *FormationSubscription) Close() {
-	f.CloseWithError(nil)
-}
-
-func (f *FormationSubscription) CloseWithError(err error) {
-	f.mtx.Lock()
-	defer f.mtx.Unlock()
-	f.err = err
-	if f.ch != nil {
-		close(f.ch)
-		f.ch = nil
-	}
-}
-
-func (f *FormationSubscription) Err() error {
-	f.mtx.RLock()
-	defer f.mtx.RUnlock()
-	return f.err
-}
-
 type FormationRepo struct {
 	db        *postgres.DB
 	apps      *AppRepo
 	releases  *ReleaseRepo
 	artifacts *ArtifactRepo
-
-	subscriptions map[*FormationSubscription]struct{}
-	stopListener  chan struct{}
-	subMtx        sync.RWMutex
 }
 
 func NewFormationRepo(db *postgres.DB, appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
 	return &FormationRepo{
-		db:            db,
-		apps:          appRepo,
-		releases:      releaseRepo,
-		artifacts:     artifactRepo,
-		subscriptions: make(map[*FormationSubscription]struct{}),
-		stopListener:  make(chan struct{}),
+		db:        db,
+		apps:      appRepo,
+		releases:  releaseRepo,
+		artifacts: artifactRepo,
 	}
 }
 
@@ -164,18 +114,26 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		Release: &ct.Release{},
 	}
 	var artifactIDs string
+	var appReleaseID *string
 	err := s.Scan(
 		&f.App.ID,
 		&f.App.Name,
 		&f.App.Meta,
+		&f.App.Strategy,
+		&appReleaseID,
+		&f.App.DeployTimeout,
+		&f.App.CreatedAt,
+		&f.App.UpdatedAt,
 		&f.Release.ID,
 		&artifactIDs,
 		&f.Release.Meta,
 		&f.Release.Env,
 		&f.Release.Processes,
+		&f.Release.CreatedAt,
 		&f.Processes,
 		&f.Tags,
 		&f.UpdatedAt,
+		&f.Deleted,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -183,8 +141,16 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		}
 		return nil, err
 	}
+	if appReleaseID != nil {
+		f.App.ReleaseID = *appReleaseID
+	}
+	if f.App.Meta == nil {
+		// ensure we don't return `{"meta": null}`
+		f.App.Meta = make(map[string]string)
+	}
 	if artifactIDs != "" {
 		f.Release.ArtifactIDs = split(artifactIDs[1:len(artifactIDs)-1], ",")
+		f.Release.LegacyArtifactID = f.Release.ImageArtifactID()
 	}
 	return f, nil
 }
@@ -203,11 +169,14 @@ func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
 	return scanFormation(row)
 }
 
-func (r *FormationRepo) GetExpanded(appID, releaseID string) (*ct.ExpandedFormation, error) {
+func (r *FormationRepo) GetExpanded(appID, releaseID string, includeDeleted bool) (*ct.ExpandedFormation, error) {
 	row := r.db.QueryRow("formation_select_expanded", appID, releaseID)
 	ef, err := scanExpandedFormation(row)
 	if err != nil {
 		return nil, err
+	}
+	if !includeDeleted && ef.Deleted {
+		return nil, ErrNotFound
 	}
 	artifacts, err := r.artifacts.ListIDs(ef.Release.ArtifactIDs...)
 	if err != nil {
@@ -230,6 +199,20 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 	if err != nil {
 		return nil, err
 	}
+	return r.listExpanded(rows)
+}
+
+func (r *FormationRepo) ListSince(since time.Time) ([]*ct.ExpandedFormation, error) {
+	rows, err := r.db.Query("formation_list_since", since)
+	if err != nil {
+		return nil, err
+	}
+	return r.listExpanded(rows)
+}
+
+func (r *FormationRepo) listExpanded(rows *pgx.Rows) ([]*ct.ExpandedFormation, error) {
+	defer rows.Close()
+
 	var formations []*ct.ExpandedFormation
 
 	// artifactIDs is a list of artifact IDs related to the formation list
@@ -240,7 +223,6 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 	for rows.Next() {
 		formation, err := scanExpandedFormation(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		formations = append(formations, formation)
@@ -295,174 +277,6 @@ func (r *FormationRepo) Remove(appID, releaseID string) error {
 	return tx.Commit()
 }
 
-func (r *FormationRepo) publish(appID, releaseID string) {
-	formation, err := r.Get(appID, releaseID)
-	if err == ErrNotFound {
-		// formation delete event
-		updated_at := time.Now()
-		formation = &ct.Formation{AppID: appID, ReleaseID: releaseID, UpdatedAt: &updated_at}
-	} else if err != nil {
-		logger.Error("error getting formation", "fn", "FormationRepo.publish", "app", appID, "release", releaseID, "err", err)
-		return
-	}
-
-	f, err := r.expandFormation(formation)
-	if err != nil {
-		logger.Error("error expanding formation", "fn", "FormationRepo.publish", "app", appID, "release", releaseID, "err", err)
-		return
-	}
-	r.subMtx.RLock()
-	defer r.subMtx.RUnlock()
-
-	for sub := range r.subscriptions {
-		sub.Notify(f)
-	}
-}
-
-func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFormation, error) {
-	app, err := r.apps.Get(formation.AppID)
-	if err == ErrNotFound {
-		app = &ct.App{ID: formation.AppID}
-	} else if err != nil {
-		return nil, err
-	}
-	release, err := r.releases.Get(formation.ReleaseID)
-	if err != nil {
-		return nil, err
-	}
-	f := &ct.ExpandedFormation{
-		App:       app.(*ct.App),
-		Release:   release.(*ct.Release),
-		Processes: formation.Processes,
-		Tags:      formation.Tags,
-		UpdatedAt: *formation.UpdatedAt,
-	}
-	if len(f.Release.ArtifactIDs) > 0 {
-		artifacts, err := r.artifacts.ListIDs(f.Release.ArtifactIDs...)
-		if err != nil {
-			return nil, err
-		}
-		populateFormationArtifacts(f, artifacts)
-	}
-	return f, nil
-}
-
-func (r *FormationRepo) startListener() error {
-	log := logger.New("fn", "FormationRepo.startListener")
-	listener, err := r.db.Listen("formations", log)
-	if err != nil {
-		return err
-	}
-	go func() {
-		defer r.unsubscribeAll()
-		for {
-			select {
-			case n, ok := <-listener.Notify:
-				if !ok {
-					return
-				}
-				ids := strings.SplitN(n.Payload, ":", 2)
-				go r.publish(ids[0], ids[1])
-			case <-r.stopListener:
-				listener.Close()
-				return
-			}
-		}
-	}()
-	return nil
-}
-
-func (r *FormationRepo) unsubscribeAll() {
-	r.subMtx.Lock()
-	defer r.subMtx.Unlock()
-
-	for sub := range r.subscriptions {
-		r.unsubscribeLocked(sub)
-	}
-}
-
-func (r *FormationRepo) Subscribe(ctx context.Context, ch chan *ct.ExpandedFormation, since time.Time, updated chan<- struct{}) (*FormationSubscription, error) {
-	// we need to keep the mutex locked whilst calling startListener
-	// to avoid a race where multiple subscribers can get added to
-	// r.subscriptions before a potentially failed listener start,
-	// meaning subsequent subscribers wont try to start the listener.
-	r.subMtx.Lock()
-	defer r.subMtx.Unlock()
-
-	if len(r.subscriptions) == 0 {
-		if err := r.startListener(); err != nil {
-			return nil, err
-		}
-	}
-
-	sub := &FormationSubscription{ch: ch}
-	r.subscriptions[sub] = struct{}{}
-
-	go func() {
-		if err := r.sendUpdatedSince(ctx, sub, since, updated); err != nil {
-			sub.CloseWithError(err)
-		}
-	}()
-
-	return sub, nil
-}
-
-func (r *FormationRepo) sendUpdatedSince(ctx context.Context, sub *FormationSubscription, since time.Time, updated chan<- struct{}) error {
-	if updated != nil {
-		defer close(updated)
-	}
-
-	rows, err := r.db.Query("formation_list_since", since)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		formation, err := scanFormation(rows)
-		if err != nil {
-			return err
-		}
-		ef, err := r.expandFormation(formation)
-		if err != nil {
-			l, _ := ctxhelper.LoggerFromContext(ctx)
-			l.Error("error expanding formation", "fn", "FormationRepo.sendUpdatedSince", "app", formation.AppID, "release", formation.ReleaseID, "err", err)
-			continue
-		}
-		// return if Notify returns false (which indicates that the
-		// subscriber channel is closed)
-		if ok := sub.Notify(ef); !ok {
-			return nil
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	sub.NotifyCurrent()
-	return nil
-}
-
-func (r *FormationRepo) Unsubscribe(sub *FormationSubscription) {
-	r.subMtx.Lock()
-	defer r.subMtx.Unlock()
-	r.unsubscribeLocked(sub)
-}
-
-func (r *FormationRepo) unsubscribeLocked(sub *FormationSubscription) {
-	go func(ch chan *ct.ExpandedFormation) {
-		// drain to prevent deadlock while removing the listener
-		for range ch {
-		}
-	}(sub.ch)
-	delete(r.subscriptions, sub)
-	sub.Close()
-	if len(r.subscriptions) == 0 {
-		select {
-		case r.stopListener <- struct{}{}:
-		default:
-		}
-	}
-}
-
 func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	app := c.getApp(ctx)
 	release, err := c.getRelease(ctx)
@@ -503,7 +317,7 @@ func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter,
 	app := c.getApp(ctx)
 	releaseID := params.ByName("releases_id")
 	if req.URL.Query().Get("expand") == "true" {
-		formation, err := c.formationRepo.GetExpanded(app.ID, releaseID)
+		formation, err := c.formationRepo.GetExpanded(app.ID, releaseID, false)
 		if err != nil {
 			respondWithError(w, err)
 			return
@@ -568,24 +382,80 @@ func (c *controllerAPI) GetFormations(ctx context.Context, w http.ResponseWriter
 	httphelper.ValidationError(w, "", "must either request a stream or only active formations")
 }
 
-func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	ch := make(chan *ct.ExpandedFormation)
-	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-	sub, err := c.formationRepo.Subscribe(ctx, ch, since, nil)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-	defer c.formationRepo.Unsubscribe(sub)
+func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) (err error) {
 	l, _ := ctxhelper.LoggerFromContext(ctx)
+	ch := make(chan *ct.ExpandedFormation)
 	stream := sse.NewStream(w, ch, l)
 	stream.Serve()
-	stream.Wait()
-	if err := sub.Err(); err != nil {
-		stream.Error(err)
+	defer func() {
+		if err == nil {
+			stream.Close()
+		} else {
+			stream.CloseWithError(err)
+		}
+	}()
+
+	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
+	if err != nil {
+		return err
+	}
+
+	eventListener, err := c.maybeStartEventListener()
+	if err != nil {
+		l.Error("error starting event listener", "err", err)
+		return err
+	}
+
+	sub, err := eventListener.Subscribe("", []string{string(ct.EventTypeScale)}, "")
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+
+	formations, err := c.formationRepo.ListSince(since)
+	if err != nil {
+		return err
+	}
+	for _, formation := range formations {
+		select {
+		case <-stream.Done:
+			return nil
+		case ch <- formation:
+		}
+	}
+
+	select {
+	case <-stream.Done:
+		return nil
+	case ch <- &ct.ExpandedFormation{}:
+	}
+
+	for {
+		select {
+		case <-stream.Done:
+			return
+		case event, ok := <-sub.Events:
+			if !ok {
+				return sub.Err
+			}
+			var scale ct.Scale
+			if err := json.Unmarshal(event.Data, &scale); err != nil {
+				l.Error("error deserializing scale event", "event.id", event.ID, "err", err)
+				continue
+			}
+			formation, err := c.formationRepo.GetExpanded(event.AppID, scale.ReleaseID, true)
+			if err != nil {
+				l.Error("error expanding formation", "app.id", event.AppID, "release.id", scale.ReleaseID, "err", err)
+				continue
+			}
+			if formation.UpdatedAt.Before(since) {
+				continue
+			}
+			select {
+			case <-stream.Done:
+				return nil
+			case ch <- formation:
+			}
+		}
 	}
 }

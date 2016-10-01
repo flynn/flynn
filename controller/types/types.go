@@ -23,6 +23,7 @@ type ExpandedFormation struct {
 	Processes     map[string]int               `json:"processes,omitempty"`
 	Tags          map[string]map[string]string `json:"tags,omitempty"`
 	UpdatedAt     time.Time                    `json:"updated_at,omitempty"`
+	Deleted       bool                         `json:"deleted,omitempty"`
 }
 
 type App struct {

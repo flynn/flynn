@@ -1,13 +1,10 @@
 package main
 
 import (
-	"fmt"
-	"os"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/pkg/random"
 	. "github.com/flynn/go-check"
 )
 
@@ -171,42 +168,5 @@ func (s *S) TestFormationListActive(c *C) {
 		c.Assert(actual.ImageArtifact.ID, Equals, f.ImageArtifact.ID)
 		c.Assert(actual.FileArtifacts, DeepEquals, f.FileArtifacts)
 		c.Assert(actual.Processes, DeepEquals, f.Processes)
-	}
-}
-
-func (s *S) TestFormationStreamingInterrupted(c *C) {
-	before := time.Now()
-	appRepo := NewAppRepo(s.hc.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), s.hc.rc)
-	releaseRepo := NewReleaseRepo(s.hc.db, nil, nil)
-	artifactRepo := NewArtifactRepo(s.hc.db)
-	formationRepo := NewFormationRepo(s.hc.db, appRepo, releaseRepo, artifactRepo)
-
-	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: fmt.Sprintf("https://example.com/%s", random.String(8))}
-	c.Assert(artifactRepo.Add(artifact), IsNil)
-
-	release := &ct.Release{ArtifactIDs: []string{artifact.ID}}
-	c.Assert(releaseRepo.Add(release), IsNil)
-
-	app := &ct.App{Name: "streamtest-interrupted"}
-	c.Assert(appRepo.Add(app), IsNil)
-
-	formation := &ct.Formation{ReleaseID: release.ID, AppID: app.ID}
-	c.Assert(formationRepo.Add(formation), IsNil)
-
-	ch := make(chan *ct.ExpandedFormation)
-	updated := make(chan struct{})
-
-	_, err := formationRepo.Subscribe(nil, ch, before, updated)
-	c.Assert(err, IsNil)
-
-	// simulate scenario where we have not completed `sendUpdatedSince` but the channel for a subscription
-	// is closed, by example due to an error listening on table `formations` that triggered `unsubscribeAll`.
-	formationRepo.unsubscribeAll()
-
-	// wait until `sendUpdateSince` finishes at which point it will not longer send to the (now closed) channel.
-	select {
-	case <-updated:
-	case <-time.After(5 * time.Second):
-		c.Fatal("timed out waiting for sendUpdatedSince to finish")
 	}
 }

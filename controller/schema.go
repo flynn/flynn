@@ -405,6 +405,10 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(21,
 		`INSERT INTO job_states (name) VALUES ('stopping')`,
 	)
+	migrations.Add(22,
+		`DROP TRIGGER notify_formation ON formations`,
+		`DROP FUNCTION notify_formation()`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
