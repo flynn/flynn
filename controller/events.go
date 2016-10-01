@@ -117,14 +117,14 @@ func scanEvent(s postgres.Scanner) (*ct.Event, error) {
 	return &event, nil
 }
 
-func (c *controllerAPI) maybeStartEventListener() error {
+func (c *controllerAPI) maybeStartEventListener() (*EventListener, error) {
 	c.eventListenerMtx.Lock()
 	defer c.eventListenerMtx.Unlock()
 	if c.eventListener != nil && !c.eventListener.IsClosed() {
-		return nil
+		return c.eventListener, nil
 	}
 	c.eventListener = newEventListener(c.eventRepo)
-	return c.eventListener.Listen()
+	return c.eventListener, c.eventListener.Listen()
 }
 
 func (c *controllerAPI) GetEvent(ctx context.Context, w http.ResponseWriter, req *http.Request) {
@@ -163,11 +163,13 @@ func (c *controllerAPI) Events(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 
-	if err := c.maybeStartEventListener(); err != nil {
+	eventListener, err := c.maybeStartEventListener()
+	if err != nil {
 		log.Error("error starting event listener", "err", err)
 		respondWithError(w, err)
+		return
 	}
-	if err := streamEvents(ctx, w, req, c.eventListener, app, c.eventRepo); err != nil {
+	if err := streamEvents(ctx, w, req, eventListener, app, c.eventRepo); err != nil {
 		log.Error("error streaming events", "err", err)
 		respondWithError(w, err)
 	}

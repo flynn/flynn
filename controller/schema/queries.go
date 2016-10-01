@@ -233,7 +233,8 @@ SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE release_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`
 	formationListActiveQuery = `
 SELECT
-  apps.app_id, apps.name, apps.meta,
+  apps.app_id, apps.name, apps.meta, apps.strategy, apps.release_id,
+  apps.deploy_timeout, apps.created_at, apps.updated_at,
   releases.release_id,
   ARRAY(
 	SELECT r.artifact_id
@@ -241,8 +242,8 @@ SELECT
 	WHERE r.release_id = releases.release_id AND r.deleted_at IS NULL
 	ORDER BY r.index
   ),
-  releases.meta, releases.env, releases.processes,
-  formations.processes, formations.tags, formations.updated_at
+  releases.meta, releases.env, releases.processes, releases.created_at,
+  formations.processes, formations.tags, formations.updated_at, formations.deleted_at IS NOT NULL
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
@@ -254,16 +255,32 @@ WHERE (formations.app_id, formations.release_id) IN (
   HAVING SUM(value::int) > 0
 )
 AND formations.deleted_at IS NULL
-ORDER BY updated_at DESC`
+ORDER BY formations.updated_at DESC`
 	formationListSinceQuery = `
-SELECT app_id, release_id, processes, tags, created_at, updated_at
-FROM formations WHERE updated_at >= $1 AND deleted_at IS NULL ORDER BY updated_at DESC`
+SELECT
+  apps.app_id, apps.name, apps.meta, apps.strategy, apps.release_id,
+  apps.deploy_timeout, apps.created_at, apps.updated_at,
+  releases.release_id,
+  ARRAY(
+	SELECT r.artifact_id
+	FROM release_artifacts r
+	WHERE r.release_id = releases.release_id AND r.deleted_at IS NULL
+	ORDER BY r.index
+  ),
+  releases.meta, releases.env, releases.processes, releases.created_at,
+  formations.processes, formations.tags, formations.updated_at, formations.deleted_at IS NOT NULL
+FROM formations
+JOIN apps USING (app_id)
+JOIN releases ON releases.release_id = formations.release_id
+WHERE formations.updated_at >= $1 AND formations.deleted_at IS NULL
+ORDER BY formations.updated_at DESC`
 	formationSelectQuery = `
 SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 	formationSelectExpandedQuery = `
 SELECT
-  apps.app_id, apps.name, apps.meta,
+  apps.app_id, apps.name, apps.meta, apps.strategy, apps.release_id,
+  apps.deploy_timeout, apps.created_at, apps.updated_at,
   releases.release_id,
   ARRAY(
 	SELECT a.artifact_id
@@ -271,12 +288,12 @@ SELECT
 	WHERE a.release_id = releases.release_id AND a.deleted_at IS NULL
 	ORDER BY a.index
   ),
-  releases.meta, releases.env, releases.processes,
-  formations.processes, formations.tags, formations.updated_at
+  releases.meta, releases.env, releases.processes, releases.created_at,
+  formations.processes, formations.tags, formations.updated_at, formations.deleted_at IS NOT NULL
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
-WHERE formations.app_id = $1 AND formations.release_id = $2 AND formations.deleted_at IS NULL`
+WHERE formations.app_id = $1 AND formations.release_id = $2`
 	formationInsertQuery = `
 INSERT INTO formations (app_id, release_id, processes, tags)
 VALUES ($1, $2, $3, $4)
