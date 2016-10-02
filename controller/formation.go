@@ -416,11 +416,15 @@ func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWri
 	if err != nil {
 		return err
 	}
+	currentUpdatedAt := since
 	for _, formation := range formations {
 		select {
 		case <-stream.Done:
 			return nil
 		case ch <- formation:
+			if formation.UpdatedAt.After(currentUpdatedAt) {
+				currentUpdatedAt = formation.UpdatedAt
+			}
 		}
 	}
 
@@ -448,7 +452,7 @@ func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWri
 				l.Error("error expanding formation", "app.id", event.AppID, "release.id", scale.ReleaseID, "err", err)
 				continue
 			}
-			if formation.UpdatedAt.Before(since) {
+			if formation.UpdatedAt.Before(currentUpdatedAt) {
 				continue
 			}
 			select {
