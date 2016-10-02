@@ -639,6 +639,12 @@ func (s *SchedulerSuite) TestDeployController(t *c.C) {
 	formation, err := client.GetFormation(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 
+	// watch job events of the current release so we can wait for down
+	// events later
+	watcher, err := client.WatchJobEvents(app.Name, release.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+
 	// create a controller deployment
 	release.ID = ""
 	t.Assert(client.CreateRelease(release), c.IsNil)
@@ -660,7 +666,7 @@ loop:
 			if !ok {
 				t.Fatal("unexpected close of deployment event stream")
 			}
-			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
+			debugf(t, "got deployment %s event", e.Status)
 			switch e.Status {
 			case "complete":
 				break loop
@@ -672,10 +678,18 @@ loop:
 		}
 	}
 
-	// check the correct controller jobs are running
+	// wait for the old release to be fully scaled down
 	hosts, err := s.clusterClient(t).Hosts()
 	t.Assert(err, c.IsNil)
 	t.Assert(hosts, c.Not(c.HasLen), 0)
+	err = watcher.WaitFor(ct.JobEvents{
+		"web":       ct.JobDownEvents(formation.Processes["web"]),
+		"worker":    ct.JobDownEvents(formation.Processes["worker"]),
+		"scheduler": ct.JobDownEvents(len(hosts)),
+	}, scaleTimeout, nil)
+	t.Assert(err, c.IsNil)
+
+	// check the correct controller jobs are running
 	actual := make(map[string]map[string]int)
 	for _, h := range hosts {
 		jobs, err := h.ListJobs()
