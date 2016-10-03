@@ -395,7 +395,7 @@ func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWri
 		}
 	}()
 
-	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
+	since, err := time.Parse(time.RFC3339Nano, req.FormValue("since"))
 	if err != nil {
 		return err
 	}
