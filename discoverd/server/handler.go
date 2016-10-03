@@ -83,6 +83,7 @@ type Handler struct {
 	Shutdown atomic.Value // bool
 	Proxy    atomic.Value // bool
 	Main     interface {
+		Deregister() error
 		Close() (dt.TargetLogIndex, error)
 		Promote() error
 		Demote() error
@@ -376,6 +377,12 @@ func (h *Handler) serveGetLeader(w http.ResponseWriter, r *http.Request, params 
 func (h *Handler) servePing(w http.ResponseWriter, r *http.Request, params httprouter.Params) {}
 
 func (h *Handler) serveShutdown(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	// deregister the server before marking as shutdown as deregistration
+	// is performed using the HTTP server
+	if err := h.Main.Deregister(); err != nil {
+		hh.Error(w, err)
+		return
+	}
 	h.Shutdown.Store(true)
 	targetLogIndex, err := h.Main.Close()
 	if err != nil {
