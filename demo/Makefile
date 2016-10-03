@@ -14,7 +14,7 @@ CLI_INSTALL_BIN := /usr/local/bin/flynn
 VAGRANT_ENV := CLUSTER_DOMAIN="${CLUSTER_DOMAIN}" SSH_AUTH_SOCK="" FLAG_BOOTSTRAP=false
 
 
-.PHONY: init install-cli bootstrap up down halt update ssh reset token destroy dashboard ssh-cmd
+.PHONY: init bootstrap up down halt update ssh reset token destroy dashboard ssh-cmd
 
 
 # Initialize a new cluster
@@ -24,14 +24,14 @@ init: update
 	@printf "\nFlynn is now running in the VM.\nOpen dashboard: make dashboard\n\n"
 
 # Install flynn cli on host
-install-cli:
+$(CLI_INSTALL_BIN):
 	curl -sL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >${CLI_INSTALL_BIN}
 	chmod +x ${CLI_INSTALL_BIN}
 
 # Bootstrap the cluster
 # This should only be called once per cluster
 # Runs bootstrap in VM and cluster add on host
-bootstrap:
+bootstrap: $(CLI_INSTALL_BIN)
 	@$(MAKE) CMD='CLUSTER_DOMAIN="${CLUSTER_DOMAIN}" flynn-host bootstrap /etc/flynn/bootstrap-manifest.json 2>&1' ssh-cmd | tee bootstrap.log
 	@(grep '^flynn cluster add .*$$' bootstrap.log || echo exit 1) | sed "s/ default / ${CLUSTER} /" | sed "s/$$(printf '\r')\$$/ --force --default/" | bash
 	@rm bootstrap.log
@@ -64,12 +64,12 @@ reset:
 
 # Destroy VM
 # Run this to delete the VM and free up disk space
-destroy:
+destroy: $(CLI_INSTALL_BIN)
 	${VAGRANT_ENV} vagrant destroy -f
 	flynn cluster remove ${CLUSTER}
 
 # Get token for API and dashboard
-token:
+token: $(CLI_INSTALL_BIN)
 	@flynn -a dashboard -c ${CLUSTER} env get LOGIN_TOKEN
 
 # Open dashboard in browser
