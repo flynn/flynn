@@ -122,7 +122,7 @@ func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFo
 		s := time.Unix(0, 0)
 		since = &s
 	}
-	t := since.UTC().Format(time.RFC3339)
+	t := since.UTC().Format(time.RFC3339Nano)
 	return c.Stream("GET", "/formations?since="+t, nil, output)
 }
 
