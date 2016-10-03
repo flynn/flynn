@@ -74,7 +74,8 @@ token: $(CLI_INSTALL_BIN)
 
 # Open dashboard in browser
 dashboard:
-	@open http://dashboard.${CLUSTER_DOMAIN}?token=${$(MAKE) token}
+	@CMD=open && which xdg-open > /dev/null && CMD=xdg-open; \
+	$$CMD http://dashboard.${CLUSTER_DOMAIN}?token=${$(MAKE) token}
 
 # Run a command in the VM via SSH
 ssh-cmd:
