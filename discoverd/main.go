@@ -393,14 +393,21 @@ func (m *Main) Demote() error {
 	return nil
 }
 
+func (m *Main) Deregister() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.hb != nil {
+		m.logger.Println("deregistering service")
+		return m.hb.Close()
+	}
+	return nil
+}
+
 // Close shuts down all open servers.
 func (m *Main) Close() (info dt.TargetLogIndex, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.logger.Println("discoverd shutting down")
-	if m.hb != nil {
-		m.hb.Close()
-	}
 	if m.httpServer != nil {
 		// Disable keep alives so that persistent connections will close
 		m.httpServer.SetKeepAlivesEnabled(false)
