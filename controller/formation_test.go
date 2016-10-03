@@ -15,21 +15,30 @@ func (s *S) TestFormationStreaming(c *C) {
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
 	updates := make(chan *ct.ExpandedFormation)
-	streamCtrl, connectErr := s.c.StreamFormations(&before, updates)
-	c.Assert(connectErr, IsNil)
-	defer streamCtrl.Close()
+	stream, err := s.c.StreamFormations(&before, updates)
+	c.Assert(err, IsNil)
+	defer stream.Close()
 
-	var existingFound bool
-	for f := range updates {
-		if f.App == nil {
-			break
-		}
-		if f.Release.ID == release.ID {
-			existingFound = true
+	nextUpdate := func() *ct.ExpandedFormation {
+		for {
+			select {
+			case f, ok := <-updates:
+				if !ok {
+					c.Fatalf("formation stream closed: %s", stream.Err())
+				}
+				if f.App == nil {
+					continue
+				}
+				return f
+			case <-time.After(10 * time.Second):
+				c.Fatal("timed out waiting for formation update")
+			}
 		}
 	}
-	c.Assert(streamCtrl.Err(), IsNil)
-	c.Assert(existingFound, Equals, true)
+
+	update := nextUpdate()
+	c.Assert(update.App, DeepEquals, app)
+	c.Assert(update.Release, DeepEquals, release)
 
 	release = s.createTestRelease(c, &ct.Release{
 		Processes: map[string]ct.ProcessType{"foo": {}},
@@ -40,32 +49,20 @@ func (s *S) TestFormationStreaming(c *C) {
 		AppID:     app.ID,
 		Processes: map[string]int{"foo": 1},
 	})
-	defer s.deleteTestFormation(formation)
 
-	var out *ct.ExpandedFormation
-	select {
-	case out = <-updates:
-	case <-time.After(time.Second):
-		c.Fatal("timed out waiting for create")
-	}
-	c.Assert(streamCtrl.Err(), IsNil)
-	c.Assert(out.Release, DeepEquals, release)
-	c.Assert(out.App, DeepEquals, app)
-	c.Assert(out.Processes, DeepEquals, formation.Processes)
-	c.Assert(out.ImageArtifact.CreatedAt, Not(IsNil))
-	c.Assert(out.ImageArtifact.ID, Equals, release.ImageArtifactID())
+	update = nextUpdate()
+	c.Assert(update.Release, DeepEquals, release)
+	c.Assert(update.App, DeepEquals, app)
+	c.Assert(update.Processes, DeepEquals, formation.Processes)
+	c.Assert(update.ImageArtifact.CreatedAt, Not(IsNil))
+	c.Assert(update.ImageArtifact.ID, Equals, release.ImageArtifactID())
 
 	c.Assert(s.c.DeleteFormation(app.ID, release.ID), IsNil)
 
-	select {
-	case out = <-updates:
-	case <-time.After(time.Second):
-		c.Fatal("timed out waiting for delete")
-	}
-	c.Assert(streamCtrl.Err(), IsNil)
-	c.Assert(out.Release, DeepEquals, release)
-	c.Assert(out.App, DeepEquals, app)
-	c.Assert(out.Processes, IsNil)
+	update = nextUpdate()
+	c.Assert(update.Release, DeepEquals, release)
+	c.Assert(update.App, DeepEquals, app)
+	c.Assert(update.Processes, IsNil)
 }
 
 func (s *S) TestFormationStreamDeleted(c *C) {
