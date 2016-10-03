@@ -17,7 +17,7 @@ RUN apt-get update &&\
       postgresql-contrib-9.5 \
       postgresql-9.5-pgextwlist \
       postgresql-9.5-plv8 \
-      postgresql-9.5-postgis \
+      postgresql-9.5-postgis-2.3 \
       postgresql-9.5-pgrouting &&\
     apt-get clean &&\
     apt-get autoremove -y &&\
