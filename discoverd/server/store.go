@@ -197,10 +197,23 @@ func (s *Store) Open() error {
 	}
 
 	// Create raft log.
+	//
+	// The mutex must be unlocked as initializing the raft store may
+	// call back into methods which acquire the lock (e.g. Restore)
+	s.mu.Unlock()
 	r, err := raft.NewRaft(config, s, cacheStore, stableStore, ss, s.peerStore, s.transport)
+	s.mu.Lock()
 	if err != nil {
 		return fmt.Errorf("raft: %s", err)
 	}
+
+	// make sure the store was not closed whilst the mutex was unlocked
+	select {
+	case <-s.closing:
+		return ErrShutdown
+	default:
+	}
+
 	s.raft = r
 
 	// Start goroutine to monitor leadership changes.
@@ -212,6 +225,10 @@ func (s *Store) Open() error {
 	go s.expirer()
 
 	return nil
+}
+
+func (s *Store) TriggerSnapshot() error {
+	return s.raft.Snapshot().Error()
 }
 
 func (s *Store) LastIndex() uint64 {

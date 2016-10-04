@@ -11,6 +11,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/server"
+	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -682,6 +683,42 @@ func TestStore_Subscribe_NoBlock(t *testing.T) {
 	// Ensure that program does not hang.
 }
 
+// Ensure the store can be restored from a snapshot
+func TestStore_RestoreSnapshot(t *testing.T) {
+	// open a store, add some services and trigger a snapshot
+	s := MustOpenStore()
+	serviceNames := []string{"service0", "service1"}
+	for _, name := range serviceNames {
+		if err := s.AddService(name, nil); err != nil {
+			s.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := s.TriggerSnapshot(); err != nil {
+		s.Close()
+		t.Fatal(err)
+	}
+	s.Store.Close()
+
+	// open another store with same path and port which will attempt
+	// to restore the snapshot
+	_, port, _ := net.SplitHostPort(s.Listener.Addr().String())
+	ln, err := keepalive.ReusableListen("tcp4", "127.0.0.1:"+port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s = NewStoreWithConfig(StoreConfig{Path: s.Path(), Listener: ln})
+	defer s.Close()
+	if err := s.Open(); err != nil {
+		t.Fatal(err)
+	}
+
+	// check the data was restored
+	if !reflect.DeepEqual(s.ServiceNames(), serviceNames) {
+		t.Fatalf("expected service names %v, got %v", serviceNames, s.ServiceNames())
+	}
+}
+
 func BenchmarkStore_AddInstance(b *testing.B) {
 	s := MustOpenStore()
 	defer s.Close()
@@ -704,25 +741,40 @@ type Store struct {
 	*server.Store
 }
 
+type StoreConfig struct {
+	Path     string
+	Listener net.Listener
+}
+
 // NewStore returns a new instance of Store.
 func NewStore() *Store {
-	// Generate a temporary path.
-	f, _ := ioutil.TempFile("", "discoverd-store-")
-	f.Close()
-	os.Remove(f.Name())
+	return NewStoreWithConfig(StoreConfig{})
+}
+
+func NewStoreWithConfig(config StoreConfig) *Store {
+	if config.Path == "" {
+		// Generate a temporary path.
+		f, _ := ioutil.TempFile("", "discoverd-store-")
+		f.Close()
+		os.Remove(f.Name())
+		config.Path = f.Name()
+	}
 
 	// Initialize store.
-	s := &Store{Store: server.NewStore(f.Name())}
+	s := &Store{Store: server.NewStore(config.Path)}
 
-	// Open listener on random port.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		panic(err)
+	if config.Listener == nil {
+		// Open listener on random port.
+		ln, err := keepalive.ReusableListen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			panic(err)
+		}
+		config.Listener = ln
 	}
-	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	_, port, _ := net.SplitHostPort(config.Listener.Addr().String())
 
 	// Set default test settings.
-	s.Listener = ln
+	s.Listener = config.Listener
 	s.Advertise, _ = net.ResolveTCPAddr("tcp", net.JoinHostPort("localhost", port))
 	s.HeartbeatTimeout = 50 * time.Millisecond
 	s.ElectionTimeout = 50 * time.Millisecond
