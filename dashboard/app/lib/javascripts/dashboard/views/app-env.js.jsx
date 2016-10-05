@@ -47,7 +47,7 @@ var AppEnv = React.createClass({
 					</header>
 					{env ? (
 						<div>
-							<EditEnv env={env} onChange={this.__handleEnvChange} />
+							<EditEnv env={env} onChange={this.__handleEnvChange} disabled={this.state.isSaving} />
 							<button className="save-btn" onClick={this.__handleSaveBtnClick} disabled={ !this.state.hasChanges || this.state.isSaving }>{this.state.isSaving ? "Please wait..." : "Save"}</button>
 						</div>
 					) : null}
