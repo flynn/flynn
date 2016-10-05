@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -165,7 +166,8 @@ func captureSchedulerState(gist *Gist) error {
 	if err != nil {
 		return err
 	}
-	res, err := http.Get(fmt.Sprintf("http://%s/debug/state", leader.Addr))
+	client := &http.Client{Timeout: 10 * time.Second}
+	res, err := client.Get(fmt.Sprintf("http://%s/debug/state", leader.Addr))
 	if err != nil {
 		return err
 	}
