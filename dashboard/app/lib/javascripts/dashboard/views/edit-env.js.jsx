@@ -33,15 +33,17 @@ var EditEnv = React.createClass({
 	},
 
 	componentWillMount: function () {
-		this.__setEnv(this.props.env || {});
+		this.__setEnv(this.props);
 	},
 
 	componentWillReceiveProps: function (props) {
-		this.__setEnv(props.env || {});
+		this.__setEnv(props);
 	},
 
-	__setEnv: function (env) {
+	__setEnv: function (props) {
+		var env = props.env || {};
 		var nextEnv = [];
+		var prevState = this.state;
 		for (var k in env) {
 			if (env.hasOwnProperty(k)) {
 				nextEnv.push({
@@ -49,6 +51,11 @@ var EditEnv = React.createClass({
 					value: env[k]
 				});
 			}
+		}
+		if (props.disabled || prevState.env.length === 0) {
+			nextEnv.sort(function (a, b) {
+				return a.key.localeCompare(b.key);
+			});
 		}
 		this.setState({
 			env: nextEnv
@@ -99,7 +106,13 @@ var EditEnv = React.createClass({
 		});
 
 		this.setState({ env: env, nRemoved: nRemoved });
-		setTimeout(function () { this.props.onChange(__env); }.bind(this), 0);
+		this.props.onChange(__env);
+	},
+
+	handleSubmit: function () {
+		if (this.props.hasOwnProperty('onSubmit')) {
+			this.props.onSubmit();
+		}
 	}
 });
 
