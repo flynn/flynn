@@ -88,6 +88,11 @@ dependencies.
 For anything other than light workloads, we recommend using Amazon
 S3 or Google Cloud Storage as the blobstore backend.
 
+Even if Flynn is not hosted within Amazon or Google services, making use of
+an external blobstore service is still advantageous. Using an external blobstore
+will free up local filesystem and other resources allowing for better general
+performance and stability.
+
 ### Amazon S3
 
 To migrate to the S3 backend, you first need to provision a new bucket and
