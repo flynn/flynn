@@ -763,6 +763,7 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 }
 
 type InternalState struct {
+	JobID      string                `json:"job_id"`
 	Hosts      map[string]*Host      `json:"hosts"`
 	Jobs       Jobs                  `json:"jobs"`
 	Formations map[string]*Formation `json:"formations"`
@@ -785,6 +786,7 @@ func (s *Scheduler) HandleInternalStateRequest(req *InternalStateRequest) {
 	// create an InternalState as a snapshot of the current state by
 	// copying objects and their exported fields
 	req.State = &InternalState{
+		JobID:      os.Getenv("FLYNN_JOB_ID"),
 		Hosts:      make(map[string]*Host, len(s.hosts)),
 		Jobs:       make(map[string]*Job, len(s.jobs)),
 		Formations: make(map[string]*Formation, len(s.formations)),
