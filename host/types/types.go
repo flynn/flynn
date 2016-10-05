@@ -13,12 +13,12 @@ const TagPrefix = "tag:"
 type Job struct {
 	ID string `json:"id,omitempty"`
 
+	Mountspecs []*Mountspec `json:"mountspecs,omitempty"`
+
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	ImageArtifact *Artifact          `json:"artifact,omitempty"`
-	FileArtifacts []*Artifact        `json:"file_artifacts,omitempty"`
-	Resources     resource.Resources `json:"resources,omitempty"`
-	Partition     string             `json:"partition,omitempty"`
+	Resources resource.Resources `json:"resources,omitempty"`
+	Partition string             `json:"partition,omitempty"`
 
 	Config ContainerConfig `json:"config,omitempty"`
 
@@ -65,6 +65,18 @@ func (j *Job) Dup() *Job {
 	}
 
 	return &job
+}
+
+type MountspecType string
+
+const MountspecTypeSquashfs MountspecType = "squashfs"
+
+type Mountspec struct {
+	Type   MountspecType     `json:"type,omitempty"`
+	ID     string            `json:"id,omitempty"`
+	URL    string            `json:"url,omitempty"`
+	Size   int64             `json:"size,omitempty"`
+	Hashes map[string]string `json:"hashes,omitempty"`
 }
 
 type JobResources struct {
@@ -174,18 +186,6 @@ type VolumeBinding struct {
 	VolumeID  string `json:"volume"`
 	Writeable bool   `json:"writeable"`
 }
-
-type Artifact struct {
-	URI  string       `json:"url,omitempty"`
-	Type ArtifactType `json:"type,omitempty"`
-}
-
-type ArtifactType string
-
-const (
-	ArtifactTypeDocker ArtifactType = "docker"
-	ArtifactTypeFile   ArtifactType = "file"
-)
 
 type Host struct {
 	ID string `json:"id,omitempty"`
