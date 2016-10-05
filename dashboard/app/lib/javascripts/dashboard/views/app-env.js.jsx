@@ -47,7 +47,7 @@ var AppEnv = React.createClass({
 					</header>
 					{env ? (
 						<div>
-							<EditEnv env={env} onChange={this.__handleEnvChange} disabled={this.state.isSaving} />
+							<EditEnv env={env} onChange={this.__handleEnvChange} onSubmit={this.__handleSubmit} disabled={this.state.isSaving} />
 							<button className="save-btn" onClick={this.__handleSaveBtnClick} disabled={ !this.state.hasChanges || this.state.isSaving }>{this.state.isSaving ? "Please wait..." : "Save"}</button>
 						</div>
 					) : null}
@@ -91,8 +91,7 @@ var AppEnv = React.createClass({
 		});
 	},
 
-	__handleSaveBtnClick: function (e) {
-		e.preventDefault();
+	__handleSubmit: function () {
 		this.setState({
 			isSaving: true
 		});
@@ -103,6 +102,11 @@ var AppEnv = React.createClass({
 			data: this.state.env,
 			deployTimeout: this.state.app.deploy_timeout
 		});
+	},
+
+	__handleSaveBtnClick: function (e) {
+		e.preventDefault();
+		this.__handleSubmit();
 	}
 });
 
