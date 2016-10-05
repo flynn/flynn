@@ -17,6 +17,7 @@ type Provider interface {
 	Kind() string
 
 	NewVolume() (Volume, error)
+	ImportFilesystem(*Filesystem) (Volume, error)
 	DestroyVolume(Volume) error
 	CreateSnapshot(Volume) (Volume, error)
 	ForkVolume(Volume) (Volume, error)
