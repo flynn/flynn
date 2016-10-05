@@ -21,7 +21,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -47,17 +46,16 @@ import (
 var logger log15.Logger
 
 type Config struct {
-	User          string
-	Gateway       string
-	WorkDir       string
-	IP            string
-	TTY           bool
-	OpenStdin     bool
-	Env           map[string]string
-	Args          []string
-	Ports         []host.Port
-	Resources     resource.Resources
-	FileArtifacts []*host.Artifact
+	User      string
+	Gateway   string
+	WorkDir   string
+	IP        string
+	TTY       bool
+	OpenStdin bool
+	Env       map[string]string
+	Args      []string
+	Ports     []host.Port
+	Resources resource.Resources
 }
 
 const SharedPath = "/.container-shared"
@@ -336,30 +334,6 @@ func runRPCServer() {
 	os.Exit(70)
 }
 
-func setupCommon(c *Config, log log15.Logger) error {
-	// fetch file artifacts in parallel now that the network is configured
-	fetchErr := make(chan error)
-	for _, artifact := range c.FileArtifacts {
-		go func(artifact *host.Artifact) {
-			log.Info("fetching artifact", "uri", artifact.URI)
-			if err := fetchFileArtifact(artifact); err != nil {
-				log.Error("error fetching artifact", "uri", artifact.URI, "err", err)
-				fetchErr <- err
-				return
-			}
-			log.Info("finished fetching artifact", "uri", artifact.URI)
-			fetchErr <- nil
-		}(artifact)
-	}
-	for range c.FileArtifacts {
-		if err := <-fetchErr; err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func getCmdPath(c *Config) (string, error) {
 	// Set PATH in containerinit so we can find the cmd
 	if envPath := c.Env["PATH"]; envPath != "" {
@@ -547,30 +521,6 @@ func babySit(process *os.Process, hbs []discoverd.Heartbeater) int {
 	return wstatus.ExitStatus()
 }
 
-// fetchFileArtifact fetches a file from an artifact URI and places it in
-// /artifacts
-func fetchFileArtifact(artifact *host.Artifact) error {
-	if err := os.MkdirAll("/artifacts", 0755); err != nil {
-		return err
-	}
-	path := filepath.Join("/artifacts", filepath.Base(artifact.URI))
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	res, err := http.Get(artifact.URI)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected HTTP status code: %s", res.Status)
-	}
-	_, err = io.Copy(file, res.Body)
-	return err
-}
-
 // Run as pid 1 and monitor the contained process to return its exit code.
 func containerInitApp(c *Config, logFile *os.File) error {
 	log := logger.New("fn", "containerInitApp")
@@ -669,13 +619,6 @@ func containerInitApp(c *Config, logFile *os.File) error {
 	if cmdErr != nil {
 		log.Error("command failed", "err", cmdErr)
 		init.changeState(StateFailed, cmdErr.Error(), -1)
-		init.exit(1)
-	}
-	// Container setup
-	log.Info("setting up the container")
-	if err := setupCommon(c, log); err != nil {
-		log.Error("error setting up the container", "err", err)
-		init.changeState(StateFailed, err.Error(), -1)
 		init.exit(1)
 	}
 	// Start the app
