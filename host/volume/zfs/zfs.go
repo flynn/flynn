@@ -9,20 +9,27 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	zfs "github.com/mistifyio/go-zfs"
+	"github.com/rancher/sparse-tools/sparse"
 )
 
+// blockSize is the block size used when creating new zvols
+const blockSize = 8 * 1024
+
 type zfsVolume struct {
-	info      *volume.Info
-	provider  *Provider
-	dataset   *zfs.Dataset
-	basemount string
+	info       *volume.Info
+	provider   *Provider
+	dataset    *zfs.Dataset
+	basemount  string
+	filesystem *volume.Filesystem
 }
 
 type Provider struct {
@@ -151,6 +158,99 @@ func (p *Provider) NewVolume() (volume.Volume, error) {
 	return v, nil
 }
 
+var zvolOpenAttempts = attempt.Strategy{
+	Total: 10 * time.Second,
+	Delay: 10 * time.Millisecond,
+}
+
+func (p *Provider) ImportFilesystem(fs *volume.Filesystem) (volume.Volume, error) {
+	if fs.ID == "" {
+		fs.ID = random.UUID()
+	}
+	v := &zfsVolume{
+		info:       &volume.Info{ID: fs.ID},
+		provider:   p,
+		basemount:  p.mountPath(fs.ID),
+		filesystem: fs,
+	}
+
+	// align size to blockSize
+	size := (fs.Size/blockSize + 1) * blockSize
+
+	opts := map[string]string{
+		"volblocksize": strconv.Itoa(blockSize),
+	}
+	if _, ok := fs.Data.(sparse.FileIoProcessor); ok {
+		opts["refreservation"] = "none"
+	}
+
+	var err error
+	v.dataset, err = zfs.CreateVolume(path.Join(v.provider.dataset.Name, fs.ID), uint64(size), opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// open the zvol device, trying multiple times as the device node is
+	// created asynchronously
+	var dev *os.File
+	err = zvolOpenAttempts.Run(func() (err error) {
+		dev, err = os.OpenFile(p.zvolPath(fs.ID), os.O_WRONLY, 0666)
+		return
+	})
+	if err != nil {
+		p.destroy(v)
+		return nil, err
+	}
+	defer dev.Close()
+
+	if f, ok := fs.Data.(sparse.FileIoProcessor); ok {
+		if err := p.copySparse(dev, f); err != nil {
+			p.destroy(v)
+			return nil, err
+		}
+	} else {
+		n, err := io.Copy(dev, fs.Data)
+		if err != nil {
+			p.destroy(v)
+			return nil, err
+		} else if n != fs.Size {
+			p.destroy(v)
+			return nil, io.ErrShortWrite
+		}
+	}
+
+	if err = os.MkdirAll(v.basemount, 0755); err != nil {
+		p.destroy(v)
+		return nil, err
+	}
+
+	if err := syscall.Mount(dev.Name(), v.basemount, fs.Type, fs.MountFlags, ""); err != nil {
+		p.destroy(v)
+		return nil, err
+	}
+
+	p.volumes[fs.ID] = v
+	return v, nil
+}
+
+func (p *Provider) copySparse(dst io.WriteSeeker, src sparse.FileIoProcessor) error {
+	extents, err := sparse.GetFiemapExtents(src)
+	if err != nil {
+		return err
+	}
+
+	for _, x := range extents {
+		if _, err := dst.Seek(int64(x.Logical), os.SEEK_SET); err != nil {
+			return err
+		}
+		if _, err := io.Copy(dst, io.NewSectionReader(src, int64(x.Logical), int64(x.Length))); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (p *Provider) owns(vol volume.Volume) (*zfsVolume, error) {
 	zvol := p.volumes[vol.Info().ID]
 	if zvol == nil {
@@ -163,33 +263,43 @@ func (p *Provider) owns(vol volume.Volume) (*zfsVolume, error) {
 }
 
 func (p *Provider) mountPath(id string) string {
-	return filepath.Join(p.config.WorkingDir, "/mnt/", id)
+	return filepath.Join(p.config.WorkingDir, "mnt", id)
 }
 
-func (p *Provider) DestroyVolume(vol volume.Volume) error {
-	zvol, err := p.owns(vol)
+func (p *Provider) zvolPath(id string) string {
+	return filepath.Join("/dev/zvol", p.dataset.Name, id)
+}
+
+func (p *Provider) DestroyVolume(v volume.Volume) error {
+	vol, err := p.owns(v)
 	if err != nil {
 		return err
 	}
-	if vol.IsSnapshot() {
-		if err := syscall.Unmount(vol.Location(), 0); err != nil {
+	return p.destroy(vol)
+}
+
+func (p *Provider) destroy(vol *zfsVolume) error {
+	if vol.IsSnapshot() || vol.filesystem != nil {
+		if err := syscall.Unmount(vol.basemount, 0); err != nil {
 			return err
 		}
-		os.Remove(vol.Location())
+		os.Remove(vol.basemount)
 	}
-	if err := zvol.dataset.Destroy(zfs.DestroyForceUmount); err != nil {
+	if err := vol.dataset.Destroy(zfs.DestroyForceUmount); err != nil {
 		for i := 0; i < 5 && err != nil && IsDatasetBusyError(err); i++ {
 			// sometimes zfs will claim to be busy as if files are still open even when all container processes are dead.
 			// usually this goes away, so retry a few times.
 			time.Sleep(1 * time.Second)
-			err = zvol.dataset.Destroy(zfs.DestroyForceUmount)
+			err = vol.dataset.Destroy(zfs.DestroyForceUmount)
 		}
 		if err != nil {
 			return err
 		}
 	}
-	os.Remove(zvol.basemount)
-	delete(p.volumes, vol.Info().ID)
+	if vol.basemount != "" {
+		os.Remove(vol.basemount)
+	}
+	delete(p.volumes, vol.info.ID)
 	return nil
 }
 
@@ -244,6 +354,15 @@ func (p *Provider) mountDataset(vol *zfsVolume) error {
 	}
 	if err = os.MkdirAll(vol.basemount, 0644); err != nil {
 		return fmt.Errorf("could not mount: %s", err)
+	}
+	if vol.filesystem != nil {
+		return syscall.Mount(
+			p.zvolPath(vol.info.ID),
+			vol.basemount,
+			vol.filesystem.Type,
+			vol.filesystem.MountFlags,
+			"",
+		)
 	}
 	var buf bytes.Buffer
 	var cmd *exec.Cmd
@@ -430,15 +549,18 @@ func (p *Provider) MarshalGlobalState() (json.RawMessage, error) {
 }
 
 type zfsVolumeRecord struct {
-	Dataset   string `json:"dataset"`
-	Basemount string `json:"basemount"`
+	Dataset    string             `json:"dataset"`
+	Basemount  string             `json:"basemount"`
+	Filesystem *volume.Filesystem `json:"filesystem,omitempty"`
 }
 
 func (p *Provider) MarshalVolumeState(volumeID string) (json.RawMessage, error) {
 	vol := p.volumes[volumeID]
-	record := zfsVolumeRecord{}
-	record.Dataset = vol.dataset.Name
-	record.Basemount = vol.basemount
+	record := zfsVolumeRecord{
+		Dataset:    vol.dataset.Name,
+		Basemount:  vol.basemount,
+		Filesystem: vol.filesystem,
+	}
 	return json.Marshal(record)
 }
 
@@ -452,10 +574,11 @@ func (p *Provider) RestoreVolumeState(volInfo *volume.Info, data json.RawMessage
 		return nil, fmt.Errorf("cannot restore volume %q: %s", volInfo.ID, err)
 	}
 	v := &zfsVolume{
-		info:      volInfo,
-		provider:  p,
-		dataset:   dataset,
-		basemount: record.Basemount,
+		info:       volInfo,
+		provider:   p,
+		dataset:    dataset,
+		basemount:  record.Basemount,
+		filesystem: record.Filesystem,
 	}
 	if err := p.mountDataset(v); err != nil {
 		return nil, err
