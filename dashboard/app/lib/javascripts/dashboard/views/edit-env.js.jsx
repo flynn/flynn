@@ -17,7 +17,8 @@ var EditEnv = React.createClass({
 								name={env.key}
 								value={env.value}
 								disabled={this.props.disabled}
-								onChange={this.handleEnvChange} />
+								onChange={this.handleEnvChange}
+								onSubmit={this.handleSubmit} />
 						</li>
 					);
 				}.bind(this))}
@@ -116,6 +117,8 @@ var EditEnv = React.createClass({
 	}
 });
 
+var KEY_CODE_RETURN = 13;
+
 var AppEnv = React.createClass({
 	displayName: "Views.EditEnv AppEnv",
 
@@ -128,6 +131,7 @@ var AppEnv = React.createClass({
 					ref='name'
 					value={this.state.name}
 					placeholder="ENV key"
+					onKeyPress={this.handleKeyPress}
 					onChange={this.handleNameChange}
 					onBlur={this.handleNameBlur} />:
 
@@ -136,6 +140,7 @@ var AppEnv = React.createClass({
 						ref='value'
 						value={this.state.value}
 						placeholder="ENV value"
+						onKeyPress={this.handleKeyPress}
 						onChange={this.handleValueChange}
 						onBlur={this.handleValueBlur} />
 			</div>
@@ -167,6 +172,13 @@ var AppEnv = React.createClass({
 		var newName = this.refs.name.getDOMNode().value;
 		this.setState({name: newName});
 		this.propagateChange(newName, this.state.value || "");
+	},
+
+	handleKeyPress: function (e) {
+		if ((e.ctrlKey || e.metaKey) && e.charCode === KEY_CODE_RETURN) {
+			e.preventDefault();
+			this.props.onSubmit();
+		}
 	},
 
 	handleValueChange: function () {
