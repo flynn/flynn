@@ -32,22 +32,22 @@ Commands:
 Examples:
 
 	$ flynn limit
-	web:     cpu=1000  max_fd=10000  memory=1GB
-	worker:  cpu=1000  max_fd=10000  memory=1GB
+	web:     cpu=1000  temp_disk=100MB  max_fd=10000  memory=1GB
+	worker:  cpu=1000  temp_disk=100MB  max_fd=10000  memory=1GB
 
-	$ flynn limit set web memory=512MB max_fd=12000 cpu=500
+	$ flynn limit set web memory=512MB max_fd=12000 cpu=500 temp_disk=200MB
 	Created release 5058ae7964f74c399a240bdd6e7d1bcb
 
 	$ flynn limit
-	web:     cpu=500   max_fd=12000  memory=512MB
-	worker:  cpu=1000  max_fd=10000  memory=1GB
+	web:     cpu=500   temp_disk=200MB  max_fd=12000  memory=512MB
+	worker:  cpu=1000  temp_disk=100MB  max_fd=10000  memory=1GB
 
 	$ flynn limit set web memory=256MB
 	Created release b39fe25d0ea344b6b2af5cf4d6542a80
 
 	$ flynn limit
-	web:     cpu=500   max_fd=12000  memory=256MB
-	worker:  cpu=1000  max_fd=10000  memory=1GB
+	web:     cpu=500   temp_disk=200MB  max_fd=12000  memory=256MB
+	worker:  cpu=1000  temp_disk=100MB  max_fd=10000  memory=1GB
 `)
 }
 
