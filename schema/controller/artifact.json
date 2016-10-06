@@ -18,11 +18,27 @@
     "type": {
       "description": "artifact type",
       "type": "string",
-      "enum": ["docker", "file"]
+      "enum": ["docker", "file", "flynn"]
     },
     "uri": {
       "description": "URI used to retrieve the artifact",
       "format": "uri",
+      "type": "string"
+    },
+    "manifest": {
+      "description": "Image manifest",
+      "type": "object"
+    },
+    "hashes": {
+      "description": "Cryptographic hashes of the content stored at URI",
+      "type": "object"
+    },
+    "size": {
+      "description": "Size of the content stored at URI",
+      "type": "integer"
+    },
+    "layer_url_template": {
+      "description": "Layer URL Template",
       "type": "string"
     },
     "meta": {

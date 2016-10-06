@@ -142,7 +142,7 @@ Options:
 		}
 	}
 
-	cmd := exec.Job(*slugBuilder.HostArtifact(), job)
+	cmd := exec.Job(slugBuilder, job)
 	var output bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
@@ -184,7 +184,7 @@ Options:
 	fmt.Printf("-----> Creating release...\n")
 
 	slugArtifact := &ct.Artifact{
-		Type: host.ArtifactTypeFile,
+		Type: ct.DeprecatedArtifactTypeFile,
 		URI:  slugURL,
 		Meta: map[string]string{"blobstore": "true"},
 	}

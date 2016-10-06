@@ -2,7 +2,7 @@
 bin
 *.deb
 .vagrant
-/version.json
+/images.json
 /log
 script/custom-vagrant
 demo/*.log

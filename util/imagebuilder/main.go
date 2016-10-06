@@ -54,7 +54,8 @@ func build(name string) error {
 	if err != nil {
 		return err
 	}
-	return json.NewEncoder(os.Stdout).Encode(manifest)
+	_, err = os.Stdout.Write(manifest.RawManifest())
+	return err
 }
 
 type layerStore struct {
