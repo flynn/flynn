@@ -24,7 +24,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
@@ -810,19 +809,28 @@ func (s *CLISuite) TestCluster(t *c.C) {
 }
 
 func (s *CLISuite) TestRelease(t *c.C) {
-	releaseJSON := []byte(`{
-		"env": {"GLOBAL": "FOO"},
-		"processes": {
+	app := s.newCliTestApp(t)
+	defer app.cleanup()
+
+	release := &ct.Release{
+		ArtifactIDs: []string{s.createArtifact(t, "test-apps").ID},
+		Env:         map[string]string{"GLOBAL": "FOO"},
+		Processes: map[string]ct.ProcessType{
 			"echoer": {
-				"args": ["/bin/echoer"],
-				"env": {"ECHOER_ONLY": "BAR"}
+				Args: []string{"/bin/echoer"},
+				Env:  map[string]string{"ECHOER_ONLY": "BAR"},
 			},
 			"env": {
-				"args": ["sh", "-c", "env; while true; do sleep 60; done"],
-				"env": {"ENV_ONLY": "BAZ"}
-			}
-		}
-	}`)
+				Args: []string{"sh", "-c", "env; while true; do sleep 60; done"},
+				Env:  map[string]string{"ENV_ONLY": "BAZ"},
+			},
+		},
+	}
+	client := s.controllerClient(t)
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.SetAppRelease(app.id, release.ID), c.IsNil)
+
+	updateFile := filepath.Join(t.MkDir(), "updates.json")
 	updateJSON := []byte(`{
 		"processes": {
 			"echoer": {
@@ -833,6 +841,9 @@ func (s *CLISuite) TestRelease(t *c.C) {
 			}
 		}
 	}`)
+	t.Assert(ioutil.WriteFile(updateFile, updateJSON, 0644), c.IsNil)
+	t.Assert(app.flynn("release", "update", updateFile), Succeeds)
+
 	resultJSON := []byte(`{
 		"env": {"GLOBAL": "FOO"},
 		"processes": {
@@ -851,27 +862,6 @@ func (s *CLISuite) TestRelease(t *c.C) {
 			}
 		}
 	}`)
-	release := &ct.Release{}
-	t.Assert(json.Unmarshal(releaseJSON, &release), c.IsNil)
-	for typ, proc := range release.Processes {
-		resource.SetDefaults(&proc.Resources)
-		release.Processes[typ] = proc
-	}
-
-	addFile, err := ioutil.TempFile("", "")
-	t.Assert(err, c.IsNil)
-	addFile.Write(releaseJSON)
-	addFile.Close()
-
-	app := s.newCliTestApp(t)
-	defer app.cleanup()
-	t.Assert(app.flynn("release", "add", "-f", addFile.Name(), imageURIs["test-apps"]), Succeeds)
-
-	r1, err := s.controller.GetAppRelease(app.name)
-	t.Assert(err, c.IsNil)
-	t.Assert(r1.Env, c.DeepEquals, release.Env)
-	t.Assert(r1.Processes, c.DeepEquals, release.Processes)
-
 	result := &ct.Release{}
 	t.Assert(json.Unmarshal(resultJSON, &result), c.IsNil)
 	for typ, proc := range result.Processes {
@@ -879,24 +869,17 @@ func (s *CLISuite) TestRelease(t *c.C) {
 		result.Processes[typ] = proc
 	}
 
-	updateFile, err := ioutil.TempFile("", "")
+	release, err := s.controller.GetAppRelease(app.name)
 	t.Assert(err, c.IsNil)
-	updateFile.Write(updateJSON)
-	updateFile.Close()
-
-	t.Assert(app.flynn("release", "update", updateFile.Name()), Succeeds)
-
-	r2, err := s.controller.GetAppRelease(app.name)
-	t.Assert(err, c.IsNil)
-	t.Assert(r2.Env, c.DeepEquals, result.Env)
-	t.Assert(r2.Processes, c.DeepEquals, result.Processes)
+	t.Assert(release.Env, c.DeepEquals, result.Env)
+	t.Assert(release.Processes, c.DeepEquals, result.Processes)
 
 	scaleCmd := app.flynn("scale", "--no-wait", "env=1", "foo=1")
 	t.Assert(scaleCmd, c.Not(Succeeds))
 	t.Assert(scaleCmd, OutputContains, "ERROR: unknown process types: \"foo\"")
 
 	// create a job watcher for the new release
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.name, r2.ID)
+	watcher, err := client.WatchJobEvents(app.name, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -1169,8 +1152,7 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	t.Assert(client.CreateApp(app), c.IsNil)
 
 	// create an image artifact
-	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: imageURIs["test-apps"]}
-	t.Assert(client.CreateArtifact(imageArtifact), c.IsNil)
+	imageArtifact := s.createArtifact(t, "test-apps")
 
 	// create 5 slug artifacts
 	var slug bytes.Buffer
@@ -1193,7 +1175,7 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 		res.Body.Close()
 		t.Assert(res.StatusCode, c.Equals, http.StatusOK)
 		artifact := &ct.Artifact{
-			Type: host.ArtifactTypeFile,
+			Type: ct.DeprecatedArtifactTypeFile,
 			URI:  uri,
 			Meta: map[string]string{"blobstore": "true"},
 		}

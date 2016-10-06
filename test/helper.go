@@ -138,11 +138,8 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 	t.Assert(client.CreateApp(app), c.IsNil)
 	debugf(t, "created app %s (%s)", app.Name, app.ID)
 
-	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: imageURIs["test-apps"]}
-	t.Assert(client.CreateArtifact(artifact), c.IsNil)
-
 	release := &ct.Release{
-		ArtifactIDs: []string{artifact.ID},
+		ArtifactIDs: []string{h.createArtifact(t, "test-apps").ID},
 		Processes: map[string]ct.ProcessType{
 			"echoer": {
 				Args:    []string{"/bin/echoer"},
@@ -195,6 +192,20 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 	t.Assert(client.CreateRelease(release), c.IsNil)
 	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
 	return app, release
+}
+
+func (h *Helper) createArtifact(t *c.C, name string) *ct.Artifact {
+	path := fmt.Sprintf("../image/%s.json", name)
+	manifest, err := ioutil.ReadFile(path)
+	t.Assert(err, c.IsNil)
+	artifact := &ct.Artifact{
+		Type:             ct.ArtifactTypeFlynn,
+		URI:              fmt.Sprintf("https://example.com?target=/images/%s.json", name),
+		RawManifest:      manifest,
+		LayerURLTemplate: "file:///var/lib/flynn/layer-cache/{id}.squashfs",
+	}
+	t.Assert(h.controllerClient(t).CreateArtifact(artifact), c.IsNil)
+	return artifact
 }
 
 func (h *Helper) stopJob(t *c.C, id string) {
