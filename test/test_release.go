@@ -13,7 +13,6 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	tc "github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/updater/types"
 	c "github.com/flynn/go-check"
@@ -178,7 +177,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(err, c.IsNil)
 	imageArtifact, err := client.GetArtifact(gitreceive.Env["SLUGRUNNER_IMAGE_ID"])
 	t.Assert(err, c.IsNil)
-	slugArtifact := &ct.Artifact{Type: host.ArtifactTypeFile, URI: fmt.Sprintf("http://%s:8080/slug.tgz", buildHost.IP)}
+	slugArtifact := &ct.Artifact{Type: ct.DeprecatedArtifactTypeFile, URI: fmt.Sprintf("http://%s:8080/slug.tgz", buildHost.IP)}
 	t.Assert(client.CreateArtifact(slugArtifact), c.IsNil)
 	resource, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: "redis", Apps: []string{slugApp.ID}})
 	t.Assert(err, c.IsNil)

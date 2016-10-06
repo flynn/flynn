@@ -2,13 +2,9 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"crypto/sha512"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"net"
@@ -41,6 +37,7 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
+	"github.com/flynn/flynn/pkg/verify"
 	"github.com/golang/groupcache/singleflight"
 	"github.com/miekg/dns"
 	"github.com/opencontainers/runc/libcontainer"
@@ -731,23 +728,9 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 			return "", fmt.Errorf("error getting squashfs layer %s: missing URL", m.ID)
 		}
 
-		if len(m.Hashes) == 0 {
-			return "", fmt.Errorf("error getting squashfs layer %s: missing Hashes", m.ID)
-		}
-		hashes := make(map[string]hash.Hash, len(m.Hashes))
-		for algorithm := range m.Hashes {
-			var h hash.Hash
-			switch algorithm {
-			case "sha256":
-				h = sha256.New()
-			case "sha512":
-				h = sha512.New()
-			case "sha512_256":
-				h = sha512.New512_256()
-			default:
-				return "", fmt.Errorf("error getting squashfs layer %s: unknown hash algorithm %q", m.ID, algorithm)
-			}
-			hashes[algorithm] = h
+		verifier, err := verify.NewVerifier(m.Hashes, m.Size)
+		if err != nil {
+			return "", fmt.Errorf("error getting squashfs layer %s: %s", m.ID, err)
 		}
 
 		u, err := url.Parse(m.URL)
@@ -789,19 +772,11 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 		}
 		defer os.Remove(tmp.Name())
 		defer tmp.Close()
-		r := io.LimitReader(layer, m.Size)
-		for _, hash := range hashes {
-			r = io.TeeReader(r, hash)
-		}
-		if _, err := io.Copy(tmp, r); err != nil {
+		if _, err := io.Copy(tmp, verifier.Reader(layer)); err != nil {
 			return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
 		}
-		for algorithm, hash := range hashes {
-			actual := hex.EncodeToString(hash.Sum(nil))
-			expected := m.Hashes[algorithm]
-			if actual != expected {
-				return "", fmt.Errorf("error getting squashfs layer from %s: expected %s hash %q but got %q", m.URL, algorithm, expected, actual)
-			}
+		if err := verifier.Verify(); err != nil {
+			return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
 		}
 
 		if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {

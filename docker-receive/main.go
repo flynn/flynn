@@ -16,7 +16,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/docker-receive/blobstore"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
 )
@@ -125,7 +124,7 @@ func (m *manifestService) Put(manifest *manifest.SignedManifest) error {
 
 func (m *manifestService) createArtifact(dgst digest.Digest) error {
 	return m.client.CreateArtifact(&ct.Artifact{
-		Type: host.ArtifactTypeDocker,
+		Type: ct.DeprecatedArtifactTypeDocker,
 		URI:  fmt.Sprintf("http://flynn:%s@docker-receive.discoverd?name=%s&id=%s", m.authKey, m.repository.Name(), dgst),
 		Meta: map[string]string{
 			"docker-receive.repository": m.repository.Name(),

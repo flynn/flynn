@@ -19,7 +19,6 @@ import (
 	"github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/backup"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
@@ -217,7 +216,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		// use just the slugrunner image as we don't need the
 		// extracted slug to run curl, and this also prevents
 		// the slug from interfering (e.g. logging output)
-		config.Artifact = release.ArtifactIDs[0]
+		config.Artifacts = release.ArtifactIDs[:1]
 
 		if bar != nil {
 			config.Stdout = io.MultiWriter(config.Stdout, bar)
@@ -542,7 +541,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			}
 		} else if uri, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_URI"]; ok {
 			imageArtifact = &ct.Artifact{
-				Type: host.ArtifactTypeDocker,
+				Type: ct.DeprecatedArtifactTypeDocker,
 				URI:  uri,
 			}
 		} else {
@@ -623,7 +622,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			return fmt.Errorf("error uploading slug: %s", err)
 		}
 		slugArtifact := &ct.Artifact{
-			Type: host.ArtifactTypeFile,
+			Type: ct.DeprecatedArtifactTypeFile,
 			URI:  slugURI,
 		}
 		if err := client.CreateArtifact(slugArtifact); err != nil {

@@ -45,10 +45,12 @@ func (a *AddAppAction) Run(s *State) error {
 		return err
 	}
 	as.App = a.App
-	if err := client.CreateArtifact(data.ImageArtifact); err != nil {
-		return err
+	for _, artifact := range data.Artifacts {
+		if err := client.CreateArtifact(artifact); err != nil {
+			return err
+		}
 	}
-	as.ImageArtifact = data.ImageArtifact
+	as.Artifacts = data.Artifacts
 	if err := client.CreateRelease(data.Release); err != nil {
 		return err
 	}

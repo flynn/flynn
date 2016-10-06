@@ -12,7 +12,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/flynn/updater/types"
@@ -110,7 +109,7 @@ func run() error {
 
 	log.Info("creating new image artifacts")
 	redisImage = &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
+		Type: ct.DeprecatedArtifactTypeDocker,
 		URI:  uris["redis"],
 	}
 	if err := client.CreateArtifact(redisImage); err != nil {
@@ -118,7 +117,7 @@ func run() error {
 		return err
 	}
 	slugRunner = &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
+		Type: ct.DeprecatedArtifactTypeDocker,
 		URI:  uris["slugrunner"],
 	}
 	if err := client.CreateArtifact(slugRunner); err != nil {
@@ -126,7 +125,7 @@ func run() error {
 		return err
 	}
 	slugBuilder = &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
+		Type: ct.DeprecatedArtifactTypeDocker,
 		URI:  uris["slugbuilder"],
 	}
 	if err := client.CreateArtifact(slugBuilder); err != nil {

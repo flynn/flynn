@@ -1,18 +1,18 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
-	"strings"
 
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
-	"github.com/fsouza/go-dockerclient"
 )
 
 func manifest(args *docopt.Args) {
@@ -35,45 +35,48 @@ func manifest(args *docopt.Args) {
 		src = f
 	}
 
-	var lookup idLookupFunc
-	var err error
-	if file := args.String["--id-file"]; file != "" {
-		lookup, err = fileLookupFunc(file)
-	} else {
-		lookup, err = dockerLookupFunc()
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err := interpolateManifest(lookup, args.String["--image-repository"], src, dest); err != nil {
+	if err := interpolateManifest(args.String["--image-dir"], args.String["--image-repository"], src, dest); err != nil {
 		log.Fatal(err)
 	}
 }
 
-var imageIDPattern = regexp.MustCompile(`\$image_id\[[^\]]+\]`)
+var imageArtifactPattern = regexp.MustCompile(`\$image_artifact\[[^\]]+\]`)
 
-func interpolateManifest(lookup idLookupFunc, imageRepository string, src io.Reader, dest io.Writer) error {
+func interpolateManifest(imageDir, imageRepository string, src io.Reader, dest io.Writer) error {
 	manifest, err := ioutil.ReadAll(src)
 	if err != nil {
 		return err
 	}
-	manifest = bytes.Replace(manifest, []byte("$image_repository"), []byte(imageRepository), -1)
 	var replaceErr interface{}
 	func() {
 		defer func() {
 			replaceErr = recover()
 		}()
-		manifest = imageIDPattern.ReplaceAllFunc(manifest, func(raw []byte) []byte {
-			imageName := string(raw[10 : len(raw)-1])
-			if !strings.Contains(imageName, "/") {
-				imageName = "flynn/" + imageName
-			}
-			res, err := lookup(imageName)
+		manifest = imageArtifactPattern.ReplaceAllFunc(manifest, func(raw []byte) []byte {
+			name := string(raw[16 : len(raw)-1])
+
+			manifest, err := ioutil.ReadFile(filepath.Join(imageDir, name+".json"))
 			if err != nil {
 				panic(err)
 			}
-			return res
+
+			artifact := &ct.Artifact{
+				Type:        ct.ArtifactTypeFlynn,
+				RawManifest: manifest,
+				Meta:        map[string]string{"flynn.component": name},
+			}
+			artifact.URI = fmt.Sprintf("%s?target=/images/%s.json", imageRepository, artifact.Manifest().ID())
+			artifact.Hashes = artifact.Manifest().Hashes()
+			if version.Dev() {
+				artifact.LayerURLTemplate = "file:///var/lib/flynn/layer-cache/{id}.squashfs"
+			} else {
+				artifact.LayerURLTemplate = fmt.Sprintf("%s?target=/%s/layers/{id}.squashfs", version.String(), imageRepository)
+			}
+			data, err := json.Marshal(artifact)
+			if err != nil {
+				panic(err)
+			}
+			return data
 		})
 	}()
 	if replaceErr != nil {
@@ -82,36 +85,3 @@ func interpolateManifest(lookup idLookupFunc, imageRepository string, src io.Rea
 	_, err = dest.Write(manifest)
 	return err
 }
-
-func dockerLookupFunc() (idLookupFunc, error) {
-	d, err := docker.NewClient("unix:///var/run/docker.sock")
-	if err != nil {
-		return nil, err
-	}
-	return func(name string) ([]byte, error) {
-		image, err := d.InspectImage(name)
-		if err != nil {
-			return nil, fmt.Errorf("error inspecting %q: %s", name, err)
-		}
-		return []byte(image.ID), nil
-	}, nil
-}
-
-func fileLookupFunc(filename string) (idLookupFunc, error) {
-	ids := make(map[string]string)
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(data, &ids); err != nil {
-		return nil, err
-	}
-	return func(name string) ([]byte, error) {
-		if id, ok := ids[name]; ok {
-			return []byte(id), nil
-		}
-		return nil, fmt.Errorf("unknown image %q", name)
-	}, nil
-}
-
-type idLookupFunc func(name string) ([]byte, error)

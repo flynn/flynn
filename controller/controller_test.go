@@ -13,14 +13,15 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/certgen"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
+	"github.com/flynn/flynn/pkg/typeconv"
 	. "github.com/flynn/go-check"
 	"github.com/jackc/pgx"
+	"github.com/tent/canonical-json-go"
 )
 
 func init() {
@@ -231,7 +232,10 @@ func (s *S) TestUpdateAppMeta(c *C) {
 
 func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	if in.Type == "" {
-		in.Type = host.ArtifactTypeDocker
+		in.Type = ct.ArtifactTypeFlynn
+		in.RawManifest = ct.ImageManifest{
+			Type: ct.ImageManifestTypeV1,
+		}.RawManifest()
 	}
 	if in.URI == "" {
 		in.URI = fmt.Sprintf("https://example.com/%s", random.String(8))
@@ -244,12 +248,16 @@ func (s *S) TestCreateArtifact(c *C) {
 	for i, id := range []string{"", random.UUID()} {
 		in := &ct.Artifact{
 			ID:   id,
-			Type: host.ArtifactTypeDocker,
-			URI:  fmt.Sprintf("docker://flynn/host?id=adsf%d", i),
+			Type: ct.ArtifactTypeFlynn,
+			RawManifest: ct.ImageManifest{
+				Type: ct.ImageManifestTypeV1,
+			}.RawManifest(),
+			URI: fmt.Sprintf("https://example.com/manifest%d.json", i),
 		}
 		out := s.createTestArtifact(c, in)
 
 		c.Assert(out.Type, Equals, in.Type)
+		c.Assert(out.RawManifest, DeepEquals, in.RawManifest)
 		c.Assert(out.URI, Equals, in.URI)
 		c.Assert(out.ID, Not(Equals), "")
 		if id != "" {
@@ -267,7 +275,7 @@ func (s *S) TestCreateArtifact(c *C) {
 
 func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
 	if len(in.ArtifactIDs) == 0 {
-		in.ArtifactIDs = []string{s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker}).ID}
+		in.ArtifactIDs = []string{s.createTestArtifact(c, &ct.Artifact{}).ID}
 		in.LegacyArtifactID = in.ArtifactIDs[0]
 	}
 	c.Assert(s.c.CreateRelease(in), IsNil)
@@ -327,7 +335,10 @@ func (s *S) TestCreateFormation(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(expanded.App.ID, Equals, app.ID)
 		c.Assert(expanded.Release.ID, Equals, release.ID)
-		c.Assert(expanded.ImageArtifact.ID, Equals, release.ImageArtifactID())
+		c.Assert(expanded.Artifacts, HasLen, len(release.ArtifactIDs))
+		for i, id := range release.ArtifactIDs {
+			c.Assert(expanded.Artifacts[i].ID, Equals, id)
+		}
 		c.Assert(expanded.Processes, DeepEquals, out.Processes)
 
 		_, err = s.c.GetFormation(appID, release.ID+"fail")
@@ -383,73 +394,135 @@ func (s *S) TestReleaseList(c *C) {
 	c.Assert(list[0].ID, Not(Equals), "")
 }
 
-func (s *S) TestReleaseArtifacts(c *C) {
-	// a release with no artifacts is ok
-	release := &ct.Release{}
-	c.Assert(s.c.CreateRelease(release), IsNil)
-	gotRelease, err := s.c.GetRelease(release.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotRelease.ArtifactIDs, IsNil)
-	c.Assert(gotRelease.ImageArtifactID(), Equals, "")
-	c.Assert(gotRelease.FileArtifactIDs(), IsNil)
+func (s *S) TestFlynnArtifact(c *C) {
+	manifest := &ct.ImageManifest{Type: ct.ImageManifestTypeV1}
 
-	// a release with a single "docker" artifact is ok
-	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	release = &ct.Release{ArtifactIDs: []string{imageArtifact.ID}}
-	c.Assert(s.c.CreateRelease(release), IsNil)
-	gotRelease, err = s.c.GetRelease(release.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotRelease.ArtifactIDs, DeepEquals, []string{imageArtifact.ID})
-	c.Assert(gotRelease.ImageArtifactID(), Equals, imageArtifact.ID)
-	c.Assert(gotRelease.FileArtifactIDs(), DeepEquals, []string{})
-
-	// a release with a single "file" artifact is not ok
-	fileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
-	err = s.c.CreateRelease(&ct.Release{ArtifactIDs: []string{fileArtifact.ID}})
-	c.Assert(err, NotNil)
-	e, ok := err.(hh.JSONError)
-	if !ok {
-		c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
+	type test struct {
+		desc     string
+		artifact *ct.Artifact
+		manifest *ct.ImageManifest
+		hashes   map[string]string
+		size     *int64
+		handler  http.HandlerFunc
+		assert   func(*test, error)
 	}
-	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
-	c.Assert(e.Message, Equals, `artifacts must have exactly one artifact of type "docker"`)
 
-	// a release with multiple "docker" artifacts is not ok
-	secondImageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	err = s.c.CreateRelease(&ct.Release{ArtifactIDs: []string{imageArtifact.ID, secondImageArtifact.ID}})
-	c.Assert(err, NotNil)
-	e, ok = err.(hh.JSONError)
-	if !ok {
-		c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
+	isValid := func(t *test, err error) {
+		c.Assert(err, IsNil)
+		gotArtifact, err := s.c.GetArtifact(t.artifact.ID)
+		c.Assert(err, IsNil)
+		c.Assert(gotArtifact, DeepEquals, t.artifact)
 	}
-	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
-	c.Assert(e.Message, Equals, `artifacts must have exactly one artifact of type "docker"`)
 
-	// a release with a single "docker" artifact and multiple "file" artifacts is ok
-	secondFileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
-	artifactIDs := []string{imageArtifact.ID, fileArtifact.ID, secondFileArtifact.ID}
-	release = &ct.Release{ArtifactIDs: artifactIDs}
-	c.Assert(s.c.CreateRelease(release), IsNil)
-	gotRelease, err = s.c.GetRelease(release.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotRelease.ArtifactIDs, DeepEquals, artifactIDs)
-	c.Assert(gotRelease.ImageArtifactID(), Equals, imageArtifact.ID)
-	fileArtifactIDs := gotRelease.FileArtifactIDs()
-	c.Assert(fileArtifactIDs, HasLen, 2)
-	c.Assert(fileArtifactIDs[0], Equals, fileArtifact.ID)
-	c.Assert(fileArtifactIDs[1], Equals, secondFileArtifact.ID)
-}
-
-func (s *S) TestFileArtifact(c *C) {
-	artifact := &ct.Artifact{
-		Type: host.ArtifactTypeFile,
-		URI:  "http://example.com/slug.tgz",
+	isValidationErr := func(field, message string) func(*test, error) {
+		return func(t *test, err error) {
+			c.Assert(err, NotNil)
+			e, ok := err.(hh.JSONError)
+			if !ok {
+				c.Fatalf("expected JSONError, got %T", err)
+			}
+			c.Assert(e.Code, Equals, hh.ValidationErrorCode)
+			c.Assert(e.Message, Matches, fmt.Sprintf("%s.*%s", field, message))
+		}
 	}
-	c.Assert(s.c.CreateArtifact(artifact), IsNil)
 
-	gotArtifact, err := s.c.GetArtifact(artifact.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotArtifact, DeepEquals, artifact)
+	isHashMismatchErr := func(t *test, err error) {
+		message := fmt.Sprintf(`expected sha512_256 hash %q but got ".*"`, manifest.Hashes()["sha512_256"])
+		isValidationErr("manifest", message)(t, err)
+	}
+
+	mux := http.NewServeMux()
+	var handler http.HandlerFunc
+	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		handler(w, req)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	for _, t := range []*test{
+		{
+			desc:   "zero size",
+			size:   typeconv.Int64Ptr(0),
+			assert: isValidationErr("size", "must be greater than zero"),
+		},
+		{
+			desc:   "negative size",
+			size:   typeconv.Int64Ptr(-1),
+			assert: isValidationErr("size", "must be greater than zero"),
+		},
+		{
+			desc:   "no hashes",
+			hashes: map[string]string{},
+			assert: isValidationErr("manifest", "no hashes provided"),
+		},
+		{
+			desc:   "unknown algorithm",
+			hashes: map[string]string{"foo": "bar"},
+			assert: isValidationErr("manifest", "no hashes provided"),
+		},
+		{
+			desc:     "known and unknown algorithm",
+			manifest: manifest,
+			hashes: map[string]string{
+				"sha512_256": manifest.Hashes()["sha512_256"],
+				"foo":        "bar",
+			},
+			assert: isValid,
+		},
+		{
+			desc:    "non-200 HTTP response",
+			handler: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) },
+			assert:  isValidationErr("manifest", "unexpected HTTP status: 500 Internal Server Error"),
+		},
+		{
+			desc:     "manifest too short",
+			manifest: &ct.ImageManifest{},
+			assert:   isValidationErr("manifest", "data too short"),
+		},
+		{
+			desc: "manifest too big",
+			manifest: &ct.ImageManifest{
+				Type: ct.ImageManifestTypeV1,
+				Meta: map[string]string{"foo": "bar"},
+			},
+			assert: isHashMismatchErr,
+		},
+		{
+			desc: "manifest different bytes",
+			manifest: &ct.ImageManifest{
+				Type: ct.ImageManifestType(strings.Replace(string(ct.ImageManifestTypeV1), "v", "w", 1)),
+			},
+			assert: isHashMismatchErr,
+		},
+		{
+			desc:     "valid manifest",
+			manifest: manifest,
+			assert:   isValid,
+		},
+	} {
+		c.Logf("testing %s", t.desc)
+		t.artifact = &ct.Artifact{
+			Type:   ct.ArtifactTypeFlynn,
+			URI:    srv.URL,
+			Hashes: t.hashes,
+		}
+		if t.size == nil {
+			data, _ := cjson.Marshal(manifest)
+			t.artifact.Size = int64(len(data))
+		}
+		if t.hashes == nil {
+			t.artifact.Hashes = manifest.Hashes()
+		}
+		if t.manifest != nil {
+			handler = func(w http.ResponseWriter, req *http.Request) {
+				w.Write(t.manifest.RawManifest())
+			}
+		} else {
+			handler = t.handler
+		}
+		err := s.c.CreateArtifact(t.artifact)
+		t.assert(t, err)
+	}
 }
 
 func (s *S) TestAppReleaseList(c *C) {
