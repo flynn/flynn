@@ -14,8 +14,11 @@
     "release": {
       "$ref": "/schema/controller/common#/definitions/id"
     },
-    "artifact": {
-      "$ref": "/schema/controller/common#/definitions/id"
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "/schema/controller/common#/definitions/id"
+      }
     },
     "cmd": {
       "$ref": "/schema/controller/common#/definitions/cmd"

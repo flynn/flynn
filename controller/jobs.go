@@ -233,10 +233,16 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	release := data.(*ct.Release)
-	if newJob.ArtifactID == "" && release.ImageArtifactID() == "" {
-		httphelper.ValidationError(w, "release.ImageArtifact", "must be set")
+	var artifactIDs []string
+	if len(newJob.ArtifactIDs) > 0 {
+		artifactIDs = newJob.ArtifactIDs
+	} else if len(release.ArtifactIDs) > 0 {
+		artifactIDs = release.ArtifactIDs
+	} else {
+		httphelper.ValidationError(w, "release.ArtifactIDs", "cannot be empty")
 		return
 	}
+
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
 	hosts, err := c.clusterClient.Hosts()
@@ -289,25 +295,16 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Args) > 0 {
 		job.Config.Args = newJob.Args
 	}
-	if newJob.ArtifactID != "" {
-		artifact, err := c.artifactRepo.Get(newJob.ArtifactID)
-		if err != nil {
-			respondWithError(w, err)
-			return
-		}
-		job.ImageArtifact = artifact.(*ct.Artifact).HostArtifact()
-	} else if len(release.ArtifactIDs) > 0 {
-		artifacts, err := c.artifactRepo.ListIDs(release.ArtifactIDs...)
-		if err != nil {
-			respondWithError(w, err)
-			return
-		}
-		job.ImageArtifact = artifacts[release.ImageArtifactID()].HostArtifact()
-		job.FileArtifacts = make([]*host.Artifact, len(release.FileArtifactIDs()))
-		for i, id := range release.FileArtifactIDs() {
-			job.FileArtifacts[i] = artifacts[id].HostArtifact()
-		}
+	artifacts := make([]*ct.Artifact, len(artifactIDs))
+	artifactList, err := c.artifactRepo.ListIDs(artifactIDs...)
+	if err != nil {
+		respondWithError(w, err)
+		return
 	}
+	for i, id := range artifactIDs {
+		artifacts[i] = artifactList[id]
+	}
+	utils.SetupMountspecs(job, artifacts)
 
 	// provision data volume if required
 	if newJob.Data {

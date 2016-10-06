@@ -415,6 +415,24 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(24,
 		`UPDATE apps SET meta = jsonb_merge(CASE WHEN meta = 'null' THEN '{}' ELSE meta END, '{"gc.max_inactive_slug_releases":"10"}') WHERE meta->>'gc.max_inactive_slug_releases' IS NULL`,
 	)
+	migrations.Add(25,
+		`DROP TRIGGER release_artifacts_trigger ON release_artifacts`,
+		`DROP FUNCTION check_release_artifacts()`,
+		`ALTER TABLE artifacts ADD COLUMN manifest jsonb`,
+		`ALTER TABLE artifacts ADD COLUMN hashes jsonb`,
+		`ALTER TABLE artifacts ADD COLUMN size integer`,
+		`ALTER TABLE artifacts ADD COLUMN layer_url_template text`,
+		`CREATE FUNCTION check_artifact_manifest() RETURNS OPAQUE AS $$
+			BEGIN
+				IF NEW.type = 'flynn' AND NEW.manifest IS NULL THEN
+					RAISE EXCEPTION 'flynn artifacts must have a manifest' USING ERRCODE = 'check_violation';
+				END IF;
+
+				RETURN NULL;
+			END;
+		$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER check_artifact_manifest AFTER INSERT ON artifacts FOR EACH ROW EXECUTE PROCEDURE check_artifact_manifest()`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

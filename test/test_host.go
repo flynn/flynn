@@ -57,12 +57,9 @@ func (s *HostSuite) TestAddFailingJob(t *c.C) {
 
 	// add a job with a non existent partition
 	job := &host.Job{
-		ID: jobID,
-		ImageArtifact: &host.Artifact{
-			Type: host.ArtifactTypeDocker,
-			URI:  "http://example.com?name=foo&id=bar",
-		},
-		Partition: "nonexistent",
+		ID:         jobID,
+		Mountspecs: []*host.Mountspec{{}},
+		Partition:  "nonexistent",
 	}
 	t.Assert(h.AddJob(job), c.IsNil)
 
@@ -108,7 +105,7 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 	cluster := s.clusterClient(t)
 
 	// run a quick interactive job
-	cmd := exec.CommandUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), "/bin/true")
+	cmd := exec.CommandUsingCluster(cluster, s.createArtifact(t, "test-apps"), "/bin/true")
 	cmd.TTY = true
 	runErr := make(chan error)
 	go func() {
@@ -144,7 +141,7 @@ func (s *HostSuite) TestExecCrashingJob(t *c.C) {
 
 	for _, attach := range []bool{true, false} {
 		t.Logf("attach = %v", attach)
-		cmd := exec.CommandUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), "sh", "-c", "exit 1")
+		cmd := exec.CommandUsingCluster(cluster, s.createArtifact(t, "test-apps"), "sh", "-c", "exit 1")
 		if attach {
 			cmd.Stdout = ioutil.Discard
 			cmd.Stderr = ioutil.Discard
@@ -159,12 +156,12 @@ func (s *HostSuite) TestExecCrashingJob(t *c.C) {
 
 	User will want to defer cmd.Kill() to clean up.
 */
-func makeIshApp(cluster *cluster.Client, h *cluster.Host, dc *discoverd.Client, extraConfig host.ContainerConfig) (*exec.Cmd, *discoverd.Instance, error) {
+func (s *Helper) makeIshApp(t *c.C, h *cluster.Host, extraConfig host.ContainerConfig) (*exec.Cmd, *discoverd.Instance, error) {
 	// pick a unique string to use as service name so this works with concurrent tests.
 	serviceName := "ish-service-" + random.String(6)
 
 	// run a job that accepts tcp connections and performs tasks we ask of it in its container
-	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), &host.Job{
+	cmd := exec.JobUsingCluster(s.clusterClient(t), s.createArtifact(t, "test-apps"), &host.Job{
 		Config: host.ContainerConfig{
 			Args:  []string{"/bin/ish"},
 			Ports: []host.Port{{Proto: "tcp"}},
@@ -179,7 +176,7 @@ func makeIshApp(cluster *cluster.Client, h *cluster.Host, dc *discoverd.Client, 
 	}
 
 	// wait for the job to heartbeat and return its address
-	services, err := dc.Instances(serviceName, time.Second*100)
+	services, err := s.discoverdClient(t).Instances(serviceName, time.Second*100)
 	if err != nil {
 		cmd.Kill()
 		return nil, nil, err
@@ -212,10 +209,8 @@ func (s *HostSuite) TestNetworkedPersistentJob(t *c.C) {
 	// this isn't much more impressive than what's already running by the time we've got a cluster engaged
 	// but the idea is to use this basic design to enable testing a series manipulations on a single container.
 
-	cluster := s.clusterClient(t)
-
 	// run a job that accepts tcp connections and performs tasks we ask of it in its container
-	cmd, service, err := makeIshApp(cluster, s.anyHostClient(t), s.discoverdClient(t), host.ContainerConfig{})
+	cmd, service, err := s.makeIshApp(t, s.anyHostClient(t), host.ContainerConfig{})
 	t.Assert(err, c.IsNil)
 	defer cmd.Kill()
 
@@ -245,7 +240,6 @@ func (s *HostSuite) TestVolumePersistence(t *c.C) {
 	// most of the volume tests (snapshotting, quotas, etc) are unit tests under their own package.
 	// these tests exist to cover the last mile where volumes are bind-mounted into containers.
 
-	cluster := s.clusterClient(t)
 	h := s.anyHostClient(t)
 
 	// create a volume!
@@ -256,7 +250,7 @@ func (s *HostSuite) TestVolumePersistence(t *c.C) {
 	}()
 
 	// create first job
-	cmd, service, err := makeIshApp(cluster, h, s.discoverdClient(t), host.ContainerConfig{
+	cmd, service, err := s.makeIshApp(t, h, host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
 			VolumeID:  vol.ID,
@@ -271,7 +265,7 @@ func (s *HostSuite) TestVolumePersistence(t *c.C) {
 	t.Assert(resp, c.Equals, "0\n")
 
 	// start another one that mounts the same volume
-	cmd, service, err = makeIshApp(cluster, h, s.discoverdClient(t), host.ContainerConfig{
+	cmd, service, err = s.makeIshApp(t, h, host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
 			VolumeID:  vol.ID,
@@ -295,7 +289,7 @@ func (s *HostSuite) TestSignalJob(t *c.C) {
 	client := schedutil.PickHost(hosts)
 
 	// start a signal-service job
-	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), &host.Job{
+	cmd := exec.JobUsingCluster(cluster, s.createArtifact(t, "test-apps"), &host.Job{
 		Config: host.ContainerConfig{
 			Args:       []string{"/bin/signal"},
 			DisableLog: true,
@@ -330,7 +324,7 @@ func (s *HostSuite) TestSignalJob(t *c.C) {
 func (s *HostSuite) TestResourceLimits(t *c.C) {
 	cmd := exec.JobUsingCluster(
 		s.clusterClient(t),
-		exec.DockerImage(imageURIs["test-apps"]),
+		s.createArtifact(t, "test-apps"),
 		&host.Job{
 			Config:    host.ContainerConfig{Args: []string{"sh", "-c", resourceCmd}},
 			Resources: testResources(),
@@ -356,7 +350,7 @@ func (s *HostSuite) TestResourceLimits(t *c.C) {
 func (s *HostSuite) TestDevStdout(t *c.C) {
 	cmd := exec.CommandUsingCluster(
 		s.clusterClient(t),
-		exec.DockerImage(imageURIs["test-apps"]),
+		s.createArtifact(t, "test-apps"),
 		"sh", "-c", "echo foo > /dev/stdout; echo bar > /dev/stderr",
 	)
 	var stdout, stderr bytes.Buffer
@@ -381,7 +375,7 @@ func (s *HostSuite) TestDevStdout(t *c.C) {
 func (s *HostSuite) TestDevSHM(t *c.C) {
 	cmd := exec.CommandUsingCluster(
 		s.clusterClient(t),
-		exec.DockerImage(imageURIs["test-apps"]),
+		s.createArtifact(t, "test-apps"),
 		"sh", "-c", "df -h /dev/shm && echo foo > /dev/shm/asdf",
 	)
 	var out bytes.Buffer
@@ -438,7 +432,7 @@ func (s *HostSuite) TestNotifyOOM(t *c.C) {
 	// run the OOM job
 	cmd := exec.CommandUsingCluster(
 		s.clusterClient(t),
-		exec.DockerImage(imageURIs["test-apps"]),
+		s.createArtifact(t, "test-apps"),
 		"/bin/oom",
 	)
 	cmd.Meta = map[string]string{"flynn-controller.app": appID}

@@ -16,7 +16,16 @@ import (
 
 func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.Job {
 	t := f.Release.Processes[name]
-	env := make(map[string]string, len(f.Release.Env)+len(t.Env)+4)
+
+	var entrypoint ct.ImageEntrypoint
+	if e := getEntrypoint(f.Artifacts, name); e != nil {
+		entrypoint = *e
+	}
+
+	env := make(map[string]string, len(entrypoint.Env)+len(f.Release.Env)+len(t.Env)+5)
+	for k, v := range entrypoint.Env {
+		env[k] = v
+	}
 	for k, v := range f.Release.Env {
 		env[k] = v
 	}
@@ -29,7 +38,7 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	env["FLYNN_RELEASE_ID"] = f.Release.ID
 	env["FLYNN_PROCESS_TYPE"] = name
 	env["FLYNN_JOB_ID"] = id
-	metadata := make(map[string]string, len(f.App.Meta)+4)
+	metadata := make(map[string]string, len(f.App.Meta)+5)
 	for k, v := range f.App.Meta {
 		metadata[k] = v
 	}
@@ -42,12 +51,16 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		ID:       id,
 		Metadata: metadata,
 		Config: host.ContainerConfig{
-			Args:        t.Args,
+			Args:        entrypoint.Args,
 			Env:         env,
+			WorkingDir:  entrypoint.WorkingDir,
 			HostNetwork: t.HostNetwork,
 		},
 		Resurrect: t.Resurrect,
 		Resources: t.Resources,
+	}
+	if len(t.Args) > 0 {
+		job.Config.Args = t.Args
 	}
 
 	// job.Config.Args may be empty if restoring from an old backup which
@@ -56,17 +69,9 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		job.Config.Args = append(t.DeprecatedEntrypoint, t.DeprecatedCmd...)
 	}
 
+	SetupMountspecs(job, f.Artifacts)
 	if f.App.Meta["flynn-system-app"] == "true" {
 		job.Partition = "system"
-	}
-	if f.ImageArtifact != nil {
-		job.ImageArtifact = f.ImageArtifact.HostArtifact()
-	}
-	if len(f.FileArtifacts) > 0 {
-		job.FileArtifacts = make([]*host.Artifact, len(f.FileArtifacts))
-		for i, artifact := range f.FileArtifacts {
-			job.FileArtifacts[i] = artifact.HostArtifact()
-		}
 	}
 	job.Config.Ports = make([]host.Port, len(t.Ports))
 	for i, p := range t.Ports {
@@ -75,6 +80,62 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		job.Config.Ports[i].Service = p.Service
 	}
 	return job
+}
+
+// getEntrypoint returns an image entrypoint for a process type from a list of
+// artifacts, first iterating through them and returning any entrypoint having
+// the exact type, then iterating through them and returning the artifact's
+// default entrypoint if it has one.
+//
+// The artifacts are traversed in reverse order so that entrypoints in the
+// image being overlayed at the top are considered first.
+func getEntrypoint(artifacts []*ct.Artifact, typ string) *ct.ImageEntrypoint {
+	for i := len(artifacts) - 1; i >= 0; i-- {
+		artifact := artifacts[i]
+		if artifact.Type != ct.ArtifactTypeFlynn {
+			continue
+		}
+		if e, ok := artifact.Manifest().Entrypoints[typ]; ok {
+			return e
+		}
+	}
+	for i := len(artifacts) - 1; i >= 0; i-- {
+		artifact := artifacts[i]
+		if artifact.Type != ct.ArtifactTypeFlynn {
+			continue
+		}
+		if e := artifact.Manifest().DefaultEntrypoint(); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+// SetupMountspecs populates job.Mountspecs using the layers from a list of
+// Flynn image artifacts, expecting each artifact to have a single rootfs entry
+// containing squashfs layers
+func SetupMountspecs(job *host.Job, artifacts []*ct.Artifact) {
+	for _, artifact := range artifacts {
+		if artifact.Type != ct.ArtifactTypeFlynn {
+			continue
+		}
+		if len(artifact.Manifest().Rootfs) != 1 {
+			continue
+		}
+		rootfs := artifact.Manifest().Rootfs[0]
+		for _, layer := range rootfs.Layers {
+			if layer.Type != ct.ImageLayerTypeSquashfs {
+				continue
+			}
+			job.Mountspecs = append(job.Mountspecs, &host.Mountspec{
+				Type:   host.MountspecTypeSquashfs,
+				ID:     layer.ID,
+				URL:    artifact.LayerURL(layer),
+				Size:   layer.Length,
+				Hashes: layer.Hashes,
+			})
+		}
+	}
 }
 
 func ProvisionVolume(h VolumeCreator, job *host.Job) error {
@@ -124,18 +185,13 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 		return nil, fmt.Errorf("error getting release: %s", err)
 	}
 
-	imageArtifact, err := c.GetArtifact(release.ImageArtifactID())
-	if err != nil {
-		return nil, fmt.Errorf("error getting image artifact: %s", err)
-	}
-
-	fileArtifacts := make([]*ct.Artifact, len(release.FileArtifactIDs()))
-	for i, fileArtifactID := range release.FileArtifactIDs() {
-		artifact, err := c.GetArtifact(fileArtifactID)
+	artifacts := make([]*ct.Artifact, len(release.ArtifactIDs))
+	for i, artifactID := range release.ArtifactIDs {
+		artifact, err := c.GetArtifact(artifactID)
 		if err != nil {
 			return nil, fmt.Errorf("error getting file artifact: %s", err)
 		}
-		fileArtifacts[i] = artifact
+		artifacts[i] = artifact
 	}
 
 	procs := make(map[string]int)
@@ -144,13 +200,12 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 	}
 
 	ef := &ct.ExpandedFormation{
-		App:           app,
-		Release:       release,
-		ImageArtifact: imageArtifact,
-		FileArtifacts: fileArtifacts,
-		Processes:     procs,
-		Tags:          f.Tags,
-		UpdatedAt:     time.Now(),
+		App:       app,
+		Release:   release,
+		Artifacts: artifacts,
+		Processes: procs,
+		Tags:      f.Tags,
+		UpdatedAt: time.Now(),
 	}
 	if f.UpdatedAt != nil {
 		ef.UpdatedAt = *f.UpdatedAt

@@ -16,7 +16,6 @@ import (
 	"github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	g "github.com/flynn/flynn/pkg/examplegenerator"
 	"github.com/flynn/flynn/pkg/httprecorder"
@@ -281,9 +280,50 @@ func (e *generator) deleteApp() {
 }
 
 func (e *generator) createArtifact() {
+	manifest := &ct.ImageManifest{
+		Type: ct.ImageManifestTypeV1,
+		Meta: map[string]string{"foo": "bar"},
+		Entrypoints: map[string]*ct.ImageEntrypoint{
+			"_default": {
+				Env:        map[string]string{"key": "default-val"},
+				WorkingDir: "/",
+				Args:       []string{"bash"},
+			},
+			"web": {
+				Env:        map[string]string{"key": "other-val"},
+				WorkingDir: "/app",
+				Args:       []string{"/bin/web-server"},
+			},
+		},
+		Rootfs: []*ct.ImageRootfs{
+			{
+				Platform: &ct.ImagePlatform{
+					Architecture: "amd64",
+					OS:           "linux",
+				},
+				Layers: []*ct.ImageLayer{
+					{
+						ID:     "34510d7fb6c0b108121b5f5f2e86f0c4c27a1e6d1dbbbd131189a65fab641775",
+						Type:   ct.ImageLayerTypeSquashfs,
+						Length: 34570240,
+						Hashes: map[string]string{"sha512_256": "34510d7fb6c0b108121b5f5f2e86f0c4c27a1e6d1dbbbd131189a65fab641775"},
+					},
+					{
+						ID:     "d038205ed955b94a475dfaf81b4e593b77d3b74420d673fb0bf0a7ca8c4cc345",
+						Type:   ct.ImageLayerTypeSquashfs,
+						Length: 92368896,
+						Hashes: map[string]string{"sha512_256": "d038205ed955b94a475dfaf81b4e593b77d3b74420d673fb0bf0a7ca8c4cc345"},
+					},
+				},
+			},
+		},
+	}
 	artifact := &ct.Artifact{
-		Type: host.ArtifactTypeDocker,
-		URI:  e.resourceIds["SLUGRUNNER_IMAGE_URI"],
+		Type:             ct.ArtifactTypeFlynn,
+		URI:              e.resourceIds["SLUGRUNNER_IMAGE_URI"],
+		RawManifest:      manifest.RawManifest(),
+		Hashes:           manifest.Hashes(),
+		LayerURLTemplate: "https://dl.flynn.io/tuf?target=/layers/{id}.squashfs",
 	}
 	err := e.client.CreateArtifact(artifact)
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 var commit, branch, tag, dirty string
 
 func String() string {
-	if commit == "" || commit == "dev" {
+	if Dev() {
 		return "dev"
 	}
 	if Tagged() {
@@ -18,6 +18,10 @@ func String() string {
 		commit += "+"
 	}
 	return fmt.Sprintf("%s (%s)", commit, branch)
+}
+
+func Dev() bool {
+	return commit == "" || commit == "dev"
 }
 
 func Tagged() bool {

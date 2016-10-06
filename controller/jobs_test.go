@@ -138,7 +138,7 @@ func (s *S) TestKillJob(c *C) {
 
 func (s *S) TestRunJobDetached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
-	artifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker, URI: "docker://foo/bar"})
+	artifact := s.createTestArtifact(c, &ct.Artifact{})
 	hostID := fakeHostID()
 	host := tu.NewFakeHostClient(hostID, false)
 	s.cc.AddHost(host)
@@ -220,7 +220,7 @@ func (s *S) TestRunJobAttached(c *C) {
 		}{outPipeR, inPipeW}), nil
 	})
 
-	artifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker, URI: "docker://foo/bar"})
+	artifact := s.createTestArtifact(c, &ct.Artifact{})
 	release := s.createTestRelease(c, &ct.Release{
 		ArtifactIDs: []string{artifact.ID},
 		Env:         map[string]string{"RELEASE": "true", "FOO": "bar"},
