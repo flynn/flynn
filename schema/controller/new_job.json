@@ -57,6 +57,9 @@
     },
     "data": {
       "type": "boolean"
+    },
+    "partition": {
+      "$ref": "/schema/controller/common#/definitions/partition"
     }
   }
 }
