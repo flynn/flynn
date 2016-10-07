@@ -284,6 +284,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 			DisableLog: newJob.DisableLog,
 		},
 		Resources: newJob.Resources,
+		Partition: string(newJob.Partition),
 	}
 	resource.SetDefaults(&job.Resources)
 	if len(newJob.Args) > 0 {

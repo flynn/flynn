@@ -66,6 +66,11 @@
     "deploy_timeout": {
       "description": "deployment timeout (default 120s)",
       "type": "integer"
+    },
+    "partition": {
+      "description": "job partition",
+      "type": "string",
+      "enum": ["background", "user", "system"]
     }
   }
 }
