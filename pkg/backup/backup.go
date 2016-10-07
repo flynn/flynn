@@ -32,6 +32,7 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 			"PGPASSWORD": pgRelease.Env["PGPASSWORD"],
 		},
 		DisableLog: true,
+		Partition:  ct.PartitionTypeBackground,
 	}
 	if err := tw.WriteCommandOutput(client, "postgres.sql.gz", "postgres", pgJob); err != nil {
 		return fmt.Errorf("error dumping postgres database: %s", err)
@@ -51,6 +52,7 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 				"MYSQL_PWD": mysqlRelease.Env["MYSQL_PWD"],
 			},
 			DisableLog: true,
+			Partition:  ct.PartitionTypeBackground,
 		}
 		if err := tw.WriteCommandOutput(client, "mysql.sql.gz", "mariadb", mysqlJob); err != nil {
 			return fmt.Errorf("error dumping mariadb database: %s", err)
@@ -71,6 +73,7 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 				"MONGO_PWD": mongodbRelease.Env["MONGO_PWD"],
 			},
 			DisableLog: true,
+			Partition:  ct.PartitionTypeBackground,
 		}
 		if err := tw.WriteCommandOutput(client, "mongodb.archive.gz", "mongodb", mongodbJob); err != nil {
 			return fmt.Errorf("error dumping mongodb database: %s", err)
