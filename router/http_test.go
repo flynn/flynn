@@ -1690,3 +1690,20 @@ func (s *S) TestHTTPCloseNotify(c *C) {
 		c.Fatal("CloseNotify not called")
 	}
 }
+
+func (s *S) TestDoubleSlashPath(c *C) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte(req.URL.Path))
+	})
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	assertGet(c, "http://"+l.Addr+"//foo/bar", "example.com", "//foo/bar")
+}
