@@ -305,8 +305,21 @@ func prepareRequest(req *http.Request) *http.Request {
 	outreq := new(http.Request)
 	*outreq = *req // includes shallow copies of maps, but okay
 
-	// Pass the Request-URI verbatim without any modifications
-	outreq.URL.Opaque = strings.Split(strings.TrimPrefix(req.RequestURI, req.URL.Scheme+":"), "?")[0]
+	// Pass the Request-URI verbatim without any modifications.
+	//
+	// NOTE: An exception must be made if the Request-URI is a path
+	// beginning with "//" (e.g. "//foo/bar") because then
+	// req.URL.RequestURI() would interpret req.URL.Opaque as being a URI
+	// with the scheme stripped and so generate a URI like scheme:opaque
+	// (e.g. "http://foo/bar") which would be incorrect, see:
+	// https://github.com/golang/go/blob/f75aafd/src/net/url/url.go#L913-L931
+	//
+	// It is ok to make this exception because the fallback to
+	// req.URL.EscapedPath will generate the correct Request-URI.
+	if !strings.HasPrefix(req.RequestURI, "//") {
+		outreq.URL.Opaque = strings.Split(strings.TrimPrefix(req.RequestURI, req.URL.Scheme+":"), "?")[0]
+	}
+
 	outreq.URL.Scheme = "http"
 	outreq.Proto = "HTTP/1.1"
 	outreq.ProtoMajor = 1
