@@ -13,22 +13,23 @@ import (
 
 func init() {
 	register("ps", runPs, `
-usage: flynn ps [-a]
+usage: flynn ps [-a] [-c]
 
 List flynn jobs.
 
 Options:
   -a, --all      Show all jobs (default is running and pending)
+  -c, --command  Show command
 
 Example:
 
        $ flynn ps
-       ID                                          TYPE  STATE  CREATED             RELEASE                               COMMAND
-       host0-52aedfbf-e613-40f2-941a-d832d10fc400  web   up     About a minute ago  cf39a906-38d1-4393-a6b1-8ad2befe8142  /runner/init start web
-       host0-205595d8-206a-46a2-be30-2e98f53df272  web   up     25 seconds ago      cf39a906-38d1-4393-a6b1-8ad2befe8142  /runner/init start web
-       host0-0f34548b-72fa-41fe-a425-abc4ac6a3857  web   up     25 seconds ago      cf39a906-38d1-4393-a6b1-8ad2befe8142  /runner/init start web
+       ID                                          TYPE  STATE  CREATED             RELEASE
+       host0-52aedfbf-e613-40f2-941a-d832d10fc400  web   up     About a minute ago  cf39a906-38d1-4393-a6b1-8ad2befe8142
+       host0-205595d8-206a-46a2-be30-2e98f53df272  web   up     25 seconds ago      cf39a906-38d1-4393-a6b1-8ad2befe8142
+       host0-0f34548b-72fa-41fe-a425-abc4ac6a3857  web   up     25 seconds ago      cf39a906-38d1-4393-a6b1-8ad2befe8142
 
-       $ flynn ps --all
+       $ flynn ps --all --command
        ID                                          TYPE  STATE  CREATED             RELEASE				  COMMAND
        host0-52aedfbf-e613-40f2-941a-d832d10fc400  web   up     2 minutes ago       cf39a906-38d1-4393-a6b1-8ad2befe842	  /runner/init start web
        host0-205595d8-206a-46a2-be30-2e98f53df272  web   up     About a minute ago  cf39a906-38d1-4393-a6b1-8ad2befe842	  /runner/init start web
@@ -47,7 +48,11 @@ func runPs(args *docopt.Args, client controller.Client) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	listRec(w, "ID", "TYPE", "STATE", "CREATED", "RELEASE", "COMMAND")
+	headers := []interface{}{"ID", "TYPE", "STATE", "CREATED", "RELEASE"}
+	if args.Bool["--command"] {
+		headers = append(headers, "COMMAND")
+	}
+	listRec(w, headers...)
 	for _, j := range jobs {
 		if j.Type == "" {
 			j.Type = "run"
@@ -63,8 +68,11 @@ func runPs(args *docopt.Args, client controller.Client) error {
 		if j.CreatedAt != nil {
 			created = units.HumanDuration(time.Now().UTC().Sub(*j.CreatedAt)) + " ago"
 		}
-		cmd := strings.Join(j.Args, " ")
-		listRec(w, id, j.Type, j.State, created, j.ReleaseID, cmd)
+		fields := []interface{}{id, j.Type, j.State, created, j.ReleaseID}
+		if args.Bool["--command"] {
+			fields = append(fields, strings.Join(j.Args, " "))
+		}
+		listRec(w, fields...)
 	}
 
 	return nil
