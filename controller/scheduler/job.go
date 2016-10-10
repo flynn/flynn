@@ -51,6 +51,8 @@ type Job struct {
 	AppID     string `json:"app_id"`
 	ReleaseID string `json:"release_id"`
 
+	Args []string `json:"args,omitempty"`
+
 	// HostID is the ID of the host the job has been placed on, and is set
 	// when a StartJob goroutine makes a placement request to the scheduler
 	// loop
@@ -144,6 +146,7 @@ func (j *Job) ControllerJob() *ct.Job {
 		Meta:      utils.JobMetaFromMetadata(j.metadata),
 		HostError: j.hostError,
 		RunAt:     j.RunAt,
+		Args:      j.Args,
 	}
 
 	switch j.State {

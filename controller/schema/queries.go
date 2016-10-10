@@ -307,18 +307,18 @@ WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
 WHERE app_id = $1 AND deleted_at IS NULL`
 	jobListQuery = `
-SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
+SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at, args
 FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC`
 	jobListActiveQuery = `
-SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
+SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at, args
 FROM job_cache WHERE state = 'pending' OR state = 'starting' OR state = 'up' OR state = 'stopping' ORDER BY updated_at DESC`
 	jobSelectQuery = `
-SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
+SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at, args
 FROM job_cache WHERE job_id = $1`
 	jobInsertQuery = `
-INSERT INTO job_cache (cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (job_id) DO UPDATE
-SET cluster_id = $1, host_id = $3, state = $7, exit_status = $9, host_error = $10, run_at = $11, restarts = $12, updated_at = now()
+INSERT INTO job_cache (cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, args)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (job_id) DO UPDATE
+SET cluster_id = $1, host_id = $3, state = $7, exit_status = $9, host_error = $10, run_at = $11, restarts = $12, args = $13, updated_at = now()
 RETURNING created_at, updated_at`
 	providerListQuery = `
 SELECT provider_id, name, url, created_at, updated_at

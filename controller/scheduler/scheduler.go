@@ -1019,6 +1019,7 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 					Formation: f,
 					StartedAt: time.Now(),
 					State:     JobStatePending,
+					Args:      f.Release.Processes[typ].Args,
 				}
 				s.jobs.Add(job)
 
@@ -1399,6 +1400,7 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 			ReleaseID: releaseID,
 			HostID:    activeJob.HostID,
 			JobID:     hostJob.ID,
+			Args:      hostJob.Config.Args,
 		}
 		s.jobs.Add(job)
 	}
@@ -1751,6 +1753,7 @@ func (s *Scheduler) restartJob(job *Job) {
 		StartedAt: time.Now(),
 		State:     JobStatePending,
 		Restarts:  restarts + 1,
+		Args:      job.Args,
 	}
 	s.jobs.Add(newJob)
 

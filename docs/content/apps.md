@@ -82,8 +82,8 @@ automatically restart any killed processes that are not one-off run jobs.
 ```text
 # Get a list of processes
 $ flynn ps
-ID                                         TYPE  RELEASE
-host-28a16c12-6136-4e06-93b1-2b014147de79  web   ace81d3d-93f5-4df3-b364-55f05cb908c3
+ID                                          TYPE  STATE  CREATED        RELEASE                               COMMAND
+host0-52aedfbf-e613-40f2-941a-d832d10fc400  web   up     6 seconds ago  cf39a906-38d1-4393-a6b1-8ad2befe8142  /runner/init start web
 
 # Kill a process
 $ flynn kill host-28a16c12-6136-4e06-93b1-2b014147de79
