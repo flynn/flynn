@@ -57,6 +57,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 		job.HostError,
 		job.RunAt,
 		job.Restarts,
+		job.Args,
 	).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if postgres.IsPostgresCode(err, postgres.CheckViolation) {
 		return ct.ValidationError{Field: "state", Message: err.Error()}
@@ -89,6 +90,7 @@ func scanJob(s postgres.Scanner) (*ct.Job, error) {
 		&job.Restarts,
 		&job.CreatedAt,
 		&job.UpdatedAt,
+		&job.Args,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {

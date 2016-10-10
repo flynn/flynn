@@ -409,6 +409,9 @@ $$ LANGUAGE plpgsql`,
 		`DROP TRIGGER notify_formation ON formations`,
 		`DROP FUNCTION notify_formation()`,
 	)
+	migrations.Add(23,
+		`ALTER TABLE job_cache ADD COLUMN args jsonb`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

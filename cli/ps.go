@@ -2,6 +2,7 @@ package main
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/docker/go-units"
@@ -21,23 +22,18 @@ Options:
 
 Example:
 
-	$ flynn ps
-	ID                                         TYPE  STATE    CREATED         RELEASE
-	host-f25797dc-c956-4337-89af-d49eff50f58e  web   up       14 seconds ago  1b1db8ef-ba4d-4314-85c1-d5895a44b27e
-	6ec25d6e-2985-4807-8e64-02dc23c348bc       web   pending  7 seconds ago   1b1db8ef-ba4d-4314-85c1-d5895a44b27e
-	ab14754c-73b7-4212-a6d9-73b825587fd2       web   pending  2 seconds ago   1b1db8ef-ba4d-4314-85c1-d5895a44b27e
+       $ flynn ps
+       ID                                          TYPE  STATE  CREATED             RELEASE                               COMMAND
+       host0-52aedfbf-e613-40f2-941a-d832d10fc400  web   up     About a minute ago  cf39a906-38d1-4393-a6b1-8ad2befe8142  /runner/init start web
+       host0-205595d8-206a-46a2-be30-2e98f53df272  web   up     25 seconds ago      cf39a906-38d1-4393-a6b1-8ad2befe8142  /runner/init start web
+       host0-0f34548b-72fa-41fe-a425-abc4ac6a3857  web   up     25 seconds ago      cf39a906-38d1-4393-a6b1-8ad2befe8142  /runner/init start web
 
-	$ flynn ps --all
-	ID                                         TYPE  STATE    CREATED             RELEASE
-	host-d84dc657-83b8-4a62-aab8-ad97bb994761  web   down     2 minutes ago       cd698657-2955-4fa4-bc2f-8714b218a7a2
-	host-feaff633-a37b-4565-9ade-24bae0cfae03  web   down     About a minute ago  cd698657-2955-4fa4-bc2f-8714b218a7a2
-	host-e8b4f9be-e422-481f-928c-4c82f0bb5e8b  web   down     About a minute ago  cd698657-2955-4fa4-bc2f-8714b218a7a2
-	host-95747b4f-fdcd-4c44-ab72-b3d9609668e4  run   down     54 seconds ago      cd698657-2955-4fa4-bc2f-8714b218a7a2
-	host-cef95d8c-a632-4ae6-8a57-e13cbc24afa9  web   down     25 seconds ago      1b1db8ef-ba4d-4314-85c1-d5895a44b27e
-	host-ef6249e3-b463-4fea-a7dd-b1302872f821  web   down     20 seconds ago      1b1db8ef-ba4d-4314-85c1-d5895a44b27e
-	host-f25797dc-c956-4337-89af-d49eff50f58e  web   up       14 seconds ago      1b1db8ef-ba4d-4314-85c1-d5895a44b27e
-	6ec25d6e-2985-4807-8e64-02dc23c348bc       web   pending  7 seconds ago       1b1db8ef-ba4d-4314-85c1-d5895a44b27e
-	ab14754c-73b7-4212-a6d9-73b825587fd2       web   pending  2 seconds ago       1b1db8ef-ba4d-4314-85c1-d5895a44b27e
+       $ flynn ps --all
+       ID                                          TYPE  STATE  CREATED             RELEASE				  COMMAND
+       host0-52aedfbf-e613-40f2-941a-d832d10fc400  web   up     2 minutes ago       cf39a906-38d1-4393-a6b1-8ad2befe842	  /runner/init start web
+       host0-205595d8-206a-46a2-be30-2e98f53df272  web   up     About a minute ago  cf39a906-38d1-4393-a6b1-8ad2befe842	  /runner/init start web
+       host0-0f34548b-72fa-41fe-a425-abc4ac6a3857  web   up     About a minute ago  cf39a906-38d1-4393-a6b1-8ad2befe842	  /runner/init start web
+       host0-129b821f-3195-4b3b-b04b-669196cfbb03  run   down   5 seconds ago       cf39a906-38d1-4393-a6b1-8ad2befe842	  /runner/init /bin/bash
 `)
 }
 
@@ -51,7 +47,7 @@ func runPs(args *docopt.Args, client controller.Client) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	listRec(w, "ID", "TYPE", "STATE", "CREATED", "RELEASE")
+	listRec(w, "ID", "TYPE", "STATE", "CREATED", "RELEASE", "COMMAND")
 	for _, j := range jobs {
 		if j.Type == "" {
 			j.Type = "run"
@@ -67,7 +63,8 @@ func runPs(args *docopt.Args, client controller.Client) error {
 		if j.CreatedAt != nil {
 			created = units.HumanDuration(time.Now().UTC().Sub(*j.CreatedAt)) + " ago"
 		}
-		listRec(w, id, j.Type, j.State, created, j.ReleaseID)
+		cmd := strings.Join(j.Args, " ")
+		listRec(w, id, j.Type, j.State, created, j.ReleaseID, cmd)
 	}
 
 	return nil
