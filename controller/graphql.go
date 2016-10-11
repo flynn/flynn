@@ -135,7 +135,7 @@ func wrapResolveFunc(fn func(*controllerAPI, graphql.ResolveParams) (interface{}
 func formationFieldResolveFunc(fn func(*controllerAPI, *ct.Formation) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if formation, ok := p.Source.(*ct.Formation); ok {
+		if formation, ok := p.Source.(*ct.Formation); ok && formation != nil {
 			return fn(api, formation)
 		}
 		return nil, nil
@@ -145,7 +145,7 @@ func formationFieldResolveFunc(fn func(*controllerAPI, *ct.Formation) (interface
 func expandedFormationFieldResolveFunc(fn func(*controllerAPI, *ct.ExpandedFormation) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if formation, ok := p.Source.(*ct.ExpandedFormation); ok {
+		if formation, ok := p.Source.(*ct.ExpandedFormation); ok && formation != nil {
 			return fn(api, formation)
 		}
 		return nil, nil
@@ -155,7 +155,7 @@ func expandedFormationFieldResolveFunc(fn func(*controllerAPI, *ct.ExpandedForma
 func artifactFieldResolveFunc(fn func(*controllerAPI, *ct.Artifact) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if artifact, ok := p.Source.(*ct.Artifact); ok {
+		if artifact, ok := p.Source.(*ct.Artifact); ok && artifact != nil {
 			return fn(api, artifact)
 		}
 		return nil, nil
@@ -165,7 +165,7 @@ func artifactFieldResolveFunc(fn func(*controllerAPI, *ct.Artifact) (interface{}
 func releaseFieldResolveFunc(fn func(*controllerAPI, *ct.Release) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if release, ok := p.Source.(*ct.Release); ok {
+		if release, ok := p.Source.(*ct.Release); ok && release != nil {
 			return fn(api, release)
 		}
 		return nil, nil
@@ -175,7 +175,7 @@ func releaseFieldResolveFunc(fn func(*controllerAPI, *ct.Release) (interface{}, 
 func appFieldResolveFunc(fn func(*controllerAPI, *ct.App) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if app, ok := p.Source.(*ct.App); ok {
+		if app, ok := p.Source.(*ct.App); ok && app != nil {
 			return fn(api, app)
 		}
 		return nil, nil
@@ -185,7 +185,7 @@ func appFieldResolveFunc(fn func(*controllerAPI, *ct.App) (interface{}, error)) 
 func deploymentFieldResolveFunc(fn func(*controllerAPI, *ct.Deployment) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if deployment, ok := p.Source.(*ct.Deployment); ok {
+		if deployment, ok := p.Source.(*ct.Deployment); ok && deployment != nil {
 			return fn(api, deployment)
 		}
 		return nil, nil
@@ -195,7 +195,7 @@ func deploymentFieldResolveFunc(fn func(*controllerAPI, *ct.Deployment) (interfa
 func jobFieldResolveFunc(fn func(*controllerAPI, *ct.Job) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if job, ok := p.Source.(*ct.Job); ok {
+		if job, ok := p.Source.(*ct.Job); ok && job != nil {
 			return fn(api, job)
 		}
 		return nil, nil
@@ -205,7 +205,7 @@ func jobFieldResolveFunc(fn func(*controllerAPI, *ct.Job) (interface{}, error)) 
 func providerFieldResolveFunc(fn func(*controllerAPI, *ct.Provider) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if provider, ok := p.Source.(*ct.Provider); ok {
+		if provider, ok := p.Source.(*ct.Provider); ok && provider != nil {
 			return fn(api, provider)
 		}
 		return nil, nil
@@ -215,7 +215,7 @@ func providerFieldResolveFunc(fn func(*controllerAPI, *ct.Provider) (interface{}
 func resourceFieldResolveFunc(fn func(*controllerAPI, *ct.Resource) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if resource, ok := p.Source.(*ct.Resource); ok {
+		if resource, ok := p.Source.(*ct.Resource); ok && resource != nil {
 			return fn(api, resource)
 		}
 		return nil, nil
@@ -225,7 +225,7 @@ func resourceFieldResolveFunc(fn func(*controllerAPI, *ct.Resource) (interface{}
 func routeCertificateFieldResolveFunc(fn func(*controllerAPI, *router.Certificate) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if cert, ok := p.Source.(*router.Certificate); ok {
+		if cert, ok := p.Source.(*router.Certificate); ok && cert != nil {
 			return fn(api, cert)
 		}
 		return nil, nil
@@ -235,7 +235,7 @@ func routeCertificateFieldResolveFunc(fn func(*controllerAPI, *router.Certificat
 func routeFieldResolveFunc(fn func(*controllerAPI, *router.Route) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if route, ok := p.Source.(*router.Route); ok {
+		if route, ok := p.Source.(*router.Route); ok && route != nil {
 			return fn(api, route)
 		}
 		return nil, nil
@@ -245,7 +245,7 @@ func routeFieldResolveFunc(fn func(*controllerAPI, *router.Route) (interface{}, 
 func eventFieldResolveFunc(fn func(*controllerAPI, *ct.Event) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if event, ok := p.Source.(*ct.Event); ok {
+		if event, ok := p.Source.(*ct.Event); ok && event != nil {
 			return fn(api, event)
 		}
 		return nil, nil
@@ -255,7 +255,7 @@ func eventFieldResolveFunc(fn func(*controllerAPI, *ct.Event) (interface{}, erro
 func appDeletionEventFieldResolveFunc(fn func(*controllerAPI, *ct.AppDeletionEvent) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if event, ok := p.Source.(*ct.AppDeletionEvent); ok {
+		if event, ok := p.Source.(*ct.AppDeletionEvent); ok && event != nil {
 			return fn(api, event)
 		}
 		return nil, nil
@@ -265,7 +265,7 @@ func appDeletionEventFieldResolveFunc(fn func(*controllerAPI, *ct.AppDeletionEve
 func appDeletionFieldResolveFunc(fn func(*controllerAPI, *ct.AppDeletion) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if ad, ok := p.Source.(*ct.AppDeletion); ok {
+		if ad, ok := p.Source.(*ct.AppDeletion); ok && ad != nil {
 			return fn(api, ad)
 		}
 		return nil, nil
@@ -275,7 +275,7 @@ func appDeletionFieldResolveFunc(fn func(*controllerAPI, *ct.AppDeletion) (inter
 func appReleaseFieldResolveFunc(fn func(*controllerAPI, *ct.AppRelease) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if ar, ok := p.Source.(*ct.AppRelease); ok {
+		if ar, ok := p.Source.(*ct.AppRelease); ok && ar != nil {
 			return fn(api, ar)
 		}
 		return nil, nil
@@ -285,7 +285,7 @@ func appReleaseFieldResolveFunc(fn func(*controllerAPI, *ct.AppRelease) (interfa
 func deploymentEventFieldResolveFunc(fn func(*controllerAPI, *ct.DeploymentEvent) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if event, ok := p.Source.(*ct.DeploymentEvent); ok {
+		if event, ok := p.Source.(*ct.DeploymentEvent); ok && event != nil {
 			return fn(api, event)
 		}
 		return nil, nil
@@ -295,7 +295,7 @@ func deploymentEventFieldResolveFunc(fn func(*controllerAPI, *ct.DeploymentEvent
 func scaleObjectFieldResolveFunc(fn func(*controllerAPI, *ct.Scale) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if s, ok := p.Source.(*ct.Scale); ok {
+		if s, ok := p.Source.(*ct.Scale); ok && s != nil {
 			return fn(api, s)
 		}
 		return nil, nil
@@ -305,7 +305,7 @@ func scaleObjectFieldResolveFunc(fn func(*controllerAPI, *ct.Scale) (interface{}
 func releaseDeletionEventFieldResolveFunc(fn func(*controllerAPI, *ct.ReleaseDeletionEvent) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if event, ok := p.Source.(*ct.ReleaseDeletionEvent); ok {
+		if event, ok := p.Source.(*ct.ReleaseDeletionEvent); ok && event != nil {
 			return fn(api, event)
 		}
 		return nil, nil
@@ -315,7 +315,7 @@ func releaseDeletionEventFieldResolveFunc(fn func(*controllerAPI, *ct.ReleaseDel
 func releaseDeletionFieldResolveFunc(fn func(*controllerAPI, *ct.ReleaseDeletion) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if rd, ok := p.Source.(*ct.ReleaseDeletion); ok {
+		if rd, ok := p.Source.(*ct.ReleaseDeletion); ok && rd != nil {
 			return fn(api, rd)
 		}
 		return nil, nil
@@ -325,7 +325,7 @@ func releaseDeletionFieldResolveFunc(fn func(*controllerAPI, *ct.ReleaseDeletion
 func tlsCertFieldResolveFunc(fn func(*controllerAPI, *tlscert.Cert) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if cert, ok := p.Source.(*tlscert.Cert); ok {
+		if cert, ok := p.Source.(*tlscert.Cert); ok && cert != nil {
 			return fn(api, cert)
 		}
 		return nil, nil
@@ -335,7 +335,7 @@ func tlsCertFieldResolveFunc(fn func(*controllerAPI, *tlscert.Cert) (interface{}
 func domainMigrationFieldResolveFunc(fn func(*controllerAPI, *ct.DomainMigration) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if dm, ok := p.Source.(*ct.DomainMigration); ok {
+		if dm, ok := p.Source.(*ct.DomainMigration); ok && dm != nil {
 			return fn(api, dm)
 		}
 		return nil, nil
@@ -345,7 +345,7 @@ func domainMigrationFieldResolveFunc(fn func(*controllerAPI, *ct.DomainMigration
 func clusterBackupFieldResolveFunc(fn func(*controllerAPI, *ct.ClusterBackup) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if cb, ok := p.Source.(*ct.ClusterBackup); ok {
+		if cb, ok := p.Source.(*ct.ClusterBackup); ok && cb != nil {
 			return fn(api, cb)
 		}
 		return nil, nil
@@ -355,7 +355,7 @@ func clusterBackupFieldResolveFunc(fn func(*controllerAPI, *ct.ClusterBackup) (i
 func appGarbageCollectionFieldResolveFunc(fn func(*controllerAPI, *ct.AppGarbageCollection) (interface{}, error)) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		api := p.Context.Value(apiContextKey).(*controllerAPI)
-		if agc, ok := p.Source.(*ct.AppGarbageCollection); ok {
+		if agc, ok := p.Source.(*ct.AppGarbageCollection); ok && agc != nil {
 			return fn(api, agc)
 		}
 		return nil, nil
