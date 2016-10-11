@@ -14,8 +14,8 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
-	"github.com/graphql-go/graphql"
-	"github.com/graphql-go/graphql/language/ast"
+	"github.com/flynn/graphql"
+	"github.com/flynn/graphql/language/ast"
 	graphqlhandler "github.com/graphql-go/handler"
 	"golang.org/x/net/context"
 )
