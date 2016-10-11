@@ -101,7 +101,15 @@ type Release struct {
 	CreatedAt *time.Time                `json:"created_at"`
 }
 
+func (r *Release) IsEmpty() bool {
+	return r.ID == "" && len(r.Artifacts) == 0 && len(r.Env) == 0 && len(r.Meta) == 0 && len(r.Processes) == 0 && r.CreatedAt == nil
+}
+
 func (r *Release) ToStandardType() *ct.Release {
+	if r.IsEmpty() {
+		return nil
+	}
+
 	var legacyArtifactID string
 	var artifactIDs []string
 	if len(r.Artifacts) > 0 {
