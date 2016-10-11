@@ -8,6 +8,7 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
+	gt "github.com/flynn/flynn/controller/types/graphql"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -21,9 +22,9 @@ import (
 
 var graphqlSchema graphql.Schema
 
-func newObjectType(name string) *graphql.Scalar {
+func newObjectType(name gt.GraphQLType) *graphql.Scalar {
 	return graphql.NewScalar(graphql.ScalarConfig{
-		Name: name,
+		Name: string(name),
 		Serialize: func(value interface{}) interface{} {
 			return value
 		},
@@ -41,15 +42,15 @@ func newObjectType(name string) *graphql.Scalar {
 }
 
 var (
-	metaObjectType      = newObjectType("MetaObject")
-	envObjectType       = newObjectType("EnvObject")
-	processesObjectType = newObjectType("ProcessesObject")
-	tagsObjectType      = newObjectType("TagsObject")
-	eventDataObjectType = newObjectType("EventDataObject")
+	metaObjectType      = newObjectType(gt.GraphQLTypeMetaObject)
+	envObjectType       = newObjectType(gt.GraphQLTypeEnvObject)
+	processesObjectType = newObjectType(gt.GraphQLTypeProcessesObject)
+	tagsObjectType      = newObjectType(gt.GraphQLTypeTagsObject)
+	eventDataObjectType = newObjectType(gt.GraphQLTypeEventDataObject)
 )
 
 var graphqlTimeType = graphql.NewScalar(graphql.ScalarConfig{
-	Name: "Time",
+	Name: string(gt.GraphQLTypeTime),
 	Serialize: func(value interface{}) interface{} {
 		if ts, ok := value.(*time.Time); ok {
 			if data, err := ts.MarshalText(); err == nil {
@@ -82,7 +83,7 @@ var graphqlTimeType = graphql.NewScalar(graphql.ScalarConfig{
 })
 
 var eventObjectTypeEnum = graphql.NewEnum(graphql.EnumConfig{
-	Name:        "EventType",
+	Name:        string(gt.GraphQLTypeEventType),
 	Description: "Type of event",
 	Values: graphql.EnumValueConfigMap{
 		string(ct.EventTypeApp):                  &graphql.EnumValueConfig{Value: ct.EventTypeApp},
@@ -107,7 +108,7 @@ var eventObjectTypeEnum = graphql.NewEnum(graphql.EnumConfig{
 })
 
 var jobStateEnum = graphql.NewEnum(graphql.EnumConfig{
-	Name:        "JobState",
+	Name:        string(gt.GraphQLTypeJobState),
 	Description: "State of job",
 	Values: graphql.EnumValueConfigMap{
 		string(ct.JobStatePending):  &graphql.EnumValueConfig{Value: ct.JobStatePending},
@@ -382,7 +383,7 @@ func init() {
 	}
 
 	formationObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Formation",
+		Name: string(gt.GraphQLTypeFormation),
 		Fields: graphql.Fields{
 			"processes": &graphql.Field{
 				Type:        processesObjectType,
@@ -416,7 +417,7 @@ func init() {
 	})
 
 	artifactObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Artifact",
+		Name: string(gt.GraphQLTypeArtifact),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.String,
@@ -469,7 +470,7 @@ func init() {
 	})
 
 	releaseObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Release",
+		Name: string(gt.GraphQLTypeRelease),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -534,7 +535,7 @@ func init() {
 	})
 
 	appObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "App",
+		Name: string(gt.GraphQLTypeApp),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -615,7 +616,7 @@ func init() {
 	})
 
 	deploymentObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Deployment",
+		Name: string(gt.GraphQLTypeDeployment),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -703,7 +704,7 @@ func init() {
 	})
 
 	jobObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Job",
+		Name: string(gt.GraphQLTypeJob),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.String,
@@ -818,7 +819,7 @@ func init() {
 	})
 
 	providerObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Provider",
+		Name: string(gt.GraphQLTypeProvider),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -859,7 +860,7 @@ func init() {
 	})
 
 	resourceObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Resource",
+		Name: string(gt.GraphQLTypeResource),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -907,7 +908,7 @@ func init() {
 	})
 
 	routeCertificateObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "RouteCertificate",
+		Name: string(gt.GraphQLTypeRouteCertificate),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -948,7 +949,7 @@ func init() {
 	})
 
 	routeObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Route",
+		Name: string(gt.GraphQLTypeRoute),
 		Fields: graphql.Fields{
 			"type": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -1193,9 +1194,9 @@ func init() {
 		return obj, nil
 	}
 
-	newEventObject := func(name string, dataType *graphql.Object) *graphql.Object {
+	newEventObject := func(name gt.GraphQLType, dataType *graphql.Object) *graphql.Object {
 		return newGraphqlObject(graphql.ObjectConfig{
-			Name: name,
+			Name: string(name),
 			Fields: graphql.Fields{
 				"id": &graphql.Field{
 					Type:        graphql.NewNonNull(graphql.Int),
@@ -1257,7 +1258,7 @@ func init() {
 	}
 
 	appDeletionObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "AppDeletion",
+		Name: string(gt.GraphQLTypeAppDeletion),
 		Fields: graphql.Fields{
 			"app": &graphql.Field{
 				Type:        appObject,
@@ -1292,7 +1293,7 @@ func init() {
 	})
 
 	appDeletionEventObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "AppDeletionEvent",
+		Name: string(gt.GraphQLTypeAppDeletionEvent),
 		Fields: graphql.Fields{
 			"app_deletion": &graphql.Field{
 				Type:        appDeletionObject,
@@ -1312,7 +1313,7 @@ func init() {
 	})
 
 	appReleaseObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "AppRelease",
+		Name: string(gt.GraphQLTypeAppRelease),
 		Fields: graphql.Fields{
 			"prev_release": &graphql.Field{
 				Type:        releaseObject,
@@ -1332,7 +1333,7 @@ func init() {
 	})
 
 	deploymentEventObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "DeploymentEvent",
+		Name: string(gt.GraphQLTypeDeploymentEvent),
 		Fields: graphql.Fields{
 			"app": &graphql.Field{
 				Type:        appObject,
@@ -1388,7 +1389,7 @@ func init() {
 	})
 
 	scaleObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "Scale",
+		Name: string(gt.GraphQLTypeScale),
 		Fields: graphql.Fields{
 			"prev_processes": &graphql.Field{
 				Type:        processesObjectType,
@@ -1415,7 +1416,7 @@ func init() {
 	})
 
 	releaseDeletionObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "ReleaseDeletion",
+		Name: string(gt.GraphQLTypeReleaseDeletion),
 		Fields: graphql.Fields{
 			"app": &graphql.Field{
 				Type:        appObject,
@@ -1458,7 +1459,7 @@ func init() {
 	})
 
 	releaseDeletionEventObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "ReleaseDeletionEvent",
+		Name: string(gt.GraphQLTypeReleaseDeletionEvent),
 		Fields: graphql.Fields{
 			"release_deletion": &graphql.Field{
 				Type:        releaseDeletionObject,
@@ -1478,7 +1479,7 @@ func init() {
 	})
 
 	tlsCertObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "TLSCert",
+		Name: string(gt.GraphQLTypeTLSCert),
 		Fields: graphql.Fields{
 			"ca_cert": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -1512,7 +1513,7 @@ func init() {
 	})
 
 	domainMigrationObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "DomainMigration",
+		Name: string(gt.GraphQLTypeDomainMigration),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
@@ -1567,7 +1568,7 @@ func init() {
 	})
 
 	clusterBackupObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "ClusterBackup",
+		Name: string(gt.GraphQLTypeClusterBackup),
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
 				Type:        graphql.String,
@@ -1629,7 +1630,7 @@ func init() {
 	})
 
 	appGarbageCollectionObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "AppGarbageCollection",
+		Name: string(gt.GraphQLTypeAppGarbageCollection),
 		Fields: graphql.Fields{
 			"app": &graphql.Field{
 				Type:        appObject,
@@ -1659,24 +1660,24 @@ func init() {
 		},
 	})
 
-	eventAppObject = newEventObject("EventApp", appObject)
-	eventAppDeletionObject = newEventObject("EventAppDeletion", appDeletionEventObject)
-	eventAppReleaseObject = newEventObject("EventAppRelease", appReleaseObject)
-	eventDeploymentObject = newEventObject("EventDeployment", deploymentEventObject)
-	eventJobObject = newEventObject("EventJob", jobObject)
-	eventScaleObject = newEventObject("EventScale", scaleObject)
-	eventReleaseObject = newEventObject("EventRelease", releaseObject)
-	eventReleaseDeletionObject = newEventObject("EventReleaseDeletion", releaseDeletionEventObject)
-	eventArtifactObject = newEventObject("EventArtifact", artifactObject)
-	eventProviderObject = newEventObject("EventProvider", providerObject)
-	eventResourceObject = newEventObject("EventResource", resourceObject)
-	eventRouteObject = newEventObject("EventRoute", routeObject)
-	eventDomainMigrationObject = newEventObject("EventDomainMigration", domainMigrationObject)
-	eventClusterBackupObject = newEventObject("EventClusterBackup", clusterBackupObject)
-	eventAppGarbageCollectionObject = newEventObject("EventAppGarbageCollection", appGarbageCollectionObject)
+	eventAppObject = newEventObject(gt.GraphQLTypeEventApp, appObject)
+	eventAppDeletionObject = newEventObject(gt.GraphQLTypeEventAppDeletion, appDeletionEventObject)
+	eventAppReleaseObject = newEventObject(gt.GraphQLTypeEventAppRelease, appReleaseObject)
+	eventDeploymentObject = newEventObject(gt.GraphQLTypeEventDeployment, deploymentEventObject)
+	eventJobObject = newEventObject(gt.GraphQLTypeEventJob, jobObject)
+	eventScaleObject = newEventObject(gt.GraphQLTypeEventScale, scaleObject)
+	eventReleaseObject = newEventObject(gt.GraphQLTypeEventRelease, releaseObject)
+	eventReleaseDeletionObject = newEventObject(gt.GraphQLTypeEventReleaseDeletion, releaseDeletionEventObject)
+	eventArtifactObject = newEventObject(gt.GraphQLTypeEventArtifact, artifactObject)
+	eventProviderObject = newEventObject(gt.GraphQLTypeEventProvider, providerObject)
+	eventResourceObject = newEventObject(gt.GraphQLTypeEventResource, resourceObject)
+	eventRouteObject = newEventObject(gt.GraphQLTypeEventRoute, routeObject)
+	eventDomainMigrationObject = newEventObject(gt.GraphQLTypeEventDomainMigration, domainMigrationObject)
+	eventClusterBackupObject = newEventObject(gt.GraphQLTypeEventClusterBackup, clusterBackupObject)
+	eventAppGarbageCollectionObject = newEventObject(gt.GraphQLTypeEventAppGarbageCollection, appGarbageCollectionObject)
 
 	expandedFormationObject := newGraphqlObject(graphql.ObjectConfig{
-		Name: "ExpandedFormation",
+		Name: string(gt.GraphQLTypeExpandedFormation),
 		Fields: graphql.Fields{
 			"app": &graphql.Field{
 				Type:        appObject,

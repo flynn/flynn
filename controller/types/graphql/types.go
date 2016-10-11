@@ -8,6 +8,56 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
+type GraphQLType string
+
+const (
+	GraphQLTypeApp                       GraphQLType = "App"
+	GraphQLTypeAppDeletion               GraphQLType = "AppDeletion"
+	GraphQLTypeAppDeletionEvent          GraphQLType = "AppDeletionEvent"
+	GraphQLTypeAppGarbageCollection      GraphQLType = "AppGarbageCollection"
+	GraphQLTypeAppRelease                GraphQLType = "AppRelease"
+	GraphQLTypeArtifact                  GraphQLType = "Artifact"
+	GraphQLTypeClusterBackup             GraphQLType = "ClusterBackup"
+	GraphQLTypeDeployment                GraphQLType = "Deployment"
+	GraphQLTypeDeploymentEvent           GraphQLType = "DeploymentEvent"
+	GraphQLTypeDomainMigration           GraphQLType = "DomainMigration"
+	GraphQLTypeEnvObject                 GraphQLType = "EnvObject"
+	GraphQLTypeEventApp                  GraphQLType = "EventApp"
+	GraphQLTypeEventAppDeletion          GraphQLType = "EventAppDeletion"
+	GraphQLTypeEventAppGarbageCollection GraphQLType = "EventAppGarbageCollection"
+	GraphQLTypeEventAppRelease           GraphQLType = "EventAppRelease"
+	GraphQLTypeEventArtifact             GraphQLType = "EventArtifact"
+	GraphQLTypeEventClusterBackup        GraphQLType = "EventClusterBackup"
+	GraphQLTypeEventDataObject           GraphQLType = "EventDataObject"
+	GraphQLTypeEventDeployment           GraphQLType = "EventDeployment"
+	GraphQLTypeEventDomainMigration      GraphQLType = "EventDomainMigration"
+	GraphQLTypeEventJob                  GraphQLType = "EventJob"
+	GraphQLTypeEventProvider             GraphQLType = "EventProvider"
+	GraphQLTypeEventRelease              GraphQLType = "EventRelease"
+	GraphQLTypeEventReleaseDeletion      GraphQLType = "EventReleaseDeletion"
+	GraphQLTypeEventResource             GraphQLType = "EventResource"
+	GraphQLTypeEventRoute                GraphQLType = "EventRoute"
+	GraphQLTypeEventScale                GraphQLType = "EventScale"
+	GraphQLTypeEventType                 GraphQLType = "EventType"
+	GraphQLTypeExpandedFormation         GraphQLType = "ExpandedFormation"
+	GraphQLTypeFormation                 GraphQLType = "Formation"
+	GraphQLTypeJob                       GraphQLType = "Job"
+	GraphQLTypeJobState                  GraphQLType = "JobState"
+	GraphQLTypeMetaObject                GraphQLType = "MetaObject"
+	GraphQLTypeProcessesObject           GraphQLType = "ProcessesObject"
+	GraphQLTypeProvider                  GraphQLType = "Provider"
+	GraphQLTypeRelease                   GraphQLType = "Release"
+	GraphQLTypeReleaseDeletion           GraphQLType = "ReleaseDeletion"
+	GraphQLTypeReleaseDeletionEvent      GraphQLType = "ReleaseDeletionEvent"
+	GraphQLTypeResource                  GraphQLType = "Resource"
+	GraphQLTypeRoute                     GraphQLType = "Route"
+	GraphQLTypeRouteCertificate          GraphQLType = "RouteCertificate"
+	GraphQLTypeScale                     GraphQLType = "Scale"
+	GraphQLTypeTLSCert                   GraphQLType = "TLSCert"
+	GraphQLTypeTagsObject                GraphQLType = "TagsObject"
+	GraphQLTypeTime                      GraphQLType = "Time"
+)
+
 type App struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
