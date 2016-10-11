@@ -795,6 +795,61 @@
 			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
 		},
 		{
+			"ImportPath": "github.com/flynn/graphql",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/gqlerrors",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/ast",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/kinds",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/lexer",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/location",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/parser",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/printer",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/source",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/typeInfo",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
+			"ImportPath": "github.com/flynn/graphql/language/visitor",
+			"Comment": "v0.4.18-57-g2a9f177",
+			"Rev": "2a9f17767b2c406e8e8a19ade89c10c2ac5e730f"
+		},
+		{
 			"ImportPath": "github.com/flynn/oauth2",
 			"Rev": "bad31004a6cc4ac89e7219ba28642459a9fa2d6c"
 		},
@@ -885,61 +940,6 @@
 		{
 			"ImportPath": "github.com/gorilla/sessions",
 			"Rev": "aa5e036e6c44aec69a32eb41097001978b29ad31"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/gqlerrors",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/ast",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/kinds",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/lexer",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/location",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/parser",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/printer",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/source",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/typeInfo",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
-		},
-		{
-			"ImportPath": "github.com/graphql-go/graphql/language/visitor",
-			"Comment": "v0.4.18-42-g491504a",
-			"Rev": "491504a5ac801fc9d72ecae4e57e5231c6a57595"
 		},
 		{
 			"ImportPath": "github.com/graphql-go/handler",
