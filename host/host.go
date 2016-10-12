@@ -56,6 +56,7 @@ options:
   --no-resurrect             disable cluster resurrection
   --max-job-concurrency=NUM  maximum number of jobs to start concurrently
   --partitions=PARTITIONS    specify resource partitions for host [default: system=cpu_shares:4096 background=cpu_shares:4096 user=cpu_shares:8192]
+  --init-log-level=LEVEL     containerinit log level [default: info]
 	`)
 }
 
@@ -179,6 +180,11 @@ func runDaemon(args *docopt.Args) {
 		shutdown.Fatalf("error setting up logger: %s", err)
 	}
 
+	initLogLevel, err := log15.LvlFromString(args.String["--init-log-level"])
+	if err != nil {
+		shutdown.Fatalf("error setting init log level: %s", err)
+	}
+
 	var peerIPs []string
 	if args.String["--peer-ips"] != "" {
 		peerIPs = strings.Split(args.String["--peer-ips"], ",")
@@ -295,7 +301,16 @@ func runDaemon(args *docopt.Args) {
 	var backend Backend
 	switch backendName {
 	case "libcontainer":
-		backend, err = NewLibcontainerBackend(state, vman, bridgeName, flynnInit, mux, partitionCGroups, logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"))
+		backend, err = NewLibcontainerBackend(
+			state,
+			vman,
+			bridgeName,
+			flynnInit,
+			initLogLevel,
+			mux,
+			partitionCGroups,
+			logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"),
+		)
 	case "mock":
 		backend = MockBackend{}
 	default:

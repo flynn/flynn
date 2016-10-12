@@ -58,6 +58,7 @@ type Config struct {
 	Ports         []host.Port
 	Resources     resource.Resources
 	FileArtifacts []*host.Artifact
+	LogLevel      log15.Lvl
 }
 
 const SharedPath = "/.container-shared"
@@ -212,6 +213,7 @@ func (c *ContainerInit) Resume(arg, res *struct{}) error {
 func (c *ContainerInit) Signal(sig int, res *struct{}) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
+	logger.Info("forwarding signal to job", "type", syscall.Signal(sig))
 	if err := c.process.Signal(syscall.Signal(sig)); err != nil {
 		return err
 	}
@@ -262,14 +264,14 @@ func (c *ContainerInit) GetStdin(arg struct{}, f *os.File) error {
 
 func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 	log := logger.New("fn", "StreamState")
-	log.Info("starting to stream state")
+	log.Debug("starting to stream state")
 
 	ch := make(chan StateChange)
 	c.streamsMtx.Lock()
 	c.mtx.Lock()
 	select {
 	case stream.Send <- StateChange{State: c.state, Error: c.error, ExitStatus: c.exitStatus}:
-		log.Info("sent initial state")
+		log.Debug("sent initial state")
 	case <-stream.Error:
 		c.mtx.Unlock()
 		c.streamsMtx.Unlock()
@@ -279,7 +281,7 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 	c.streams[ch] = struct{}{}
 	c.streamsMtx.Unlock()
 	defer func() {
-		log.Info("cleanup")
+		log.Debug("cleanup")
 		go func() {
 			// drain to prevent deadlock while removing the listener
 			for range ch {
@@ -291,13 +293,13 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 		close(ch)
 	}()
 
-	log.Info("waiting for state changes")
+	log.Debug("waiting for state changes")
 	for {
 		select {
 		case change := <-ch:
 			select {
 			case stream.Send <- change:
-				log.Info("sent state change", "state", change.State)
+				log.Debug("sent state change", "state", change.State)
 			case <-stream.Error:
 				return nil
 			}
@@ -310,11 +312,11 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 // Caller must hold lock
 func (c *ContainerInit) changeState(state State, err string, exitStatus int) {
 	if err != "" {
-		logger.Info("changing state", "fn", "changeState", "state", state, "err", err)
+		logger.Debug("changing state", "fn", "changeState", "state", state, "err", err)
 	} else if exitStatus != -1 {
-		logger.Info("changing state", "fn", "changeState", "state", state, "exitStatus", exitStatus)
+		logger.Debug("changing state", "fn", "changeState", "state", state, "exitStatus", exitStatus)
 	} else {
-		logger.Info("changing state", "fn", "changeState", "state", state)
+		logger.Debug("changing state", "fn", "changeState", "state", state)
 	}
 
 	c.state = state
@@ -344,7 +346,7 @@ var SocketPath = filepath.Join(SharedPath, "rpc.sock")
 
 func runRPCServer() {
 	os.Remove(SocketPath)
-	logger.Info("starting RPC server", "fn", "runRPCServer")
+	logger.Debug("starting RPC server", "fn", "runRPCServer")
 	fdrpc.ListenAndServe(SocketPath)
 	os.Exit(70)
 }
@@ -354,13 +356,13 @@ func setupCommon(c *Config, log log15.Logger) error {
 	fetchErr := make(chan error)
 	for _, artifact := range c.FileArtifacts {
 		go func(artifact *host.Artifact) {
-			log.Info("fetching artifact", "uri", artifact.URI)
+			log.Debug("fetching artifact", "uri", artifact.URI)
 			if err := fetchFileArtifact(artifact); err != nil {
 				log.Error("error fetching artifact", "uri", artifact.URI, "err", err)
 				fetchErr <- err
 				return
 			}
-			log.Info("finished fetching artifact", "uri", artifact.URI)
+			log.Debug("finished fetching artifact", "uri", artifact.URI)
 			fetchErr <- nil
 		}(artifact)
 	}
@@ -400,7 +402,6 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string, lo
 
 	if config.Create {
 		// TODO: maybe reuse maybeAddService() from the client
-		log.Info("creating service")
 		if err := client.AddService(config.Name, nil); err != nil {
 			if !hh.IsObjectExistsError(err) {
 				log.Error("error creating service", "err", err)
@@ -425,7 +426,7 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string, lo
 
 	// no checker, but we still want to register a service
 	if config.Check == nil {
-		log.Info("registering instance", "instance", inst)
+		log.Info("registering instance", "addr", inst.Addr)
 		return client.RegisterInstance(config.Name, inst)
 	}
 
@@ -501,16 +502,16 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string, lo
 }
 
 func babySit(init *ContainerInit, hbs []discoverd.Heartbeater) int {
-	log := logger.New("fn", "babySit")
+	log := logger.New()
 
 	var shutdownOnce sync.Once
 	hbDone := make(chan struct{})
 	closeHBs := func() {
 		for _, hb := range hbs {
 			if err := hb.Close(); err != nil {
-				log.Error("error closing heartbeater", "err", err)
+				log.Error("error deregistering service", "addr", hb.Addr(), "err", err)
 			} else {
-				log.Info("closed heartbeater")
+				log.Info("service deregistered", "addr", hb.Addr())
 			}
 		}
 		close(hbDone)
@@ -535,7 +536,7 @@ func babySit(init *ContainerInit, hbs []discoverd.Heartbeater) int {
 			if sig == syscall.SIGTERM || sig == syscall.SIGINT {
 				shutdownOnce.Do(closeHBs)
 			}
-			log.Info("forwarding signal to command", "type", sig)
+			log.Info("forwarding signal to job", "type", sig)
 			init.process.Signal(sig)
 		}
 	}()
@@ -555,11 +556,11 @@ func babySit(init *ContainerInit, hbs []discoverd.Heartbeater) int {
 	select {
 	case <-hbDone:
 	case <-time.After(5 * time.Second):
-		log.Error("timed out waiting for heartbeaters to close")
+		log.Error("timed out waiting for services to be deregistered")
 	}
 
 	if wstatus.Signaled() {
-		log.Info("command exited due to signal")
+		log.Debug("job exited due to signal")
 		return 0
 	}
 
@@ -592,10 +593,10 @@ func fetchFileArtifact(artifact *host.Artifact) error {
 
 // Run as pid 1 and monitor the contained process to return its exit code.
 func containerInitApp(c *Config, logFile *os.File) error {
-	log := logger.New("fn", "containerInitApp")
+	log := logger.New()
 
 	init := newContainerInit(c, logFile)
-	log.Info("registering RPC server")
+	log.Debug("registering RPC server")
 	if err := rpcplus.Register(init); err != nil {
 		log.Error("error registering RPC server", "err", err)
 		return err
@@ -621,17 +622,17 @@ func containerInitApp(c *Config, logFile *os.File) error {
 	// either a pty or pipes.  The FDs for the controlling side of the
 	// pty/pipes will be passed to flynn-host later via a UNIX socket.
 	if c.TTY {
-		log.Info("creating PTY")
+		log.Debug("creating PTY")
 		ptyMaster, ptySlave, err := pty.Open()
 		if err != nil {
-			log.Info("error creating PTY", "err", err)
+			log.Error("error creating PTY", "err", err)
 			return err
 		}
 		init.ptyMaster = ptyMaster
 		cmd.Stdout = ptySlave
 		cmd.Stderr = ptySlave
 		if c.OpenStdin {
-			log.Info("attaching stdin to PTY")
+			log.Debug("attaching stdin to PTY")
 			cmd.Stdin = ptySlave
 			cmd.SysProcAttr.Setctty = true
 		}
@@ -639,7 +640,7 @@ func containerInitApp(c *Config, logFile *os.File) error {
 		// we use syscall.Socketpair (rather than cmd.StdoutPipe) to make it easier
 		// for flynn-host to do non-blocking I/O (via net.FileConn) so that no
 		// read(2) calls can succeed after closing the logs during an update.
-		log.Info("creating stdout pipe")
+		log.Debug("creating stdout pipe")
 		var err error
 		cmd.Stdout, init.stdout, err = newSocketPair("stdout")
 		if err != nil {
@@ -647,14 +648,14 @@ func containerInitApp(c *Config, logFile *os.File) error {
 			return err
 		}
 
-		log.Info("creating stderr pipe")
+		log.Debug("creating stderr pipe")
 		cmd.Stderr, init.stderr, err = newSocketPair("stderr")
 		if err != nil {
 			log.Error("error creating stderr pipe", "err", err)
 			return err
 		}
 
-		log.Info("creating FD proxies")
+		log.Debug("creating FD proxies")
 		if err := createFDProxies(cmd); err != nil {
 			log.Error("error creating FD proxies", "err", err)
 			return err
@@ -665,7 +666,7 @@ func containerInitApp(c *Config, logFile *os.File) error {
 			// returns an io.WriteCloser with the underlying object
 			// being an *exec.closeOnce, neither of which provides
 			// a way to convert to an FD.
-			log.Info("creating stdin pipe")
+			log.Debug("creating stdin pipe")
 			pipeRead, pipeWrite, err := os.Pipe()
 			if err != nil {
 				log.Error("creating stdin pipe", "err", err)
@@ -680,31 +681,29 @@ func containerInitApp(c *Config, logFile *os.File) error {
 
 	// Wait for flynn-host to tell us to start
 	init.mtx.Unlock() // Allow calls
-	log.Info("waiting to be resumed")
+	log.Debug("waiting to be resumed")
 	<-init.resume
-	log.Info("resuming")
+	log.Debug("resuming")
 	init.mtx.Lock()
 
+	log.Info("starting the job", "args", cmd.Args)
 	if cmdErr != nil {
-		log.Error("command failed", "err", cmdErr)
+		log.Error("error starting the job", "err", cmdErr)
 		init.changeState(StateFailed, cmdErr.Error(), -1)
 		init.exit(1)
 	}
-	// Container setup
-	log.Info("setting up the container")
+	log.Debug("setting up the container")
 	if err := setupCommon(c, log); err != nil {
-		log.Error("error setting up the container", "err", err)
+		log.Error("error starting the job", "err", err)
 		init.changeState(StateFailed, err.Error(), -1)
 		init.exit(1)
 	}
-	// Start the app
-	log.Info("starting the command")
 	if err := cmd.Start(); err != nil {
-		log.Error("error starting the command", "err", err)
+		log.Error("error starting the job", "err", err)
 		init.changeState(StateFailed, err.Error(), -1)
 		init.exit(1)
 	}
-	log.Info("setting state to running")
+	log.Debug("setting state to running")
 	init.process = cmd.Process
 	init.changeState(StateRunning, "", -1)
 
@@ -715,7 +714,7 @@ func containerInitApp(c *Config, logFile *os.File) error {
 		if port.Service == nil {
 			continue
 		}
-		log = log.New("service", port.Service.Name, "port", port.Port, "proto", port.Proto)
+		log := log.New("name", port.Service.Name, "port", port.Port, "proto", port.Proto)
 		log.Info("monitoring service")
 		hb, err := monitor(port, init, c.Env, log)
 		if err != nil {
@@ -725,7 +724,7 @@ func containerInitApp(c *Config, logFile *os.File) error {
 		hbs = append(hbs, hb)
 	}
 	exitCode := babySit(init, hbs)
-	log.Info("command exited", "status", exitCode)
+	log.Info("job exited", "status", exitCode)
 	init.mtx.Lock()
 	init.changeState(StateExited, "", exitCode)
 	init.mtx.Unlock() // Allow calls
@@ -795,9 +794,6 @@ func Main() {
 	}
 	go debugStackPrinter(logW)
 
-	logger = log15.New("app", "containerinit")
-	logger.SetHandler(log15.StreamHandler(logW, log15.LogfmtFormat()))
-
 	config := &Config{}
 	data, err := ioutil.ReadFile("/.containerconfig")
 	if err != nil {
@@ -806,6 +802,9 @@ func Main() {
 	if err := json.Unmarshal(data, config); err != nil {
 		os.Exit(70)
 	}
+
+	logger = log15.New("component", "containerinit")
+	logger.SetHandler(log15.LvlFilterHandler(config.LogLevel, log15.StreamHandler(logW, log15.LogfmtFormat())))
 
 	// Propagate the plugin-specific container env variable
 	config.Env["container"] = os.Getenv("container")
