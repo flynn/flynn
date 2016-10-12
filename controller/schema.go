@@ -415,6 +415,9 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(24,
 		`UPDATE apps SET meta = jsonb_merge(CASE WHEN meta = 'null' THEN '{}' ELSE meta END, '{"gc.max_inactive_slug_releases":"10"}') WHERE meta->>'gc.max_inactive_slug_releases' IS NULL`,
 	)
+	migrations.AddSteps(25,
+		migrateProcessData,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
@@ -499,6 +502,60 @@ func migrateProcessArgs(tx *postgres.DBTx) error {
 				args = v.([]interface{})
 			}
 			proc["args"] = append(args, cmd...)
+			release.Processes[typ] = proc
+		}
+
+		// save the processes back to the db
+		if err := tx.Exec("UPDATE releases SET processes = $1 WHERE release_id = $2", release.Processes, release.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateProcessData populates ProcessType.Volumes if ProcessType.Data is set
+func migrateProcessData(tx *postgres.DBTx) error {
+	type Release struct {
+		ID string
+
+		// use map[string]interface{} for process types so we can just
+		// update Volumes and Data and leave other fields untouched
+		Processes map[string]map[string]interface{}
+	}
+
+	var releases []Release
+	rows, err := tx.Query("SELECT release_id, processes FROM releases")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var release Release
+		if err := rows.Scan(&release.ID, &release.Processes); err != nil {
+			return err
+		}
+		releases = append(releases, release)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, release := range releases {
+		for typ, proc := range release.Processes {
+			v, ok := proc["data"]
+			if !ok {
+				continue
+			}
+			data, ok := v.(bool)
+			if !ok || !data {
+				continue
+			}
+			proc["volumes"] = []struct {
+				Path string `json:"path"`
+			}{
+				{Path: "/data"},
+			}
+			delete(proc, "data")
 			release.Processes[typ] = proc
 		}
 

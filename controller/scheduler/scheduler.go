@@ -897,9 +897,9 @@ func (s *Scheduler) HandleInternalStateRequest(req *InternalStateRequest) {
 		}
 		for name, proc := range formation.Release.Processes {
 			f.Release.Processes[name] = ct.ProcessType{
-				Args: proc.Args,
-				Data: proc.Data,
-				Omni: proc.Omni,
+				Args:    proc.Args,
+				Volumes: proc.Volumes,
+				Omni:    proc.Omni,
 			}
 		}
 		req.State.Formations[key.String()] = &f
@@ -1061,6 +1061,7 @@ func (s *Scheduler) StartJob(job *Job) {
 	log := s.logger.New("fn", "StartJob", "app.id", job.AppID, "release.id", job.ReleaseID, "job.type", job.Type)
 	log.Info("starting job")
 
+outer:
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 {
 			// when making multiple attempts, backoff in increments
@@ -1089,11 +1090,11 @@ func (s *Scheduler) StartJob(job *Job) {
 			continue
 		}
 
-		if job.needsVolume() {
-			log.Info("provisioning data volume", "host.id", host.ID)
-			if err := utils.ProvisionVolume(host.client, config); err != nil {
+		for _, vol := range job.Volumes() {
+			log.Info("provisioning volume", "host.id", host.ID, "vol.path", vol.Path)
+			if err := utils.ProvisionVolume(&vol, host.client, config); err != nil {
 				log.Error("error provisioning volume", "err", err)
-				continue
+				continue outer
 			}
 		}
 

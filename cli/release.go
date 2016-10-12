@@ -280,8 +280,12 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 			if len(procUpdate.Ports) > 0 {
 				procRelease.Ports = procUpdate.Ports
 			}
-			if procUpdate.Data {
-				procRelease.Data = true
+			if len(procUpdate.Volumes) > 0 {
+				procRelease.Volumes = procUpdate.Volumes
+			}
+			if procUpdate.DeprecatedData {
+				fmt.Fprintln(os.Stderr, `WARN: ProcessType.Data is deprecated and will be removed in future versions, populate ProcessType.Volumes instead e.g. "volumes": [{"path": "/data"}]`)
+				procRelease.DeprecatedData = true
 			}
 			if procUpdate.Omni {
 				procRelease.Omni = true

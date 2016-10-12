@@ -242,19 +242,31 @@ $function$;
 			f.Release.Processes[typ] = p
 		}
 	}
+	updateVolumes := func(f *ct.ExpandedFormation, step *manifestStep) {
+		for typ, proc := range step.Release.Processes {
+			p := f.Release.Processes[typ]
+			p.Volumes = proc.Volumes
+			f.Release.Processes[typ] = p
+		}
+	}
 	for _, step := range manifestSteps {
 		switch step.ID {
+		case "discoverd":
+			updateVolumes(data.Discoverd, step)
 		case "postgres":
 			updateProcArgs(data.Postgres, step)
+			updateVolumes(data.Postgres, step)
 		case "controller":
 			updateProcArgs(data.Controller, step)
 		case "mariadb":
 			if data.MariaDB != nil {
 				updateProcArgs(data.MariaDB, step)
+				updateVolumes(data.MariaDB, step)
 			}
 		case "mongodb":
 			if data.MongoDB != nil {
 				updateProcArgs(data.MongoDB, step)
+				updateVolumes(data.MongoDB, step)
 			}
 		}
 		if step.Artifact.URI != "" {

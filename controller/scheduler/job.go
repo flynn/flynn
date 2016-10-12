@@ -117,10 +117,14 @@ func (j *Job) TagsMatchHost(host *Host) bool {
 	return true
 }
 
-// needsVolume indicates whether a volume should be provisioned in the cluster
-// for the job, determined from the corresponding process type in the release
-func (j *Job) needsVolume() bool {
-	return j.Formation.Release.Processes[j.Type].Data
+func (j *Job) Volumes() []ct.VolumeReq {
+	proc := j.Formation.Release.Processes[j.Type]
+	if len(proc.Volumes) > 0 {
+		return proc.Volumes
+	} else if proc.DeprecatedData {
+		return []ct.VolumeReq{{Path: "/data"}}
+	}
+	return nil
 }
 
 func (j *Job) IsRunning() bool {

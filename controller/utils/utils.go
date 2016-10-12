@@ -77,13 +77,13 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	return job
 }
 
-func ProvisionVolume(h VolumeCreator, job *host.Job) error {
+func ProvisionVolume(req *ct.VolumeReq, h VolumeCreator, job *host.Job) error {
 	vol, err := h.CreateVolume("default")
 	if err != nil {
 		return err
 	}
 	job.Config.Volumes = []host.VolumeBinding{{
-		Target:    "/data",
+		Target:    req.Path,
 		VolumeID:  vol.ID,
 		Writeable: true,
 	}}
