@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strconv"
 
@@ -16,7 +17,7 @@ import (
 
 func init() {
 	register("log", runLog, `
-usage: flynn log [-f] [-j <id>] [-n <lines>] [-r] [-s] [-t <type>]
+usage: flynn log [-f] [-j <id>] [-n <lines>] [-r] [-s] [-t <type>] [-i]
 
 Stream log for an app.
 
@@ -27,6 +28,7 @@ Options:
 	-r, --raw-output           output raw log messages with no prefix
 	-s, --split-stderr         send stderr lines to stderr
 	-t, --process-type=<type>  filter logs to a specific process type
+	-i, --init                 output containerinit logs to stderr
 `)
 }
 
@@ -60,6 +62,10 @@ func runLog(args *docopt.Args, client controller.Client) error {
 	if args.Bool["--split-stderr"] {
 		stderr = os.Stderr
 	}
+	var initOut io.Writer = ioutil.Discard
+	if args.Bool["--init"] {
+		initOut = os.Stderr
+	}
 
 	dec := json.NewDecoder(rc)
 	for {
@@ -71,9 +77,16 @@ func runLog(args *docopt.Args, client controller.Client) error {
 			return err
 		}
 
-		var stream io.Writer = os.Stdout
-		if msg.Stream == "stderr" {
+		var stream io.Writer
+		switch msg.Stream {
+		case "stdout":
+			stream = os.Stdout
+		case "stderr":
 			stream = stderr
+		case "init":
+			stream = initOut
+		default:
+			continue
 		}
 		if rawOutput {
 			fmt.Fprintln(stream, msg.Msg)
