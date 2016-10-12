@@ -301,16 +301,16 @@ func runDaemon(args *docopt.Args) {
 	var backend Backend
 	switch backendName {
 	case "libcontainer":
-		backend, err = NewLibcontainerBackend(
-			state,
-			vman,
-			bridgeName,
-			flynnInit,
-			initLogLevel,
-			mux,
-			partitionCGroups,
-			logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"),
-		)
+		backend, err = NewLibcontainerBackend(&LibcontainerConfig{
+			State:            state,
+			VolManager:       vman,
+			BridgeName:       bridgeName,
+			InitPath:         flynnInit,
+			InitLogLevel:     initLogLevel,
+			LogMux:           mux,
+			PartitionCGroups: partitionCGroups,
+			Logger:           logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"),
+		})
 	case "mock":
 		backend = MockBackend{}
 	default:

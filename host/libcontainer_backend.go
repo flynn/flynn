@@ -69,61 +69,65 @@ var defaultCapabilities = []string{
 	"CAP_SYS_CHROOT",
 }
 
-func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath string, initLogLevel log15.Lvl, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
+type LibcontainerConfig struct {
+	State            *State
+	VolManager       *volumemanager.Manager
+	BridgeName       string
+	InitPath         string
+	InitLogLevel     log15.Lvl
+	LogMux           *logmux.Mux
+	PartitionCGroups map[string]int64
+	Logger           log15.Logger
+}
+
+func NewLibcontainerBackend(config *LibcontainerConfig) (Backend, error) {
 	factory, err := libcontainer.New(
 		containerRoot,
 		libcontainer.Cgroupfs,
 		libcontainer.InitArgs(os.Args[0], "libcontainer-init"),
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	pinkertonCtx, err := pinkerton.BuildContext("aufs", imageRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := setupCGroups(partitionCGroups); err != nil {
+	if err := setupCGroups(config.PartitionCGroups); err != nil {
 		return nil, err
 	}
 
 	return &LibcontainerBackend{
-		InitPath:            initPath,
+		LibcontainerConfig:  config,
 		factory:             factory,
-		state:               state,
-		vman:                vman,
 		pinkerton:           pinkertonCtx,
 		logStreams:          make(map[string]map[string]*logmux.LogStream),
 		containers:          make(map[string]*Container),
 		defaultEnv:          make(map[string]string),
 		resolvConf:          "/etc/resolv.conf",
-		mux:                 mux,
 		ipalloc:             ipallocator.New(),
-		bridgeName:          bridgeName,
 		discoverdConfigured: make(chan struct{}),
 		networkConfigured:   make(chan struct{}),
-		partitionCGroups:    partitionCGroups,
-		logger:              logger,
 		globalState:         &libcontainerGlobalState{},
-		initLogLevel:        initLogLevel,
 	}, nil
 }
 
 type LibcontainerBackend struct {
-	InitPath  string
+	*LibcontainerConfig
+
 	factory   libcontainer.Factory
-	state     *State
-	vman      *volumemanager.Manager
 	host      *Host
 	pinkerton *pinkerton.Context
 	ipalloc   *ipallocator.IPAllocator
 
-	bridgeName string
 	bridgeAddr net.IP
 	bridgeNet  *net.IPNet
 	resolvConf string
 
 	logStreamMtx sync.Mutex
 	logStreams   map[string]map[string]*logmux.LogStream
-	mux          *logmux.Mux
 
 	containersMtx sync.RWMutex
 	containers    map[string]*Container
@@ -134,14 +138,8 @@ type LibcontainerBackend struct {
 	discoverdConfigured chan struct{}
 	networkConfigured   chan struct{}
 
-	partitionCGroups map[string]int64 // name -> cpu shares
-
-	logger log15.Logger
-
 	globalStateMtx sync.Mutex
 	globalState    *libcontainerGlobalState
-
-	initLogLevel log15.Lvl
 }
 
 type Container struct {
@@ -217,7 +215,7 @@ func readDockerImageConfig(id string) (*dockerImageConfig, error) {
 // ConfigureNetworking is called once during host startup and sets up the local
 // bridge and forwarding rules for containers.
 func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) error {
-	log := l.logger.New("fn", "ConfigureNetworking")
+	log := l.Logger.New("fn", "ConfigureNetworking")
 	var err error
 	l.bridgeAddr, l.bridgeNet, err = net.ParseCIDR(config.Subnet)
 	if err != nil {
@@ -225,13 +223,13 @@ func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) er
 	}
 	l.ipalloc.RequestIP(l.bridgeNet, l.bridgeAddr)
 
-	err = netlink.CreateBridge(l.bridgeName, false)
+	err = netlink.CreateBridge(l.BridgeName, false)
 	bridgeExists := os.IsExist(err)
 	if err != nil && !bridgeExists {
 		return err
 	}
 
-	bridge, err := net.InterfaceByName(l.bridgeName)
+	bridge, err := net.InterfaceByName(l.BridgeName)
 	if err != nil {
 		return err
 	}
@@ -275,7 +273,7 @@ func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) er
 
 	// Set up iptables for outbound traffic masquerading from containers to the
 	// rest of the network.
-	if err := iptables.EnableOutboundNAT(l.bridgeName, l.bridgeNet.String()); err != nil {
+	if err := iptables.EnableOutboundNAT(l.BridgeName, l.bridgeNet.String()); err != nil {
 		return err
 	}
 
@@ -330,10 +328,10 @@ func (l *LibcontainerBackend) SetHost(h *Host) {
 }
 
 func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimitBucket *RateLimitBucket) (err error) {
-	log := l.logger.New("fn", "run", "job.id", job.ID)
+	log := l.Logger.New("fn", "run", "job.id", job.ID)
 
 	// if the job has been stopped, just return
-	if l.state.GetJob(job.ID).ForceStop {
+	if l.State.GetJob(job.ID).ForceStop {
 		log.Info("skipping start of stopped job")
 		return nil
 	}
@@ -342,14 +340,14 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 
 	defer func() {
 		if err != nil {
-			l.state.SetStatusFailed(job.ID, err)
+			l.State.SetStatusFailed(job.ID, err)
 		}
 	}()
 
 	if job.Partition == "" {
 		job.Partition = defaultPartition
 	}
-	if _, ok := l.partitionCGroups[job.Partition]; !ok {
+	if _, ok := l.PartitionCGroups[job.Partition]; !ok {
 		return fmt.Errorf("host: invalid job partition %q", job.Partition)
 	}
 
@@ -384,7 +382,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			return err
 		}
 		log.Info("obtained ip", "network", l.bridgeNet.String(), "ip", container.IP.String())
-		l.state.SetContainerIP(job.ID, container.IP)
+		l.State.SetContainerIP(job.ID, container.IP)
 	}
 	defer func() {
 		if err != nil {
@@ -546,7 +544,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 
 	// apply volumes
 	for _, v := range job.Config.Volumes {
-		vol := l.vman.GetVolume(v.VolumeID)
+		vol := l.VolManager.GetVolume(v.VolumeID)
 		if vol == nil {
 			err := fmt.Errorf("job %s required volume %s, but that volume does not exist", job.ID, v.VolumeID)
 			log.Error("missing required volume", "volumeID", v.VolumeID, "err", err)
@@ -556,7 +554,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	}
 
 	// mutating job state, take state write lock
-	l.state.mtx.Lock()
+	l.State.mtx.Lock()
 	if job.Config.Env == nil {
 		job.Config.Env = make(map[string]string)
 	}
@@ -580,7 +578,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		job.Config.Env["EXTERNAL_IP"] = container.IP.String()
 	}
 	// release the write lock, we won't mutate global structures from here on out
-	l.state.mtx.Unlock()
+	l.State.mtx.Unlock()
 
 	initConfig := &containerinit.Config{
 		Args:          job.Config.Args,
@@ -589,7 +587,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		WorkDir:       job.Config.WorkingDir,
 		Resources:     job.Resources,
 		FileArtifacts: job.FileArtifacts,
-		LogLevel:      l.initLogLevel,
+		LogLevel:      l.InitLogLevel,
 	}
 	if !job.Config.HostNetwork {
 		initConfig.IP = container.IP.String() + "/24"
@@ -649,7 +647,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			{
 				Type:              "veth",
 				Name:              "eth0",
-				Bridge:            l.bridgeName,
+				Bridge:            l.BridgeName,
 				Address:           initConfig.IP,
 				Gateway:           initConfig.Gateway,
 				Mtu:               1500,
@@ -683,7 +681,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	container.container = c
 
 	// TODO: still necessary?
-	l.state.SetContainerID(job.ID, job.ID)
+	l.State.SetContainerID(job.ID, job.ID)
 
 	go container.watch(nil, nil)
 
@@ -722,7 +720,7 @@ func (l *LibcontainerBackend) resolveDiscoverdURI(uri string) (string, error) {
 }
 
 func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
-	log := c.l.logger.New("fn", "watch", "job.id", c.job.ID)
+	log := c.l.Logger.New("fn", "watch", "job.id", c.job.ID)
 	log.Info("start watching container")
 
 	readyErr := func(err error) {
@@ -765,7 +763,7 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	if err != nil {
 		log.Error("error connecting to container", "err", err)
 		readyErr(err)
-		c.l.state.SetStatusFailed(c.job.ID, errors.New("failed to connect to container"))
+		c.l.State.SetStatusFailed(c.job.ID, errors.New("failed to connect to container"))
 		return err
 	}
 	defer c.Client.Close()
@@ -789,38 +787,38 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 			err := errors.New(change.Error)
 			log.Error("error in change state", "err", err)
 			c.Client.Resume()
-			c.l.state.SetStatusFailed(c.job.ID, err)
+			c.l.State.SetStatusFailed(c.job.ID, err)
 			return err
 		}
 		switch change.State {
 		case containerinit.StateInitial:
 			log.Info("waiting for attach")
-			c.l.state.WaitAttach(c.job.ID)
+			c.l.State.WaitAttach(c.job.ID)
 			log.Info("resuming")
 			c.Client.Resume()
 			log.Info("resumed")
 		case containerinit.StateRunning:
 			log.Info("container running")
-			c.l.state.SetStatusRunning(c.job.ID)
+			c.l.State.SetStatusRunning(c.job.ID)
 
 			// if the job was stopped before it started, exit
-			if c.l.state.GetJob(c.job.ID).ForceStop {
+			if c.l.State.GetJob(c.job.ID).ForceStop {
 				c.Stop()
 			}
 		case containerinit.StateExited:
 			log.Info("container exited", "status", change.ExitStatus)
 			c.Client.Resume()
-			c.l.state.SetStatusDone(c.job.ID, change.ExitStatus)
+			c.l.State.SetStatusDone(c.job.ID, change.ExitStatus)
 			return nil
 		case containerinit.StateFailed:
 			log.Info("container failed to start")
 			c.Client.Resume()
-			c.l.state.SetStatusFailed(c.job.ID, errors.New("container failed to start"))
+			c.l.State.SetStatusFailed(c.job.ID, errors.New("container failed to start"))
 			return nil
 		}
 	}
 	log.Error("unknown failure")
-	c.l.state.SetStatusFailed(c.job.ID, errors.New("unknown failure"))
+	c.l.State.SetStatusFailed(c.job.ID, errors.New("unknown failure"))
 
 	return nil
 }
@@ -850,7 +848,7 @@ func (c *Container) followLogs(log log15.Logger, buffer host.LogBuffer) error {
 
 	muxConfig := logmux.Config{
 		AppID:   c.job.Metadata["flynn-controller.app"],
-		HostID:  c.l.state.id,
+		HostID:  c.l.State.id,
 		JobType: c.job.Metadata["flynn-controller.type"],
 		JobID:   c.job.ID,
 	}
@@ -861,28 +859,28 @@ func (c *Container) followLogs(log log15.Logger, buffer host.LogBuffer) error {
 		log.Error("error streaming stdout", "err", err)
 		return err
 	}
-	logStreams["stdout"] = c.l.mux.Follow(stdoutR, buffer["stdout"], 1, muxConfig)
+	logStreams["stdout"] = c.l.LogMux.Follow(stdoutR, buffer["stdout"], 1, muxConfig)
 
 	stderrR, err := nonblocking(stderr)
 	if err != nil {
 		log.Error("error streaming stderr", "err", err)
 		return err
 	}
-	logStreams["stderr"] = c.l.mux.Follow(stderrR, buffer["stderr"], 2, muxConfig)
+	logStreams["stderr"] = c.l.LogMux.Follow(stderrR, buffer["stderr"], 2, muxConfig)
 
 	initLogR, err := nonblocking(initLog)
 	if err != nil {
 		log.Error("error streaming initial log", "err", err)
 		return err
 	}
-	logStreams["initLog"] = c.l.mux.Follow(initLogR, buffer["initLog"], 3, muxConfig)
+	logStreams["initLog"] = c.l.LogMux.Follow(initLogR, buffer["initLog"], 3, muxConfig)
 	c.l.logStreams[c.job.ID] = logStreams
 
 	return nil
 }
 
 func (c *Container) cleanup() error {
-	log := c.l.logger.New("fn", "cleanup", "job.id", c.job.ID)
+	log := c.l.Logger.New("fn", "cleanup", "job.id", c.job.ID)
 	log.Info("starting cleanup")
 
 	c.l.logStreamMtx.Lock()
@@ -903,7 +901,7 @@ func (c *Container) cleanup() error {
 }
 
 func (c *Container) WaitStop(timeout time.Duration) error {
-	job := c.l.state.GetJob(c.job.ID)
+	job := c.l.State.GetJob(c.job.ID)
 	if job.Status == host.StatusDone || job.Status == host.StatusFailed {
 		return nil
 	}
@@ -1006,7 +1004,7 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 	defer func() {
 		if client != nil && (req.Job.Job.Config.TTY || req.Stream) && err == io.EOF {
 			<-client.done
-			job := l.state.GetJob(req.Job.Job.ID)
+			job := l.State.GetJob(req.Job.Job.ID)
 			if job.Status == host.StatusDone || job.Status == host.StatusCrashed {
 				err = ExitError(*job.ExitStatus)
 				return
@@ -1043,7 +1041,7 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 		}
 
 		<-done
-		l.logger.Info("one side of the TTY went away, stopping job", "fn", "attach", "job.id", req.Job.Job.ID)
+		l.Logger.Info("one side of the TTY went away, stopping job", "fn", "attach", "job.id", req.Job.Job.ID)
 		client.Stop()
 		return io.EOF
 	}
@@ -1092,7 +1090,7 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 	}
 
 	ch := make(chan *rfc5424.Message)
-	stream, err := l.mux.StreamLog(req.Job.Job.Metadata["flynn-controller.app"], req.Job.Job.ID, req.Logs, req.Stream, ch)
+	stream, err := l.LogMux.StreamLog(req.Job.Job.Metadata["flynn-controller.app"], req.Job.Job.ID, req.Logs, req.Stream, ch)
 	if err != nil {
 		return err
 	}
@@ -1120,7 +1118,7 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 }
 
 func (l *LibcontainerBackend) Cleanup(except []string) error {
-	log := l.logger.New("fn", "Cleanup")
+	log := l.Logger.New("fn", "Cleanup")
 	shouldSkip := func(id string) bool {
 		for _, s := range except {
 			if id == s {
@@ -1168,7 +1166,7 @@ type libcontainerGlobalState struct {
 
 func (l *LibcontainerBackend) persistGlobalState() error {
 	data, _ := json.Marshal(l.globalState)
-	return l.state.PersistBackendGlobalState(data)
+	return l.State.PersistBackendGlobalState(data)
 }
 
 /*
@@ -1178,7 +1176,7 @@ func (l *LibcontainerBackend) persistGlobalState() error {
 	(thus this may take a significant moment; it's not just deserializing).
 */
 func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobBackendStates map[string][]byte, backendGlobalState []byte, buffers host.LogBuffers) error {
-	log := l.logger.New("fn", "UnmarshalState")
+	log := l.Logger.New("fn", "UnmarshalState")
 	containers := make(map[string]*Container)
 	for k, v := range jobBackendStates {
 		container := &Container{}
@@ -1277,7 +1275,7 @@ func (l *LibcontainerBackend) OpenLogs(buffers host.LogBuffers) error {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	for id, c := range l.containers {
-		if err := c.followLogs(l.logger.New("fn", "OpenLogs", "job.id", id), buffers[id]); err != nil {
+		if err := c.followLogs(l.Logger.New("fn", "OpenLogs", "job.id", id), buffers[id]); err != nil {
 			return err
 		}
 	}
@@ -1285,7 +1283,7 @@ func (l *LibcontainerBackend) OpenLogs(buffers host.LogBuffers) error {
 }
 
 func (l *LibcontainerBackend) CloseLogs() (host.LogBuffers, error) {
-	log := l.logger.New("fn", "CloseLogs")
+	log := l.Logger.New("fn", "CloseLogs")
 	l.logStreamMtx.Lock()
 	defer l.logStreamMtx.Unlock()
 	buffers := make(host.LogBuffers, len(l.logStreams))
