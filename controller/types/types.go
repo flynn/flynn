@@ -98,7 +98,7 @@ type ProcessType struct {
 	Args        []string           `json:"args,omitempty"`
 	Env         map[string]string  `json:"env,omitempty"`
 	Ports       []Port             `json:"ports,omitempty"`
-	Data        bool               `json:"data,omitempty"`
+	Volumes     []VolumeReq        `json:"volumes,omitempty"`
 	Omni        bool               `json:"omni,omitempty"` // omnipresent - present on all hosts
 	HostNetwork bool               `json:"host_network,omitempty"`
 	Service     string             `json:"service,omitempty"`
@@ -108,12 +108,19 @@ type ProcessType struct {
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
 	DeprecatedCmd        []string `json:"cmd,omitempty"`
 	DeprecatedEntrypoint []string `json:"entrypoint,omitempty"`
+
+	// Data is DEPRECATED: populate Volumes instead
+	DeprecatedData bool `json:"data,omitempty"`
 }
 
 type Port struct {
 	Port    int           `json:"port"`
 	Proto   string        `json:"proto"`
 	Service *host.Service `json:"service,omitempty"`
+}
+
+type VolumeReq struct {
+	Path string `json:"path"`
 }
 
 type Artifact struct {

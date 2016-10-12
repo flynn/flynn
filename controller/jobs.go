@@ -311,7 +311,8 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 
 	// provision data volume if required
 	if newJob.Data {
-		if err := utils.ProvisionVolume(client, job); err != nil {
+		vol := &ct.VolumeReq{Path: "/data"}
+		if err := utils.ProvisionVolume(vol, client, job); err != nil {
 			respondWithError(w, err)
 			return
 		}

@@ -59,6 +59,11 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		if len(proc.DeprecatedCmd) > 0 {
 			proc.Args = append(proc.Args, proc.DeprecatedCmd...)
 		}
+		// handle deprecated Data
+		if proc.DeprecatedData && len(proc.Volumes) == 0 {
+			proc.Volumes = []ct.VolumeReq{{Path: "/data"}}
+			proc.DeprecatedData = false
+		}
 		resource.SetDefaults(&proc.Resources)
 		release.Processes[typ] = proc
 	}

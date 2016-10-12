@@ -25,7 +25,14 @@
         "$ref": "/schema/controller/port"
       }
     },
+    "volumes": {
+      "type": "array",
+      "items": {
+        "$ref": "/schema/controller/volume_req"
+      }
+    },
     "data": {
+      "description": "DEPRECATED (use volumes instead)",
       "type": "boolean"
     },
     "omni": {

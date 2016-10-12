@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
@@ -197,7 +198,8 @@ outer:
 		// and provision a new volume
 		if syncJob == nil {
 			syncJob = primaryJob
-			if err := utils.ProvisionVolume(syncHost, syncJob); err != nil {
+			vol := &ct.VolumeReq{Path: "/data"}
+			if err := utils.ProvisionVolume(vol, syncHost, syncJob); err != nil {
 				return fmt.Errorf("error creating volume on %s: %s", syncHost.ID(), err)
 			}
 		}

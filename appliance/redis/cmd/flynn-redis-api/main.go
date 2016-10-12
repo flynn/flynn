@@ -196,7 +196,7 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 					{Port: 6379, Proto: "tcp"},
 					{Port: 6380, Proto: "tcp"},
 				},
-				Data:    true,
+				Volumes: []ct.VolumeReq{{Path: "/data"}},
 				Args:    []string{"/bin/start-flynn-redis", "redis"},
 				Service: serviceName,
 			},

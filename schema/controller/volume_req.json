@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/volume_req#",
+  "title": "Volume Request",
+  "description": "",
+  "sortIndex": 20,
+  "type": "object",
+  "require": ["path"],
+  "additionalProperties": false,
+  "properties": {
+    "path": {
+      "type": "string"
+    }
+  }
+}
