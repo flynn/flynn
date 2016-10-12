@@ -204,9 +204,6 @@ func (m *Mux) addAggregator(addr string) {
 					}
 				}
 			}
-			if string(m.MsgID) == "ID3" {
-				continue
-			}
 			if _, err := conn.Write(rfc6587.Bytes(m.Message)); err != nil {
 				l.Error("failed to write message", "error", err)
 				return
