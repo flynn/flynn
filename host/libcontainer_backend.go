@@ -69,7 +69,7 @@ var defaultCapabilities = []string{
 	"CAP_SYS_CHROOT",
 }
 
-func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath string, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
+func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath string, initLogLevel log15.Lvl, mux *logmux.Mux, partitionCGroups map[string]int64, logger log15.Logger) (Backend, error) {
 	factory, err := libcontainer.New(
 		containerRoot,
 		libcontainer.Cgroupfs,
@@ -103,6 +103,7 @@ func NewLibcontainerBackend(state *State, vman *volumemanager.Manager, bridgeNam
 		partitionCGroups:    partitionCGroups,
 		logger:              logger,
 		globalState:         &libcontainerGlobalState{},
+		initLogLevel:        initLogLevel,
 	}, nil
 }
 
@@ -139,6 +140,8 @@ type LibcontainerBackend struct {
 
 	globalStateMtx sync.Mutex
 	globalState    *libcontainerGlobalState
+
+	initLogLevel log15.Lvl
 }
 
 type Container struct {
@@ -586,6 +589,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		WorkDir:       job.Config.WorkingDir,
 		Resources:     job.Resources,
 		FileArtifacts: job.FileArtifacts,
+		LogLevel:      l.initLogLevel,
 	}
 	if !job.Config.HostNetwork {
 		initConfig.IP = container.IP.String() + "/24"

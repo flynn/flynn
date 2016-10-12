@@ -471,6 +471,7 @@ sudo start-stop-daemon \
   --force \
   --peer-ips {{ .Peers }} \
   --max-job-concurrency 8 \
+  --init-log-level debug \
   &>/tmp/flynn-host.log
 `[1:]))
 
