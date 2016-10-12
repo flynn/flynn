@@ -162,6 +162,8 @@ func streamName(msgID []byte) string {
 		return "stdout"
 	case "ID2":
 		return "stderr"
+	case "ID3":
+		return "init"
 	default:
 		return "unknown"
 	}
