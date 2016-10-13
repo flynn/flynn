@@ -243,6 +243,21 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 
+	artifacts := make([]*ct.Artifact, len(artifactIDs))
+	artifactList, err := c.artifactRepo.ListIDs(artifactIDs...)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	for i, id := range artifactIDs {
+		artifacts[i] = artifactList[id]
+	}
+
+	var entrypoint ct.ImageEntrypoint
+	if e := utils.GetEntrypoint(artifacts, ""); e != nil {
+		entrypoint = *e
+	}
+
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
 	hosts, err := c.clusterClient.Hosts()
@@ -260,11 +275,14 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	hostID := client.ID()
 	id := cluster.GenerateJobID(hostID, uuid)
 	app := c.getApp(ctx)
-	env := make(map[string]string, len(release.Env)+len(newJob.Env)+4)
+	env := make(map[string]string, len(entrypoint.Env)+len(release.Env)+len(newJob.Env)+4)
 	env["FLYNN_APP_ID"] = app.ID
 	env["FLYNN_RELEASE_ID"] = release.ID
 	env["FLYNN_PROCESS_TYPE"] = ""
 	env["FLYNN_JOB_ID"] = id
+	for k, v := range entrypoint.Env {
+		env[k] = v
+	}
 	if newJob.ReleaseEnv {
 		for k, v := range release.Env {
 			env[k] = v
@@ -284,7 +302,11 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		ID:       id,
 		Metadata: metadata,
 		Config: host.ContainerConfig{
+			Args:       entrypoint.Args,
 			Env:        env,
+			WorkingDir: entrypoint.WorkingDir,
+			Uid:        entrypoint.Uid,
+			Gid:        entrypoint.Gid,
 			TTY:        newJob.TTY,
 			Stdin:      attach,
 			DisableLog: newJob.DisableLog,
@@ -295,15 +317,6 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Args) > 0 {
 		job.Config.Args = newJob.Args
 	}
-	artifacts := make([]*ct.Artifact, len(artifactIDs))
-	artifactList, err := c.artifactRepo.ListIDs(artifactIDs...)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-	for i, id := range artifactIDs {
-		artifacts[i] = artifactList[id]
-	}
 	utils.SetupMountspecs(job, artifacts)
 
 	// provision data volume if required
@@ -312,11 +325,6 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 			respondWithError(w, err)
 			return
 		}
-	}
-
-	// ensure slug apps use /runner/init
-	if release.IsGitDeploy() && (len(job.Config.Args) == 0 || job.Config.Args[0] != "/runner/init") {
-		job.Config.Args = append([]string{"/runner/init"}, job.Config.Args...)
 	}
 
 	var attachClient cluster.AttachClient
