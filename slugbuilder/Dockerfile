@@ -7,6 +7,7 @@ RUN nl -nrz /builder/buildpacks.txt | awk '{print $2 "\t" $1}' | xargs -L 1 /bui
 
 RUN apt-get install --yes squashfs-tools
 
+ADD convert-legacy-slug.sh /bin/convert-legacy-slug.sh
 ADD bin/create-artifact /bin/create-artifact
 ADD builder/build.sh /builder/
 ADD builder/create-user.sh /builder/
