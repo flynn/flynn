@@ -1,12 +1,15 @@
 FROM flynn/cedarish
 
-ADD builder/buildpacks.txt /tmp/builder/
-ADD builder/install-buildpack /tmp/builder/
+ADD builder/buildpacks.txt /builder/
+ADD builder/install-buildpack /builder/
 # Explicitly number the buildpacks directory based on the order of buildpacks.txt
-RUN nl -nrz /tmp/builder/buildpacks.txt | awk '{print $2 "\t" $1}' | xargs -L 1 /tmp/builder/install-buildpack /tmp/buildpacks && \
-    chown -R nobody:nogroup /tmp/buildpacks
+RUN nl -nrz /builder/buildpacks.txt | awk '{print $2 "\t" $1}' | xargs -L 1 /builder/install-buildpack /builder/buildpacks
 
-ADD builder/build.sh /tmp/builder/
+RUN apt-get install --yes squashfs-tools
 
-ENTRYPOINT ["/tmp/builder/build.sh"]
+ADD bin/create-artifact /bin/create-artifact
+ADD builder/build.sh /builder/
+ADD builder/create-user.sh /builder/
+
+ENTRYPOINT ["/builder/build.sh"]
 CMD []
