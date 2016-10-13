@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/pkg/httprecorder"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
+	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -293,6 +294,8 @@ func (e *generator) createArtifact() {
 				Env:        map[string]string{"key": "other-val"},
 				WorkingDir: "/app",
 				Args:       []string{"/bin/web-server"},
+				Uid:        typeconv.Uint32Ptr(1000),
+				Gid:        typeconv.Uint32Ptr(1000),
 			},
 		},
 		Rootfs: []*ct.ImageRootfs{
