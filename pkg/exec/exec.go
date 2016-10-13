@@ -28,6 +28,8 @@ type Cmd struct {
 
 	Env map[string]string
 
+	Volumes []*ct.VolumeReq
+
 	Stdin io.Reader
 
 	Stdout io.Writer
@@ -204,7 +206,6 @@ func (c *Cmd) Start() error {
 	if c.Job.ID == "" {
 		c.Job.ID = cluster.GenerateJobID(c.HostID, "")
 	}
-	utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
 
 	if c.host == nil {
 		var err error
@@ -213,6 +214,14 @@ func (c *Cmd) Start() error {
 			return err
 		}
 	}
+
+	for _, vol := range c.Volumes {
+		if _, err := utils.ProvisionVolume(vol, c.host, c.Job); err != nil {
+			return err
+		}
+	}
+
+	utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
 
 	if c.Stdout != nil || c.Stderr != nil || c.Stdin != nil || c.stdinPipe != nil {
 		req := &host.AttachReq{

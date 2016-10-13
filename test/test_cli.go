@@ -1,10 +1,10 @@
 package main
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
-	"compress/gzip"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +25,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/attempt"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
 	c "github.com/flynn/go-check"
@@ -961,11 +962,20 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	t.Assert(r.flynn("mysql", "console", "--", "-e",
 		"CREATE TABLE foos (data TEXT); INSERT INTO foos (data) VALUES ('foobar')"), Succeeds)
 
+	// grab the slug details
+	client := s.controllerClient(t)
+	release, err := client.GetAppRelease(srcApp)
+	t.Assert(err, c.IsNil)
+	artifact, err := client.GetArtifact(release.ArtifactIDs[1])
+	t.Assert(err, c.IsNil)
+	slugLayer := artifact.Manifest().Rootfs[0].Layers[0]
+
 	// export app
 	t.Assert(r.flynn("export", "-f", file), Succeeds)
 	assertExportContains(
-		"app.json", "routes.json", "release.json", "artifact.json",
-		"formation.json", "slug.tar.gz", "postgres.dump", "mysql.dump",
+		"app.json", "routes.json", "release.json", "artifacts.json",
+		slugLayer.ID+".layer",
+		"formation.json", "postgres.dump", "mysql.dump",
 	)
 
 	// remove db tables from source app
@@ -985,7 +995,7 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	t.Assert(query, SuccessfulOutputContains, "foobar")
 
 	// wait for it to start
-	_, err := s.discoverdClient(t).Instances(dstApp+"-web", 10*time.Second)
+	_, err = s.discoverdClient(t).Instances(dstApp+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
 }
 
@@ -1090,22 +1100,25 @@ func (s *CLISuite) TestReleaseDelete(t *c.C) {
 	t.Assert(res.Output, c.Equals, "Release scaled down for app but not fully deleted (still associated with 1 other apps)\n")
 
 	// check the slug artifact still exists
-	slugArtifact, err := client.GetArtifact(releases[1].FileArtifactIDs()[0])
+	slugArtifact, err := client.GetArtifact(releases[1].ArtifactIDs[1])
 	t.Assert(err, c.IsNil)
 	s.assertURI(t, slugArtifact.URI, http.StatusOK)
+	slugLayerURL := slugArtifact.LayerURL(slugArtifact.Manifest().Rootfs[0].Layers[0])
+	s.assertURI(t, slugLayerURL, http.StatusOK)
 
 	// check the inital release can now be deleted
 	res = r.flynn("-a", otherApp.ID, "release", "delete", "--yes", releases[1].ID)
 	t.Assert(res, Succeeds)
-	t.Assert(res.Output, c.Equals, fmt.Sprintf("Deleted release %s (deleted 1 files)\n", releases[1].ID))
+	t.Assert(res.Output, c.Equals, fmt.Sprintf("Deleted release %s (deleted 2 files)\n", releases[1].ID))
 
 	// check the slug artifact was deleted
 	_, err = client.GetArtifact(slugArtifact.ID)
 	t.Assert(err, c.Equals, controller.ErrNotFound)
 	s.assertURI(t, slugArtifact.URI, http.StatusNotFound)
+	s.assertURI(t, slugLayerURL, http.StatusNotFound)
 
 	// check the image artifact was not deleted (since it is shared between both releases)
-	_, err = client.GetArtifact(releases[1].ImageArtifactID())
+	_, err = client.GetArtifact(releases[1].ArtifactIDs[0])
 	t.Assert(err, c.IsNil)
 }
 
@@ -1155,29 +1168,53 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	imageArtifact := s.createArtifact(t, "test-apps")
 
 	// create 5 slug artifacts
-	var slug bytes.Buffer
-	gz := gzip.NewWriter(&slug)
-	t.Assert(tar.NewWriter(gz).Close(), c.IsNil)
-	t.Assert(gz.Close(), c.IsNil)
+	tmp, err := ioutil.TempFile("", "squashfs-")
+	t.Assert(err, c.IsNil)
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+	t.Assert(exec.Command("mksquashfs", t.MkDir(), tmp.Name(), "-noappend").Run(), c.IsNil)
+	slug, err := ioutil.ReadAll(tmp)
+	t.Assert(err, c.IsNil)
+	slugHash := sha512.Sum512(slug)
 	slugs := []string{
-		"http://blobstore.discoverd/1/slug.tgz",
-		"http://blobstore.discoverd/2/slug.tgz",
-		"http://blobstore.discoverd/3/slug.tgz",
-		"http://blobstore.discoverd/4/slug.tgz",
-		"http://blobstore.discoverd/5/slug.tgz",
+		"http://blobstore.discoverd/layer/1.squashfs",
+		"http://blobstore.discoverd/layer/2.squashfs",
+		"http://blobstore.discoverd/layer/3.squashfs",
+		"http://blobstore.discoverd/layer/4.squashfs",
+		"http://blobstore.discoverd/layer/5.squashfs",
 	}
 	slugArtifacts := make([]*ct.Artifact, len(slugs))
-	for i, uri := range slugs {
-		req, err := http.NewRequest("PUT", uri, bytes.NewReader(slug.Bytes()))
+	put := func(url string, data []byte) {
+		req, err := http.NewRequest("PUT", url, bytes.NewReader(data))
 		t.Assert(err, c.IsNil)
 		res, err := http.DefaultClient.Do(req)
 		t.Assert(err, c.IsNil)
 		res.Body.Close()
 		t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+	}
+	for i, layerURL := range slugs {
+		manifest := &ct.ImageManifest{
+			Type: ct.ImageManifestTypeV1,
+			Rootfs: []*ct.ImageRootfs{{
+				Layers: []*ct.ImageLayer{{
+					ID:     strconv.Itoa(i + 1),
+					Type:   ct.ImageLayerTypeSquashfs,
+					Length: int64(len(slug)),
+					Hashes: map[string]string{"sha512": hex.EncodeToString(slugHash[:])},
+				}},
+			}},
+		}
+		data := manifest.RawManifest()
+		url := fmt.Sprintf("http://blobstore.discoverd/image/%s.json", manifest.ID())
+		put(url, data)
+		put(layerURL, slug)
 		artifact := &ct.Artifact{
-			Type: ct.DeprecatedArtifactTypeFile,
-			URI:  uri,
-			Meta: map[string]string{"blobstore": "true"},
+			Type:             ct.ArtifactTypeFlynn,
+			URI:              url,
+			Meta:             map[string]string{"blobstore": "true"},
+			RawManifest:      data,
+			Hashes:           manifest.Hashes(),
+			LayerURLTemplate: "http://blobstore.discoverd/layer/{id}.squashfs",
 		}
 		t.Assert(client.CreateArtifact(artifact), c.IsNil)
 		slugArtifacts[i] = artifact
@@ -1202,6 +1239,7 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 			Processes: map[string]ct.ProcessType{
 				"app": {Args: []string{"/bin/pingserv"}, Ports: []ct.Port{{Proto: "tcp"}}},
 			},
+			Meta: map[string]string{"git": "true"},
 		}
 		t.Assert(client.CreateRelease(release), c.IsNil)
 		procs := map[string]int{"app": 0}
@@ -1268,9 +1306,8 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 	t.Assert(list, c.HasLen, maxInactiveSlugReleases+2)
 	distinctSlugs := make(map[string]struct{}, len(list))
 	for _, release := range list {
-		files := release.FileArtifactIDs()
-		t.Assert(files, c.HasLen, 1)
-		distinctSlugs[files[0]] = struct{}{}
+		t.Assert(release.ArtifactIDs, c.HasLen, 2)
+		distinctSlugs[release.ArtifactIDs[1]] = struct{}{}
 	}
 	t.Assert(distinctSlugs, c.HasLen, maxInactiveSlugReleases+1)
 
@@ -1345,7 +1382,7 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	// check the job is reachable with the app's name in discoverd
 	instances, err := s.discoverdClient(t).Instances(app.Name+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
-	res, err := http.Get("http://" + instances[0].Addr)
+	res, err := hh.RetryClient.Get("http://" + instances[0].Addr)
 	t.Assert(err, c.IsNil)
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
@@ -1371,7 +1408,7 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	// delete the image from the registry
 	release, err := client.GetAppRelease(app.Name)
 	t.Assert(err, c.IsNil)
-	artifact, err := client.GetArtifact(release.ImageArtifactID())
+	artifact, err := client.GetArtifact(release.ArtifactIDs[0])
 	t.Assert(err, c.IsNil)
 	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
 	t.Assert(err, c.IsNil)
