@@ -11,6 +11,7 @@ import (
 
 	"github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
@@ -57,8 +58,8 @@ type Client interface {
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
 	GetApp(appID string) (*ct.App, error)
-	GetAppLog(appID string, options *ct.LogOpts) (io.ReadCloser, error)
-	StreamAppLog(appID string, options *ct.LogOpts, output chan<- *ct.SSELogChunk) (stream.Stream, error)
+	GetAppLog(appID string, options *logagg.LogOpts) (io.ReadCloser, error)
+	StreamAppLog(appID string, options *logagg.LogOpts, output chan<- *ct.SSELogChunk) (stream.Stream, error)
 	GetDeployment(deploymentID string) (*ct.Deployment, error)
 	CreateDeployment(appID, releaseID string) (*ct.Deployment, error)
 	DeploymentList(appID string) ([]*ct.Deployment, error)

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
@@ -389,28 +390,13 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 // is zero or above, the number of lines returned will be capped at that value.
 // Otherwise, all available logs are returned. If follow is true, new log lines
 // are streamed after the buffered log.
-func (c *Client) GetAppLog(appID string, options *ct.LogOpts) (io.ReadCloser, error) {
+func (c *Client) GetAppLog(appID string, opts *logagg.LogOpts) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/apps/%s/log", appID)
-	if options != nil {
-		opts := *options
-		query := url.Values{}
-		if opts.Follow {
-			query.Set("follow", "true")
-		}
-		if opts.JobID != "" {
-			query.Set("job_id", opts.JobID)
-		}
-		if opts.Lines != nil {
-			query.Set("lines", strconv.Itoa(*opts.Lines))
-		}
-		if opts.ProcessType != nil {
-			query.Set("process_type", *opts.ProcessType)
-		}
-		if encodedQuery := query.Encode(); encodedQuery != "" {
+	if opts != nil {
+		if encodedQuery := opts.EncodedQuery(); encodedQuery != "" {
 			path = fmt.Sprintf("%s?%s", path, encodedQuery)
 		}
 	}
-
 	res, err := c.RawReq("GET", path, nil, nil, nil)
 	if err != nil {
 		return nil, err
@@ -419,24 +405,10 @@ func (c *Client) GetAppLog(appID string, options *ct.LogOpts) (io.ReadCloser, er
 }
 
 // StreamAppLog is the same as GetAppLog but returns log lines via an SSE stream
-func (c *Client) StreamAppLog(appID string, options *ct.LogOpts, output chan<- *ct.SSELogChunk) (stream.Stream, error) {
+func (c *Client) StreamAppLog(appID string, opts *logagg.LogOpts, output chan<- *ct.SSELogChunk) (stream.Stream, error) {
 	path := fmt.Sprintf("/apps/%s/log", appID)
-	if options != nil {
-		opts := *options
-		query := url.Values{}
-		if opts.Follow {
-			query.Set("follow", "true")
-		}
-		if opts.JobID != "" {
-			query.Set("job_id", opts.JobID)
-		}
-		if opts.Lines != nil {
-			query.Set("lines", strconv.Itoa(*opts.Lines))
-		}
-		if opts.ProcessType != nil {
-			query.Set("process_type", *opts.ProcessType)
-		}
-		if encodedQuery := query.Encode(); encodedQuery != "" {
+	if opts != nil {
+		if encodedQuery := opts.EncodedQuery(); encodedQuery != "" {
 			path = fmt.Sprintf("%s?%s", path, encodedQuery)
 		}
 	}

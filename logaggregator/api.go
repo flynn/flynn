@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/logaggregator/snapshot"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
@@ -88,6 +90,14 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 		val := processTypeVals[len(processTypeVals)-1]
 		filters = append(filters, filterProcessType(val))
 	}
+	if streamTypeVals := req.FormValue("stream_types"); streamTypeVals != "" {
+		vals := strings.Split(streamTypeVals, ",")
+		streamTypes := make([]logagg.StreamType, len(vals))
+		for i, typ := range vals {
+			streamTypes[i] = logagg.StreamType(typ)
+		}
+		filters = append(filters, filterStreamType(streamTypes...))
+	}
 
 	iter := &Iterator{
 		id:      params.ByName("channel_id"),
@@ -138,7 +148,7 @@ func NewMessageFromSyslog(m *rfc5424.Message) client.Message {
 		ProcessType: string(processType),
 		// TODO(bgentry): source is always "app" for now, could be router in future
 		Source:    "app",
-		Stream:    streamName(m.MsgID),
+		Stream:    streamType(m.MsgID),
 		Timestamp: m.Timestamp,
 	}
 }
@@ -156,15 +166,15 @@ func splitProcID(procID []byte) (processType, jobID []byte) {
 	return
 }
 
-func streamName(msgID []byte) string {
+func streamType(msgID []byte) logagg.StreamType {
 	switch string(msgID) {
 	case "ID1":
-		return "stdout"
+		return logagg.StreamTypeStdout
 	case "ID2":
-		return "stderr"
+		return logagg.StreamTypeStderr
 	case "ID3":
-		return "init"
+		return logagg.StreamTypeInit
 	default:
-		return "unknown"
+		return logagg.StreamTypeUnknown
 	}
 }

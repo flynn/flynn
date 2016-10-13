@@ -10,6 +10,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	c "github.com/flynn/go-check"
 )
 
@@ -81,7 +82,7 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 	readLines := func(expectedLines ...string) {
 		lineCount := 10
 		lc, _ := client.New("http://" + aggHost)
-		out, err := lc.GetLog(app.id, &client.LogOpts{Follow: true, Lines: &lineCount})
+		out, err := lc.GetLog(app.id, &logagg.LogOpts{Follow: true, Lines: &lineCount})
 		t.Assert(err, c.IsNil)
 
 		done := make(chan struct{})

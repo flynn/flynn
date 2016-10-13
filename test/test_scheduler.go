@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/typeconv"
@@ -81,7 +82,7 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 	leader, err := s.discoverdClient(t).Service("controller-scheduler").Leader()
 	t.Assert(err, c.IsNil)
 	client := s.controllerClient(t)
-	res, err := client.GetAppLog("controller", &ct.LogOpts{
+	res, err := client.GetAppLog("controller", &logagg.LogOpts{
 		Follow:      true,
 		JobID:       leader.Meta["FLYNN_JOB_ID"],
 		ProcessType: typeconv.StringPtr("scheduler"),

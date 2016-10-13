@@ -6,9 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
@@ -57,39 +57,18 @@ func NewWithHTTP(uri string, httpClient *http.Client) (*Client, error) {
 // If lines is above zero, the number of lines returned will be capped at that
 // value. Otherwise, all available logs are returned. If follow is true, new log
 // lines are streamed after the buffered log.
-func (c *Client) GetLog(channelID string, options *LogOpts) (io.ReadCloser, error) {
+func (c *Client) GetLog(channelID string, opts *logagg.LogOpts) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/log/%s", channelID)
-	query := url.Values{}
-	if options != nil {
-		opts := *options
-		if opts.Follow {
-			query.Set("follow", "true")
+	if opts != nil {
+		if encodedQuery := opts.EncodedQuery(); encodedQuery != "" {
+			path = fmt.Sprintf("%s?%s", path, encodedQuery)
 		}
-		if opts.JobID != "" {
-			query.Set("job_id", opts.JobID)
-		}
-		if opts.Lines != nil && *opts.Lines >= 0 {
-			query.Set("lines", strconv.Itoa(*opts.Lines))
-		}
-		if opts.ProcessType != nil {
-			query.Set("process_type", *opts.ProcessType)
-		}
-	}
-	if encodedQuery := query.Encode(); encodedQuery != "" {
-		path = fmt.Sprintf("%s?%s", path, encodedQuery)
 	}
 	res, err := c.RawReq("GET", path, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	return res.Body, nil
-}
-
-type LogOpts struct {
-	Follow      bool
-	JobID       string
-	Lines       *int
-	ProcessType *string
 }
 
 // Message represents a single log message.
@@ -107,7 +86,7 @@ type Message struct {
 	Source string `json:"source,omitempty"`
 	// Stream is the I/O stream that emitted this message, such as "stdout" or
 	// "stderr".
-	Stream string `json:"stream,omitempty"`
+	Stream logagg.StreamType `json:"stream,omitempty"`
 	// Timestamp is the time that this log line was emitted.
 	Timestamp time.Time `json:"timestamp,omitempty"`
 }

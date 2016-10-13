@@ -12,26 +12,31 @@ import (
 var (
 	appAMessages = buildTestData(200, &rfc5424.Header{
 		AppName: []byte("app-A"),
+		MsgID:   []byte("ID1"),
 	})
 
 	appBJob1Messages = buildTestData(100, &rfc5424.Header{
 		AppName: []byte("app-B"),
 		ProcID:  []byte("web.job1"),
+		MsgID:   []byte("ID1"),
 	})
 
 	appBJob2Messages = buildTestData(100, &rfc5424.Header{
 		AppName: []byte("app-B"),
 		ProcID:  []byte("web.job2"),
+		MsgID:   []byte("ID1"),
 	})
 
 	appCWebMessages = buildTestData(100, &rfc5424.Header{
 		AppName: []byte("app-C"),
 		ProcID:  []byte("web.job1"),
+		MsgID:   []byte("ID1"),
 	})
 
 	appCRunMessages = buildTestData(100, &rfc5424.Header{
 		AppName: []byte("app-C"),
 		ProcID:  []byte("run.job2"),
+		MsgID:   []byte("ID1"),
 	})
 
 	nopFilter = Filter(make(filterSlice, 0))

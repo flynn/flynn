@@ -19,6 +19,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -170,7 +171,7 @@ func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}
 }
 
 type logClient interface {
-	GetLog(channelID string, options *logaggc.LogOpts) (io.ReadCloser, error)
+	GetLog(channelID string, options *logagg.LogOpts) (io.ReadCloser, error)
 }
 
 type handlerConfig struct {

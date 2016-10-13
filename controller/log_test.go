@@ -14,6 +14,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/typeconv"
 
 	. "github.com/flynn/go-check"
@@ -61,7 +62,7 @@ type fakeLogAggregatorClient struct {
 	subs map[string]<-chan *logaggc.Message
 }
 
-func (f *fakeLogAggregatorClient) GetLog(channelID string, options *logaggc.LogOpts) (io.ReadCloser, error) {
+func (f *fakeLogAggregatorClient) GetLog(channelID string, options *logagg.LogOpts) (io.ReadCloser, error) {
 	buf, ok := f.logs[channelID]
 	if !ok {
 		buf = sampleMessages
@@ -121,26 +122,26 @@ func (s *S) TestGetAppLog(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "get-app-log-test"})
 
 	tests := []struct {
-		opts     *ct.LogOpts
+		opts     *logagg.LogOpts
 		expected []logaggc.Message
 	}{
 		{
 			expected: sampleMessages,
 		},
 		{
-			opts:     &ct.LogOpts{Lines: typeconv.IntPtr(1)},
+			opts:     &logagg.LogOpts{Lines: typeconv.IntPtr(1)},
 			expected: sampleMessages[2:],
 		},
 		{
-			opts:     &ct.LogOpts{ProcessType: typeconv.StringPtr("web")},
+			opts:     &logagg.LogOpts{ProcessType: typeconv.StringPtr("web")},
 			expected: sampleMessages[1:2],
 		},
 		{
-			opts:     &ct.LogOpts{ProcessType: typeconv.StringPtr("")},
+			opts:     &logagg.LogOpts{ProcessType: typeconv.StringPtr("")},
 			expected: sampleMessages[:1],
 		},
 		{
-			opts:     &ct.LogOpts{JobID: "11111111111111111111111111111111"},
+			opts:     &logagg.LogOpts{JobID: "11111111111111111111111111111111"},
 			expected: sampleMessages[1:2],
 		},
 	}
@@ -186,7 +187,7 @@ func (s *S) TestGetAppLogFollow(c *C) {
 	s.flac.subs[app.ID] = subc
 	defer func() { delete(s.flac.subs, app.ID) }()
 
-	rc, err := s.c.GetAppLog(app.Name, &ct.LogOpts{
+	rc, err := s.c.GetAppLog(app.Name, &logagg.LogOpts{
 		Lines:  nil,
 		Follow: true,
 	})
