@@ -18,7 +18,7 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	t := f.Release.Processes[name]
 
 	var entrypoint ct.ImageEntrypoint
-	if e := getEntrypoint(f.Artifacts, name); e != nil {
+	if e := GetEntrypoint(f.Artifacts, name); e != nil {
 		entrypoint = *e
 	}
 
@@ -84,14 +84,14 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	return job
 }
 
-// getEntrypoint returns an image entrypoint for a process type from a list of
+// GetEntrypoint returns an image entrypoint for a process type from a list of
 // artifacts, first iterating through them and returning any entrypoint having
 // the exact type, then iterating through them and returning the artifact's
 // default entrypoint if it has one.
 //
 // The artifacts are traversed in reverse order so that entrypoints in the
 // image being overlayed at the top are considered first.
-func getEntrypoint(artifacts []*ct.Artifact, typ string) *ct.ImageEntrypoint {
+func GetEntrypoint(artifacts []*ct.Artifact, typ string) *ct.ImageEntrypoint {
 	for i := len(artifacts) - 1; i >= 0; i-- {
 		artifact := artifacts[i]
 		if artifact.Type != ct.ArtifactTypeFlynn {
