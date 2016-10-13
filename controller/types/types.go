@@ -554,6 +554,8 @@ type ImageEntrypoint struct {
 	WorkingDir        string            `json:"cwd,omitempty"`
 	Args              []string          `json:"args,omitempty"`
 	LinuxCapabilities []string          `json:"linux_capabilities,omitempty"`
+	Uid               *uint32           `json:"uid,omitempty"`
+	Gid               *uint32           `json:"gid,omitempty"`
 }
 
 type ImageRootfs struct {

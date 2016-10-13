@@ -46,7 +46,8 @@ import (
 var logger log15.Logger
 
 type Config struct {
-	User      string
+	Uid       *uint32
+	Gid       *uint32
 	Gateway   string
 	WorkDir   string
 	IP        string
@@ -568,6 +569,16 @@ func containerInitApp(c *Config, logFile *os.File) error {
 	// App runs in its own session
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
+	if c.Uid != nil || c.Gid != nil {
+		cmd.SysProcAttr.Credential = &syscall.Credential{}
+		if c.Uid != nil {
+			cmd.SysProcAttr.Credential.Uid = *c.Uid
+		}
+		if c.Gid != nil {
+			cmd.SysProcAttr.Credential.Gid = *c.Gid
+		}
+	}
+
 	// Console setup.  Hook up the container app's stdin/stdout/stderr to
 	// either a pty or pipes.  The FDs for the controlling side of the
 	// pty/pipes will be passed to flynn-host later via a UNIX socket.
@@ -606,7 +617,7 @@ func containerInitApp(c *Config, logFile *os.File) error {
 		}
 
 		log.Debug("creating FD proxies")
-		if err := createFDProxies(cmd); err != nil {
+		if err := createFDProxies(cmd, c); err != nil {
 			log.Error("error creating FD proxies", "err", err)
 			return err
 		}
@@ -692,7 +703,7 @@ func newSocketPair(name string) (*os.File, *os.File, error) {
 // This is necessary (rather than just symlinking those paths to /proc/self/fd/{1,2})
 // because the standard streams are sockets, and calling open(2) on a socket
 // leads to an ENXIO error (see http://marc.info/?l=ast-users&m=120978595414993).
-func createFDProxies(cmd *exec.Cmd) error {
+func createFDProxies(cmd *exec.Cmd, config *Config) error {
 	for path, dst := range map[string]*os.File{
 		"/dev/stdout": cmd.Stdout.(*os.File),
 		"/dev/stderr": cmd.Stderr.(*os.File),
@@ -700,6 +711,11 @@ func createFDProxies(cmd *exec.Cmd) error {
 		os.Remove(path)
 		if err := syscall.Mkfifo(path, 0666); err != nil {
 			return err
+		}
+		if config.Uid != nil && config.Gid != nil {
+			if err := os.Chown(path, int(*config.Uid), int(*config.Gid)); err != nil {
+				return err
+			}
 		}
 		pipe, err := os.OpenFile(path, os.O_RDWR, os.ModeNamedPipe)
 		if err != nil {

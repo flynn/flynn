@@ -54,6 +54,8 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 			Args:        entrypoint.Args,
 			Env:         env,
 			WorkingDir:  entrypoint.WorkingDir,
+			Uid:         entrypoint.Uid,
+			Gid:         entrypoint.Gid,
 			HostNetwork: t.HostNetwork,
 		},
 		Resurrect: t.Resurrect,
