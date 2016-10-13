@@ -36,7 +36,7 @@ import (
 
 var logger = log15.New("component", "controller")
 
-var ErrNotFound = errors.New("controller: resource not found")
+var ErrNotFound = ct.ErrNotFound
 var ErrShutdown = errors.New("controller: shutting down")
 
 var schemaRoot = "/etc/flynn-controller/jsonschema"
