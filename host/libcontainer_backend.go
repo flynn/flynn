@@ -593,15 +593,14 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		TTY:       job.Config.TTY,
 		OpenStdin: job.Config.Stdin,
 		WorkDir:   job.Config.WorkingDir,
+		Uid:       job.Config.Uid,
+		Gid:       job.Config.Gid,
 		Resources: job.Resources,
 		LogLevel:  l.InitLogLevel,
 	}
 	if !job.Config.HostNetwork {
 		initConfig.IP = container.IP.String() + "/24"
 		initConfig.Gateway = l.bridgeAddr.String()
-	}
-	if job.Config.Uid > 0 {
-		initConfig.User = strconv.Itoa(job.Config.Uid)
 	}
 	for _, port := range job.Config.Ports {
 		initConfig.Ports = append(initConfig.Ports, port)

@@ -93,7 +93,8 @@ type ContainerConfig struct {
 	Volumes     []VolumeBinding   `json:"volumes,omitempty"`
 	Ports       []Port            `json:"ports,omitempty"`
 	WorkingDir  string            `json:"working_dir,omitempty"`
-	Uid         int               `json:"uid,omitempty"`
+	Uid         *uint32           `json:"uid,omitempty"`
+	Gid         *uint32           `json:"gid,omitempty"`
 	HostNetwork bool              `json:"host_network,omitempty"`
 	DisableLog  bool              `json:"disable_log,omitempty"`
 }
@@ -129,8 +130,11 @@ func (x ContainerConfig) Merge(y ContainerConfig) ContainerConfig {
 	if y.WorkingDir != "" {
 		x.WorkingDir = y.WorkingDir
 	}
-	if y.Uid != 0 {
+	if y.Uid != nil {
 		x.Uid = y.Uid
+	}
+	if y.Gid != nil {
+		x.Gid = y.Gid
 	}
 	x.HostNetwork = x.HostNetwork || y.HostNetwork
 	return x
