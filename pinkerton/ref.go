@@ -55,6 +55,10 @@ func (r *Ref) ID() string {
 	return r.imageID
 }
 
+func (r *Ref) Name() string {
+	return r.repo
+}
+
 func (r *Ref) DockerRepo() string {
 	return r.host + "/" + r.repo
 }
