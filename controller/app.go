@@ -14,7 +14,7 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
-	logaggc "github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -340,12 +340,19 @@ func (c *controllerAPI) ScheduleAppGarbageCollection(ctx context.Context, w http
 func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	opts := logaggc.LogOpts{
+	opts := logagg.LogOpts{
 		Follow: req.FormValue("follow") == "true",
 		JobID:  req.FormValue("job_id"),
 	}
 	if vals, ok := req.Form["process_type"]; ok && len(vals) > 0 {
 		opts.ProcessType = &vals[len(vals)-1]
+	}
+	if streamTypeVals := req.FormValue("stream_types"); streamTypeVals != "" {
+		streamTypes := strings.Split(streamTypeVals, ",")
+		opts.StreamTypes = make([]logagg.StreamType, len(streamTypes))
+		for i, typ := range streamTypes {
+			opts.StreamTypes[i] = logagg.StreamType(typ)
+		}
 	}
 	if strLines := req.FormValue("lines"); strLines != "" {
 		lines, err := strconv.Atoi(req.FormValue("lines"))

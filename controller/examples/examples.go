@@ -17,6 +17,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	g "github.com/flynn/flynn/pkg/examplegenerator"
 	"github.com/flynn/flynn/pkg/httprecorder"
 	"github.com/flynn/flynn/pkg/random"
@@ -209,7 +210,7 @@ func (e *generator) getAppLog() {
 	e.resourceIds["controller"] = app.ID // save ID for streamAppLog
 	e.recorder.GetRequests()             // discard above request
 	lines := 10
-	res, err := e.client.GetAppLog(app.ID, &ct.LogOpts{
+	res, err := e.client.GetAppLog(app.ID, &logagg.LogOpts{
 		Lines: &lines,
 	})
 	if err == nil {
@@ -221,7 +222,7 @@ func (e *generator) getAppLog() {
 func (e *generator) streamAppLog() {
 	output := make(chan *ct.SSELogChunk)
 	lines := 10
-	e.client.StreamAppLog(e.resourceIds["controller"], &ct.LogOpts{
+	e.client.StreamAppLog(e.resourceIds["controller"], &logagg.LogOpts{
 		Lines: &lines,
 	}, output)
 	timeout := time.After(10 * time.Second)

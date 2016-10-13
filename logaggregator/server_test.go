@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
@@ -29,7 +30,7 @@ func (s *ServerTestSuite) TestServerDurability(c *C) {
 	defer conn.Close()
 
 	zero := 0
-	rc, err := cl.GetLog("app-A", &client.LogOpts{Follow: true, Lines: &zero})
+	rc, err := cl.GetLog("app-A", &logagg.LogOpts{Follow: true, Lines: &zero})
 	c.Assert(err, IsNil)
 
 	for _, msg := range appAMessages {
@@ -41,7 +42,7 @@ func (s *ServerTestSuite) TestServerDurability(c *C) {
 	for _, want := range appAMessages {
 		c.Assert(dec.Decode(&got), IsNil)
 		c.Assert(got.HostID, Equals, string(want.Hostname))
-		c.Assert(got.Stream, Equals, streamName(want.MsgID))
+		c.Assert(got.Stream, Equals, streamType(want.MsgID))
 		c.Assert(got.Timestamp.Equal(want.Timestamp), Equals, true)
 
 		procType, jobID := splitProcID(want.ProcID)

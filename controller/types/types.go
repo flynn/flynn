@@ -343,13 +343,6 @@ type SSELogChunk struct {
 	Data  json.RawMessage `json:"data,omitempty"`
 }
 
-type LogOpts struct {
-	Follow      bool
-	JobID       string
-	Lines       *int
-	ProcessType *string
-}
-
 type EventType string
 
 const (

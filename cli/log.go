@@ -9,8 +9,8 @@ import (
 	"strconv"
 
 	"github.com/flynn/flynn/controller/client"
-	ct "github.com/flynn/flynn/controller/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 
 	"github.com/flynn/go-docopt"
 )
@@ -38,9 +38,13 @@ const rfc3339micro = "2006-01-02T15:04:05.000000Z07:00"
 
 func runLog(args *docopt.Args, client controller.Client) error {
 	rawOutput := args.Bool["--raw-output"]
-	opts := ct.LogOpts{
+	opts := logagg.LogOpts{
 		Follow: args.Bool["--follow"],
 		JobID:  args.String["--job"],
+		StreamTypes: []logagg.StreamType{
+			logagg.StreamTypeStdout,
+			logagg.StreamTypeStderr,
+		},
 	}
 	if ptype, ok := args.String["--process-type"]; ok {
 		opts.ProcessType = &ptype
@@ -51,6 +55,9 @@ func runLog(args *docopt.Args, client controller.Client) error {
 			return err
 		}
 		opts.Lines = &lines
+	}
+	if args.Bool["--init"] {
+		opts.StreamTypes = append(opts.StreamTypes, logagg.StreamTypeInit)
 	}
 	rc, err := client.GetAppLog(mustApp(), &opts)
 	if err != nil {
@@ -79,11 +86,11 @@ func runLog(args *docopt.Args, client controller.Client) error {
 
 		var stream io.Writer
 		switch msg.Stream {
-		case "stdout":
+		case logagg.StreamTypeStdout:
 			stream = os.Stdout
-		case "stderr":
+		case logagg.StreamTypeStderr:
 			stream = stderr
-		case "init":
+		case logagg.StreamTypeInit:
 			stream = initOut
 		default:
 			continue

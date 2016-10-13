@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/typeconv"
 	. "github.com/flynn/go-check"
@@ -37,7 +38,7 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 	s.agg.feed(msg4)
 	s.agg.feed(msg5)
 
-	runtest := func(opts client.LogOpts, expected string) {
+	runtest := func(opts logagg.LogOpts, expected string) {
 		numLines := -1
 		if opts.Lines != nil {
 			numLines = *opts.Lines
@@ -90,7 +91,7 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 		},
 	}
 	for _, test := range tests {
-		opts := client.LogOpts{
+		opts := logagg.LogOpts{
 			Follow: false,
 			JobID:  test.jobID,
 		}
@@ -144,7 +145,7 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
 		s.agg.feed(msg1)
 		s.agg.feed(msg2)
 
-		logrc, err := s.client.GetLog(appID, &client.LogOpts{
+		logrc, err := s.client.GetLog(appID, &logagg.LogOpts{
 			Follow: true,
 			Lines:  &test.nLines,
 		})
@@ -202,7 +203,7 @@ func (s *LogAggregatorTestSuite) TestNewMessageFromSyslog(c *C) {
 	c.Assert(m.JobID, Equals, "flynn-abcd1234")
 	c.Assert(m.ProcessType, Equals, "web")
 	c.Assert(m.Source, Equals, "app")
-	c.Assert(m.Stream, Equals, "stdout")
+	c.Assert(m.Stream, Equals, logagg.StreamTypeStdout)
 	c.Assert(m.Timestamp, Equals, timestamp)
 }
 
@@ -249,6 +250,7 @@ func newMessageForApp(appname, procID, msg string) *rfc5424.Message {
 		&rfc5424.Header{
 			AppName: []byte(appname),
 			ProcID:  []byte(procID),
+			MsgID:   []byte("ID1"),
 		},
 		[]byte(msg),
 	)

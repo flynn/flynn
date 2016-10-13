@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
@@ -40,6 +41,17 @@ func filterProcessType(processType string) filterFunc {
 	return func(m *rfc5424.Message) bool {
 		b, _ := splitProcID(m.ProcID)
 		return bytes.Equal(a, b)
+	}
+}
+
+func filterStreamType(streams ...logagg.StreamType) filterFunc {
+	lookup := make(map[logagg.StreamType]struct{}, len(streams))
+	for _, stream := range streams {
+		lookup[stream] = struct{}{}
+	}
+	return func(m *rfc5424.Message) bool {
+		_, ok := lookup[streamType(m.MsgID)]
+		return ok
 	}
 }
 

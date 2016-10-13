@@ -9,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn/host/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/exec"
@@ -58,7 +59,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	// stream the log from the logaggregator
 	logc, err := logaggc.New("")
 	t.Assert(err, c.IsNil)
-	log, err := logc.GetLog("partial-logger", &logaggc.LogOpts{Follow: true})
+	log, err := logc.GetLog("partial-logger", &logagg.LogOpts{Follow: true})
 	t.Assert(err, c.IsNil)
 	defer log.Close()
 	msgs := make(chan *logaggc.Message)
