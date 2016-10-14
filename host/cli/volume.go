@@ -6,6 +6,7 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/go-docopt"
@@ -69,7 +70,9 @@ func runVolumeGarbageCollection(args *docopt.Args, client *cluster.Client) error
 		}
 		for _, j := range jobs {
 			for _, vb := range j.Job.Config.Volumes {
-				attached[vb.VolumeID] = struct{}{}
+				if j.Status == host.StatusRunning || j.Status == host.StatusStarting {
+					attached[vb.VolumeID] = struct{}{}
+				}
 			}
 		}
 	}
