@@ -67,17 +67,19 @@ func (r *AppRepo) Add(data interface{}) error {
 	if app.DeployTimeout == 0 {
 		app.DeployTimeout = ct.DefaultDeployTimeout
 	}
+	if app.Meta == nil {
+		app.Meta = make(map[string]string)
+	}
+	if _, ok := app.Meta["gc.max_inactive_slug_releases"]; !ok {
+		app.Meta["gc.max_inactive_slug_releases"] = "10"
+	}
+
 	if err := tx.QueryRow("app_insert", app.ID, app.Name, app.Meta, app.Strategy, app.DeployTimeout).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
 		tx.Rollback()
 		if postgres.IsUniquenessError(err, "apps_name_idx") {
 			return httphelper.ObjectExistsErr(fmt.Sprintf("application %q already exists", app.Name))
 		}
 		return err
-	}
-
-	if app.Meta == nil {
-		// ensure we don't return `{"meta": null}`
-		app.Meta = make(map[string]string)
 	}
 
 	if err := createEvent(tx.Exec, &ct.Event{

@@ -365,3 +365,52 @@ func (MigrateSuite) TestMigrateRedisService(c *C) {
 	}
 	c.Assert(proc.Service, Equals, appName)
 }
+
+func (MigrateSuite) TestMigrateDefaultAppGC(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_default_app_gc")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 23
+	m.migrateTo(23)
+
+	// add some apps
+	type app struct {
+		ID      string
+		OldMeta map[string]string
+		NewMeta map[string]string
+	}
+	apps := []*app{
+		{
+			OldMeta: nil,
+			NewMeta: map[string]string{"gc.max_inactive_slug_releases": "10"},
+		},
+		{
+			OldMeta: map[string]string{},
+			NewMeta: map[string]string{"gc.max_inactive_slug_releases": "10"},
+		},
+		{
+			OldMeta: map[string]string{"gc.max_inactive_slug_releases": "20"},
+			NewMeta: map[string]string{"gc.max_inactive_slug_releases": "20"},
+		},
+		{
+			OldMeta: map[string]string{"foo": "bar"},
+			NewMeta: map[string]string{"foo": "bar", "gc.max_inactive_slug_releases": "10"},
+		},
+		{
+			OldMeta: map[string]string{"foo": "bar", "gc.max_inactive_slug_releases": "20"},
+			NewMeta: map[string]string{"foo": "bar", "gc.max_inactive_slug_releases": "20"},
+		},
+	}
+	for _, app := range apps {
+		app.ID = random.UUID()
+		c.Assert(db.Exec(`INSERT INTO apps (app_id, name, meta) VALUES ($1, $2, $3)`, app.ID, random.String(16), app.OldMeta), IsNil)
+	}
+
+	// migrate to 24, check meta was updated correctly
+	m.migrateTo(24)
+	for _, app := range apps {
+		var meta map[string]string
+		c.Assert(db.QueryRow("SELECT meta FROM apps WHERE app_id = $1", app.ID).Scan(&meta), IsNil)
+		c.Assert(meta, DeepEquals, app.NewMeta)
+	}
+}

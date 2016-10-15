@@ -150,6 +150,41 @@ func (s *S) TestCreateApp(c *C) {
 	}
 }
 
+func (s *S) TestCreateAppDefaultGC(c *C) {
+	type meta struct {
+		in  map[string]string
+		out map[string]string
+	}
+	for _, m := range []meta{
+		{
+			in:  nil,
+			out: map[string]string{"gc.max_inactive_slug_releases": "10"},
+		},
+		{
+			in:  map[string]string{},
+			out: map[string]string{"gc.max_inactive_slug_releases": "10"},
+		},
+		{
+			in:  map[string]string{"gc.max_inactive_slug_releases": "20"},
+			out: map[string]string{"gc.max_inactive_slug_releases": "20"},
+		},
+		{
+			in:  map[string]string{"foo": "bar"},
+			out: map[string]string{"foo": "bar", "gc.max_inactive_slug_releases": "10"},
+		},
+		{
+			in:  map[string]string{"foo": "bar", "gc.max_inactive_slug_releases": "20"},
+			out: map[string]string{"foo": "bar", "gc.max_inactive_slug_releases": "20"},
+		},
+	} {
+		app := s.createTestApp(c, &ct.App{Meta: m.in})
+		c.Assert(app.Meta, DeepEquals, m.out)
+		app, err := s.c.GetApp(app.ID)
+		c.Assert(err, IsNil)
+		c.Assert(app.Meta, DeepEquals, m.out)
+	}
+}
+
 func (s *S) TestSystemApp(c *C) {
 	app := s.createTestApp(c, &ct.App{Meta: map[string]string{"flynn-system-app": "true"}})
 	c.Assert(app.System(), Equals, true)
