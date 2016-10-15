@@ -221,6 +221,9 @@ Options:
 		}
 		procs[t] = proc
 	}
+	if sb, ok := prevRelease.Processes["slugbuilder"]; ok {
+		procs["slugbuilder"] = sb
+	}
 	release.Processes = procs
 
 	if err := client.CreateRelease(release); err != nil {
