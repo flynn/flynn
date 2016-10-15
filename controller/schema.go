@@ -412,6 +412,9 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(23,
 		`ALTER TABLE job_cache ADD COLUMN args jsonb`,
 	)
+	migrations.Add(24,
+		`UPDATE apps SET meta = jsonb_merge(CASE WHEN meta = 'null' THEN '{}' ELSE meta END, '{"gc.max_inactive_slug_releases":"10"}') WHERE meta->>'gc.max_inactive_slug_releases' IS NULL`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
