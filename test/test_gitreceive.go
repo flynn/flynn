@@ -55,6 +55,10 @@ func (s *GitreceiveSuite) TestSlugbuilderLimit(t *c.C) {
 	t.Assert(push, Succeeds)
 	t.Assert(push, OutputContains, "524288000")
 
+	limit := r.flynn("limit")
+	t.Assert(limit, Succeeds)
+	t.Assert(limit.Output, Matches, "slugbuilder:.+memory=500MB")
+
 	t.Assert(r.flynn("-a", "gitreceive", "env", "unset", "SLUGBUILDER_DEFAULT_MEMORY_LIMIT"), Succeeds)
 }
 
