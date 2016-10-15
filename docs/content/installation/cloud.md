@@ -48,7 +48,7 @@ To login to a server provisioned by Flynn, you can specify the generated key and
 IP address of the server:
 
 ```text
-ssh -i ~/.flynn/installer/keys/flynn ubuntu@SERVER_IP
+ssh -i ~/.flynn/installer/keys/flynn root@SERVER_IP
 ```
 
 ## Release Mailing List
