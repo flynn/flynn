@@ -679,9 +679,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 
 	container.container = c
 
-	// TODO: still necessary?
-	l.State.SetContainerID(job.ID, job.ID)
-
 	go container.watch(nil, nil)
 
 	log.Info("job started")
