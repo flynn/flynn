@@ -675,7 +675,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		c.Destroy()
 		return err
 	}
-	// TODO: detach? an update will detach all container anyway
 	go process.Wait()
 
 	container.container = c
