@@ -73,6 +73,17 @@ Deploys via `git push` can be cancelled by killing the push process with
 `Ctrl-C` or by signalling the process to terminate. The build will be cancelled
 immediately and the code will not be deployed.
 
+### Building specific Git branches
+
+To deploy different branches of the same repository, can create new apps using the 
+same git repository but with different remotes:
+
+```
+flynn create myapp-staging --remote staging
+flynn -a staging env set FOO=bar
+git push staging staging:master
+```
+
 ## Processes
 
 You can get a list of an app's individual processes using `flynn ps`. The ID
