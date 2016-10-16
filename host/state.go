@@ -29,10 +29,9 @@ type State struct {
 	jobs map[string]*host.ActiveJob
 	mtx  sync.RWMutex
 
-	containers map[string]*host.ActiveJob              // container ID -> job
-	listeners  map[string]map[chan host.Event]struct{} // job id -> listener list (ID "all" gets all events)
-	listenMtx  sync.RWMutex
-	attachers  map[string]map[chan struct{}]struct{}
+	listeners map[string]map[chan host.Event]struct{} // job id -> listener list (ID "all" gets all events)
+	listenMtx sync.RWMutex
+	attachers map[string]map[chan struct{}]struct{}
 
 	stateFilePath string
 	stateDB       *bolt.DB
@@ -47,7 +46,6 @@ func NewState(id string, stateFilePath string) *State {
 		id:            id,
 		stateFilePath: stateFilePath,
 		jobs:          make(map[string]*host.ActiveJob),
-		containers:    make(map[string]*host.ActiveJob),
 		listeners:     make(map[string]map[chan host.Event]struct{}),
 		attachers:     make(map[string]map[chan struct{}]struct{}),
 		dbCond:        sync.NewCond(&sync.Mutex{}),
@@ -81,9 +79,6 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 			}
 			if job.CreatedAt.IsZero() {
 				job.CreatedAt = time.Now()
-			}
-			if job.ContainerID != "" {
-				s.containers[job.ContainerID] = job
 			}
 			s.jobs[string(k)] = job
 
@@ -349,14 +344,6 @@ func (s *State) ClusterJobs() []*host.Job {
 	return res
 }
 
-func (s *State) SetContainerID(jobID, containerID string) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	s.jobs[jobID].ContainerID = containerID
-	s.containers[containerID] = s.jobs[jobID]
-	s.persist(jobID)
-}
-
 func (s *State) SetContainerIP(jobID string, ip net.IP) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -395,17 +382,7 @@ func (s *State) SetStatusRunning(jobID string) {
 	}
 }
 
-func (s *State) SetContainerStatusDone(containerID string, exitCode int) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	job, ok := s.containers[containerID]
-	if !ok {
-		return
-	}
-	s.setStatusDone(job, exitCode)
-}
-
-func (s *State) SetStatusDone(jobID string, exitCode int) {
+func (s *State) SetStatusDone(jobID string, exitStatus int) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	job, ok := s.jobs[jobID]
@@ -413,10 +390,6 @@ func (s *State) SetStatusDone(jobID string, exitCode int) {
 		fmt.Println("SKIP")
 		return
 	}
-	s.setStatusDone(job, exitCode)
-}
-
-func (s *State) setStatusDone(job *host.ActiveJob, exitStatus int) {
 	if job.Status == host.StatusDone || job.Status == host.StatusCrashed || job.Status == host.StatusFailed {
 		return
 	}

@@ -201,17 +201,16 @@ type Event struct {
 }
 
 type ActiveJob struct {
-	Job         *Job      `json:"job,omitempty"`
-	HostID      string    `json:"host_id,omitempty"`
-	ContainerID string    `json:"container_id,omitempty"`
-	InternalIP  string    `json:"internal_ip,omitempty"`
-	ForceStop   bool      `json:"force_stop,omitempty"`
-	Status      JobStatus `json:"status,omitempty"`
-	CreatedAt   time.Time `json:"created_at,omitempty"`
-	StartedAt   time.Time `json:"started_at,omitempty"`
-	EndedAt     time.Time `json:"ended_at,omitempty"`
-	ExitStatus  *int      `json:"exit_status,omitempty"`
-	Error       *string   `json:"error,omitempty"`
+	Job        *Job      `json:"job,omitempty"`
+	HostID     string    `json:"host_id,omitempty"`
+	InternalIP string    `json:"internal_ip,omitempty"`
+	ForceStop  bool      `json:"force_stop,omitempty"`
+	Status     JobStatus `json:"status,omitempty"`
+	CreatedAt  time.Time `json:"created_at,omitempty"`
+	StartedAt  time.Time `json:"started_at,omitempty"`
+	EndedAt    time.Time `json:"ended_at,omitempty"`
+	ExitStatus *int      `json:"exit_status,omitempty"`
+	Error      *string   `json:"error,omitempty"`
 }
 
 func (j *ActiveJob) Dup() *ActiveJob {
