@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -136,41 +137,50 @@ func (s *TestScheduler) Stop() {
 }
 
 func (s *TestScheduler) waitRectify() utils.FormationKey {
-	event, err := s.waitForEvent("rectified formation")
+	event, err := s.waitForEvent("rectified formation", nil)
 	s.c.Assert(err, IsNil)
 	return event.Get("key").(utils.FormationKey)
 }
 
 func (s *TestScheduler) waitFormationChange() {
-	_, err := s.waitForEvent("formation change handled")
+	_, err := s.waitForEvent("formation change handled", nil)
 	s.c.Assert(err, IsNil)
 }
 
 func (s *TestScheduler) waitFormationSync() {
-	_, err := s.waitForEvent("formations synced")
+	_, err := s.waitForEvent("formations synced", nil)
 	s.c.Assert(err, IsNil)
 }
 
 func (s *TestScheduler) waitJobStart() *Job {
-	return s.waitJobEvent("start")
+	return s.waitJobEvent("start", nil)
+}
+
+func (s *TestScheduler) waitJobStartWithErr(expectedErr string) *Job {
+	return s.waitJobEvent("start", &expectedErr)
 }
 
 func (s *TestScheduler) waitJobStop() *Job {
-	return s.waitJobEvent("stop")
+	return s.waitJobEvent("stop", nil)
 }
 
-func (s *TestScheduler) waitJobEvent(typ string) *Job {
-	event, err := s.waitForEvent(fmt.Sprintf("handled job %s event", typ))
+func (s *TestScheduler) waitJobEvent(typ string, expectedErr *string) *Job {
+	event, err := s.waitForEvent(fmt.Sprintf("handled job %s event", typ), expectedErr)
 	s.c.Assert(err, IsNil)
 	return event.Get("job").(*Job)
 }
 
-func (s *TestScheduler) waitDurationForEvent(msg string, duration time.Duration) (*logEvent, error) {
+func (s *TestScheduler) waitDurationForEvent(msg string, duration time.Duration, expectedErr *string) (*logEvent, error) {
 	for {
 		select {
 		case event, ok := <-s.events:
 			if !ok {
-				return nil, fmt.Errorf("unexpected close of scheduler event stream")
+				return nil, errors.New("unexpected close of scheduler event stream")
+			}
+			if event.Lvl <= log15.LvlError {
+				if expectedErr == nil || event.Msg != *expectedErr {
+					return nil, fmt.Errorf("unexpected event: %s: %s", event.Lvl, event.Msg)
+				}
 			}
 			if event.Msg == msg {
 				return &logEvent{*event}, nil
@@ -181,8 +191,8 @@ func (s *TestScheduler) waitDurationForEvent(msg string, duration time.Duration)
 	}
 }
 
-func (s *TestScheduler) waitForEvent(msg string) (*logEvent, error) {
-	return s.waitDurationForEvent(msg, 2*time.Second)
+func (s *TestScheduler) waitForEvent(msg string, expectedErr *string) (*logEvent, error) {
+	return s.waitDurationForEvent(msg, 2*time.Second, expectedErr)
 }
 
 func (TestSuite) TestSingleJobStart(c *C) {
@@ -296,7 +306,7 @@ func (TestSuite) TestRectify(c *C) {
 	// Add the job to the host without adding the formation. Expected error.
 	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect job with nil formation.")
 	host.AddJob(config)
-	job = s.waitJobStart()
+	job = s.waitJobStartWithErr("error looking up formation for job")
 	c.Assert(job.Formation, IsNil)
 
 	c.Log("Add the formation to the controller. Wait for formation change. Check the job has a formation and no new job was created")
@@ -305,7 +315,7 @@ func (TestSuite) TestRectify(c *C) {
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitFormationChange()
-	_, err := s.waitDurationForEvent("handled job start event", 1*time.Second)
+	_, err := s.waitDurationForEvent("handled job start event", 1*time.Second, nil)
 	c.Assert(err, NotNil)
 	c.Assert(job.Formation, NotNil)
 	c.Assert(s.RunningJobs(), HasLen, 2)
@@ -528,9 +538,9 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	s2 := runTestScheduler(c, cluster, false)
 	defer s2.Stop()
 
-	_, err := s1.waitDurationForEvent("handled job start event", 1*time.Second)
+	_, err := s1.waitDurationForEvent("handled job start event", 1*time.Second, nil)
 	c.Assert(err, NotNil)
-	_, err = s2.waitDurationForEvent("handled job start event", 1*time.Second)
+	_, err = s2.waitDurationForEvent("handled job start event", 1*time.Second, nil)
 	c.Assert(err, NotNil)
 
 	// Make S1 the leader, wait for jobs to start
@@ -554,9 +564,9 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	s2.PutFormation(formation)
 	s1.waitFormationChange()
 	s2.waitFormationChange()
-	_, err = s2.waitDurationForEvent("handled job start event", 1*time.Second)
+	_, err = s2.waitDurationForEvent("handled job start event", 1*time.Second, nil)
 	c.Assert(err, NotNil)
-	_, err = s1.waitDurationForEvent("handled job start event", 1*time.Second)
+	_, err = s1.waitDurationForEvent("handled job start event", 1*time.Second, nil)
 	c.Assert(err, NotNil)
 
 	s2.discoverd.promote()
@@ -762,7 +772,7 @@ func (TestSuite) TestScaleCriticalApp(c *C) {
 
 	// check we can't scale it down
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: nil})
-	_, err := s.waitForEvent("refusing to scale down critical app")
+	_, err := s.waitForEvent("refusing to scale down critical app", nil)
 	s.c.Assert(err, IsNil)
 	s.waitFormationChange()
 
