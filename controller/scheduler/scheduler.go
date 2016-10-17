@@ -515,15 +515,23 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 	}
 
-	// ensure any active in-memory jobs are also active in the controller
-	// (the two may diverge if for example a previous persistence of the
-	// job's state failed with a non-retryable error)
 	for _, job := range s.jobs {
-		if job.State != JobStatePending && job.State != JobStateStarting && job.State != JobStateRunning {
-			continue
-		}
-		if _, active := activeControllerJobs[job.ID]; !active {
-			s.persistJob(job)
+		switch job.State {
+
+		// ensure any active in-memory jobs are also active in the
+		// controller (the two may diverge if for example a previous
+		// persistence of the job's state failed with a non-retryable
+		// error)
+		case JobStatePending, JobStateStarting, JobStateRunning:
+			if _, active := activeControllerJobs[job.ID]; !active {
+				s.persistJob(job)
+			}
+
+		// stop any jobs in the JobStateStopping state (this races with
+		// an already running stopJob call, but stopping a job multiple
+		// times isn't a big deal and avoids the need for synchronization)
+		case JobStateStopping:
+			s.stopJob(job)
 		}
 	}
 
@@ -1630,8 +1638,10 @@ func (s *Scheduler) stopJob(job *Job) error {
 	// set the state to JobStateStopping in case a StartJob goroutine is
 	// still trying to start the job, in which case it will get an
 	// ErrJobNotPending error on the next call to PlaceJob
-	job.State = JobStateStopping
-	s.persistJob(job)
+	if job.State != JobStateStopping {
+		job.State = JobStateStopping
+		s.persistJob(job)
+	}
 
 	routerBackend := s.routerBackends[job.JobID]
 	go func() {
@@ -1664,13 +1674,13 @@ func (s *Scheduler) stopJob(job *Job) error {
 }
 
 // findJobToStop finds a job from the given formation and type which should be
-// stopped, choosing pending or stopping jobs if present, and the most recently
-// started job otherwise
+// stopped, choosing pending jobs if present, and the most recently started job
+// otherwise
 func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 	var runningJob *Job
 	for _, job := range s.jobs.WithFormationAndType(f, typ) {
 		switch job.State {
-		case JobStatePending, JobStateStopping:
+		case JobStatePending:
 			return job, nil
 		case JobStateStarting, JobStateRunning:
 			// if the job is on a host which is shutting down,

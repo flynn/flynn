@@ -128,7 +128,7 @@ func (j *Job) IsRunning() bool {
 }
 
 func (j *Job) IsInFormation(key utils.FormationKey) bool {
-	return j.State != JobStateStopped && j.Formation != nil && j.Formation.key() == key
+	return j.State != JobStateStopped && j.State != JobStateStopping && j.Formation != nil && j.Formation.key() == key
 }
 
 func (j *Job) IsInApp(appID string) bool {
