@@ -54,6 +54,9 @@
     },
     "resources": {
       "$ref": "/schema/controller/common#/definitions/resources"
+    },
+    "data": {
+      "type": "boolean"
     }
   }
 }

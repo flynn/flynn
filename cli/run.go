@@ -80,6 +80,7 @@ type runConfig struct {
 	Stderr     io.Writer
 	DisableLog bool
 	Exit       bool
+	Data       bool
 }
 
 func runJob(client controller.Client, config runConfig) error {
@@ -91,6 +92,7 @@ func runJob(client controller.Client, config runConfig) error {
 		Env:        config.Env,
 		ReleaseEnv: config.ReleaseEnv,
 		DisableLog: config.DisableLog,
+		Data:       config.Data,
 	}
 
 	// ensure slug apps from old clusters use /runner/init
