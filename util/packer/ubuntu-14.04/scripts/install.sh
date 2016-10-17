@@ -36,6 +36,7 @@ main() {
   install_flynn
   disable_docker_start
   apt_cleanup
+  packer_cleanup
 
   if vagrant_build; then
     net_cleanup
@@ -221,6 +222,10 @@ apt_cleanup() {
     | egrep ${kernel_pkg} \
     | egrep -v "${cur_kernel}|${meta_pkg}" \
     | awk '{print $2}')
+}
+
+packer_cleanup() {
+  rm -f /home/ubuntu/.ssh/authorized_keys
 }
 
 net_cleanup() {
