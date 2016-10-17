@@ -1677,7 +1677,7 @@ func (s *Scheduler) stopJob(job *Job) error {
 // stopped, choosing pending jobs if present, and the most recently started job
 // otherwise
 func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
-	var runningJob *Job
+	var found *Job
 	for _, job := range s.jobs.WithFormationAndType(f, typ) {
 		switch job.State {
 		case JobStatePending:
@@ -1695,16 +1695,17 @@ func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 
 			// return the most recent job (which is the first in
 			// the slice we are iterating over) if none of the
-			// above cases match
-			if runningJob == nil {
-				runningJob = job
+			// above cases match, preferring starting jobs to
+			// running ones
+			if found == nil || found.State == JobStateRunning && job.State == JobStateStarting {
+				found = job
 			}
 		}
 	}
-	if runningJob == nil {
+	if found == nil {
 		return nil, fmt.Errorf("no %s jobs running", typ)
 	}
-	return runningJob, nil
+	return found, nil
 }
 
 func jobConfig(job *Job, hostID string) *host.Job {
