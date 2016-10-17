@@ -9,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -305,6 +306,14 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		job.FileArtifacts = make([]*host.Artifact, len(release.FileArtifactIDs()))
 		for i, id := range release.FileArtifactIDs() {
 			job.FileArtifacts[i] = artifacts[id].HostArtifact()
+		}
+	}
+
+	// provision data volume if required
+	if newJob.Data {
+		if err := utils.ProvisionVolume(client, job); err != nil {
+			respondWithError(w, err)
+			return
 		}
 	}
 

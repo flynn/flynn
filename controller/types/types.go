@@ -255,6 +255,7 @@ type NewJob struct {
 	Lines      int                `json:"tty_lines,omitempty"`
 	DisableLog bool               `json:"disable_log,omitempty"`
 	Resources  resource.Resources `json:"resources,omitempty"`
+	Data       bool               `json:"data,omitempty"`
 
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
 	DeprecatedCmd        []string `json:"cmd,omitempty"`
