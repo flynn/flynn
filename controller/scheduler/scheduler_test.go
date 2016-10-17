@@ -786,3 +786,63 @@ func (TestSuite) TestScaleCriticalApp(c *C) {
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: nil})
 	s.waitJobStop()
 }
+
+func (TestSuite) TestFindJobToStop(c *C) {
+	s := &Scheduler{
+		isLeader: typeconv.BoolPtr(true),
+		jobs:     make(Jobs),
+		logger:   log15.New(),
+	}
+
+	// populate s.jobs with jobs in various states, oldest first
+	formation := &Formation{}
+	typ := "web"
+	start := time.Now()
+	startedAt := func(i int) time.Time {
+		return start.Add(time.Duration(int64(i)) * time.Second)
+	}
+	for i, state := range []JobState{
+		JobStatePending,
+		JobStateStarting,
+		JobStateRunning,
+		JobStatePending,
+		JobStateStarting,
+		JobStateRunning,
+		JobStateStopping,
+		JobStateStopped,
+		JobStatePending,
+		JobStateStarting,
+		JobStateRunning,
+	} {
+		id := fmt.Sprintf("job%d", i)
+		s.jobs[id] = &Job{
+			ID:        id,
+			Formation: formation,
+			Type:      typ,
+			StartedAt: startedAt(i),
+			State:     state,
+		}
+	}
+
+	nextJob := func() *Job {
+		job, err := s.findJobToStop(formation, typ)
+		c.Assert(err, IsNil)
+		delete(s.jobs, job.ID)
+		return job
+	}
+
+	// expect the three pending jobs first
+	c.Assert(nextJob().State, Equals, JobStatePending)
+	c.Assert(nextJob().State, Equals, JobStatePending)
+	c.Assert(nextJob().State, Equals, JobStatePending)
+
+	// then the starting jobs, newest first
+	c.Assert(nextJob().ID, Equals, "job9")
+	c.Assert(nextJob().ID, Equals, "job4")
+	c.Assert(nextJob().ID, Equals, "job1")
+
+	// then the running jobs, newest first
+	c.Assert(nextJob().ID, Equals, "job10")
+	c.Assert(nextJob().ID, Equals, "job5")
+	c.Assert(nextJob().ID, Equals, "job2")
+}
