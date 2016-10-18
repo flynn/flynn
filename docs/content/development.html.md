@@ -180,7 +180,7 @@ $ flynn-host stop $JOBID
 $ flynn-host ps -a | xargs flynn-host stop
 ```
 
-*(NOTE: as jobs are stopped, the scheduler may start new jobs. To avoid this, stop the scehduler first)*
+*(NOTE: as jobs are stopped, the scheduler may start new jobs. To avoid this, stop the scheduler first)*
 
 ### stop all jobs for a particular app
 
