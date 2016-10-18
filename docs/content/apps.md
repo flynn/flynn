@@ -75,7 +75,7 @@ immediately and the code will not be deployed.
 
 ### Building specific Git branches
 
-To deploy different branch of the same repository, create a new app using the 
+To deploy a different branch of the same repository, create a new app using the 
 same git repository but with different remotes:
 
 ```
