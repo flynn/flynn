@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/certgen"
 	hh "github.com/flynn/flynn/pkg/httphelper"
@@ -104,7 +105,7 @@ func (s *S) SetUpSuite(c *C) {
 }
 
 func (s *S) SetUpTest(c *C) {
-	s.cc.SetHosts(make(map[string]*tu.FakeHostClient))
+	s.cc.SetHosts(make(map[string]utils.HostClient))
 }
 
 func (s *S) TestBadAuth(c *C) {

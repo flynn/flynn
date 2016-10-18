@@ -1058,22 +1058,11 @@ func (s *Scheduler) activeFormationCount(appID string) int {
 }
 
 func (s *Scheduler) StartJob(job *Job) {
-	log := s.logger.New("fn", "StartJob", "app.id", job.AppID, "release.id", job.ReleaseID, "job.type", job.Type)
+	log := s.logger.New("fn", "StartJob", "app.id", job.AppID, "release.id", job.ReleaseID, "job.id", job.ID, "job.type", job.Type)
 	log.Info("starting job")
 
 outer:
 	for attempt := 0; ; attempt++ {
-		if attempt > 0 {
-			// when making multiple attempts, backoff in increments
-			// of 500ms (capped at 30s)
-			delay := 500 * time.Millisecond * time.Duration(attempt)
-			if delay > 30*time.Second {
-				delay = 30 * time.Second
-			}
-			log.Info(fmt.Sprintf("failed to start job after %d attempts, waiting %s before trying again", attempt, delay))
-			time.Sleep(delay)
-		}
-
 		log.Info("placing job in the cluster")
 		config, host, err := s.PlaceJob(job)
 		if err == ErrNotLeader {
@@ -1098,12 +1087,23 @@ outer:
 			}
 		}
 
-		log.Info("adding job to the cluster", "host.id", host.ID, "job.id", config.ID)
-		if err := host.client.AddJob(config); err != nil {
-			log.Error("error adding job to the cluster", "err", err)
-			continue
+		log.Info("adding job to the cluster", "host.id", host.ID)
+		err = host.client.AddJob(config)
+		if err == nil {
+			return
 		}
-		return
+		log.Error("error adding job to the cluster", "err", err)
+
+		if attempt > 0 {
+			// when making multiple attempts, backoff in increments
+			// of 500ms (capped at 30s)
+			delay := 500 * time.Millisecond * time.Duration(attempt)
+			if delay > 30*time.Second {
+				delay = 30 * time.Second
+			}
+			log.Warn(fmt.Sprintf("failed to start job after %d attempts, waiting %s before trying again", attempt, delay))
+			time.Sleep(delay)
+		}
 	}
 }
 
@@ -1182,6 +1182,7 @@ func (s *Scheduler) markHostAsUnhealthy(host *Host) {
 func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 	log := s.logger.New("fn", "HandleHostEvent", "event.type", e.Kind)
 	log.Info("handling host event")
+	defer log.Debug("handled host event")
 
 	switch e.Kind {
 	case discoverd.EventKindUp:
@@ -1412,6 +1413,23 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 			Args:      hostJob.Config.Args,
 		}
 		s.jobs.Add(job)
+	}
+
+	// If the host ID of the active job is different to the host ID of the
+	// in-memory job, then it shouldn't be running so just stop it.
+	//
+	// This can happen if an initial request to start the job fails but the
+	// host does in fact start the job (e.g. the AddJob HTTP request timed
+	// out), and in the meantime the job was started successfully on a
+	// different host.
+	if job.HostID != activeJob.HostID {
+		s.logger.Warn("stopping job with incorrect host ID", "job.id", job.ID, "expected", job.HostID, "actual", activeJob.HostID)
+		if host, ok := s.hosts[activeJob.HostID]; ok {
+			if err := host.client.StopJob(hostJob.ID); err != nil {
+				s.logger.Error("error stopping job", "job.id", job.ID, "host.id", activeJob.HostID, "err", err)
+			}
+		}
+		return job
 	}
 
 	job.StartedAt = activeJob.StartedAt

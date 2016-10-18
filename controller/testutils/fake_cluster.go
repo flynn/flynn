@@ -11,14 +11,21 @@ import (
 )
 
 func NewFakeCluster() *FakeCluster {
+	return NewFakeClusterWithHosts(nil)
+}
+
+func NewFakeClusterWithHosts(hosts map[string]utils.HostClient) *FakeCluster {
+	if hosts == nil {
+		hosts = make(map[string]utils.HostClient)
+	}
 	return &FakeCluster{
-		hosts:        make(map[string]*FakeHostClient),
+		hosts:        hosts,
 		hostChannels: make(map[chan *discoverd.Event]struct{}),
 	}
 }
 
 type FakeCluster struct {
-	hosts        map[string]*FakeHostClient
+	hosts        map[string]utils.HostClient
 	mtx          sync.RWMutex
 	hostChannels map[chan *discoverd.Event]struct{}
 }
@@ -60,11 +67,11 @@ func (c *FakeCluster) Host(id string) (utils.HostClient, error) {
 	return host, nil
 }
 
-func (c *FakeCluster) SetHosts(h map[string]*FakeHostClient) {
+func (c *FakeCluster) SetHosts(h map[string]utils.HostClient) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 	oldHosts := c.hosts
-	c.hosts = make(map[string]*FakeHostClient)
+	c.hosts = make(map[string]utils.HostClient)
 	for id, h := range h {
 		if _, ok := oldHosts[id]; ok {
 			delete(oldHosts, id)
@@ -78,14 +85,13 @@ func (c *FakeCluster) SetHosts(h map[string]*FakeHostClient) {
 	}
 }
 
-func (c *FakeCluster) AddHost(h *FakeHostClient) {
+func (c *FakeCluster) AddHost(h utils.HostClient) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 	c.addHost(h)
 }
 
-func (c *FakeCluster) addHost(h *FakeHostClient) {
-	h.cluster = c
+func (c *FakeCluster) addHost(h utils.HostClient) {
 	c.hosts[h.ID()] = h
 
 	for ch := range c.hostChannels {
