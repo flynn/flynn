@@ -61,10 +61,12 @@ func (d *fakeDiscoverd) demote() {
 	d.leader <- false
 }
 
-func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd, l log15.Logger) *Scheduler {
+func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd, processes map[string]int, l log15.Logger) *Scheduler {
 	app := &ct.App{ID: testAppID, Name: testAppID}
 	artifact := &ct.Artifact{ID: testArtifactId}
-	processes := map[string]int{testJobType: testJobCount}
+	if processes == nil {
+		processes = map[string]int{testJobType: testJobCount}
+	}
 	release := NewRelease(testReleaseID, artifact, processes)
 	cc := NewFakeControllerClient()
 	cc.CreateApp(app)
@@ -74,13 +76,13 @@ func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd, l log
 	return NewScheduler(cluster, cc, discoverd, l)
 }
 
-func newTestHosts() map[string]*FakeHostClient {
-	return map[string]*FakeHostClient{
+func newTestHosts() map[string]utils.HostClient {
+	return map[string]utils.HostClient{
 		testHostID: NewFakeHostClient(testHostID, false),
 	}
 }
 
-func newTestCluster(hosts map[string]*FakeHostClient) *FakeCluster {
+func newTestCluster(hosts map[string]utils.HostClient) *FakeCluster {
 	cluster := NewFakeCluster()
 	if hosts == nil {
 		hosts = newTestHosts()
@@ -89,7 +91,7 @@ func newTestCluster(hosts map[string]*FakeHostClient) *FakeCluster {
 	return cluster
 }
 
-func newTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestScheduler {
+func newTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool, processes map[string]int) *TestScheduler {
 	if cluster == nil {
 		cluster = newTestCluster(nil)
 	}
@@ -102,12 +104,12 @@ func newTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestSch
 		log15.ChannelHandler(events),
 	))
 
-	s := createTestScheduler(cluster, discoverd, logger)
+	s := createTestScheduler(cluster, discoverd, processes, logger)
 	return &TestScheduler{s, c, events, discoverd}
 }
 
 func runTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestScheduler {
-	s := newTestScheduler(c, cluster, isLeader)
+	s := newTestScheduler(c, cluster, isLeader, nil)
 	go s.Run()
 	return s
 }
@@ -152,6 +154,11 @@ func (s *TestScheduler) waitFormationSync() {
 	s.c.Assert(err, IsNil)
 }
 
+func (s *TestScheduler) waitForHost() {
+	_, err := s.waitForEvent("handled host event", nil)
+	s.c.Assert(err, IsNil)
+}
+
 func (s *TestScheduler) waitJobStart() *Job {
 	return s.waitJobEvent("start", nil)
 }
@@ -189,6 +196,11 @@ func (s *TestScheduler) waitDurationForEvent(msg string, duration time.Duration,
 			return nil, fmt.Errorf("timed out waiting for event: %q", msg)
 		}
 	}
+}
+
+func (s *TestScheduler) waitForError(msg string) {
+	_, err := s.waitForEvent(msg, &msg)
+	s.c.Assert(err, IsNil)
 }
 
 func (s *TestScheduler) waitForEvent(msg string, expectedErr *string) (*logEvent, error) {
@@ -325,7 +337,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	hosts := newTestHosts()
 	host1 := hosts[testHostID]
 	fakeCluster := newTestCluster(hosts)
-	s := newTestScheduler(c, fakeCluster, true)
+	s := newTestScheduler(c, fakeCluster, true, nil)
 
 	// use incremental job IDs so we can find them easily in s.jobs
 	var jobID uint64
@@ -339,7 +351,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 
 	// assertJobs checks that hosts have expected jobs based on their type
 	// and current state
-	type hostJobs map[*FakeHostClient][]*Job
+	type hostJobs map[utils.HostClient][]*Job
 	assertJobs := func(expected hostJobs) {
 		// get a sorted list of scheduler jobs per host to compare
 		// against the expected list
@@ -508,7 +520,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	})
 
 	c.Logf("Remove another host. Ensure the cluster recovers correctly (hosts=%v)", hosts)
-	host1.Healthy = false
+	host1.(*FakeHostClient).Healthy = false
 	fakeCluster.RemoveHost(host1.ID())
 	s.waitFormationSync()
 	s.waitJobStart()
@@ -845,4 +857,76 @@ func (TestSuite) TestFindJobToStop(c *C) {
 	c.Assert(nextJob().ID, Equals, "job10")
 	c.Assert(nextJob().ID, Equals, "job5")
 	c.Assert(nextJob().ID, Equals, "job2")
+}
+
+type failingHostClient struct {
+	*FakeHostClient
+
+	addJob chan struct{}
+}
+
+func newFailingHostClient() *failingHostClient {
+	return &failingHostClient{
+		FakeHostClient: NewFakeHostClient("failing-host", false),
+		addJob:         make(chan struct{}),
+	}
+}
+
+func (c *failingHostClient) AddJob(job *host.Job) error {
+	go func() {
+		<-c.addJob
+		c.FakeHostClient.AddJob(job)
+	}()
+	return errors.New("fail")
+}
+
+func (TestSuite) TestFailingAddJob(c *C) {
+	// create a cluster with a single host which fails when adding jobs
+	failingHost := newFailingHostClient()
+	cluster := NewFakeCluster()
+	cluster.AddHost(failingHost)
+
+	// start the scheduler
+	s := newTestScheduler(c, cluster, true, map[string]int{"web": 0})
+	go s.Run()
+	defer s.Stop()
+	s.waitForHost()
+
+	// scale up the formation, wait for a job placement failure
+	s.PutFormation(&ct.Formation{AppID: testAppID, ReleaseID: testReleaseID, Processes: map[string]int{"web": 1}})
+	addJobErr := "error adding job to the cluster"
+	s.waitForError(addJobErr)
+
+	// add an ok host, wait for the job to be scheduled on it
+	okHost := NewFakeHostClient("ok-host", false)
+	events := make(chan *host.Event)
+	stream, err := okHost.StreamEvents("", events)
+	c.Assert(err, IsNil)
+	defer stream.Close()
+	cluster.AddHost(okHost)
+	_, err = s.waitForEvent("handled host event", &addJobErr)
+	s.c.Assert(err, IsNil)
+	select {
+	case <-events:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for job to be scheduled on ok host")
+	}
+
+	// trigger the failing host to add its job, check it gets killed
+	events = make(chan *host.Event)
+	stream, err = failingHost.StreamEvents("", events)
+	c.Assert(err, IsNil)
+	defer stream.Close()
+	close(failingHost.addJob)
+loop:
+	for {
+		select {
+		case event := <-events:
+			if event.Event == host.JobEventStop {
+				break loop
+			}
+		case <-time.After(10 * time.Second):
+			c.Fatal("timed out waiting for job to be stopped on failing host")
+		}
+	}
 }

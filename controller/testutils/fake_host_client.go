@@ -35,7 +35,6 @@ type FakeHostClient struct {
 	stopped          map[string]bool
 	attach           map[string]attachFunc
 	Jobs             map[string]host.ActiveJob
-	cluster          *FakeCluster
 	volumes          map[string]*volume.Info
 	eventChannelsMtx sync.Mutex
 	eventChannels    map[chan<- *host.Event]struct{}
@@ -69,6 +68,9 @@ func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) {
 func (c *FakeHostClient) AddJob(job *host.Job) error {
 	c.jobsMtx.Lock()
 	defer c.jobsMtx.Unlock()
+	if _, ok := c.Jobs[job.ID]; ok {
+		return errors.New("job exists")
+	}
 	j := host.ActiveJob{
 		Job:       job,
 		HostID:    c.hostID,
