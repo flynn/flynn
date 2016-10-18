@@ -302,3 +302,15 @@ func listRec(w io.Writer, a ...interface{}) {
 		}
 	}
 }
+
+func compatCheck(client controller.Client, minVersion string, message string) error {
+	status, err := client.Status()
+	if err != nil {
+		return err
+	}
+	v := version.Parse(status.Version)
+	if v.Before(version.Parse(minVersion)) && !v.Dev {
+		return fmt.Errorf(message, minVersion)
+	}
+	return nil
+}
