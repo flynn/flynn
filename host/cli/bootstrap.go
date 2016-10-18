@@ -373,7 +373,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'flannel');
 		`, network))
 	}
 
-	// start discoverd/flannel/postgres/mariadb
+	// start discoverd/flannel/postgres
 	cfg.Singleton = data.Postgres.Release.Env["SINGLETON"] == "true"
 	systemSteps := bootstrap.Manifest{
 		step("discoverd", "run-app", &bootstrap.RunAppAction{
@@ -386,8 +386,8 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'flannel');
 		step("postgres", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: data.Postgres,
 		}),
-		step("postgres-wait", "wait", &bootstrap.WaitAction{
-			URL: "http://postgres-api.discoverd/ping",
+		step("postgres-wait", "sirenia-wait", &bootstrap.SireniaWaitAction{
+			Service: "postgres",
 		}),
 	}
 
@@ -462,8 +462,8 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
 			step("mariadb", "run-app", &bootstrap.RunAppAction{
 				ExpandedFormation: data.MariaDB,
 			}),
-			step("mariadb-wait", "wait", &bootstrap.WaitAction{
-				URL: "http://mariadb-api.discoverd/ping",
+			step("mariadb-wait", "sirenia-wait", &bootstrap.SireniaWaitAction{
+				Service: "mariadb",
 			}),
 		}.RunWithState(ch, state)
 		if err != nil {
@@ -502,8 +502,8 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
 			step("mongodb", "run-app", &bootstrap.RunAppAction{
 				ExpandedFormation: data.MongoDB,
 			}),
-			step("mongodb-wait", "wait", &bootstrap.WaitAction{
-				URL: "http://mongodb-api.discoverd/ping",
+			step("mongodb-wait", "sirenia-wait", &bootstrap.SireniaWaitAction{
+				Service: "mongodb",
 			}),
 		}.RunWithState(ch, state)
 		if err != nil {
