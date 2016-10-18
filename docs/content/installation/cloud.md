@@ -48,8 +48,14 @@ To login to a server provisioned by Flynn, you can specify the generated key and
 IP address of the server:
 
 ```text
-ssh -i ~/.flynn/installer/keys/flynn ubuntu@SERVER_IP
+ssh -i ~/.flynn/installer/keys/flynn USER@SERVER_IP
 ```
+
+where `USER` varies based on which cloud provider you installed on:
+
+* AWS: `ubuntu`
+* DigitalOcean: `root`
+* Azure: `flynn`
 
 ## Release Mailing List
 
