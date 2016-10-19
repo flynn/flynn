@@ -53,6 +53,9 @@ case "$1" in
     ;;
 esac
 
+# allow the user to access /dev/std{out,err}
+chown nobody:nogroup /dev/std{out,err}
+
 ## Run!
 
 chown -R nobody:nogroup .

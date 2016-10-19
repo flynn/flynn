@@ -16,9 +16,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/docker/docker/pkg/term"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	c "github.com/flynn/go-check"
+	"github.com/kr/pty"
 )
 
 type GitDeploySuite struct {
@@ -384,4 +386,34 @@ func (s *GitDeploySuite) TestCustomPort(t *c.C) {
 	release, err = cc.GetAppRelease(name)
 	t.Assert(err, c.IsNil)
 	t.Assert(release.Processes["web"].Ports[0].Port, c.Equals, 9090)
+}
+
+func (s *GitDeploySuite) TestDevStdout(t *c.C) {
+	r := s.newGitRepo(t, "empty-release")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// check slug jobs can write to /dev/stdout and /dev/stderr
+	for _, dev := range []string{"/dev/stdout", "/dev/stderr"} {
+		// check without a TTY
+		echoFoo := fmt.Sprintf("echo foo > %s", dev)
+		t.Assert(r.flynn("run", "bash", "-c", echoFoo), SuccessfulOutputContains, "foo")
+
+		// check with a TTY
+		cmd := flynnCmd(r.dir, "run", "bash", "-c", echoFoo)
+		master, slave, err := pty.Open()
+		t.Assert(err, c.IsNil)
+		defer master.Close()
+		defer slave.Close()
+		t.Assert(term.SetWinsize(slave.Fd(), &term.Winsize{Height: 24, Width: 80}), c.IsNil)
+		cmd.Stdin = slave
+		cmd.Stdout = slave
+		cmd.Stderr = slave
+		t.Assert(cmd.Run(), c.IsNil)
+		out := make([]byte, 3)
+		_, err = io.ReadFull(master, out)
+		t.Assert(err, c.IsNil)
+		t.Assert(string(out), c.Equals, "foo")
+	}
 }
