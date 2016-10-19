@@ -18,6 +18,7 @@ import (
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
@@ -745,6 +746,18 @@ func (c *Client) DeleteRelease(appID, releaseID string) (*ct.ReleaseDeletion, er
 // ScheduleAppGarbageCollection schedules a garbage collection cycle for the app
 func (c *Client) ScheduleAppGarbageCollection(appID string) error {
 	return c.Post(fmt.Sprintf("/apps/%s/gc", appID), nil, nil)
+}
+
+// Status gets the controller status
+func (c *Client) Status() (*status.Status, error) {
+	type statusResponse struct {
+		Data status.Status `json:"data"`
+	}
+	s := &statusResponse{}
+	if err := c.Get(status.Path, s); err != nil {
+		return nil, err
+	}
+	return &s.Data, nil
 }
 
 func (c *Client) Put(path string, in, out interface{}) error {

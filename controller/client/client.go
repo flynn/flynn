@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
+	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
@@ -89,6 +90,7 @@ type Client interface {
 	GetBackupMeta() (*ct.ClusterBackup, error)
 	DeleteRelease(appID, releaseID string) (*ct.ReleaseDeletion, error)
 	ScheduleAppGarbageCollection(appID string) error
+	Status() (*status.Status, error)
 }
 
 type Config struct {
