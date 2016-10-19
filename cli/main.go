@@ -47,7 +47,7 @@ Commands:
 	apps        list apps
 	info        show app information
 	ps          list jobs
-	kill        kill a job
+	kill        kill jobs
 	log         get app log
 	scale       change formation
 	run         run a job
