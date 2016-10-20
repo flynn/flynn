@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
@@ -52,4 +53,17 @@ type HostCursor struct {
 
 func (c HostCursor) After(other HostCursor) bool {
 	return c.Time.After(other.Time) || (c.Time.Equal(other.Time) && c.Seq > other.Seq)
+}
+
+func StreamType(msg *rfc5424.Message) logagg.StreamType {
+	switch logagg.MsgID(msg.MsgID) {
+	case logagg.MsgIDStdout:
+		return logagg.StreamTypeStdout
+	case logagg.MsgIDStderr:
+		return logagg.StreamTypeStderr
+	case logagg.MsgIDInit:
+		return logagg.StreamTypeInit
+	default:
+		return logagg.StreamTypeUnknown
+	}
 }

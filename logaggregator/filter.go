@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	logagg "github.com/flynn/flynn/logaggregator/types"
+	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
@@ -50,7 +51,7 @@ func filterStreamType(streams ...logagg.StreamType) filterFunc {
 		lookup[stream] = struct{}{}
 	}
 	return func(m *rfc5424.Message) bool {
-		_, ok := lookup[streamType(m.MsgID)]
+		_, ok := lookup[utils.StreamType(m)]
 		return ok
 	}
 }

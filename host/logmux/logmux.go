@@ -3,7 +3,6 @@ package logmux
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
@@ -268,11 +268,11 @@ func (m *Mux) addAggregator(addr string) {
 // Follow starts a goroutine that reads log lines from the reader into the mux.
 // It runs until the reader is closed or an error occurs. If an error occurs,
 // the reader may still be open.
-func (m *Mux) Follow(r io.ReadCloser, buffer string, fd int, config Config) *LogStream {
+func (m *Mux) Follow(r io.ReadCloser, buffer string, msgID logagg.MsgID, config Config) *LogStream {
 	hdr := &rfc5424.Header{
 		Hostname: []byte(config.HostID),
 		AppName:  []byte(config.AppID),
-		MsgID:    []byte(fmt.Sprintf("ID%d", fd)),
+		MsgID:    []byte(msgID),
 	}
 	if config.JobType != "" {
 		hdr.ProcID = []byte(config.JobType + "." + config.JobID)
@@ -285,7 +285,7 @@ func (m *Mux) Follow(r io.ReadCloser, buffer string, fd int, config Config) *Log
 		log:  r,
 		done: make(chan struct{}),
 	}
-	s.closed.Store(true)
+	s.closed.Store(false)
 
 	m.jobsMtx.Lock()
 	defer m.jobsMtx.Unlock()
