@@ -265,10 +265,23 @@ func (m *Mux) addAggregator(addr string) {
 	close(bufferedMessages)
 }
 
+type MuxLogger struct {
+	log15.Logger
+	*LogStream
+}
+
+func (m *Mux) Logger(msgID logagg.MsgID, config *Config, ctx ...interface{}) *MuxLogger {
+	r, w := io.Pipe()
+	logger := log15.New(ctx...)
+	logger.SetHandler(log15.StreamHandler(w, log15.LogfmtFormat()))
+	stream := m.Follow(r, "", msgID, config)
+	return &MuxLogger{logger, stream}
+}
+
 // Follow starts a goroutine that reads log lines from the reader into the mux.
 // It runs until the reader is closed or an error occurs. If an error occurs,
 // the reader may still be open.
-func (m *Mux) Follow(r io.ReadCloser, buffer string, msgID logagg.MsgID, config Config) *LogStream {
+func (m *Mux) Follow(r io.ReadCloser, buffer string, msgID logagg.MsgID, config *Config) *LogStream {
 	hdr := &rfc5424.Header{
 		Hostname: []byte(config.HostID),
 		AppName:  []byte(config.AppID),

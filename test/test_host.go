@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -14,12 +15,15 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	logaggc "github.com/flynn/flynn/logaggregator/client"
+	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/exec"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/schedutil"
+	"github.com/flynn/flynn/pkg/stream"
 	c "github.com/flynn/go-check"
 )
 
@@ -396,6 +400,70 @@ func (s *HostSuite) TestDevSHM(t *c.C) {
 	}
 
 	t.Assert(out.String(), c.Equals, "Filesystem                Size      Used Available Use% Mounted on\nshm                      64.0M         0     64.0M   0% /dev/shm\n")
+}
+
+func (s *HostSuite) TestNotifyOOM(t *c.C) {
+	appID := random.UUID()
+
+	// subscribe to init log messages from the logaggregator
+	client, err := logaggc.New("")
+	t.Assert(err, c.IsNil)
+	opts := logagg.LogOpts{
+		Follow:      true,
+		StreamTypes: []logagg.StreamType{logagg.StreamTypeInit},
+	}
+	rc, err := client.GetLog(appID, &opts)
+	t.Assert(err, c.IsNil)
+	defer rc.Close()
+	msgs := make(chan *logaggc.Message)
+	stream := stream.New()
+	defer stream.Close()
+	go func() {
+		defer close(msgs)
+		dec := json.NewDecoder(rc)
+		for {
+			var msg logaggc.Message
+			if err := dec.Decode(&msg); err != nil {
+				stream.Error = err
+				return
+			}
+			select {
+			case msgs <- &msg:
+			case <-stream.StopCh:
+				return
+			}
+		}
+	}()
+
+	// run the OOM job
+	cmd := exec.CommandUsingCluster(
+		s.clusterClient(t),
+		exec.DockerImage(imageURIs["test-apps"]),
+		"/bin/oom",
+	)
+	cmd.Meta = map[string]string{"flynn-controller.app": appID}
+	runErr := make(chan error)
+	go func() {
+		runErr <- cmd.Run()
+	}()
+
+	// wait for the OOM notification
+	for {
+		select {
+		case err := <-runErr:
+			t.Assert(err, c.IsNil)
+		case msg, ok := <-msgs:
+			if !ok {
+				t.Fatalf("message stream closed unexpectedly: %s", stream.Err())
+			}
+			t.Log(msg.Msg)
+			if strings.Contains(msg.Msg, "FATAL: a container process was killed due to lack of available memory") {
+				return
+			}
+		case <-time.After(30 * time.Second):
+			t.Fatal("timed out waiting for OOM notification")
+		}
+	}
 }
 
 func (s *HostSuite) TestUpdate(t *c.C) {
