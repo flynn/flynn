@@ -20,7 +20,7 @@ cd "${HOME}"
 
 usermod --home $HOME nobody
 
-## Load profile.d and release config
+## Load profile.d, profile and release config
 
 shopt -s nullglob
 mkdir -p .profile.d
@@ -36,6 +36,9 @@ fi
 for file in .profile.d/*; do
   source "${file}"
 done
+if [[ -f .profile  ]]; then
+  source .profile
+fi
 hash -r
 
 ## Inject "start" command to run processes defined in Procfile
