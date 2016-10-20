@@ -24,7 +24,7 @@ Reviewers should leave a "LGTM" comment once they are satisfied with the patch. 
 Please follow these guidelines when formatting source code:
 
 * Go code should match the output of `gofmt -s`
-* Shell scripts should adhere to the [Google Shell Style guide](https://google-styleguide.googlecode.com/svn/trunk/shell.xml)
+* Shell scripts should adhere to the [Google Shell Style guide](https://google.github.io/styleguide/shell.xml)
 
 ## Developer’s Certificate of Origin
 
