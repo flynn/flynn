@@ -29,6 +29,8 @@ import (
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/manager"
+	logagg "github.com/flynn/flynn/logaggregator/types"
+	logutils "github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
@@ -855,21 +857,21 @@ func (c *Container) followLogs(log log15.Logger, buffer host.LogBuffer) error {
 		log.Error("error streaming stdout", "err", err)
 		return err
 	}
-	logStreams["stdout"] = c.l.LogMux.Follow(stdoutR, buffer["stdout"], 1, muxConfig)
+	logStreams["stdout"] = c.l.LogMux.Follow(stdoutR, buffer["stdout"], logagg.MsgIDStdout, muxConfig)
 
 	stderrR, err := nonblocking(stderr)
 	if err != nil {
 		log.Error("error streaming stderr", "err", err)
 		return err
 	}
-	logStreams["stderr"] = c.l.LogMux.Follow(stderrR, buffer["stderr"], 2, muxConfig)
+	logStreams["stderr"] = c.l.LogMux.Follow(stderrR, buffer["stderr"], logagg.MsgIDStderr, muxConfig)
 
 	initLogR, err := nonblocking(initLog)
 	if err != nil {
 		log.Error("error streaming initial log", "err", err)
 		return err
 	}
-	logStreams["initLog"] = c.l.LogMux.Follow(initLogR, buffer["initLog"], 3, muxConfig)
+	logStreams["initLog"] = c.l.LogMux.Follow(initLogR, buffer["initLog"], logagg.MsgIDInit, muxConfig)
 	c.l.logStreams[c.job.ID] = logStreams
 
 	return nil
@@ -1094,12 +1096,12 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 
 	for msg := range ch {
 		var w io.Writer
-		switch string(msg.MsgID) {
-		case "ID1":
+		switch logutils.StreamType(msg) {
+		case logagg.StreamTypeStdout:
 			w = req.Stdout
-		case "ID2":
+		case logagg.StreamTypeStderr:
 			w = req.Stderr
-		case "ID3":
+		case logagg.StreamTypeInit:
 			w = req.InitLog
 		}
 		if w == nil {

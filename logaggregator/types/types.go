@@ -50,3 +50,11 @@ const (
 	StreamTypeInit    StreamType = "init"
 	StreamTypeUnknown StreamType = "unknown"
 )
+
+type MsgID string
+
+const (
+	MsgIDStdout MsgID = "ID1"
+	MsgIDStderr MsgID = "ID2"
+	MsgIDInit   MsgID = "ID3"
+)

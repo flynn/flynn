@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/logaggregator/snapshot"
 	logagg "github.com/flynn/flynn/logaggregator/types"
+	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
@@ -148,7 +149,7 @@ func NewMessageFromSyslog(m *rfc5424.Message) client.Message {
 		ProcessType: string(processType),
 		// TODO(bgentry): source is always "app" for now, could be router in future
 		Source:    "app",
-		Stream:    streamType(m.MsgID),
+		Stream:    utils.StreamType(m),
 		Timestamp: m.Timestamp,
 	}
 }
@@ -164,17 +165,4 @@ func splitProcID(procID []byte) (processType, jobID []byte) {
 		jobID = split[1]
 	}
 	return
-}
-
-func streamType(msgID []byte) logagg.StreamType {
-	switch string(msgID) {
-	case "ID1":
-		return logagg.StreamTypeStdout
-	case "ID2":
-		return logagg.StreamTypeStderr
-	case "ID3":
-		return logagg.StreamTypeInit
-	default:
-		return logagg.StreamTypeUnknown
-	}
 }
