@@ -139,6 +139,12 @@ Finally, migrate the existing blobs from Postgres to S3 and remove them from
 Postgres:
 
 ```text
+flynn -a blobstore run /bin/flynn-blobstore migrate --delete
+```
+
+Or if you're on a version of Flynn older than v20160924.0:
+
+```text
 flynn -a blobstore run /bin/flynn-blobstore-migrate --delete
 ```
 
