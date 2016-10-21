@@ -56,64 +56,43 @@ func runPs(args *docopt.Args, client controller.Client) error {
 	if err != nil {
 		return err
 	}
-
-	jobs = prepareAndFilterJobs(jobs, args.Bool["--all"], args.String["<type>"])
 	sort.Sort(sortJobs(jobs))
-
-	if args.Bool["--quiet"] {
-		printJobsQuiet(jobs)
-	} else {
-		printJobs(jobs, args.Bool["--command"])
-	}
-	return nil
-}
-
-func printJobsQuiet(jobs []*ct.Job) {
-	for _, j := range jobs {
-		fmt.Println(j.ID)
-	}
-}
-
-func printJobs(jobs []*ct.Job, commandFlagOn bool) {
 	w := tabWriter()
 	defer w.Flush()
-
 	headers := []interface{}{"ID", "TYPE", "STATE", "CREATED", "RELEASE"}
-	if commandFlagOn {
+	if args.Bool["--command"] {
 		headers = append(headers, "COMMAND")
 	}
 	listRec(w, headers...)
 	for _, j := range jobs {
-		var created string
-		if j.CreatedAt != nil {
-			created = units.HumanDuration(time.Now().UTC().Sub(*j.CreatedAt)) + " ago"
-		}
-		fields := []interface{}{j.ID, j.Type, j.State, created, j.ReleaseID}
-		if commandFlagOn {
-			fields = append(fields, strings.Join(j.Args, " "))
-		}
-		listRec(w, fields...)
-	}
-}
-
-func prepareAndFilterJobs(jobs []*ct.Job, all bool, jobType string) []*ct.Job {
-	filteredJobs := []*ct.Job{}
-	for _, j := range jobs {
-		if !all && j.State != ct.JobStateUp && j.State != ct.JobStatePending {
+		if !args.Bool["--all"] && j.State != ct.JobStateUp && j.State != ct.JobStatePending {
 			continue
 		}
 		if j.Type == "" {
 			j.Type = "run"
 		}
-		if jobType != "" && j.Type != jobType {
+		if args.String["<type>"] != "" && j.Type != args.String["<type>"] {
 			continue
 		}
-		if j.ID == "" {
-			j.ID = j.UUID
+		id := j.ID
+		if id == "" {
+			id = j.UUID
 		}
-		filteredJobs = append(filteredJobs, j)
+		if args.Bool["--quiet"] {
+			fmt.Println(id)
+			continue
+		}
+		var created string
+		if j.CreatedAt != nil {
+			created = units.HumanDuration(time.Now().UTC().Sub(*j.CreatedAt)) + " ago"
+		}
+		fields := []interface{}{id, j.Type, j.State, created, j.ReleaseID}
+		if args.Bool["--command"] {
+			fields = append(fields, strings.Join(j.Args, " "))
+		}
+		listRec(w, fields...)
 	}
-	return filteredJobs
+	return nil
 }
 
 // sortJobs sorts Jobs in chronological order based on their CreatedAt time
