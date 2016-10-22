@@ -347,6 +347,20 @@ The `controller`, `router`, and `blobstore` components store data in
 a PostgreSQL cluster managed by Flynn. Their databases may be accessed by
 running `flynn -a $APP_NAME pg psql`.
 
+### Recovery
+
+In the event that a cluster is having difficulties with apps, either internal
+or external, not starting after a cluster reboots, it may be necessary to run 
+the automated cluster repair tool. 
+
+Before attempting recovery, [perform a backup](#cluster-backup) and [collect the logs](#retrieving-logs).
+Send the logs to [logs@flynn.io](mailto:logs@flynn.io) to debug the cluster
+and help determine what caused it to fail.
+
+Next, run `flynn-host fix --min-hosts=N` from any node in the cluster to start
+an automated cluster health check which can fix several common problems, where
+`N` is the minimum number of expected hosts in the cluster.
+
 ## Updating
 
 There are two ways to update Flynn: in-place and backup/restore. The in-place
