@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/flynn/go-docopt"
 	"gopkg.in/inconshreveable/log15.v2"
 )
@@ -69,6 +71,11 @@ func runCollectDebugInfo(args *docopt.Args) error {
 		if err := gist.AddLocalFile(name, filepath); err != nil && !os.IsNotExist(err) {
 			log.Error(fmt.Sprintf("error getting flynn-host log %q", filepath), "err", err)
 		}
+	}
+
+	log.Info("getting sirenia metadata")
+	if err := captureSireniaMetadata(gist); err != nil {
+		log.Error("error getting sirenia metadata", "err", err)
 	}
 
 	log.Info("getting scheduler state")
@@ -180,5 +187,31 @@ func captureSchedulerState(gist *Gist) error {
 		return err
 	}
 	gist.AddFile("scheduler-state.json", string(body))
+	return nil
+}
+
+func captureSireniaMetadata(gist *Gist) error {
+	appliances := []string{"postgres", "mariadb", "mongodb"}
+	for _, appliance := range appliances {
+		meta, err := discoverd.NewService(appliance).GetMeta()
+		if err != nil {
+			continue // skip if no service, appliance may not be enabled
+		}
+		dstate := &state.DiscoverdState{
+			Index: meta.Index,
+			State: &state.State{},
+		}
+		if len(meta.Data) > 0 {
+			err := json.Unmarshal(meta.Data, dstate.State)
+			if err != nil {
+				continue
+			}
+			body, err := json.MarshalIndent(dstate, "", "    ")
+			if err != nil {
+				continue
+			}
+			gist.AddFile(fmt.Sprintf("%s-sirenia-state.json", appliance), string(body))
+		}
+	}
 	return nil
 }
