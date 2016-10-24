@@ -448,6 +448,9 @@ func (s *Store) applyRemoveServiceCommand(cmd []byte) error {
 	// Remove the service.
 	delete(s.data.Services, c.Service)
 
+	// Delete service meta
+	delete(s.data.Metas, c.Service)
+
 	// Broadcast EventKindDown for all instances on the service.
 	for _, inst := range s.data.ServiceInstances(c.Service) {
 		s.broadcast(&discoverd.Event{

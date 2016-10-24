@@ -145,6 +145,35 @@ func TestStore_RemoveService_Events(t *testing.T) {
 	}
 }
 
+// Ensure the store removes service meta when service is removed
+func TestStore_RemoveService_RemoveMeta(t *testing.T) {
+	s := MustOpenStore()
+	defer s.Close()
+	if err := s.AddService("service0", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set metadata.
+	if err := s.SetServiceMeta("service0", &discoverd.ServiceMeta{Data: []byte(`"foo"`), Index: 0}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify metadata was updated.
+	if m := s.ServiceMeta("service0"); !reflect.DeepEqual(m, &discoverd.ServiceMeta{Data: []byte(`"foo"`), Index: 3}) {
+		t.Fatalf("unexpected meta: %#v", m)
+	}
+
+	// Remove service.
+	if err := s.RemoveService("service0"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify service meta is no longer set
+	if m := s.ServiceMeta("service0"); m != nil {
+		t.Fatalf("unexpected meta: %#v", m)
+	}
+}
+
 // Ensure the store returns an error when removing non-existent services.
 func TestStore_RemoveService_ErrNotFound(t *testing.T) {
 	s := MustOpenStore()
