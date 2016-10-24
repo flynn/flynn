@@ -57,6 +57,7 @@ Commands:
 	route       manage routes
 	pg          manage postgres database
 	mysql       manage mysql database
+	mongodb     manage mongodb database
 	redis       manage redis database
 	provider    manage resource providers
 	docker      deploy Docker images to a Flynn cluster
