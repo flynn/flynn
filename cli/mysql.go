@@ -83,7 +83,7 @@ func getMysqlRunConfig(client controller.Client, appName string, appRelease *ct.
 		App:        appName,
 		Release:    release.ID,
 		Env:        make(map[string]string),
-		DisableLog: false, // true,
+		DisableLog: true,
 		Exit:       true,
 	}
 
