@@ -1366,14 +1366,6 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	t.Assert(proc.Args, c.DeepEquals, []string{"/bin/pingserv"})
 
 	// check updated env vars are not overwritten
-	//
-	// need to remove the tag before pushing as we are using Docker 1.9
-	// which does not overwrite tags.
-	// TODO: remove this when upgrading Docker > 1.9
-	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
-	t.Assert(err, c.IsNil)
-	tag := fmt.Sprintf("%s/%s:latest", u.Host, app.Name)
-	t.Assert(run(t, exec.Command("docker", "rmi", tag)), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app.Name, "env", "set", "FOO=BAZ"), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app.Name, "env", "get", "FOO"), Outputs, "BAZ\n")
