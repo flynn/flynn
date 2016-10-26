@@ -21,7 +21,9 @@
 // 			if ctx, err := accessController.Authorized(ctx, access); err != nil {
 //				if challenge, ok := err.(auth.Challenge) {
 //					// Let the challenge write the response.
-//					challenge.ServeHTTP(w, r)
+//					challenge.SetHeaders(w)
+//					w.WriteHeader(http.StatusUnauthorized)
+//					return
 //				} else {
 //					// Some other error.
 //				}
@@ -31,10 +33,29 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/docker/distribution/context"
+)
+
+const (
+	// UserKey is used to get the user object from
+	// a user context
+	UserKey = "auth.user"
+
+	// UserNameKey is used to get the user name from
+	// a user context
+	UserNameKey = "auth.user.name"
+)
+
+var (
+	// ErrInvalidCredential is returned when the auth token does not authenticate correctly.
+	ErrInvalidCredential = errors.New("invalid authorization credential")
+
+	// ErrAuthenticationFailure returned when authentication fails.
+	ErrAuthenticationFailure = errors.New("authentication failure")
 )
 
 // UserInfo carries information about
@@ -85,6 +106,11 @@ type AccessController interface {
 	Authorized(ctx context.Context, access ...Access) (context.Context, error)
 }
 
+// CredentialAuthenticator is an object which is able to authenticate credentials
+type CredentialAuthenticator interface {
+	AuthenticateUser(username, password string) error
+}
+
 // WithUser returns a context with the authorized user info.
 func WithUser(ctx context.Context, user UserInfo) context.Context {
 	return userInfoContext{
@@ -100,9 +126,9 @@ type userInfoContext struct {
 
 func (uic userInfoContext) Value(key interface{}) interface{} {
 	switch key {
-	case "auth.user":
+	case UserKey:
 		return uic.user
-	case "auth.user.name":
+	case UserNameKey:
 		return uic.user.Name
 	}
 

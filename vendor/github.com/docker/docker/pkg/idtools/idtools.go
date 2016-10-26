@@ -38,13 +38,20 @@ const (
 // ownership to the requested uid/gid.  If the directory already exists, this
 // function will still change ownership to the requested uid/gid pair.
 func MkdirAllAs(path string, mode os.FileMode, ownerUID, ownerGID int) error {
-	return mkdirAs(path, mode, ownerUID, ownerGID, true)
+	return mkdirAs(path, mode, ownerUID, ownerGID, true, true)
+}
+
+// MkdirAllNewAs creates a directory (include any along the path) and then modifies
+// ownership ONLY of newly created directories to the requested uid/gid. If the
+// directories along the path exist, no change of ownership will be performed
+func MkdirAllNewAs(path string, mode os.FileMode, ownerUID, ownerGID int) error {
+	return mkdirAs(path, mode, ownerUID, ownerGID, true, false)
 }
 
 // MkdirAs creates a directory and then modifies ownership to the requested uid/gid.
 // If the directory already exists, this function still changes ownership
 func MkdirAs(path string, mode os.FileMode, ownerUID, ownerGID int) error {
-	return mkdirAs(path, mode, ownerUID, ownerGID, false)
+	return mkdirAs(path, mode, ownerUID, ownerGID, false, true)
 }
 
 // GetRootUIDGID retrieves the remapped root uid/gid pair from the set of maps.
@@ -148,6 +155,9 @@ func parseSubgid(username string) (ranges, error) {
 	return parseSubidFile(subgidFileName, username)
 }
 
+// parseSubidFile will read the appropriate file (/etc/subuid or /etc/subgid)
+// and return all found ranges for a specified username. If the special value
+// "ALL" is supplied for username, then all ranges in the file will be returned
 func parseSubidFile(path, username string) (ranges, error) {
 	var rangeList ranges
 
@@ -164,15 +174,14 @@ func parseSubidFile(path, username string) (ranges, error) {
 		}
 
 		text := strings.TrimSpace(s.Text())
-		if text == "" {
+		if text == "" || strings.HasPrefix(text, "#") {
 			continue
 		}
 		parts := strings.Split(text, ":")
 		if len(parts) != 3 {
 			return rangeList, fmt.Errorf("Cannot parse subuid/gid information: Format not correct for %s file", path)
 		}
-		if parts[0] == username {
-			// return the first entry for a user; ignores potential for multiple ranges per user
+		if parts[0] == username || username == "ALL" {
 			startid, err := strconv.Atoi(parts[1])
 			if err != nil {
 				return rangeList, fmt.Errorf("String to int conversion failed during subuid/gid parsing of %s: %v", path, err)
