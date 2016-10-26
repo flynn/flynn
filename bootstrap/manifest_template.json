@@ -102,17 +102,15 @@
         "PGHOST": "leader.postgres.discoverd",
         "PGUSER": "flynn",
         "PGPASSWORD": "{{ (index .StepData \"pg-password\").Data }}",
-        "SIRENIA_PROCESS": "postgres"
+        "SIRENIA_PROCESS": "postgres",
+        "SINGLETON": "{{ .Singleton }}"
       },
       "processes": {
         "postgres": {
           "ports": [{"port": 5432, "proto": "tcp"}],
           "data": true,
           "args": ["/bin/start-flynn-postgres", "postgres"],
-          "service": "postgres",
-          "env": {
-            "SINGLETON": "{{ .Singleton }}"
-          }
+          "service": "postgres"
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
@@ -368,16 +366,14 @@
         "MYSQL_DATABASE": "mysql",
         "MYSQL_USER": "flynn",
         "MYSQL_PWD": "{{ (index .StepData \"mariadb-password\").Data }}",
-        "SIRENIA_PROCESS": "mariadb"
+        "SIRENIA_PROCESS": "mariadb",
+        "SINGLETON": "{{ .Singleton }}"
       },
       "processes": {
         "mariadb": {
           "ports": [{"port": 3306, "proto": "tcp"}],
           "args": ["/bin/start-flynn-mariadb", "mariadb"],
           "service": "mariadb",
-          "env": {
-            "SINGLETON": "{{ .Singleton }}"
-          },
           "data": true
         },
         "web": {
@@ -424,16 +420,14 @@
         "MONGO_HOST": "leader.mongodb.discoverd",
         "MONGO_USER": "flynn",
         "MONGO_PWD": "{{ (index .StepData \"mongodb-password\").Data }}",
-        "SIRENIA_PROCESS": "mongodb"
+        "SIRENIA_PROCESS": "mongodb",
+        "SINGLETON": "{{ .Singleton }}"
       },
       "processes": {
         "mongodb": {
           "ports": [{"port": 27017, "proto": "tcp"}],
           "args": ["/bin/start-flynn-mongodb", "mongodb"],
           "service": "mongodb",
-          "env": {
-            "SINGLETON": "{{ .Singleton }}"
-          },
           "data": true
         },
         "web": {
