@@ -220,10 +220,10 @@ outer:
 		if err != nil {
 			return err
 		}
-		if leader != nil {
+		if leader != nil && leader.Addr != "" {
 			addr = leader.Addr
 		}
-		log.Info("waiting for cluster to come up read-write")
+		log.Info("waiting for cluster to come up read-write", "addr", addr)
 		return sirenia.NewClient(addr).WaitForReadWrite(5 * time.Minute)
 	}
 	return nil
