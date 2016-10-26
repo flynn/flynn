@@ -19,7 +19,7 @@ func fixVolumePathPrefix(srcPath string) string {
 }
 
 // getWalkRoot calculates the root path when performing a TarWithOptions.
-// We use a seperate function as this is platform specific.
+// We use a separate function as this is platform specific.
 func getWalkRoot(srcPath string, include string) string {
 	return filepath.Join(srcPath, include)
 }
@@ -49,7 +49,7 @@ func chmodTarEntry(perm os.FileMode) os.FileMode {
 	return perm
 }
 
-func setHeaderForSpecialDevice(hdr *tar.Header, ta *tarAppender, name string, stat interface{}) (nlink uint32, inode uint64, err error) {
+func setHeaderForSpecialDevice(hdr *tar.Header, ta *tarAppender, name string, stat interface{}) (inode uint64, err error) {
 	// do nothing. no notion of Rdev, Inode, Nlink in stat on Windows
 	return
 }
