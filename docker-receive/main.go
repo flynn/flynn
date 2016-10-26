@@ -10,7 +10,6 @@ import (
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/context"
 	"github.com/docker/distribution/digest"
-	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/middleware/repository"
 	"github.com/flynn/flynn/controller/client"
@@ -26,9 +25,7 @@ import (
 func main() {
 	logrus.SetLevel(logrus.InfoLevel)
 
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "version", version.String())
-	ctx = context.WithLogger(ctx, context.GetLogger(ctx, "version"))
+	ctx := context.WithVersion(context.Background(), version.String())
 
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
 	if err != nil {
@@ -48,7 +45,7 @@ func main() {
 
 	middleware.Register("flynn", repositoryMiddleware(client, artifact, authKey))
 
-	config := configuration.Configuration{
+	config := &configuration.Configuration{
 		Version: configuration.CurrentVersion,
 		Storage: configuration.Storage{
 			blobstore.DriverName: configuration.Parameters{},
@@ -123,21 +120,17 @@ type manifestService struct {
 	authKey    string
 }
 
-func (m *manifestService) Put(manifest *manifest.SignedManifest) error {
-	if err := m.ManifestService.Put(manifest); err != nil {
-		return err
-	}
-
-	dgst, err := digestManifest(manifest)
+func (m *manifestService) Put(ctx context.Context, manifest distribution.Manifest, options ...distribution.ManifestServiceOption) (digest.Digest, error) {
+	dgst, err := m.ManifestService.Put(ctx, manifest, options...)
 	if err != nil {
-		return err
+		return dgst, err
 	}
 
-	return m.runArtifactJob(dgst)
+	return dgst, m.runArtifactJob(dgst)
 }
 
 func (m *manifestService) runArtifactJob(dgst digest.Digest) error {
-	url := fmt.Sprintf("http://flynn:%s@docker-receive.discoverd?name=%s&id=%s", m.authKey, m.repository.Name(), dgst)
+	url := fmt.Sprintf("http://flynn:%s@docker-receive.discoverd?name=%s&id=%s", m.authKey, m.repository.Named(), dgst)
 	cmd := exec.Command(m.artifact, "/bin/docker-artifact", url)
 	cmd.Env = map[string]string{
 		"CONTROLLER_KEY": os.Getenv("CONTROLLER_KEY"),
@@ -147,14 +140,4 @@ func (m *manifestService) runArtifactJob(dgst digest.Digest) error {
 		return fmt.Errorf("error running artifact job: %s: %s", err, out)
 	}
 	return nil
-}
-
-// digestManifest is a modified version of:
-// https://github.com/docker/distribution/blob/6ba799b/registry/handlers/images.go#L228-L251
-func digestManifest(manifest *manifest.SignedManifest) (digest.Digest, error) {
-	p, err := manifest.Payload()
-	if err != nil {
-		return "", err
-	}
-	return digest.FromBytes(p)
 }

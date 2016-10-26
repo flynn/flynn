@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -51,7 +50,7 @@ func run(url string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := context.PullDocker(url, ioutil.Discard); err != nil {
+	if _, err := context.PullDocker(url); err != nil {
 		return err
 	}
 
