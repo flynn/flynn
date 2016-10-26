@@ -397,16 +397,9 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		return err
 	}
 	// TODO(lmars): stream pull progress (maybe to the app log?)
-	imageID, err := l.pinkerton.PullDocker(artifactURI, ioutil.Discard)
+	dockerImage, err := l.pinkerton.PullDocker(artifactURI, pinkerton.NopProgress)
 	if err != nil {
 		log.Error("error pulling image", "err", err)
-		return err
-	}
-
-	log.Info("reading image config")
-	imageConfig, err := readDockerImageConfig(imageID)
-	if err != nil {
-		log.Error("error reading image config", "err", err)
 		return err
 	}
 
@@ -415,7 +408,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	// creating an AUFS mount can fail intermittently with EINVAL, so try a
 	// few times (see https://github.com/flynn/flynn/issues/2044)
 	for start := time.Now(); time.Since(start) < time.Second; time.Sleep(50 * time.Millisecond) {
-		rootPath, err = l.pinkerton.Checkout(job.ID, imageID)
+		rootPath, err = l.pinkerton.Checkout(job.ID, dockerImage.ID())
 		if err == nil || !strings.HasSuffix(err.Error(), "invalid argument") {
 			break
 		}
@@ -594,15 +587,15 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		initConfig.Gateway = l.bridgeAddr.String()
 	}
 	if initConfig.WorkDir == "" {
-		initConfig.WorkDir = imageConfig.WorkingDir
+		initConfig.WorkDir = dockerImage.RunConfig().WorkingDir
 	}
 	if job.Config.Uid > 0 {
 		initConfig.User = strconv.Itoa(job.Config.Uid)
-	} else if imageConfig.User != "" {
+	} else if dockerImage.RunConfig().User != "" {
 		// TODO: check and lookup user from image config
 	}
 	if len(job.Config.Args) == 0 {
-		initConfig.Args = append(imageConfig.Entrypoint, imageConfig.Cmd...)
+		initConfig.Args = append(dockerImage.RunConfig().Entrypoint, dockerImage.RunConfig().Cmd...)
 	}
 	for _, port := range job.Config.Ports {
 		initConfig.Ports = append(initConfig.Ports, port)

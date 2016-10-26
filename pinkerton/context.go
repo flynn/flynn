@@ -12,20 +12,27 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/docker/docker/cliconfig"
-	"github.com/docker/docker/daemon/events"
 	"github.com/docker/docker/daemon/graphdriver"
 	_ "github.com/docker/docker/daemon/graphdriver/aufs"
-	"github.com/docker/docker/graph"
-	"github.com/docker/docker/opts"
+	"github.com/docker/docker/distribution"
+	"github.com/docker/docker/distribution/metadata"
+	"github.com/docker/docker/distribution/xfer"
+	"github.com/docker/docker/image"
+	"github.com/docker/docker/image/v1"
+	dlayer "github.com/docker/docker/layer"
 	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/reexec"
+	"github.com/docker/docker/pkg/streamformatter"
 	"github.com/docker/docker/pkg/term"
+	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
+	"github.com/docker/engine-api/types"
 	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 	tuf "github.com/flynn/go-tuf/client"
+	"golang.org/x/net/context"
 )
 
 var internalDockerEndpoints = []string{
@@ -39,10 +46,14 @@ func init() {
 }
 
 type Context struct {
-	store  *graph.TagStore
-	graph  *graph.Graph
-	driver graphdriver.Driver
-	mtx    sync.Mutex
+	driver          graphdriver.Driver
+	registryService registry.Service
+	metadataStore   metadata.Store
+	imageStore      image.Store
+	layerStore      dlayer.Store
+	referenceStore  reference.Store
+	downloadManager *xfer.LayerDownloadManager
+	mtx             sync.Mutex
 }
 
 func BuildContext(driver, root string) (*Context, error) {
@@ -51,65 +62,96 @@ func BuildContext(driver, root string) (*Context, error) {
 		return nil, err
 	}
 
-	g, err := graph.NewGraph(filepath.Join(root, "graph"), d, nil, nil)
+	registryService := registry.NewService(registry.ServiceOptions{
+		InsecureRegistries: internalDockerEndpoints,
+		V2Only:             true,
+	})
+
+	imageRoot := filepath.Join(root, "image", driver)
+
+	metadataStore, err := metadata.NewFSMetadataStore(filepath.Join(imageRoot, "distribution"))
 	if err != nil {
 		return nil, err
 	}
 
-	config := &graph.TagStoreConfig{
-		Graph:  g,
-		Events: events.New(),
-		Registry: registry.NewService(&registry.Options{
-			Mirrors:            opts.NewListOpts(nil),
-			InsecureRegistries: *opts.NewListOptsRef(&internalDockerEndpoints, nil),
-		}),
-	}
-	store, err := graph.NewTagStore(filepath.Join(root, "repositories-"+d.String()), config)
+	layerStore, err := dlayer.NewStoreFromOptions(dlayer.StoreOptions{
+		StorePath:                 root,
+		MetadataStorePathTemplate: filepath.Join(root, "image", "%s", "layerdb"),
+		GraphDriver:               driver,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	return NewContext(store, g, d), nil
+	ifs, err := image.NewFSStoreBackend(filepath.Join(imageRoot, "imagedb"))
+	if err != nil {
+		return nil, err
+	}
+
+	imageStore, err := image.NewImageStore(ifs, layerStore)
+	if err != nil {
+		return nil, err
+	}
+
+	referenceStore, err := reference.NewReferenceStore(filepath.Join(imageRoot, "repositories.json"))
+	if err != nil {
+		return nil, err
+	}
+
+	return &Context{
+		driver:          d,
+		registryService: registryService,
+		metadataStore:   metadataStore,
+		imageStore:      imageStore,
+		layerStore:      layerStore,
+		referenceStore:  referenceStore,
+		downloadManager: xfer.NewLayerDownloadManager(layerStore, 1),
+	}, nil
 }
 
-func NewContext(store *graph.TagStore, graph *graph.Graph, driver graphdriver.Driver) *Context {
-	return &Context{store: store, graph: graph, driver: driver}
-}
-
-func (c *Context) PullDocker(url string, out io.Writer) (string, error) {
+func (c *Context) PullDocker(url string, progress progress.Output) (*image.Image, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
 	ref, err := NewRef(url)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if ref.imageID != "" && c.graph.Exists(ref.imageID) {
-		return ref.imageID, nil
+	dockerRef, err := reference.ParseNamed(ref.DockerRef())
+	if err != nil {
+		return nil, err
 	}
 
-	if img, err := c.store.LookupImage(ref.DockerRef()); err == nil && img != nil {
-		return img.ID, nil
+	// if the URL contains a digest, check if it already exists
+	if ref, isCanonical := dockerRef.(reference.Canonical); isCanonical {
+		if img, err := c.imageStore.Get(image.ID(ref.Digest())); err == nil {
+			return img, nil
+		}
 	}
 
-	config := &graph.ImagePullConfig{
-		AuthConfig: &cliconfig.AuthConfig{
+	pullConfig := &distribution.ImagePullConfig{
+		AuthConfig: &types.AuthConfig{
 			Username: ref.username,
 			Password: ref.password,
 		},
-		OutStream: out,
+		ProgressOutput:   progress,
+		RegistryService:  c.registryService,
+		ImageEventLogger: func(id, name, action string) {},
+		MetadataStore:    c.metadataStore,
+		ImageStore:       c.imageStore,
+		ReferenceStore:   c.referenceStore,
+		DownloadManager:  c.downloadManager,
 	}
-	if err := c.store.Pull(ref.DockerRepo(), ref.Tag(), config); err != nil {
-		return "", err
+	if err := distribution.Pull(context.Background(), dockerRef, pullConfig); err != nil {
+		return nil, err
 	}
 
-	img, err := c.store.LookupImage(ref.DockerRef())
+	id, err := c.referenceStore.Get(dockerRef)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	return img.ID, nil
+	return c.imageStore.Get(id)
 }
 
 func (c *Context) PullTUF(url string, client *tuf.Client, progress chan<- layer.PullInfo) error {
@@ -137,57 +179,91 @@ func (c *Context) PullTUF(url string, client *tuf.Client, progress chan<- layer.
 		}
 	}
 
-	if ref.imageID != "" && c.graph.Exists(ref.imageID) {
-		sendProgress(ref.imageID, layer.TypeImage, layer.StatusExists)
+	dockerRef, err := reference.ParseNamed(ref.DockerRef())
+	if err != nil {
+		return err
+	}
+
+	if id, err := c.referenceStore.Get(dockerRef); err == nil {
+		sendProgress(id.String(), layer.TypeImage, layer.StatusExists)
 		return nil
 	}
 
 	session := NewTUFSession(client, ref)
 
-	image, err := session.GetImage()
+	img, err := session.GetImage()
 	if err != nil {
 		return err
 	}
 
-	layers, err := session.GetAncestors(image.ID())
+	layers, err := session.GetAncestors(img.ID())
 	if err != nil {
 		return err
 	}
 
+	descriptors := make([]xfer.DownloadDescriptor, 0, len(layers))
+	newHistory := make([]image.History, 0, len(layers))
 	for i := len(layers) - 1; i >= 0; i-- {
 		l := layers[i]
-		if c.graph.Exists(l.ID()) {
-			sendProgress(l.ID(), layer.TypeLayer, layer.StatusExists)
-			continue
-		}
-
-		status := layer.StatusDownloaded
-		if err := c.graph.Register(l, l); err != nil {
+		layerJSON, err := l.MarshalConfig()
+		if err != nil {
 			return err
 		}
-		sendProgress(l.ID(), layer.TypeLayer, status)
+		history, err := v1.HistoryFromConfig(layerJSON, false)
+		if err != nil {
+			return err
+		}
+		newHistory = append(newHistory, history)
+		descriptors = append(descriptors, l)
 	}
 
-	sendProgress(image.ID(), layer.TypeImage, layer.StatusDownloaded)
+	rootFS := image.NewRootFS()
+	resultRootFS, release, err := c.downloadManager.Download(context.Background(), *rootFS, descriptors, NopProgress)
+	if err != nil {
+		return err
+	}
+	defer release()
 
-	// TODO: update sizes
+	imgJSON, err := img.MarshalConfig()
+	if err != nil {
+		return err
+	}
+	config, err := v1.MakeConfigFromV1Config(imgJSON, &resultRootFS, newHistory)
+	if err != nil {
+		return err
+	}
 
+	imageID, err := c.imageStore.Create(config)
+	if err != nil {
+		return err
+	}
+
+	if err := c.referenceStore.AddTag(dockerRef, imageID, true); err != nil {
+		return err
+	}
+
+	sendProgress(imageID.String(), layer.TypeImage, layer.StatusDownloaded)
 	return nil
 }
 
-func (c *Context) Checkout(id, imageID string) (string, error) {
+func (c *Context) Checkout(id string, imageID image.ID) (string, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	id = "tmp-" + id
-	if err := c.driver.Create(id, imageID); err != nil {
-		return "", err
-	}
-	path, err := c.driver.Get(id, "")
+	img, err := c.imageStore.Get(imageID)
 	if err != nil {
 		return "", err
 	}
-	return path, nil
+	id = "tmp-" + id
+	rwLayer, err := c.layerStore.CreateRWLayer(id, img.RootFS.ChainID(), "", c.setupInitLayer, nil)
+	if err != nil {
+		return "", err
+	}
+	return rwLayer.Mount("")
+}
+
+func (c *Context) setupInitLayer(initPath string) error {
+	return nil
 }
 
 func (c *Context) Cleanup(id string) error {
@@ -195,10 +271,23 @@ func (c *Context) Cleanup(id string) error {
 	defer c.mtx.Unlock()
 
 	id = "tmp-" + id
-	if err := c.driver.Put(id); err != nil {
+	rwLayer, err := c.layerStore.GetRWLayer(id)
+	if err != nil {
 		return err
 	}
-	return c.driver.Remove(id)
+	if err := rwLayer.Unmount(); err != nil {
+		return err
+	}
+	_, err = c.layerStore.ReleaseRWLayer(rwLayer)
+	return err
+}
+
+var NopProgress = &nopProgress{}
+
+type nopProgress struct{}
+
+func (d *nopProgress) WriteProgress(progress.Progress) error {
+	return nil
 }
 
 func InfoPrinter(jsonOut bool) chan<- layer.PullInfo {
@@ -216,11 +305,12 @@ func InfoPrinter(jsonOut bool) chan<- layer.PullInfo {
 	return info
 }
 
-func DockerPullPrinter(out io.Writer) io.Writer {
+func DockerPullPrinter(out io.Writer) progress.Output {
 	rd, wr := io.Pipe()
+	progressOutput := streamformatter.NewJSONStreamFormatter().NewProgressOutput(wr, false)
 	termOut, isTerm := term.GetFdInfo(out)
-	go jsonmessage.DisplayJSONMessagesStream(rd, out, termOut, isTerm)
-	return wr
+	go jsonmessage.DisplayJSONMessagesStream(rd, out, termOut, isTerm, nil)
+	return progressOutput
 }
 
 var ErrNoImageID = errors.New("pinkerton: missing image id")

@@ -2,15 +2,17 @@ package pinkerton
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"time"
+
+	"github.com/docker/docker/layer"
+	"github.com/docker/docker/pkg/progress"
+	"golang.org/x/net/context"
 )
 
 type Image struct {
 	config  *ImageConfig
 	session *tufSession
-	layer   io.ReadCloser
 }
 
 type ImageConfig struct {
@@ -28,8 +30,16 @@ type ImageConfig struct {
 	Size            int64            `json:"size,omitempty"`
 }
 
+func (i *Image) Key() string {
+	return i.ID()
+}
+
 func (i *Image) ID() string {
 	return i.config.ID
+}
+
+func (i *Image) DiffID() (layer.DiffID, error) {
+	return layer.DiffID(""), nil
 }
 
 func (i *Image) Parent() string {
@@ -40,23 +50,9 @@ func (i *Image) MarshalConfig() ([]byte, error) {
 	return json.Marshal(i.config)
 }
 
-func (i *Image) Read(p []byte) (int, error) {
-	if i.session == nil {
-		return 0, errors.New("registry: improperly initialized Image")
-	}
-	if i.layer == nil {
-		var err error
-		i.layer, err = i.session.GetLayer(i.ID())
-		if err != nil {
-			return 0, err
-		}
-	}
-	return i.layer.Read(p)
+func (i *Image) Download(ctx context.Context, progressOutput progress.Output) (io.ReadCloser, int64, error) {
+	layer, err := i.session.GetLayer(i.ID())
+	return layer, i.config.Size, err
 }
 
-func (i *Image) Close() error {
-	if i.layer == nil {
-		return nil
-	}
-	return i.layer.Close()
-}
+func (i *Image) Close() {}
