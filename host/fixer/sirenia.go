@@ -13,8 +13,8 @@ import (
 	state "github.com/flynn/flynn/pkg/sirenia/state"
 )
 
-func (f *ClusterFixer) FixSirenia(svc string) error {
-	log := f.l.New("fn", "FixSirenia", "service", svc)
+func (f *ClusterFixer) CheckSirenia(svc string) error {
+	log := f.l.New("fn", "CheckSirenia", "service", svc)
 	log.Info("checking sirenia cluster status")
 	service := discoverd.NewService(svc)
 	leader, _ := service.Leader()
@@ -41,9 +41,18 @@ func (f *ClusterFixer) FixSirenia(svc string) error {
 		log.Info("cluster claims to be read-write")
 		return nil
 	}
+	return fmt.Errorf("cluster isn't read-write")
+}
+
+func (f *ClusterFixer) FixSirenia(svc string) error {
+	log := f.l.New("fn", "FixSirenia", "service", svc)
+
+	service := discoverd.NewService(svc)
+	instances, _ := service.Instances()
+	leader, _ := service.Leader()
 
 	log.Info("getting service metadata")
-	meta, err := discoverd.NewService(svc).GetMeta()
+	meta, err := service.GetMeta()
 	if err != nil {
 		return fmt.Errorf("error getting sirenia state from discoverd: %s", err)
 	}

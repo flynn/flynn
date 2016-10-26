@@ -119,8 +119,13 @@ func (f *ClusterFixer) Run(args *docopt.Args, c *cluster.Client) error {
 			f.l.Error("error checking database state", "db", db)
 			return err
 		}
-		if err := f.FixSirenia(db); err != nil {
-			return err
+		if err := f.CheckSirenia(db); err != nil {
+			if err := f.KillSchedulers(); err != nil {
+				return err
+			}
+			if err := f.FixSirenia(db); err != nil {
+				return err
+			}
 		}
 	}
 
