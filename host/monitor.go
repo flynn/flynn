@@ -208,11 +208,13 @@ func (m *Monitor) repairCluster() error {
 			log.Error("error checking database state", "db", db)
 			return err
 		}
-		if err := f.FixSirenia(db); err != nil {
-			if db == "postgres" {
-				return err
-			} else {
-				log.Error("failed database recovery", "db", db)
+		if err := f.CheckSirenia(db); err != nil {
+			if err := f.FixSirenia(db); err != nil {
+				if db == "postgres" {
+					return err
+				} else {
+					log.Error("failed database recovery", "db", db)
+				}
 			}
 		}
 	}
