@@ -362,6 +362,9 @@ func (p *Process) assumePrimary(downstream *discoverd.Instance, clusterState *st
 		panic(fmt.Sprintf("unexpected state running role=%s", p.config().Role))
 	}
 
+	// Begin with both replication and security disabled
+	// We will enable both once we either initialise the database or confirm
+	// that it has already been initialized.
 	p.securityEnabledValue.Store(false)
 	if err := p.writeConfig(configData{}); err != nil {
 		logger.Error("error writing config", "path", p.ConfigPath(), "err", err)
@@ -437,8 +440,15 @@ func replSetGetStatusQuery(session *mgo.Session) (*replSetStatus, error) {
 func (p *Process) isReplInitialised() (bool, error) {
 	_, err := p.replSetGetStatus()
 	if err != nil {
-		if merr, ok := err.(*mgo.QueryError); ok && merr.Code == 94 {
-			return false, nil
+		if merr, ok := err.(*mgo.QueryError); ok {
+			switch merr.Code {
+			case 93: // replica set exists but is invalid/we aren't a member
+				return true, nil
+			case 94: // replica set not yet configured
+				return false, nil
+			}
+			p.Logger.Error("failed to check if replset initialized", "err", err, "code", merr.Code)
+			return false, err
 		}
 		return false, err
 	}
@@ -454,7 +464,7 @@ func (p *Process) isUserCreated() (bool, error) {
 
 	session.SetMode(mgo.Monotonic, true)
 
-	n, err := session.DB("system").C("users").Find("flynn").Count()
+	n, err := session.DB("admin").C("system.users").Find(bson.M{"user": "flynn"}).Count()
 	if err != nil {
 		if merr, ok := err.(*mgo.QueryError); ok && merr.Code == 13 {
 			return false, nil
@@ -495,9 +505,10 @@ func (p *Process) initPrimaryDB(clusterState *state.State) error {
 	logger.Info("initializing primary database")
 
 	// check if admin user has been created
+	logger.Info("checking if user has been created")
 	created, err := p.isUserCreated()
 	if err != nil {
-		logger.Error("error creating user")
+		logger.Error("error checking if user created")
 		return err
 	}
 
@@ -517,41 +528,48 @@ func (p *Process) initPrimaryDB(clusterState *state.State) error {
 		if err := p.start(); err != nil {
 			return err
 		}
+		logger.Info("creating user")
 		if err := p.createUser(); err != nil {
 			return err
 		}
-		logger.Info("stopping database to re-enable security")
-		if err := p.stop(); err != nil {
-			return err
-		}
-		p.securityEnabledValue.Store(true)
-		if err := p.writeConfig(configData{ReplicationEnabled: true}); err != nil {
-			logger.Error("error writing config", "path", p.ConfigPath(), "err", err)
-			return err
-		}
-		logger.Info("starting database with security enabled")
-		if err := p.start(); err != nil {
-			return err
-		}
-		logger.Info("user created successfully")
+	}
+	logger.Info("stopping database to enable security/replication")
+	if err := p.stop(); err != nil {
+		return err
+	}
+	p.securityEnabledValue.Store(true)
+	if err := p.writeConfig(configData{ReplicationEnabled: true}); err != nil {
+		logger.Error("error writing config", "path", p.ConfigPath(), "err", err)
+		return err
+	}
+	logger.Info("starting database with security enabled")
+	if err := p.start(); err != nil {
+		return err
 	}
 
 	// check if replica set has been initialised
 	logger.Info("checking if replica set has been initialised")
 	initialized, err := p.isReplInitialised()
 	if err != nil {
+		logger.Error("error checking replset initialised", "err", err)
 		return err
 	}
+	logger.Info("not initialized, initialising now")
 	if !initialized && clusterState != nil {
 		if err := p.replSetInitiate(); err != nil {
+			logger.Error("error initialising replset", "err", err)
 			return err
 		}
 
 	}
+	logger.Info("getting current replset config")
 	replSetCurrent, err := p.getReplConfig()
 	if err != nil {
+		logger.Error("error getting replset config", "err", err)
 		return err
 	}
+
+	logger.Info("reconfiguring replset")
 	replSetNew := p.replSetConfigFromState(replSetCurrent, clusterState)
 	err = p.setReplConfig(replSetNew)
 	if err != nil {
