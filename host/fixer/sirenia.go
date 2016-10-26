@@ -108,7 +108,7 @@ func (f *ClusterFixer) FixSirenia(svc string) error {
 	log.Info("terminating unassigned sirenia instances")
 outer:
 	for _, i := range instances {
-		if i.Addr == state.Primary.Addr || i.Addr == state.Sync.Addr {
+		if i.Addr == state.Primary.Addr || (state.Sync != nil && i.Addr == state.Sync.Addr) {
 			continue
 		}
 		for _, a := range state.Async {
