@@ -35,7 +35,7 @@ func (s *DockerReceiveSuite) TestPushImage(t *c.C) {
 	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
 	t.Assert(err, c.IsNil)
 	tag := fmt.Sprintf("%s/%s:latest", u.Host, repo)
-	t.Assert(run(t, exec.Command("docker", "tag", "--force", repo, tag)), Succeeds)
+	t.Assert(run(t, exec.Command("docker", "tag", repo, tag)), Succeeds)
 	t.Assert(run(t, exec.Command("docker", "push", tag)), Succeeds)
 
 	// wait for an artifact to be created
