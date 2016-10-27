@@ -6,7 +6,7 @@ GIT_DIRTY=`test -n "$(git status --porcelain)" && echo true || echo false`
 GIT_DEV=GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false
 GO_ENV=GOROOT=`readlink -f util/_toolchain/go`
 
-all: toolchain
+all: toolchain docker
 	@$(GIT_DEV) $(GO_ENV) tup
 
 release: toolchain
@@ -15,6 +15,13 @@ release: toolchain
 clean:
 	git clean -Xdf -e '!.tup' -e '!.vagrant' -e '!script/custom-vagrant'
 	sudo rm -rf "/var/lib/flynn/layer-cache"
+
+docker:
+	sudo stop docker
+	sudo rm -rf /var/lib/docker
+	sudo apt-get update
+	sudo apt-get install --yes --force-yes 'docker-engine=1.12.2-0~trusty'
+	rm -rf log
 
 test: test-unit test-integration
 
