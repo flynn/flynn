@@ -8,7 +8,7 @@ RUN apt-get update &&\
     update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8 &&\
     dpkg-reconfigure locales &&\
     apt-get -y install curl sudo &&\
-    curl --silent --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - &&\
+    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 &&\
     sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list' &&\
     apt-get update &&\
     apt-get install -y -q \
