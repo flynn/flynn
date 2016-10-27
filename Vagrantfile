@@ -111,7 +111,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo chmod +x "/usr/local/bin/jq"
 
     # Database dependencies - postgres, mariadb + percona xtrabackup, mongodb, redis
-    sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 ACCC4CF8 1BB943DB CD2EFD2A EA312927 C7917B12
+    sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 ACCC4CF8 1BB943DB 8507EFA5 EA312927 C7917B12
     sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" > /etc/apt/sources.list.d/postgresql.list'
     sudo sh -c 'echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu trusty main" > /etc/apt/sources.list.d/mariadb.list'
     sudo sh -c 'echo "deb http://repo.percona.com/apt trusty main" > /etc/apt/sources.list.d/percona.list'
