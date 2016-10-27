@@ -131,7 +131,7 @@ var ErrDockerTLSError = errors.New("docker TLS error")
 
 func dockerLogin(host, key string) error {
 	var out bytes.Buffer
-	cmd := exec.Command("docker", "login", "--email=user@"+host, "--username=user", "--password="+key, host)
+	cmd := exec.Command("docker", "login", "--username=user", "--password="+key, host)
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	err := cmd.Run()
