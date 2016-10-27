@@ -164,8 +164,8 @@ dpkg-reconfigure locales
 # add keys
 curl --fail --silent https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
 apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 EA312927
-apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xcbcb082a1bb943db
-apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 1C4CBDCDCD2EFD2A
+apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 1BB943DB
+apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 8507EFA5
 
 # add repos
 echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list
