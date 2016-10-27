@@ -162,10 +162,11 @@ update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8
 dpkg-reconfigure locales
 
 # add keys
-curl --fail --silent https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 EA312927
-apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 1BB943DB
-apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 8507EFA5
+apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 \
+  B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 \
+  199369E5404BD5FC7D2FE43BCBCB082A1BB943DB \
+  4D1BB29D63D98E422B2113B19334A25F8507EFA5 \
+  42F3E95A2C4F08279C4960ADD68FA50FEA312927
 
 # add repos
 echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list
