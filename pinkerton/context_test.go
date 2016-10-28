@@ -19,7 +19,7 @@ import (
 
 const (
 	testImageDigest = "sha256:e3d939e790435a08a456e064203d1c8688342be817dc9f6a73f1d7610540122f"
-	testImageID     = "c302bbd9e1b808906d73e7d07005dd779acf16c32b7a8fbd8f5c4570fbae0696"
+	testImageID     = "sha256:4cd1305ddefa8e7660f501af8d6c8024765720d3bcb7e160e1bad5497f2735ce"
 	testImageData   = "foo\n"
 )
 
@@ -44,7 +44,7 @@ func TestDocker(t *testing.T) {
 	}
 
 	// start Docker registry using test files
-	config := configuration.Configuration{
+	config := &configuration.Configuration{
 		Storage: configuration.Storage{
 			"filesystem": configuration.Parameters{
 				"rootdirectory": tmp,
@@ -63,17 +63,17 @@ func TestDocker(t *testing.T) {
 	}
 
 	// pull image using digest
-	imageID, err := ctx.PullDocker(srv.URL+"?name=pinkerton-test&id="+testImageDigest, ioutil.Discard)
+	img, err := ctx.PullDocker(srv.URL+"?name=pinkerton-test&id="+testImageDigest, NopProgress)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if imageID != testImageID {
-		t.Fatalf("expected image to have ID %q, got %q", testImageID, imageID)
+	if img.ID().String() != testImageID {
+		t.Fatalf("expected image to have ID %q, got %q", testImageID, img.ID())
 	}
 
 	// checkout image
 	name := random.String(8)
-	path, err := ctx.Checkout(name, imageID)
+	path, err := ctx.Checkout(name, img.ID())
 	if err != nil {
 		t.Fatal(err)
 	}

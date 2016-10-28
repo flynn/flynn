@@ -13,7 +13,7 @@ import (
 
 func main() {
 	root := os.Args[1]
-	config := configuration.Configuration{
+	config := &configuration.Configuration{
 		Storage: configuration.Storage{
 			"filesystem": configuration.Parameters{
 				"rootdirectory": root,

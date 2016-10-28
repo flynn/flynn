@@ -161,10 +161,6 @@ func (c *EC2Client) loadStruct(v url.Values, value reflect.Value, prefix string)
 					v.Set(fmt.Sprintf("%s.%d", name, i+1), val)
 				}
 			}
-		case []byte:
-			if len(casted) != 0 {
-				v.Set(name, string(casted))
-			}
 		case time.Time:
 			if !casted.IsZero() {
 				const ISO8601UTC = "2006-01-02T15:04:05Z"

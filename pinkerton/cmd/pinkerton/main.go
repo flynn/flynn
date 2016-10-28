@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/docker/docker/image"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/go-docopt"
 	tuf "github.com/flynn/go-tuf/client"
@@ -63,7 +64,7 @@ Options:
 			log.Fatal(err)
 		}
 	case args.Bool["checkout"]:
-		path, err := ctx.Checkout(args.String["<id>"], args.String["<image-id>"])
+		path, err := ctx.Checkout(args.String["<id>"], image.ID(args.String["<image-id>"]))
 		if err != nil {
 			log.Fatal(err)
 		}

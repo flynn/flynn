@@ -32,7 +32,7 @@ func export(args *docopt.Args) {
 	images := make([]string, 0, len(manifest))
 	for name, id := range manifest {
 		tagged := name + ":latest"
-		run(exec.Command("docker", "tag", "--force", id, tagged))
+		run(exec.Command("docker", "tag", id, tagged))
 		images = append(images, tagged)
 	}
 
