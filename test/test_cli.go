@@ -1214,6 +1214,7 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 			Meta:             map[string]string{"blobstore": "true"},
 			RawManifest:      data,
 			Hashes:           manifest.Hashes(),
+			Size:             int64(len(data)),
 			LayerURLTemplate: "http://blobstore.discoverd/layer/{id}.squashfs",
 		}
 		t.Assert(client.CreateArtifact(artifact), c.IsNil)

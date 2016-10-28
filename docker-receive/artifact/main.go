@@ -86,6 +86,7 @@ func run(url string) error {
 		},
 		RawManifest:      rawManifest,
 		Hashes:           image.Hashes(),
+		Size:             int64(len(rawManifest)),
 		LayerURLTemplate: layerURLTemplate,
 	}
 	return client.CreateArtifact(artifact)

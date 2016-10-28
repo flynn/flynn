@@ -326,6 +326,7 @@ func (e *generator) createArtifact() {
 		URI:              e.resourceIds["SLUGRUNNER_IMAGE_URI"],
 		RawManifest:      manifest.RawManifest(),
 		Hashes:           manifest.Hashes(),
+		Size:             int64(len(manifest.RawManifest())),
 		LayerURLTemplate: "https://dl.flynn.io/tuf?target=/layers/{id}.squashfs",
 	}
 	err := e.client.CreateArtifact(artifact)
