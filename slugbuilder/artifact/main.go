@@ -122,6 +122,7 @@ func run(dir string, uid, gid int) error {
 		},
 		RawManifest:      rawManifest,
 		Hashes:           manifest.Hashes(),
+		Size:             int64(len(rawManifest)),
 		LayerURLTemplate: "http://blobstore.discoverd/slugs/layers/{id}.squashfs",
 	}
 

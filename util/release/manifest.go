@@ -63,6 +63,7 @@ func interpolateManifest(imageDir, imageRepository string, src io.Reader, dest i
 			artifact := &ct.Artifact{
 				Type:        ct.ArtifactTypeFlynn,
 				RawManifest: manifest,
+				Size:        int64(len(manifest)),
 				Meta:        map[string]string{"flynn.component": name},
 			}
 			artifact.URI = fmt.Sprintf("%s?target=/images/%s.json", imageRepository, artifact.Manifest().ID())
