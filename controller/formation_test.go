@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	. "github.com/flynn/go-check"
@@ -10,7 +11,7 @@ import (
 
 func (s *S) TestFormationStreaming(c *C) {
 	before := time.Now()
-	release := s.createTestRelease(c, &ct.Release{})
+	release := s.createTestRelease(c, s.c, &ct.Release{})
 	app := s.createTestApp(c, &ct.App{Name: "streamtest-existing"})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
@@ -40,7 +41,7 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(update.App, DeepEquals, app)
 	c.Assert(update.Release, DeepEquals, release)
 
-	release = s.createTestRelease(c, &ct.Release{
+	release = s.createTestRelease(c, s.c, &ct.Release{
 		Processes: map[string]ct.ProcessType{"foo": {}},
 	})
 	app = s.createTestApp(c, &ct.App{Name: "streamtest"})
@@ -71,7 +72,7 @@ func (s *S) TestFormationStreamDeleted(c *C) {
 	// create 3 releases with formations
 	releases := make([]*ct.Release, 3)
 	for i := 0; i < 3; i++ {
-		releases[i] = s.createTestRelease(c, &ct.Release{})
+		releases[i] = s.createTestRelease(c, s.c, &ct.Release{})
 		s.createTestFormation(c, &ct.Formation{ReleaseID: releases[i].ID, AppID: app.ID})
 	}
 
@@ -117,8 +118,8 @@ outer:
 func (s *S) TestFormationListActive(c *C) {
 	app1 := s.createTestApp(c, &ct.App{})
 	app2 := s.createTestApp(c, &ct.App{})
-	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	fileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
+	imageArtifact := s.createTestArtifact(c, s.c, &ct.Artifact{Type: host.ArtifactTypeDocker})
+	fileArtifact := s.createTestArtifact(c, s.c, &ct.Artifact{Type: host.ArtifactTypeFile})
 
 	createFormation := func(app *ct.App, procs map[string]int) *ct.ExpandedFormation {
 		release := &ct.Release{
@@ -128,7 +129,7 @@ func (s *S) TestFormationListActive(c *C) {
 		for typ := range procs {
 			release.Processes[typ] = ct.ProcessType{}
 		}
-		s.createTestRelease(c, release)
+		s.createTestRelease(c, s.c, release)
 		s.createTestFormation(c, &ct.Formation{
 			AppID:     app.ID,
 			ReleaseID: release.ID,
@@ -151,19 +152,24 @@ func (s *S) TestFormationListActive(c *C) {
 		createFormation(app2, map[string]int{"web": 1, "worker": 2}),
 	}
 
-	list, err := s.c.FormationListActive()
-	c.Assert(err, IsNil)
-	c.Assert(list, HasLen, 3)
-
-	// check that we only get the formations with a non-zero process count,
-	// most recently updated first
 	expected := []*ct.ExpandedFormation{formations[4], formations[3], formations[1]}
-	for i, f := range expected {
-		actual := list[i]
-		c.Assert(actual.App.ID, Equals, f.App.ID)
-		c.Assert(actual.Release.ID, Equals, f.Release.ID)
-		c.Assert(actual.ImageArtifact.ID, Equals, f.ImageArtifact.ID)
-		c.Assert(actual.FileArtifacts, DeepEquals, f.FileArtifacts)
-		c.Assert(actual.Processes, DeepEquals, f.Processes)
-	}
+	s.withEachClient(c, func(client controller.Client) {
+		list, err := client.FormationListActive()
+		c.Assert(err, IsNil)
+		c.Assert(list, HasLen, 3)
+
+		// check that we only get the formations with a non-zero process count,
+		// most recently updated first
+		for i, f := range expected {
+			actual := list[i]
+			c.Assert(actual.App, Not(IsNil))
+			c.Assert(actual.App.ID, Equals, f.App.ID)
+			c.Assert(actual.Release, Not(IsNil))
+			c.Assert(actual.Release.ID, Equals, f.Release.ID)
+			c.Assert(actual.ImageArtifact, Not(IsNil))
+			c.Assert(actual.ImageArtifact.ID, Equals, f.ImageArtifact.ID)
+			c.Assert(actual.FileArtifacts, DeepEquals, f.FileArtifacts)
+			c.Assert(actual.Processes, DeepEquals, f.Processes)
+		}
+	})
 }

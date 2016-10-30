@@ -13,6 +13,8 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
+var ErrNotFound = errors.New("controller: resource not found")
+
 const RouteParentRefPrefix = "controller/apps/"
 
 type ExpandedFormation struct {
@@ -345,6 +347,25 @@ func (n NotFoundError) Error() string {
 	return fmt.Sprintf("resource not found: %s", n.Resource)
 }
 
+type GraphQLErrors []*GraphQLError
+
+func (e GraphQLErrors) Error() string {
+	messages := make([]string, len(e))
+	for i, err := range e {
+		messages[i] = err.Error()
+	}
+	return strings.Join(messages, "\n")
+}
+
+type GraphQLError struct {
+	Message   string      `json:"message"`
+	Locations interface{} `json:"locations"`
+}
+
+func (e *GraphQLError) Error() string {
+	return e.Message
+}
+
 // SSELogChunk is used as a data wrapper for the `GET /apps/:apps_id/log` SSE stream
 type SSELogChunk struct {
 	Event string          `json:"event,omitempty"`
@@ -367,8 +388,6 @@ const (
 	EventTypeResource             EventType = "resource"
 	EventTypeResourceDeletion     EventType = "resource_deletion"
 	EventTypeResourceAppDeletion  EventType = "resource_app_deletion"
-	EventTypeKey                  EventType = "key"
-	EventTypeKeyDeletion          EventType = "key_deletion"
 	EventTypeRoute                EventType = "route"
 	EventTypeRouteDeletion        EventType = "route_deletion"
 	EventTypeDomainMigration      EventType = "domain_migration"
@@ -449,12 +468,12 @@ type JobWatcher interface {
 }
 
 type ListEventsOptions struct {
-	AppID       string
-	ObjectTypes []EventType
-	ObjectID    string
-	BeforeID    *int64
-	SinceID     *int64
-	Count       int
+	AppID       string      `json:"app_id,omitempty"`
+	ObjectTypes []EventType `json:"object_types,omitempty"`
+	ObjectID    string      `json:"object_id,omitempty"`
+	BeforeID    *int64      `json:"before_id,omitempty"`
+	SinceID     *int64      `json:"since_id,omitempty"`
+	Count       int         `json:"count,omitempty"`
 }
 
 type StreamEventsOptions struct {

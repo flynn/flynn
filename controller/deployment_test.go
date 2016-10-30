@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	. "github.com/flynn/go-check"
@@ -11,7 +12,7 @@ import (
 
 func (s *S) TestCreateDeployment(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "create-deployment"})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, s.c, &ct.Release{
 		Processes: map[string]ct.ProcessType{"web": {}},
 	})
 	c.Assert(s.c.PutFormation(&ct.Formation{
@@ -26,10 +27,13 @@ func (s *S) TestCreateDeployment(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(d.FinishedAt, NotNil)
 	// but the app release should now be set
-	gotRelease, err := s.c.GetAppRelease(app.ID)
-	c.Assert(release.ID, Equals, gotRelease.ID)
+	s.withEachClient(c, func(client controller.Client) {
+		gotRelease, err := client.GetAppRelease(app.ID)
+		c.Assert(err, IsNil)
+		c.Assert(release.ID, Equals, gotRelease.ID)
+	})
 
-	newRelease := s.createTestRelease(c, &ct.Release{})
+	newRelease := s.createTestRelease(c, s.c, &ct.Release{})
 
 	d, err = s.c.CreateDeployment(app.ID, newRelease.ID)
 	c.Assert(err, IsNil)
@@ -47,7 +51,7 @@ func (s *S) TestCreateDeployment(c *C) {
 
 func (s *S) TestStreamDeployment(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "stream-deployment"})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, s.c, &ct.Release{
 		Processes: map[string]ct.ProcessType{"web": {}},
 	})
 	c.Assert(s.c.PutFormation(&ct.Formation{
@@ -58,7 +62,7 @@ func (s *S) TestStreamDeployment(c *C) {
 	defer s.c.DeleteFormation(app.ID, release.ID)
 	c.Assert(s.c.SetAppRelease(app.ID, release.ID), IsNil)
 
-	newRelease := s.createTestRelease(c, &ct.Release{})
+	newRelease := s.createTestRelease(c, s.c, &ct.Release{})
 
 	d, err := s.c.CreateDeployment(app.ID, newRelease.ID)
 	c.Assert(err, IsNil)
@@ -92,7 +96,7 @@ func (s *S) TestStreamDeployment(c *C) {
 
 func (s *S) TestGetDeployment(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "get-deployment"})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, s.c, &ct.Release{
 		Processes: map[string]ct.ProcessType{"web": {}},
 	})
 	c.Assert(s.c.PutFormation(&ct.Formation{
@@ -106,7 +110,7 @@ func (s *S) TestGetDeployment(c *C) {
 	d, err := s.c.CreateDeployment(app.ID, release.ID)
 	c.Assert(err, IsNil)
 	c.Assert(d.Status, Equals, "complete")
-	newRelease := s.createTestRelease(c, &ct.Release{})
+	newRelease := s.createTestRelease(c, s.c, &ct.Release{})
 
 	// create a second deployment
 	d, err = s.c.CreateDeployment(app.ID, newRelease.ID)
@@ -114,19 +118,21 @@ func (s *S) TestGetDeployment(c *C) {
 	c.Assert(d.Status, Equals, "pending")
 
 	// test we can retrieve it
-	deployment, err := s.c.GetDeployment(d.ID)
-	c.Assert(err, IsNil)
-	c.Assert(deployment.ID, Equals, d.ID)
-	c.Assert(deployment.AppID, Equals, app.ID)
-	c.Assert(deployment.OldReleaseID, Equals, release.ID)
-	c.Assert(deployment.NewReleaseID, Equals, newRelease.ID)
-	c.Assert(deployment.Status, Equals, d.Status)
-	c.Assert(reflect.DeepEqual(deployment.Processes, map[string]int{"web": 1}), Equals, true)
+	s.withEachClient(c, func(client controller.Client) {
+		deployment, err := client.GetDeployment(d.ID)
+		c.Assert(err, IsNil)
+		c.Assert(deployment.ID, Equals, d.ID)
+		c.Assert(deployment.AppID, Equals, app.ID)
+		c.Assert(deployment.OldReleaseID, Equals, release.ID)
+		c.Assert(deployment.NewReleaseID, Equals, newRelease.ID)
+		c.Assert(deployment.Status, Equals, d.Status)
+		c.Assert(reflect.DeepEqual(deployment.Processes, map[string]int{"web": 1}), Equals, true)
+	})
 }
 
 func (s *S) TestDeploymentList(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "list-deployment"})
-	release := s.createTestRelease(c, &ct.Release{
+	release := s.createTestRelease(c, s.c, &ct.Release{
 		Processes: map[string]ct.ProcessType{"web": {}},
 	})
 	c.Assert(s.c.PutFormation(&ct.Formation{
@@ -140,7 +146,7 @@ func (s *S) TestDeploymentList(c *C) {
 	initial, err := s.c.CreateDeployment(app.ID, release.ID)
 	c.Assert(err, IsNil)
 	c.Assert(initial.Status, Equals, "complete")
-	newRelease := s.createTestRelease(c, &ct.Release{})
+	newRelease := s.createTestRelease(c, s.c, &ct.Release{})
 
 	// create a second deployment
 	second, err := s.c.CreateDeployment(app.ID, newRelease.ID)
@@ -148,9 +154,11 @@ func (s *S) TestDeploymentList(c *C) {
 	c.Assert(err, IsNil)
 
 	// test we get back both the initial release and the new deployment
-	deployments, err := s.c.DeploymentList(app.ID)
-	c.Assert(err, IsNil)
-	c.Assert(deployments, HasLen, 2)
-	c.Assert(deployments[1].ID, Equals, initial.ID)
-	c.Assert(deployments[0].ID, Equals, second.ID)
+	s.withEachClient(c, func(client controller.Client) {
+		deployments, err := client.DeploymentList(app.ID)
+		c.Assert(err, IsNil)
+		c.Assert(deployments, HasLen, 2)
+		c.Assert(deployments[1].ID, Equals, initial.ID)
+		c.Assert(deployments[0].ID, Equals, second.ID)
+	})
 }

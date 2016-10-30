@@ -3,7 +3,6 @@ package controller
 
 import (
 	"crypto/tls"
-	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -78,13 +77,9 @@ type Client interface {
 	JobList(appID string) ([]*ct.Job, error)
 	JobListActive() ([]*ct.Job, error)
 	AppList() ([]*ct.App, error)
-	KeyList() ([]*ct.Key, error)
 	ArtifactList() ([]*ct.Artifact, error)
 	ReleaseList() ([]*ct.Release, error)
 	AppReleaseList(appID string) ([]*ct.Release, error)
-	CreateKey(pubKey string) (*ct.Key, error)
-	GetKey(keyID string) (*ct.Key, error)
-	DeleteKey(id string) error
 	ProviderList() ([]*ct.Provider, error)
 	Backup() (io.ReadCloser, error)
 	GetBackupMeta() (*ct.ClusterBackup, error)
@@ -99,7 +94,7 @@ type Config struct {
 }
 
 // ErrNotFound is returned when a resource is not found (HTTP status 404).
-var ErrNotFound = errors.New("controller: resource not found")
+var ErrNotFound = ct.ErrNotFound
 
 // newClient creates a generic Client object, additional attributes must
 // be set by the caller
