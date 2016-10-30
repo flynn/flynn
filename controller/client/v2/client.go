@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
+	"github.com/flynn/graphql"
 	"github.com/graphql-go/handler"
 )
 
@@ -33,69 +34,263 @@ func New(v1client *v1controller.Client) *Client {
 	}
 }
 
-const (
-	FragmentAppFields = `
-		fragment appFields on App {
-			id
-			name
-			meta
-			strategy
-			current_release {
-				id
-			}
-			deploy_timeout
-			created_at
-			updated_at
-		}`
+var FragmentAppFields = &GQLParams{
+	FragmentType: "App",
+	Fields: GQLFields{
+		"id":       nil,
+		"name":     nil,
+		"meta":     nil,
+		"strategy": nil,
+		"current_release": &GQLParams{
+			Fields: GQLFields{"id": nil},
+		},
+		"deploy_timeout": nil,
+		"created_at":     nil,
+		"updated_at":     nil,
+	},
+}
 
-	FragmentRouteFields = `
-		fragment routeFields on Route {
-			type
-			id
-			parent_ref
-			service
-			leader
-			created_at
-			updated_at
-			domain
-			certificate {
-				id
-				key
-				cert
-				created_at
-				updated_at
-			}
-			sticky
-			path
-			port
-		}`
+var FragmentRouteFields = &GQLParams{
+	FragmentType: "Route",
+	Fields: GQLFields{
+		"type":       nil,
+		"id":         nil,
+		"parent_ref": nil,
+		"service":    nil,
+		"leader":     nil,
+		"created_at": nil,
+		"updated_at": nil,
+		"domain":     nil,
+		"certificate": &GQLParams{
+			Fields: GQLFields{
+				"id":         nil,
+				"key":        nil,
+				"cert":       nil,
+				"created_at": nil,
+				"updated_at": nil,
+			},
+		},
+		"sticky": nil,
+		"path":   nil,
+		"port":   nil,
+	},
+}
 
-	FragmentResourceFields = `
-		fragment resourceFields on Resource {
-			id
-			provider {
-				id
-			}
-			external_id
-			env
-			apps {
-				id
-			}
-			created_at
-		}`
+var FragmentResourceFields = &GQLParams{
+	FragmentType: "Resource",
+	Fields: GQLFields{
+		"id": nil,
+		"provider": &GQLParams{
+			Fields: GQLFields{
+				"id": nil,
+			},
+		},
+		"external_id": nil,
+		"env":         nil,
+		"created_at":  nil,
+	},
+}
 
-	FragmentReleaseFields = `
-		fragment releaseFields on Release {
-			id
-			artifacts {
-				id
+var FragmentReleaseFields = &GQLParams{
+	FragmentType: "Release",
+	Fields: GQLFields{
+		"id": nil,
+		"artifacts": &GQLParams{
+			Fields: GQLFields{
+				"id": nil,
+			},
+		},
+		"env":        nil,
+		"meta":       nil,
+		"processes":  nil,
+		"created_at": nil,
+	},
+}
+
+type CompiledGQLRequest struct {
+	Schema graphql.Schema
+}
+
+// TODO(jvatic): automatically map request params/fields to schema
+func BuildRequest(r *GQLRequest) (*CompiledGQLRequest, error) {
+	// graphqlschema.Schema.QueryType().Fields()
+	return nil, nil
+}
+
+func indentString(n int) string {
+	indent := make([]string, n+1)
+	return strings.Join(indent, "\t")
+}
+
+type GQLRequest struct {
+	Fields    GQLFields
+	Variables map[string]interface{}
+}
+
+type GQLParams struct {
+	FragmentType   string
+	Fragments      []*GQLParams
+	InlineFragment bool
+	Args           map[string]interface{}
+	Output         interface{} // only supported for top-level fields
+	Fields         GQLFields
+}
+
+func fragmentName(params *GQLParams) string {
+	return fmt.Sprintf("%sFields", params.FragmentType)
+}
+
+func (p *GQLParams) String(indent int, parentName string) string {
+	nameWithPrefix := func(name string) string {
+		return parentName + name
+	}
+	lines := make([]string, 0, len(p.Fields))
+	if len(p.Fragments) > 0 {
+		for _, f := range p.Fragments {
+			if f.InlineFragment {
+				lines = append(lines, fmt.Sprintf("%s ...%s {\n%s\n%s}", indentString(indent), fragmentName(f), f.String(indent+1, ""), indentString(indent)))
+			} else {
+				lines = append(lines, fmt.Sprintf("%s ...%s", indentString(indent), fragmentName(f)))
 			}
-			env
-			meta
-			processes
-			created_at
-		}`
-)
+		}
+	}
+	for name, params := range p.Fields {
+		if params == nil {
+			lines = append(lines, fmt.Sprintf("%s%s", indentString(indent), name))
+		} else {
+			var argsStr string
+			if len(params.Args) > 0 {
+				argsStr += "("
+				i := 0
+				for n := range params.Args {
+					if i > 0 {
+						argsStr += ", "
+					}
+					argsStr += fmt.Sprintf("%s: $%s", n, nameWithPrefix(name+n))
+					i++
+				}
+				argsStr += ")"
+			}
+			lines = append(lines, fmt.Sprintf("%s%s%s {\n%s\n%s}", indentString(indent), name, argsStr, params.String(indent+1, name), indentString(indent)))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+type GQLFields map[string]*GQLParams
+
+type gqlVariable struct {
+	Type  string
+	Value interface{}
+}
+
+// TODO(jvatic): Dedup variables and use $1, $2, $3 etc. for the names
+func parseVariables(p *GQLParams, prefix string) map[string]*gqlVariable {
+	nameWithPrefix := func(name string) string {
+		return prefix + name
+	}
+	variables := make(map[string]*gqlVariable, 0)
+	if p.Args != nil {
+		for name, value := range p.Args {
+			// TODO(jvatic): Use schema to figure out what the type should be
+			var typ string
+			switch value.(type) {
+			case string:
+				typ = "String!"
+			case []string:
+				typ = "[String!]"
+			case int, int32, int64:
+				typ = "Int!"
+			case []int, []int32, []int64:
+				typ = "[Int!]"
+			default:
+				typ = "Null"
+			}
+			variables[nameWithPrefix(name)] = &gqlVariable{Type: typ, Value: value}
+		}
+	}
+	if p.Fields != nil {
+		for name, p := range p.Fields {
+			if p == nil {
+				continue
+			}
+			for name, v := range parseVariables(p, nameWithPrefix(name)) {
+				variables[name] = v
+			}
+		}
+	}
+	return variables
+}
+
+func GQLQuery(r *GQLRequest) *handler.RequestOptions {
+	if r.Fields == nil {
+		return nil
+	}
+	var buildFragments func(*GQLParams) []string
+	buildFragments = func(params *GQLParams) []string {
+		fragments := []string{}
+		for _, f := range params.Fragments {
+			if f.InlineFragment {
+				continue
+			}
+			fragments = append(fragments, fmt.Sprintf("fragment %s on %s {\n%s\n}\n", fragmentName(f), f.FragmentType, f.String(1, "")))
+			for _, frag := range buildFragments(f) {
+				fragments = append(fragments, frag)
+			}
+		}
+		for _, p := range params.Fields {
+			if p == nil {
+				continue
+			}
+			for _, f := range buildFragments(p) {
+				fragments = append(fragments, f)
+			}
+		}
+		return fragments
+	}
+	params := &GQLParams{Fields: r.Fields}
+	variables := parseVariables(params, "")
+	fragments := buildFragments(params)
+	reqVars := make(map[string]interface{}, len(variables))
+	var argsStr string
+	if len(variables) > 0 {
+		argsStr += "("
+		i := 0
+		for name, v := range variables {
+			if i > 0 {
+				argsStr += ", "
+			}
+			argsStr += fmt.Sprintf("$%s: %s", name, v.Type)
+			reqVars[name] = v.Value
+			i++
+		}
+		argsStr += ")"
+	}
+	return &handler.RequestOptions{
+		Query:     fmt.Sprintf("query q%s {\n%s\n}\n%s", argsStr, params.String(1, ""), strings.Join(fragments, "\n")),
+		Variables: reqVars,
+	}
+}
+
+func (c *Client) RunGraphQLRequest(r *GQLRequest) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	rawOut, err := c.graphqlRequest(GQLQuery(r))
+	if err != nil {
+		return nil, err
+	}
+	for name, data := range rawOut {
+		if params, ok := r.Fields[name]; ok {
+			obj := params.Output
+			if err := json.Unmarshal(data, obj); err != nil {
+				return nil, err
+			}
+			out[name] = obj
+		} else {
+			out[name] = data
+		}
+	}
+	return out, nil
+}
 
 func queryWithFragments(query string, fragments ...string) string {
 	return strings.Join([]string{query, strings.Join(fragments, "\n")}, "\n")
@@ -902,102 +1097,82 @@ func (c *Client) ListEvents(opts ct.ListEventsOptions) ([]*ct.Event, error) {
 	if err := <-errChan; err != nil {
 		return nil, err
 	}
-	data, err := c.graphqlRequest(&handler.RequestOptions{
-		Query: queryWithFragments(`query events($object_types: [String], $object_id: String, $app_id: String, $count: Int, $before_id: Int, $since_id: Int) {
-			events(object_types: $object_types, object_id: $object_id, app_id: $app_id, count: $count, before_id: $before_id, since_id: $since_id)  {
-				id
-				object_type
-				object_id
-				app {
-					id
-				}
-				...on EventApp {
-					data {
-						...appFields
-					}
-				}
-				... on EventAppRelease {
-					data {
-						prev_release {
-							...releaseFields
-						}
-						release {
-							...releaseFields
-						}
-					}
-				}
-				... on EventRelease {
-					data {
-						...releaseFields
-					}
-				}
-				... on EventAppDeletion {
-					data {
-						app_deletion {
-							app {
-								id
-							}
-							routes {
-								...routeFields
-							}
-							resources {
-								...resourceFields
-							}
-							releases {
-								...releaseFields
-							}
-						}
-						error
-					}
-				}
-				... on EventDeployment {
-					data {
-						app {
-							id
-						}
-						deployment {
-							id
-						}
-						release {
-							id
-						}
-						status
-						job_type
-						job_state
-						error
-					}
-				}
-				... on EventReleaseDeletion {
-					data {
-						release_deletion {
-							app {
-								id
-							}
-							release {
-								id
-							}
-							remaining_apps {
-								id
-							}
-							deleted_files
-						}
-						error
-					}
-				}
-				... on EventRoute {
-					data {
-						...routeFields
-					}
-				}
-				created_at
-			}
-		}`,
-			FragmentAppFields,
-			FragmentRouteFields,
-			FragmentResourceFields,
-			FragmentReleaseFields),
-		Variables: variables,
-	})
+	data, err := c.RunGraphQLRequest(GQLQuery(&GQLRequest{
+		Fields: GQLFields{
+			"events": &GQLParams{
+				Args: variables,
+				Fragments: []*GQLParams{
+					&GQLParams{FragmentType: "EventApp", InlineFragment: true, Fields: GQLFields{"data": &GQLParams{Fragments: []*GQLParams{FragmentAppFields}}}},
+					&GQLParams{FragmentType: "EventAppRelease", InlineFragment: true, Fields: GQLFields{"data": &GQLParams{
+						Fields: GQLFields{
+							"prev_release": &GQLParams{Fragments: []*GQLParams{FragmentReleaseFields}},
+							"release":      &GQLParams{Fragments: []*GQLParams{FragmentReleaseFields}},
+						},
+					}}},
+					&GQLParams{FragmentType: "EventRelease", InlineFragment: true, Fields: GQLFields{"data": &GQLParams{Fragments: []*GQLParams{FragmentReleaseFields}}}},
+					&GQLParams{FragmentType: "EventAppDeletion", InlineFragment: true, Fields: GQLFields{"data": &GQLParams{
+						Fields: GQLFields{
+							"app_deletion": &GQLParams{
+								Fields: GQLFields{
+									"app":       &GQLParams{Fields: GQLFields{"id": nil}},
+									"routes":    &GQLParams{Fragments: []*GQLParams{FragmentRouteFields}},
+									"resources": &GQLParams{Fragments: []*GQLParams{FragmentResourceFields}},
+									"releases":  &GQLParams{Fragments: []*GQLParams{FragmentReleaseFields}},
+								},
+							},
+							"error": nil,
+						},
+					}}},
+					&GQLParams{FragmentType: "EventDeployment", InlineFragment: true, Fields: GQLFields{"data": &GQLParams{
+						Fields: GQLFields{
+							"app": &GQLParams{
+								Fields: GQLFields{"id": nil},
+							},
+							"deployment": &GQLParams{
+								Fields: GQLFields{"id": nil},
+							},
+							"release": &GQLParams{
+								Fields: GQLFields{"id": nil},
+							},
+							"status":    nil,
+							"job_type":  nil,
+							"job_state": nil,
+							"error":     nil,
+						},
+					}}},
+					&GQLParams{FragmentType: "EventReleaseDeletion", InlineFragment: true, Fields: GQLFields{"data": &GQLParams{
+						Fields: GQLFields{
+							"release_deletion": &GQLParams{
+								Fields: GQLFields{
+									"app": &GQLParams{
+										Fields: GQLFields{"id": nil},
+									},
+									"release": &GQLParams{
+										Fields: GQLFields{"id": nil},
+									},
+									"remaining_apps": &GQLParams{
+										Fields: GQLFields{"id": nil},
+									},
+									"deleted_files": nil,
+								},
+							},
+							"error": nil,
+						},
+					}}},
+					&GQLParams{FragmentType: "EventRoute", InlineFragment: true, Fields: GQLFields{"data": &GQLParams{Fragments: []*GQLParams{FragmentRouteFields}}}},
+				},
+				Fields: GQLFields{
+					"id":          nil,
+					"object_type": nil,
+					"object_id":   nil,
+					"app": &GQLParams{
+						Fields: GQLFields{"id": nil},
+					},
+					"created_at": nil,
+				},
+			},
+		},
+	}))
 	if err != nil {
 		return nil, err
 	}

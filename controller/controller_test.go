@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/client/v1"
 	"github.com/flynn/flynn/controller/client/v2"
+	"github.com/flynn/flynn/controller/graphql"
 	"github.com/flynn/flynn/controller/schema"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
@@ -23,11 +24,24 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
 	. "github.com/flynn/go-check"
+	"github.com/flynn/graphql"
 	"github.com/jackc/pgx"
 )
 
 func init() {
 	schemaRoot, _ = filepath.Abs(filepath.Join("..", "schema"))
+	app := graphqlschema.Schema.QueryType().Fields()["app"]
+	fmt.Printf("%#v\n", app)
+	for _, arg := range app.Args {
+		fmt.Printf("\t%#v\n", arg)
+	}
+	fmt.Println("Fields:")
+	for name, field := range app.Type.(*graphql.Object).Fields() {
+		fmt.Printf("%s: %#v\n", name, field.Type.String())
+		for _, arg := range field.Args {
+			fmt.Printf("\t\t%#v\n", arg)
+		}
+	}
 }
 
 // Hook gocheck up to the "go test" runner
