@@ -1,0 +1,91 @@
+interface Node {
+  id: ID!
+}
+
+type KVPair {
+  key: String!
+  value: String!
+}
+
+type DeploymentConfig {
+  strategy: String!
+  timeout: Int!
+}
+
+type App implements Node {
+  id: ID!
+
+  # The name of the app.
+  name: String!
+
+  meta(keys: [String!]): [KVPair]!
+
+  deploymentConfig: DeploymentConfig!
+
+  currentRelease: Release
+
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Release implements Node {
+  id: ID!
+
+  artifacts: [Artifact!]!
+
+  env(keys: [String!]): [KVPair]!
+
+  meta(keys: [String!]): [KVPair]!
+
+  processTypes(names: [String!]): [ProcessType]!
+
+  createdAt: DateTime!
+}
+
+type ProcessType {
+  name: String!
+
+  args: [String!]!
+
+  env(keys: [String!]): [KVPair]!
+
+  ports: [ProcessPort!]!
+
+  data: Boolean!
+
+  omni: Boolean!
+
+  hostNetwork: Boolean!
+
+  serviceName: String
+
+  resurrect: Boolean!
+
+  resources: ResourceConfig
+}
+
+type ProcessPort {
+  port: Int!
+  proto: String!
+  service: HostService
+}
+
+type HostService {
+
+}
+
+type ResourceConfig {
+
+}
+
+type Artifact implements Node {
+  id: ID!
+
+  type: ArtifactType!
+
+  uri: URI!
+
+  meta(keys: [String!]): [KVPair]!
+
+  createdAt: DateTime!
+}
