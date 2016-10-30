@@ -637,27 +637,49 @@ func containerInitApp(c *Config, logFile *os.File) error {
 			cmd.SysProcAttr.Setctty = true
 		}
 	} else {
-		// we use syscall.Socketpair (rather than cmd.StdoutPipe) to make it easier
-		// for flynn-host to do non-blocking I/O (via net.FileConn) so that no
+		// We copy through a socketpair (rather than using cmd.StdoutPipe directly) to make
+		// it easier for flynn-host to do non-blocking I/O (via net.FileConn) so that no
 		// read(2) calls can succeed after closing the logs during an update.
+		//
+		// We also don't assign the socketpair directly to fd 1 because that prevents jobs
+		// using /dev/stdout (calling open(2) on a socket leads to an ENXIO error, see
+		// http://marc.info/?l=ast-users&m=120978595414993).
+		newPipe := func(pipeFn func() (io.ReadCloser, error), name string) (*os.File, error) {
+			pipe, err := pipeFn()
+			if err != nil {
+				return nil, err
+			}
+			sockR, sockW, err := newSocketPair(name)
+			if err != nil {
+				return nil, err
+			}
+			go func() {
+				defer sockW.Close()
+				for {
+					// copy data from the pipe to the socket using splice(2)
+					// (rather than io.Copy) to avoid a needless copy through
+					// user space
+					n, err := syscall.Splice(int(pipe.(*os.File).Fd()), nil, int(sockW.Fd()), nil, 65535, 0)
+					if err != nil || n == 0 {
+						return
+					}
+				}
+			}()
+			return sockR, nil
+		}
+
 		log.Debug("creating stdout pipe")
 		var err error
-		cmd.Stdout, init.stdout, err = newSocketPair("stdout")
+		init.stdout, err = newPipe(cmd.StdoutPipe, "stdout")
 		if err != nil {
 			log.Error("error creating stdout pipe", "err", err)
 			return err
 		}
 
 		log.Debug("creating stderr pipe")
-		cmd.Stderr, init.stderr, err = newSocketPair("stderr")
+		init.stderr, err = newPipe(cmd.StderrPipe, "stderr")
 		if err != nil {
 			log.Error("error creating stderr pipe", "err", err)
-			return err
-		}
-
-		log.Debug("creating FD proxies")
-		if err := createFDProxies(cmd); err != nil {
-			log.Error("error creating FD proxies", "err", err)
 			return err
 		}
 
@@ -740,40 +762,6 @@ func newSocketPair(name string) (*os.File, *os.File, error) {
 		return nil, nil, err
 	}
 	return os.NewFile(uintptr(pair[0]), name), os.NewFile(uintptr(pair[1]), name), nil
-}
-
-// createFDProxies creates pipes at /dev/stdout and /dev/stderr and copies data
-// written to them to the job's stdout and stderr streams respectively.
-//
-// This is necessary (rather than just symlinking those paths to /proc/self/fd/{1,2})
-// because the standard streams are sockets, and calling open(2) on a socket
-// leads to an ENXIO error (see http://marc.info/?l=ast-users&m=120978595414993).
-func createFDProxies(cmd *exec.Cmd) error {
-	for path, dst := range map[string]*os.File{
-		"/dev/stdout": cmd.Stdout.(*os.File),
-		"/dev/stderr": cmd.Stderr.(*os.File),
-	} {
-		os.Remove(path)
-		if err := syscall.Mkfifo(path, 0666); err != nil {
-			return err
-		}
-		pipe, err := os.OpenFile(path, os.O_RDWR, os.ModeNamedPipe)
-		if err != nil {
-			return err
-		}
-		go func(dst *os.File) {
-			defer pipe.Close()
-			for {
-				// copy data from the pipe to dst using splice(2) (rather than io.Copy)
-				// to avoid a needless copy through user space
-				n, err := syscall.Splice(int(pipe.Fd()), nil, int(dst.Fd()), nil, 65535, 0)
-				if err != nil || n == 0 {
-					return
-				}
-			}
-		}(dst)
-	}
-	return nil
 }
 
 // print a full goroutine stack trace to the log fd on SIGUSR2

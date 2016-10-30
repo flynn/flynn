@@ -357,8 +357,13 @@ func (s *HostSuite) TestDevStdout(t *c.C) {
 	cmd := exec.CommandUsingCluster(
 		s.clusterClient(t),
 		exec.DockerImage(imageURIs["test-apps"]),
-		"sh", "-c", "echo foo > /dev/stdout; echo bar > /dev/stderr",
+		"sh",
 	)
+	cmd.Stdin = strings.NewReader(`
+echo foo > /dev/stdout
+echo bar > /dev/stderr
+echo "SUBSHELL: $(echo baz > /dev/stdout)"
+echo "SUBSHELL: $(echo qux 2>&1 > /dev/stderr)" >&2`)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -374,8 +379,8 @@ func (s *HostSuite) TestDevStdout(t *c.C) {
 		t.Fatal("timed out waiting for /dev/stdout job")
 	}
 
-	t.Assert(stdout.String(), c.Equals, "foo\n")
-	t.Assert(stderr.String(), c.Equals, "bar\n")
+	t.Assert(stdout.String(), c.Equals, "foo\nSUBSHELL: baz\n")
+	t.Assert(stderr.String(), c.Equals, "bar\nSUBSHELL: qux\n")
 }
 
 func (s *HostSuite) TestDevSHM(t *c.C) {
