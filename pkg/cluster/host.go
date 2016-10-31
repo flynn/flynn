@@ -140,6 +140,12 @@ func (c *Host) CreateVolume(providerId string) (*volume.Info, error) {
 	return &res, err
 }
 
+// GetVolume gets a volume by ID
+func (c *Host) GetVolume(volumeID string) (*volume.Info, error) {
+	var volume volume.Info
+	return &volume, c.c.Get(fmt.Sprintf("/storage/volumes/%s", volumeID), &volume)
+}
+
 // ListVolume returns a list of volume IDs
 func (c *Host) ListVolumes() ([]*volume.Info, error) {
 	var volumes []*volume.Info

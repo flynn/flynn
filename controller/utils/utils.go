@@ -77,10 +77,10 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	return job
 }
 
-func ProvisionVolume(req *ct.VolumeReq, h VolumeCreator, job *host.Job) error {
+func ProvisionVolume(req *ct.VolumeReq, h VolumeCreator, job *host.Job) (*volume.Info, error) {
 	vol, err := h.CreateVolume("default")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	job.Config.Volumes = []host.VolumeBinding{{
 		Target:       req.Path,
@@ -88,7 +88,7 @@ func ProvisionVolume(req *ct.VolumeReq, h VolumeCreator, job *host.Job) error {
 		Writeable:    true,
 		DeleteOnStop: req.DeleteOnStop,
 	}}
-	return nil
+	return vol, nil
 }
 
 func JobMetaFromMetadata(metadata map[string]string) map[string]string {
