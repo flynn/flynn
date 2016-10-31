@@ -196,9 +196,9 @@ type Host struct {
 }
 
 type Event struct {
-	Event string     `json:"event,omitempty"`
-	JobID string     `json:"job_id,omitempty"`
-	Job   *ActiveJob `json:"job,omitempty"`
+	Event JobEventType `json:"event,omitempty"`
+	JobID string       `json:"job_id,omitempty"`
+	Job   *ActiveJob   `json:"job,omitempty"`
 }
 
 type ActiveJob struct {
@@ -302,11 +302,13 @@ type HostStatus struct {
 	Version   string            `json:"version"`
 }
 
+type JobEventType string
+
 const (
-	JobEventCreate string = "create"
-	JobEventStart  string = "start"
-	JobEventStop   string = "stop"
-	JobEventError  string = "error"
+	JobEventCreate JobEventType = "create"
+	JobEventStart  JobEventType = "start"
+	JobEventStop   JobEventType = "stop"
+	JobEventError  JobEventType = "error"
 )
 
 type ResourceCheck struct {

@@ -67,7 +67,7 @@ func (s *HostSuite) TestAddFailingJob(t *c.C) {
 	t.Assert(h.AddJob(job), c.IsNil)
 
 	// check we get a create then error event
-	actual := make(map[string]*host.Event, 2)
+	actual := make(map[host.JobEventType]*host.Event, 2)
 loop:
 	for {
 		select {

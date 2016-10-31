@@ -491,7 +491,7 @@ func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 	close(ch)
 }
 
-func (s *State) sendEvent(job *host.ActiveJob, event string) {
+func (s *State) sendEvent(job *host.ActiveJob, event host.JobEventType) {
 	j := job.Dup()
 	go func() {
 		s.listenMtx.RLock()
