@@ -491,6 +491,14 @@ func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 	close(ch)
 }
 
+func (s *State) SendCleanupEvent(jobID string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if job, ok := s.jobs[jobID]; ok {
+		s.sendEvent(job, host.JobEventCleanup)
+	}
+}
+
 func (s *State) sendEvent(job *host.ActiveJob, event host.JobEventType) {
 	j := job.Dup()
 	go func() {

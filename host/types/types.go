@@ -305,10 +305,11 @@ type HostStatus struct {
 type JobEventType string
 
 const (
-	JobEventCreate JobEventType = "create"
-	JobEventStart  JobEventType = "start"
-	JobEventStop   JobEventType = "stop"
-	JobEventError  JobEventType = "error"
+	JobEventCreate  JobEventType = "create"
+	JobEventStart   JobEventType = "start"
+	JobEventStop    JobEventType = "stop"
+	JobEventError   JobEventType = "error"
+	JobEventCleanup JobEventType = "cleanup"
 )
 
 type ResourceCheck struct {
