@@ -199,7 +199,7 @@ outer:
 		if syncJob == nil {
 			syncJob = primaryJob
 			vol := &ct.VolumeReq{Path: "/data"}
-			if err := utils.ProvisionVolume(vol, syncHost, syncJob); err != nil {
+			if _, err := utils.ProvisionVolume(vol, syncHost, syncJob); err != nil {
 				return fmt.Errorf("error creating volume on %s: %s", syncHost.ID(), err)
 			}
 		}

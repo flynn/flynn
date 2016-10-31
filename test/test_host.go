@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
@@ -467,6 +469,65 @@ func (s *HostSuite) TestNotifyOOM(t *c.C) {
 			}
 		case <-time.After(30 * time.Second):
 			t.Fatal("timed out waiting for OOM notification")
+		}
+	}
+}
+
+func (s *HostSuite) TestVolumeDeleteOnStop(t *c.C) {
+	hosts, err := s.clusterClient(t).Hosts()
+	t.Assert(err, c.IsNil)
+	t.Assert(hosts, c.Not(c.HasLen), 0)
+	h := hosts[0]
+
+	// stream job events so we can wait for cleanup events
+	events := make(chan *host.Event)
+	stream, err := h.StreamEvents("all", events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+	waitCleanup := func(jobID string) {
+		timeout := time.After(30 * time.Second)
+		for {
+			select {
+			case event := <-events:
+				if event.JobID == jobID && event.Event == host.JobEventCleanup {
+					return
+				}
+			case <-timeout:
+				t.Fatal("timed out waiting for cleanup event")
+			}
+		}
+	}
+
+	for _, deleteOnStop := range []bool{true, false} {
+		job := &host.Job{
+			Config: host.ContainerConfig{
+				Args:       []string{"sh", "-c", "ls -d /foo"},
+				DisableLog: true,
+			},
+		}
+
+		// provision a volume
+		req := &ct.VolumeReq{Path: "/foo", DeleteOnStop: deleteOnStop}
+		vol, err := utils.ProvisionVolume(req, h, job)
+		t.Assert(err, c.IsNil)
+		defer h.DestroyVolume(vol.ID)
+
+		// run the job
+		cmd := exec.JobUsingCluster(s.clusterClient(t), exec.DockerImage(imageURIs["test-apps"]), job)
+		cmd.HostID = h.ID()
+		out, err := cmd.CombinedOutput()
+		t.Assert(err, c.IsNil)
+		t.Assert(string(out), c.Equals, "/foo\n")
+
+		// wait for a cleanup event
+		waitCleanup(job.ID)
+
+		// check if the volume was deleted or not
+		vol, err = h.GetVolume(vol.ID)
+		if deleteOnStop {
+			t.Assert(hh.IsObjectNotFoundError(err), c.Equals, true)
+		} else {
+			t.Assert(err, c.IsNil)
 		}
 	}
 }

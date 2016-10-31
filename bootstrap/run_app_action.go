@@ -111,7 +111,7 @@ func (a *RunAppAction) Run(s *State) error {
 			config := utils.JobConfig(a.ExpandedFormation, typ, host.ID(), "")
 			hostresource.SetDefaults(&config.Resources)
 			for _, vol := range a.ExpandedFormation.Release.Processes[typ].Volumes {
-				if err := utils.ProvisionVolume(&vol, host, config); err != nil {
+				if _, err := utils.ProvisionVolume(&vol, host, config); err != nil {
 					return err
 				}
 			}

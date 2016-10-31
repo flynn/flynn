@@ -1081,7 +1081,7 @@ outer:
 
 		for _, vol := range job.Volumes() {
 			log.Info("provisioning volume", "host.id", host.ID, "vol.path", vol.Path)
-			if err := utils.ProvisionVolume(&vol, host.client, config); err != nil {
+			if _, err := utils.ProvisionVolume(&vol, host.client, config); err != nil {
 				log.Error("error provisioning volume", "err", err)
 				continue outer
 			}
