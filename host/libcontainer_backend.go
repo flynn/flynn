@@ -908,6 +908,14 @@ func (c *Container) cleanup() error {
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
 		c.l.ipalloc.ReleaseIP(c.l.bridgeNet, c.IP)
 	}
+	for _, v := range c.job.Config.Volumes {
+		if !v.DeleteOnStop {
+			continue
+		}
+		if err := c.l.VolManager.DestroyVolume(v.VolumeID); err != nil {
+			log.Error("error destroying volume", "vol.id", v.VolumeID, "err", err)
+		}
+	}
 	log.Info("finished cleanup")
 	return nil
 }

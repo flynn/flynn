@@ -171,8 +171,9 @@ type VolumeBinding struct {
 	// Target defines the filesystem path inside the container where the volume will be mounted.
 	Target string `json:"target"`
 	// VolumeID can be thought of as the source path if this were a simple bind-mount.  It is resolved by a VolumeManager.
-	VolumeID  string `json:"volume"`
-	Writeable bool   `json:"writeable"`
+	VolumeID     string `json:"volume"`
+	Writeable    bool   `json:"writeable"`
+	DeleteOnStop bool   `json:"delete_on_stop"`
 }
 
 type Artifact struct {

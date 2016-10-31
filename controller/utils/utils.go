@@ -83,9 +83,10 @@ func ProvisionVolume(req *ct.VolumeReq, h VolumeCreator, job *host.Job) error {
 		return err
 	}
 	job.Config.Volumes = []host.VolumeBinding{{
-		Target:    req.Path,
-		VolumeID:  vol.ID,
-		Writeable: true,
+		Target:       req.Path,
+		VolumeID:     vol.ID,
+		Writeable:    true,
+		DeleteOnStop: req.DeleteOnStop,
 	}}
 	return nil
 }
