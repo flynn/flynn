@@ -597,6 +597,12 @@ func containerInitApp(c *Config, logFile *os.File) error {
 			cmd.Stdin = ptySlave
 			cmd.SysProcAttr.Setctty = true
 		}
+		if c.Uid != nil && c.Gid != nil {
+			if err := syscall.Fchown(int(ptySlave.Fd()), int(*c.Uid), int(*c.Gid)); err != nil {
+				log.Error("error changing PTY ownership", "err", err)
+				return err
+			}
+		}
 	} else {
 		// We copy through a socketpair (rather than using cmd.StdoutPipe directly) to make
 		// it easier for flynn-host to do non-blocking I/O (via net.FileConn) so that no
@@ -609,6 +615,11 @@ func containerInitApp(c *Config, logFile *os.File) error {
 			pipe, err := pipeFn()
 			if err != nil {
 				return nil, err
+			}
+			if c.Uid != nil && c.Gid != nil {
+				if err := syscall.Fchown(int(pipe.(*os.File).Fd()), int(*c.Uid), int(*c.Gid)); err != nil {
+					return nil, err
+				}
 			}
 			sockR, sockW, err := newSocketPair(name)
 			if err != nil {
