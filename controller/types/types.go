@@ -120,7 +120,8 @@ type Port struct {
 }
 
 type VolumeReq struct {
-	Path string `json:"path"`
+	Path         string `json:"path"`
+	DeleteOnStop bool   `json:"delete_on_stop"`
 }
 
 type Artifact struct {
