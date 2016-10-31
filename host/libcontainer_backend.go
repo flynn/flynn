@@ -917,6 +917,7 @@ func (c *Container) cleanup() error {
 		}
 	}
 	log.Info("finished cleanup")
+	c.l.State.SendCleanupEvent(c.job.ID)
 	return nil
 }
 
