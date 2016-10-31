@@ -12,5 +12,8 @@ ADD bin/create-artifact /bin/create-artifact
 ADD builder/build.sh /builder/
 ADD builder/create-user.sh /builder/
 
+# allow custom buildpack install by unprivileged user
+RUN chmod ugo+w /builder/buildpacks
+
 ENTRYPOINT ["/builder/build.sh"]
 CMD []
