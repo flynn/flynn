@@ -3,7 +3,7 @@ set -eo pipefail
 
 export TMPDIR="${TMPDIR:-"/tmp"}"
 
-app_dir=/app
+app_dir="${TMPDIR}/app"
 env_dir="${TMPDIR}/env"
 build_root="${TMPDIR}/build"
 build_dir="${build_root}/app"
@@ -86,9 +86,10 @@ cat | tar -xm
 
 if [[ -f "${env_cookie}" ]]; then
   rm "${env_cookie}"
-  mv app env "${TMPDIR}"
-  rsync -aq "${TMPDIR}/app/" .
-  rm -rf "${TMPDIR}/app"
+  tmpdir="$(mktemp --directory)"
+  mv app env "${tmpdir}"
+  rsync -aq "${tmpdir}/app/" .
+  rm -rf "${tmpdir}/app"
   envdir="true"
 fi
 
@@ -99,6 +100,7 @@ fi
 # In heroku, there are two separate directories, and some
 # buildpacks expect that.
 cp -r . ${build_dir}
+ln -s "${app_dir}" "/app"
 chown -R "${USER}:${USER}" \
   "${TMPDIR}" \
   "${app_dir}" \
