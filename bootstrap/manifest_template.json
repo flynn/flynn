@@ -499,6 +499,7 @@
               }
             }
           ],
+          "service": "gitreceive",
           "volumes": [{"path": "/tmp", "delete_on_stop": true}]
         }
       }
