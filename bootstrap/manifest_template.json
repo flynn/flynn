@@ -184,7 +184,8 @@
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
           "args": ["/bin/start-flynn-controller", "controller"],
-          "service": "controller"
+          "service": "controller",
+          "volumes": [{"path": "/tmp", "delete_on_stop": true}]
         },
         "scheduler": {
           "args": ["/bin/start-flynn-controller", "scheduler"],
@@ -497,7 +498,8 @@
                 "create": true
               }
             }
-          ]
+          ],
+          "volumes": [{"path": "/tmp", "delete_on_stop": true}]
         }
       }
     },
