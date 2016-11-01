@@ -9,6 +9,7 @@ RUN apt-get install --yes squashfs-tools
 
 ADD convert-legacy-slug.sh /bin/convert-legacy-slug.sh
 ADD bin/create-artifact /bin/create-artifact
+ADD bin/migrator /bin/slug-migrator
 ADD builder/build.sh /builder/
 ADD builder/create-user.sh /builder/
 
