@@ -303,6 +303,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 	}
 
 	jobEvents := d.ReleaseJobEvents(releaseID)
+	timeout := time.After(time.Duration(d.DeployTimeout) * time.Second)
 	for {
 		select {
 		case <-d.stop:
@@ -361,7 +362,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 			case JobEventTypeError:
 				return e.Error
 			}
-		case <-time.After(time.Duration(d.DeployTimeout) * time.Second):
+		case <-timeout:
 			return fmt.Errorf("timed out waiting for job events: %v", expected)
 		}
 	}
