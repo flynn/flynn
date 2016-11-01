@@ -172,7 +172,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		// using the digest is not enough as "docker inspect" only
 		// works with tags)
 		tag := fmt.Sprintf("%s:flynn-export-%s", repo, random.String(8))
-		if out, err := exec.Command("docker", "tag", "--force", ref, tag).CombinedOutput(); err != nil {
+		if out, err := exec.Command("docker", "tag", ref, tag).CombinedOutput(); err != nil {
 			return fmt.Errorf("error tagging docker image: %s: %q", err, out)
 		}
 		defer exec.Command("docker", "rmi", tag).Run()
@@ -573,8 +573,8 @@ func runImport(args *docopt.Args, client controller.Client) error {
 		if err != nil {
 			return err
 		}
-		tag := fmt.Sprintf("%s/%s:latest", host, app.Name)
-		if out, err := exec.Command("docker", "tag", "--force", dockerImage.config.Tag, tag).CombinedOutput(); err != nil {
+		tag := fmt.Sprintf("%s/%s:flynn-import-%s", host, app.Name, random.String(8))
+		if out, err := exec.Command("docker", "tag", dockerImage.config.Tag, tag).CombinedOutput(); err != nil {
 			return fmt.Errorf("error tagging docker image: %s: %q", err, out)
 		}
 
