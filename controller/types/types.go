@@ -28,10 +28,6 @@ type ExpandedFormation struct {
 	Tags      map[string]map[string]string `json:"tags,omitempty"`
 	UpdatedAt time.Time                    `json:"updated_at,omitempty"`
 	Deleted   bool                         `json:"deleted,omitempty"`
-
-	// NOTE: these will be removed in a future PR
-	ImageArtifact *Artifact   `json:"artifact,omitempty"`
-	FileArtifacts []*Artifact `json:"file_artifacts,omitempty"`
 }
 
 type App struct {
@@ -71,27 +67,6 @@ type Release struct {
 	// LegacyArtifactID is to support old clients which expect releases
 	// to have a single ArtifactID
 	LegacyArtifactID string `json:"artifact,omitempty"`
-}
-
-func (r *Release) ImageArtifactID() string {
-	if len(r.ArtifactIDs) > 0 {
-		return r.ArtifactIDs[0]
-	}
-	return r.LegacyArtifactID
-}
-
-func (r *Release) SetImageArtifactID(id string) {
-	if len(r.ArtifactIDs) == 0 {
-		r.ArtifactIDs = []string{id}
-	}
-	r.ArtifactIDs[0] = id
-}
-
-func (r *Release) FileArtifactIDs() []string {
-	if len(r.ArtifactIDs) < 1 {
-		return nil
-	}
-	return r.ArtifactIDs[1:len(r.ArtifactIDs)]
 }
 
 func (r *Release) IsGitDeploy() bool {

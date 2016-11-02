@@ -84,10 +84,6 @@ type Cmd struct {
 	stdinPipe *readyWriter
 }
 
-func DockerImage(uri string) *ct.Artifact {
-	return &ct.Artifact{Type: ct.DeprecatedArtifactTypeDocker, URI: uri}
-}
-
 func Command(artifact *ct.Artifact, args ...string) *Cmd {
 	return &Cmd{ImageArtifact: artifact, Args: args}
 }
