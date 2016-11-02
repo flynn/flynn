@@ -1204,6 +1204,10 @@ func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jo
 		if err := json.Unmarshal(v, container); err != nil {
 			return fmt.Errorf("failed to deserialize backed container state: %s", err)
 		}
+		if container.MuxConfig == nil {
+			container.MuxConfig = &logmux.Config{}
+		}
+		container.MuxConfig.HostID = l.State.id
 		c, err := l.factory.Load(container.ID)
 		if err != nil {
 			return fmt.Errorf("error loading container state: %s", err)
@@ -1221,6 +1225,9 @@ func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jo
 		container.l = l
 		container.job = j.Job
 		container.done = make(chan struct{})
+		container.MuxConfig.AppID = j.Job.Metadata["flynn-controller.app"]
+		container.MuxConfig.JobType = j.Job.Metadata["flynn-controller.type"]
+		container.MuxConfig.JobID = j.Job.ID
 		readySignals[j.Job.ID] = make(chan error)
 		go container.watch(readySignals[j.Job.ID], buffers[j.Job.ID])
 	}
