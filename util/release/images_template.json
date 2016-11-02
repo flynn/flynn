@@ -1,7 +1,7 @@
 {
   "flannel":        $image_artifact[flannel],
   "discoverd":      $image_artifact[discoverd],
-  "postgresql":     $image_artifact[postgresql],
+  "postgres":       $image_artifact[postgres],
   "controller":     $image_artifact[controller],
   "blobstore":      $image_artifact[blobstore],
   "router":         $image_artifact[router],

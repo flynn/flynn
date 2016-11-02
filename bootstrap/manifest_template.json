@@ -112,7 +112,7 @@
         }
       }
     },
-    "artifacts": [$image_artifact[postgresql]],
+    "artifacts": [$image_artifact[postgres]],
     "processes": {
       "postgres": 3,
       "web": 2

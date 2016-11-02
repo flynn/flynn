@@ -236,7 +236,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		if app.ImageOnly {
 			continue // we don't deploy ImageOnly updates
 		}
-		debugf(t, "checking new %s release is using image %s", app.Name, images[app.Image()].URI)
+		debugf(t, "checking new %s release is using image %s", app.Name, images[app.Name].URI)
 		expected := fmt.Sprintf(`"finished deploy of system app" name=%s`, app.Name)
 		if !strings.Contains(updateOutput.String(), expected) {
 			t.Fatalf(`expected update to deploy %s`, app.Name)
@@ -247,7 +247,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		artifact, err := client.GetArtifact(release.ArtifactIDs[0])
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s artifact: %+v", app.Name, artifact)
-		assertImage(artifact.URI, app.Image())
+		assertImage(artifact.URI, app.Name)
 	}
 
 	// check gitreceive has the correct slug env vars

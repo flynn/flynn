@@ -93,8 +93,8 @@ func run() error {
 			)
 			continue
 		}
-		if _, ok := images[app.Image()]; !ok {
-			err := fmt.Errorf("missing image: %s", app.Image())
+		if _, ok := images[app.Name]; !ok {
+			err := fmt.Errorf("missing image: %s", app.Name)
 			log.Error(err.Error())
 			return err
 		}
@@ -137,7 +137,7 @@ func run() error {
 			log.Error("error getting app", "err", err)
 			return err
 		}
-		if err := deployApp(client, app, images[appInfo.Image()], appInfo.UpdateRelease, log); err != nil {
+		if err := deployApp(client, app, images[appInfo.Name], appInfo.UpdateRelease, log); err != nil {
 			if e, ok := err.(errDeploySkipped); ok {
 				log.Info(
 					"skipped deploy of system app",
