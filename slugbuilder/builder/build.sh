@@ -83,13 +83,8 @@ cd ${app_dir}
 ## Load source from STDIN
 cat | tar -xm
 
-
-if [[ -f "${env_cookie}" ]]; then
-  rm "${env_cookie}"
-  tmpdir="$(mktemp --directory)"
-  mv app env "${tmpdir}"
-  rsync -aq "${tmpdir}/app/" .
-  rm -rf "${tmpdir}/app"
+if [[ -d "${env_cookie}" ]]; then
+  mv "${env_cookie}" "${env_dir}"
   envdir="true"
 fi
 

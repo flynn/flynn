@@ -314,6 +314,7 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) e
 	defer pipe.Close()
 	tr := tar.NewReader(stdin)
 	tw := tar.NewWriter(pipe)
+	defer tw.Close()
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -323,7 +324,6 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) e
 		if err != nil {
 			return err
 		}
-		hdr.Name = path.Join("app", hdr.Name)
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
 		}
@@ -334,7 +334,7 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) e
 	// append env dir
 	for key, value := range env {
 		hdr := &tar.Header{
-			Name:    path.Join("env", key),
+			Name:    path.Join(".ENV_DIR_bdca46b87df0537eaefe79bb632d37709ff1df18", key),
 			Mode:    0644,
 			ModTime: time.Now(),
 			Size:    int64(len(value)),
@@ -347,11 +347,5 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) e
 			return err
 		}
 	}
-	hdr := &tar.Header{
-		Name:    ".ENV_DIR_bdca46b87df0537eaefe79bb632d37709ff1df18",
-		Mode:    0400,
-		ModTime: time.Now(),
-		Size:    0,
-	}
-	return tw.WriteHeader(hdr)
+	return nil
 }
