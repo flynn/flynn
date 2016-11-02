@@ -593,3 +593,17 @@ type ImageLayer struct {
 	Length int64             `json:"length,omitempty"`
 	Hashes map[string]string `json:"hashes,omitempty"`
 }
+
+type ImagePullInfo struct {
+	Name     string        `json:"name"`
+	Type     ImagePullType `json:"type"`
+	Artifact *Artifact     `json:"artifact"`
+	Layer    *ImageLayer   `json:"layer"`
+}
+
+type ImagePullType string
+
+const (
+	ImagePullTypeImage ImagePullType = "image"
+	ImagePullTypeLayer ImagePullType = "layer"
+)

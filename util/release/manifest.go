@@ -66,12 +66,12 @@ func interpolateManifest(imageDir, imageRepository string, src io.Reader, dest i
 				Size:        int64(len(manifest)),
 				Meta:        map[string]string{"flynn.component": name},
 			}
-			artifact.URI = fmt.Sprintf("%s?target=/images/%s.json", imageRepository, artifact.Manifest().ID())
+			artifact.URI = fmt.Sprintf("%s?target=/%s/images/%s.json", imageRepository, version.String(), artifact.Manifest().ID())
 			artifact.Hashes = artifact.Manifest().Hashes()
 			if version.Dev() {
 				artifact.LayerURLTemplate = "file:///var/lib/flynn/layer-cache/{id}.squashfs"
 			} else {
-				artifact.LayerURLTemplate = fmt.Sprintf("%s?target=/%s/layers/{id}.squashfs", version.String(), imageRepository)
+				artifact.LayerURLTemplate = fmt.Sprintf("%s?target=/%s/layers/{id}.squashfs", imageRepository, version.String())
 			}
 			data, err := json.Marshal(artifact)
 			if err != nil {
