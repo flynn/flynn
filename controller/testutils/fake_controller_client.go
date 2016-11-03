@@ -259,6 +259,14 @@ func (c *FakeControllerClient) JobListActive() ([]*ct.Job, error) {
 	return list, nil
 }
 
+func (c *FakeControllerClient) ListSinks() ([]*ct.Sink, error) {
+	return nil, nil
+}
+
+func (c *FakeControllerClient) StreamSinks(*time.Time, chan *ct.Sink) (stream.Stream, error) {
+	return nil, nil
+}
+
 func NewRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
 	return NewReleaseOmni(id, artifact, processes, false)
 }

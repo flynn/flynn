@@ -257,6 +257,9 @@ type HostClient interface {
 	ListJobs() (map[string]host.ActiveJob, error)
 	StreamEvents(id string, ch chan *host.Event) (stream.Stream, error)
 	GetStatus() (*host.HostStatus, error)
+	GetSinks() ([]*ct.Sink, error)
+	AddSink(*ct.Sink) error
+	RemoveSink(string) error
 }
 
 type ClusterClient interface {
@@ -279,6 +282,8 @@ type ControllerClient interface {
 	FormationListActive() ([]*ct.ExpandedFormation, error)
 	PutJob(*ct.Job) error
 	JobListActive() ([]*ct.Job, error)
+	StreamSinks(since *time.Time, ch chan *ct.Sink) (stream.Stream, error)
+	ListSinks() ([]*ct.Sink, error)
 }
 
 func ClusterClientWrapper(c *cluster.Client) clusterClientWrapper {

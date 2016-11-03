@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 
@@ -52,6 +53,7 @@ type Scheduler struct {
 	maxHostChecks int
 
 	formations Formations
+	sinks      map[string]*ct.Sink
 	hosts      map[string]*Host
 	routers    map[string]*Router
 	jobs       Jobs
@@ -63,6 +65,7 @@ type Scheduler struct {
 
 	syncJobs              chan struct{}
 	syncFormations        chan struct{}
+	syncSinks             chan struct{}
 	syncHosts             chan struct{}
 	hostChecks            chan struct{}
 	rectify               chan struct{}
@@ -71,6 +74,7 @@ type Scheduler struct {
 	routerServiceEvents   chan *discoverd.Event
 	routerBackendEvents   chan *RouterEvent
 	formationEvents       chan *ct.ExpandedFormation
+	sinkEvents            chan *ct.Sink
 	putJobs               chan *ct.Job
 	placementRequests     chan *PlacementRequest
 	internalStateRequests chan *InternalStateRequest
@@ -111,10 +115,12 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		routers:               make(map[string]*Router),
 		jobs:                  make(map[string]*Job),
 		formations:            make(Formations),
+		sinks:                 make(map[string]*ct.Sink),
 		jobEvents:             make(chan *host.Event, eventBufferSize),
 		stop:                  make(chan struct{}),
 		syncJobs:              make(chan struct{}, 1),
 		syncFormations:        make(chan struct{}, 1),
+		syncSinks:             make(chan struct{}, 1),
 		syncHosts:             make(chan struct{}, 1),
 		hostChecks:            make(chan struct{}, 1),
 		rectifyBatch:          make(map[utils.FormationKey]struct{}),
@@ -124,6 +130,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		hostEvents:            make(chan *discoverd.Event, eventBufferSize),
 		routerServiceEvents:   make(chan *discoverd.Event, eventBufferSize),
 		routerBackendEvents:   make(chan *RouterEvent, eventBufferSize),
+		sinkEvents:            make(chan *ct.Sink, eventBufferSize),
 		putJobs:               make(chan *ct.Job, eventBufferSize),
 		placementRequests:     make(chan *PlacementRequest, eventBufferSize),
 		internalStateRequests: make(chan *InternalStateRequest, eventBufferSize),
@@ -318,6 +325,38 @@ func (s *Scheduler) streamRouterEvents() {
 	}
 }
 
+func (s *Scheduler) streamSinkEvents() error {
+	log := s.logger.New("fn", "streamSinkEvents")
+
+	var events chan *ct.Sink
+	var stream stream.Stream
+	var since *time.Time
+	connect := func() (err error) {
+		log.Info("connecting log sink event stream")
+		events = make(chan *ct.Sink, eventBufferSize)
+		stream, err = s.StreamSinks(since, events)
+		if err != nil {
+			log.Error("error connecting log sink event stream", "err", err)
+		}
+		return
+	}
+	for {
+		for {
+			if err := connect(); err == nil {
+				break
+			}
+			time.Sleep(time.Second)
+		}
+		for event := range events {
+			if event.ID == "" {
+				continue
+			}
+			s.sinkEvents <- event
+		}
+		log.Warn("log sink event stream disconnected", "err", stream.Err())
+	}
+}
+
 func (s *Scheduler) Run() {
 	log := s.logger.New("fn", "Run")
 	log.Info("starting scheduler loop")
@@ -339,9 +378,11 @@ func (s *Scheduler) Run() {
 	leaderCh := s.discoverd.LeaderCh()
 
 	go s.streamRouterEvents()
+	go s.streamSinkEvents()
 
 	s.tickSyncJobs(30 * time.Second)
 	s.tickSyncFormations(time.Minute)
+	s.tickSyncSinks(time.Minute)
 	s.tickSyncHosts(10 * time.Second)
 	s.tickSendTelemetry()
 
@@ -387,6 +428,9 @@ func (s *Scheduler) Run() {
 		case <-s.syncFormations:
 			s.SyncFormations()
 			continue
+		case <-s.syncSinks:
+			s.SyncSinks()
+			continue
 		case <-s.syncJobs:
 			s.SyncJobs()
 			continue
@@ -422,6 +466,8 @@ func (s *Scheduler) Run() {
 			s.HandleJobEvent(e)
 		case f := <-s.formationEvents:
 			s.HandleFormationChange(f)
+		case e := <-s.sinkEvents:
+			s.HandleSinkChange(e)
 		case <-s.syncFormations:
 			s.SyncFormations()
 		case <-s.syncJobs:
@@ -430,6 +476,8 @@ func (s *Scheduler) Run() {
 			s.SyncHosts()
 		case <-s.sendTelemetry:
 			s.SendTelemetry()
+		case <-s.syncSinks:
+			s.SyncSinks()
 		case <-s.pause:
 			<-s.resume
 		}
@@ -554,6 +602,55 @@ func (s *Scheduler) SyncFormations() {
 			log.Warn("formation should not be active, scaling down", "app.id", f.App.ID, "release.id", f.Release.ID)
 			f.Processes = nil
 			s.triggerRectify(f.key())
+		}
+	}
+}
+
+func (s *Scheduler) SyncSinks() {
+	log := s.logger.New("fn", "SyncSinks")
+	log.Info("syncing log sinks")
+
+	sinks, err := s.ListSinks()
+	if err != nil {
+		log.Error("error getting controller sinks", "err", err)
+		return
+	}
+
+	active := make(map[string]struct{}, len(sinks))
+	for _, sink := range sinks {
+		active[sink.ID] = struct{}{}
+		s.handleSink(sink)
+	}
+
+	// check that all sinks we think are active are still active
+	for _, sink := range s.sinks {
+		if _, ok := active[sink.ID]; !ok {
+			log.Warn("sink should no longer be active, removing", "sink.id", sink.ID)
+			sink.Config = nil
+			s.handleSink(sink)
+		}
+	}
+
+	// make sure all hosts have the correct sinks
+	for _, host := range s.hosts {
+		sinks, err := host.GetSinks()
+		if err != nil {
+			log.Error("error getting host sinks", "host.id", host.ID, "err", err)
+			continue
+		}
+
+		for _, sink := range sinks {
+			if sink.HostManaged {
+				continue // Ignore sinks managed by the host
+			}
+			expected, ok := s.sinks[sink.ID]
+			if !ok {
+				log.Warn("removing non existent host sink", "host.id", host.ID, "sink.id", sink.ID)
+				host.RemoveSink(sink.ID)
+			} else if !reflect.DeepEqual(sink.Config, expected.Config) {
+				log.Warn("updating stale host sink", "host.id", host.ID, "sink.id", sink.ID)
+				host.AddSink(expected)
+			}
 		}
 	}
 }
@@ -744,6 +841,11 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 	log.Info("handling formation change")
 	defer log.Debug("formation change handled")
 	s.handleFormation(ef)
+}
+
+func (s *Scheduler) HandleSinkChange(sink *ct.Sink) {
+	s.logger.Info("handling sink change", "sink.id", sink.ID)
+	s.handleSink(sink)
 }
 
 func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
@@ -1581,6 +1683,50 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Format
 	return
 }
 
+func (s *Scheduler) handleSink(sink *ct.Sink) {
+	log := s.logger.New("fn", "handleSink", "sink.id", sink.ID)
+
+	if sink.Config == nil {
+		log.Info("removing deleted sink")
+		s.removeSink(sink)
+		return
+	}
+
+	existing, ok := s.sinks[sink.ID]
+	if !ok {
+		log.Info("adding new sink", "sink.kind", sink.Kind)
+		s.addSink(sink)
+		return
+	}
+
+	if !reflect.DeepEqual(existing.Config, sink.Config) {
+		log.Info("updating config of existing sink")
+		s.addSink(sink)
+	}
+}
+
+func (s *Scheduler) removeSink(sink *ct.Sink) {
+	for _, host := range s.hosts {
+		if err := host.RemoveSink(sink.ID); err != nil {
+			// just log the error, SyncSinks will try removing the sink again
+			// if it still exists on the host
+			s.logger.Error("error removing sink", "host.id", host.ID, "err", err)
+		}
+	}
+	delete(s.sinks, sink.ID)
+}
+
+func (s *Scheduler) addSink(sink *ct.Sink) {
+	s.sinks[sink.ID] = sink
+	for _, host := range s.hosts {
+		if err := host.AddSink(sink); err != nil {
+			// just log the error, SyncSinks will try adding the sink again
+			// if it doesn't exist on the host
+			s.logger.Error("error adding sink", "host.id", host.ID, "sink.id", sink.ID, "err", err)
+		}
+	}
+}
+
 func (s *Scheduler) triggerRectify(key utils.FormationKey) {
 	s.rectifyBatch[key] = struct{}{}
 	select {
@@ -1833,6 +1979,15 @@ func (s *Scheduler) tickSyncFormations(d time.Duration) {
 	}()
 }
 
+func (s *Scheduler) tickSyncSinks(d time.Duration) {
+	s.logger.Info("starting sync log sinks ticker", "duration", d)
+	go func() {
+		for range time.Tick(d) {
+			s.triggerSyncSinks()
+		}
+	}()
+}
+
 func (s *Scheduler) tickSyncHosts(d time.Duration) {
 	s.logger.Info("starting sync hosts ticker", "duration", d)
 	go func() {
@@ -1858,6 +2013,13 @@ func (s *Scheduler) triggerSyncJobs() {
 func (s *Scheduler) triggerSyncFormations() {
 	select {
 	case s.syncFormations <- struct{}{}:
+	default:
+	}
+}
+
+func (s *Scheduler) triggerSyncSinks() {
+	select {
+	case s.syncSinks <- struct{}{}:
 	default:
 	}
 }

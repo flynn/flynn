@@ -212,6 +212,18 @@ func (c *FakeHostClient) GetStatus() (*host.HostStatus, error) {
 	return &host.HostStatus{ID: c.ID()}, nil
 }
 
+func (c *FakeHostClient) GetSinks() ([]*ct.Sink, error) {
+	return nil, nil
+}
+
+func (c *FakeHostClient) AddSink(*ct.Sink) error {
+	return nil
+}
+
+func (c *FakeHostClient) RemoveSink(string) error {
+	return nil
+}
+
 type attachFunc func(req *host.AttachReq, wait bool) (cluster.AttachClient, error)
 
 type HostStream struct {

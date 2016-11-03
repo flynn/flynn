@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/controller/testutils"
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/stream"
@@ -118,6 +119,18 @@ func (h *Host) StreamEventsTo(ch chan *host.Event) (map[string]host.ActiveJob, e
 		}
 	}()
 	return jobs, nil
+}
+
+func (h *Host) GetSinks() ([]*ct.Sink, error) {
+	return h.client.GetSinks()
+}
+
+func (h *Host) AddSink(sink *ct.Sink) error {
+	return h.client.AddSink(sink)
+}
+
+func (h *Host) RemoveSink(id string) error {
+	return h.client.RemoveSink(id)
 }
 
 func (h *Host) Close() {
