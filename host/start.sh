@@ -30,6 +30,7 @@ ZPOOL="flynn-${FLYNN_JOB_ID}"
 
 ARGS=(
   --state      "${DIR}/host-state.bolt"
+  --sink-state "${DIR}/sink-state.bolt"
   --volpath    "${DIR}/volumes"
   --log-dir    "${DIR}/logs"
   --zpool-name "${ZPOOL}"

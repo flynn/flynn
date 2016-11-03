@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
-	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,9 +12,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/logaggregator/client"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/stream"
@@ -72,27 +70,6 @@ type Config struct {
 	AppID, HostID, JobID, JobType string
 }
 
-func (m *Mux) StreamToAggregators(s discoverd.Service) error {
-	l := m.logger.New("fn", "StreamToAggregators")
-	ch := make(chan *discoverd.Event)
-	_, err := s.Watch(ch)
-	if err != nil {
-		l.Error("failed to connect to discoverd watch", "error", err)
-		return err
-	}
-	m.logger.Info("connected to discoverd watch")
-	go func() {
-		for e := range ch {
-			if e.Kind != discoverd.EventKindUp {
-				continue
-			}
-			l.Info("connecting to new aggregator", "addr", e.Instance.Addr)
-			go m.addAggregator(e.Instance.Addr)
-		}
-	}()
-	return nil
-}
-
 func (m *Mux) subscribe(app string, ch chan message) func() {
 	m.subscribersMtx.Lock()
 	defer m.subscribersMtx.Unlock()
@@ -127,142 +104,156 @@ func (m *Mux) broadcast(app string, msg message) {
 	}
 }
 
-func (m *Mux) addAggregator(addr string) {
-	l := m.logger.New("fn", "addAggregator", "addr", addr)
-	// TODO(titanous): add dial timeout
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		l.Error("failed to connect to aggregator", "error", err)
-		return
-	}
-	l.Info("connected to aggregator")
+func (m *Mux) addSink(sink Sink) {
+	l := m.logger.New("fn", "addSink")
+	shutdownCh := sink.ShutdownCh()
+	reconnectDelay := 0 * time.Second
 
-	host, _, _ := net.SplitHostPort(addr)
-	c, _ := client.New("http://" + host)
-	cursors, err := c.GetCursors()
-	if err != nil {
-		// TODO(titanous): retry
-		l.Error("failed to get cursors from aggregator", "error", err)
-		conn.Close()
-		return
-	}
-
-	var aggCursor *utils.HostCursor
-	if c, ok := cursors[m.hostID]; ok {
-		aggCursor = &c
-	}
-	if aggCursor != nil {
-		l.Info("got cursor", "cursor.timestamp", aggCursor.Time, "cursor.seq", aggCursor.Seq)
-	} else {
-		l.Info("no cursor for host")
-	}
-
-	appLogs, err := m.logFiles("")
-	if err != nil {
-		l.Error("failed to get local log files", "error", err)
-		conn.Close()
-		return
-	}
-
-	bufferedMessages := make(chan message)
-	firehose := make(chan message)
-	done := make(chan struct{})
-
-	// subscribe to all messages
-	unsubscribe := m.subscribe(firehoseApp, firehose)
-
-	bufferCursors := make(map[string]utils.HostCursor)
-	var bufferCursorsMtx sync.Mutex
-	go func() {
-		l := m.logger.New("fn", "sendToAggregator", "addr", addr)
-		defer unsubscribe()
-		defer conn.Close()
-		defer close(done)
-		bm := bufferedMessages // make a copy so we can nil it later
-		for {
-			var m message
-			var ok bool
-			select {
-			case m, ok = <-bm:
-				if !ok {
-					bm = nil
-					continue
-				}
-			case m, ok = <-firehose:
-				if !ok {
-					return
-				}
-
-				// if app in list of app logs and cursor from reading files, skip
-				appID := string(m.Message.AppName)
-				if _, ok := appLogs[appID]; ok {
-					bufferCursorsMtx.Lock()
-					c, ok := bufferCursors[appID]
-					bufferCursorsMtx.Unlock()
-					if !ok || c.After(*m.HostCursor) {
-						continue
-					}
-				}
-			}
-			if _, err := conn.Write(rfc6587.Bytes(m.Message)); err != nil {
-				l.Error("failed to write message", "error", err)
-				return
-			}
-		}
-	}()
-
-	for appID, logs := range appLogs {
-		for i, name := range logs {
+	for {
+		select {
+		case <-shutdownCh:
+			sink.Close()
+			return
+		case <-time.After(reconnectDelay):
 			func() {
-				l := l.New("log", name)
-				f, err := os.Open(name)
+				l.Info("connecting to sink")
+				err := sink.Connect()
 				if err != nil {
-					l.Error("failed to open log file", "error", err)
+					l.Error("error connecting to sink", "err", err)
+					reconnectDelay = 10 * time.Second
 					return
 				}
-				defer f.Close()
-				sc := bufio.NewScanner(f)
-				sc.Split(rfc6587.SplitWithNewlines)
-				var cursor *utils.HostCursor
-				cursorSaved := false
-			scan:
-				for sc.Scan() {
-					msgBytes := sc.Bytes()
-					// slice in msgBytes could get modified on next Scan(), need to copy it
-					msgCopy := make([]byte, len(msgBytes)-1)
-					copy(msgCopy, msgBytes)
-					var msg *rfc5424.Message
-					msg, cursor, err = utils.ParseMessage(msgCopy)
-					if err != nil {
-						l.Error("failed to parse message", "msg", string(msgCopy), "error", err)
-						continue
-					}
-					if aggCursor != nil && !cursor.After(*aggCursor) {
-						continue
-					}
-					select {
-					case bufferedMessages <- message{cursor, msg}:
-					case <-done:
-						return
-					}
+				sinkCursor, err := sink.GetCursor(m.hostID)
+				if err != nil {
+					l.Error("failed to get cursor from sink")
 				}
-				if err := sc.Err(); err != nil {
-					l.Error("failed to scan message", "error", err)
+
+				if sinkCursor != nil {
+					l.Info("got cursor", "cursor.timestamp", sinkCursor.Time, "cursor.seq", sinkCursor.Seq)
+				} else {
+					l.Info("no cursor for host")
+				}
+
+				appLogs, err := m.logFiles("")
+				if err != nil {
+					l.Error("failed to get local log files", "error", err)
 					return
 				}
-				if !cursorSaved && i == len(appLogs[appID])-1 {
-					// last file, send cursor to processing goroutine
-					bufferCursorsMtx.Lock()
-					bufferCursors[appID] = *cursor
-					bufferCursorsMtx.Unlock()
-					cursorSaved = true
-					// read to end of file again
-					goto scan
+
+				bufferedMessages := make(chan message)
+				firehose := make(chan message)
+				done := make(chan struct{})
+
+				// subscribe to all messages
+				unsubscribe := m.subscribe(firehoseApp, firehose)
+
+				bufferCursors := make(map[string]utils.HostCursor)
+				var bufferCursorsMtx sync.Mutex
+
+				// Start goroutine to write messages to the sink
+				go func() {
+					l := m.logger.New("fn", "sendToSink")
+					defer unsubscribe()
+					defer sink.Close()
+					defer close(done)
+					bm := bufferedMessages // make a copy so we can nil it later
+					for {
+						var m message
+						var ok bool
+						select {
+						case <-shutdownCh:
+							sink.Close()
+							return
+						// first drain the list of buffered messages
+						case m, ok = <-bm:
+							if !ok {
+								bm = nil
+								continue
+							}
+						// then consume from the firehose
+						case m, ok = <-firehose:
+							if !ok {
+								return
+							}
+
+							// if app in list of app logs and cursor from reading files, skip
+							appID := string(m.Message.AppName)
+							if _, ok := appLogs[appID]; ok {
+								bufferCursorsMtx.Lock()
+								c, ok := bufferCursors[appID]
+								bufferCursorsMtx.Unlock()
+								if !ok || c.After(*m.HostCursor) {
+									continue
+								}
+							}
+						}
+						// Send message to sink
+						if err := sink.Write(m); err != nil {
+							l.Error("failed to write message to sink", "error", err)
+							return
+						}
+					}
+				}()
+
+				// Read in all messages from log files
+				for appID, logs := range appLogs {
+					for i, name := range logs {
+						func() {
+							l := l.New("log", name)
+							f, err := os.Open(name)
+							if err != nil {
+								l.Error("failed to open log file", "error", err)
+								return
+							}
+							defer f.Close()
+							sc := bufio.NewScanner(f)
+							sc.Split(rfc6587.SplitWithNewlines)
+							var cursor *utils.HostCursor
+							cursorSaved := false
+						scan:
+							for sc.Scan() {
+								msgBytes := sc.Bytes()
+								// slice in msgBytes could get modified on next Scan(), need to copy it
+								msgCopy := make([]byte, len(msgBytes)-1)
+								copy(msgCopy, msgBytes)
+								var msg *rfc5424.Message
+								msg, cursor, err = utils.ParseMessage(msgCopy)
+								if err != nil {
+									l.Error("failed to parse message", "msg", string(msgCopy), "error", err)
+									continue
+								}
+								if sinkCursor != nil && !cursor.After(*sinkCursor) {
+									continue
+								}
+								select {
+								case bufferedMessages <- message{cursor, msg}:
+								case <-done:
+									return
+								}
+							}
+							if err := sc.Err(); err != nil {
+								l.Error("failed to scan message", "error", err)
+								return
+							}
+							if !cursorSaved && i == len(appLogs[appID])-1 {
+								// last file, send cursor to processing goroutine
+								bufferCursorsMtx.Lock()
+								bufferCursors[appID] = *cursor
+								bufferCursorsMtx.Unlock()
+								cursorSaved = true
+								// read to end of file again
+								goto scan
+							}
+						}()
+					}
 				}
+				// Close the bufferedMessages channel once we have sent all on disk messages to processing goroutine
+				close(bufferedMessages)
+				// Block here until processing goroutine stops
+				<-done
 			}()
 		}
 	}
-	close(bufferedMessages)
 }
 
 type MuxLogger struct {
