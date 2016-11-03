@@ -13,10 +13,10 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-func NewDiscoverdManager(backend Backend, mux *logmux.Mux, hostID, publishAddr string, tags map[string]string) *DiscoverdManager {
+func NewDiscoverdManager(backend Backend, sinkManager *logmux.SinkManager, hostID, publishAddr string, tags map[string]string) *DiscoverdManager {
 	d := &DiscoverdManager{
-		backend: backend,
-		mux:     mux,
+		backend:     backend,
+		sinkManager: sinkManager,
 		inst: &discoverd.Instance{
 			Addr: publishAddr,
 			Meta: map[string]string{"id": hostID},
@@ -30,12 +30,12 @@ func NewDiscoverdManager(backend Backend, mux *logmux.Mux, hostID, publishAddr s
 }
 
 type DiscoverdManager struct {
-	backend Backend
-	mux     *logmux.Mux
-	inst    *discoverd.Instance
-	mtx     sync.Mutex
-	hb      discoverd.Heartbeater
-	local   atomic.Value // bool
+	backend     Backend
+	sinkManager *logmux.SinkManager
+	inst        *discoverd.Instance
+	mtx         sync.Mutex
+	hb          discoverd.Heartbeater
+	local       atomic.Value // bool
 }
 
 func (d *DiscoverdManager) Close() error {
@@ -91,7 +91,7 @@ func (d *DiscoverdManager) ConnectLocal(url string) error {
 	discoverd.DefaultClient = discoverd.NewClient()
 
 	go func() {
-		if err := d.mux.StreamToAggregators(discoverd.NewClientWithURL(url).Service("logaggregator")); err != nil {
+		if err := d.sinkManager.StreamToAggregators(discoverd.NewClientWithURL(url).Service("logaggregator")); err != nil {
 			shutdown.Fatal(err)
 		}
 	}()

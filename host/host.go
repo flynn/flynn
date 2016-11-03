@@ -44,6 +44,7 @@ options:
   --external-ip=IP           external IP of host
   --listen-ip=IP             bind host network services to this IP
   --state=PATH               path to state file [default: /var/lib/flynn/host-state.bolt]
+  --sink-state=PATH          path to the sink state file [default: /var/lib/flynn/sink-state.bolt]
   --id=ID                    host id
   --tags=TAGS                host tags (comma separated list of KEY=VAL pairs, used for job constraints in the scheduler)
   --force                    kill all containers booted by flynn-host before starting
@@ -107,6 +108,7 @@ Commands:
   discover                   Return low-level information about a service
   promote                    Promotes a Flynn node to a member of the consensus cluster
   demote                     Demotes a Flynn node, removing it from the consensus cluster
+  log-sink                   Manage host log sinks
 
 See 'flynn-host help <command>' for more information on a specific command.
 `
@@ -168,6 +170,7 @@ func runDaemon(args *docopt.Args) {
 	externalIP := args.String["--external-ip"]
 	listenIP := args.String["--listen-ip"]
 	stateFile := args.String["--state"]
+	sinkFile := args.String["--sink-state"]
 	hostID := args.String["--id"]
 	tags := parseTagArgs(args.String["--tags"])
 	force := args.Bool["--force"]
@@ -292,6 +295,8 @@ func runDaemon(args *docopt.Args) {
 	shutdown.BeforeExit(func() { vman.CloseDB() })
 
 	mux := logmux.New(hostID, logDir, logger.New("host.id", hostID, "component", "logmux"))
+	sman := logmux.NewSinkManager(sinkFile, mux, state, logger.New("host.id", hostID, "component", "sinkManager"))
+	shutdown.BeforeExit(func() { sman.CloseDB() })
 
 	log.Info("initializing job backend", "type", backendName)
 	var backend Backend
@@ -319,7 +324,7 @@ func runDaemon(args *docopt.Args) {
 	backend.SetDefaultEnv("LISTEN_IP", listenIP)
 
 	var buffers host.LogBuffers
-	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr, tags)
+	discoverdManager := NewDiscoverdManager(backend, sman, hostID, publishAddr, tags)
 	publishURL := "http://" + publishAddr
 	host := &Host{
 		id:  hostID,
@@ -332,6 +337,7 @@ func runDaemon(args *docopt.Args) {
 		state:   state,
 		backend: backend,
 		vman:    vman,
+		sman:    sman,
 		volAPI:  volumeapi.NewHTTPAPI(vman),
 		discMan: discoverdManager,
 		log:     logger.New("host.id", hostID),

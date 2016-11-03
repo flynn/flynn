@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -223,4 +224,23 @@ func (c *Host) Update(name string, args ...string) (pid int, err error) {
 
 func (c *Host) UpdateTags(tags map[string]string) error {
 	return c.c.Post("/host/tags", tags, nil)
+}
+
+func (c *Host) GetSinks() ([]*ct.Sink, error) {
+	var sinks []*ct.Sink
+	return sinks, c.c.Get("/sinks", &sinks)
+}
+
+func (c *Host) AddSink(info *ct.Sink) error {
+	if info.ID == "" {
+		return errors.New("missing ID")
+	}
+	return c.c.Put("/sinks/"+info.ID, info, nil)
+}
+
+func (c *Host) RemoveSink(id string) error {
+	if id == "" {
+		return errors.New("missing ID")
+	}
+	return c.c.Delete("/sinks/" + id)
 }
