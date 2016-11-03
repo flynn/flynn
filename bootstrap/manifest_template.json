@@ -601,7 +601,7 @@
     "release": {
       "processes": {
         "app": {
-          "args": ["/bin/logaggregator", "-logaddr", ":514", "-apiaddr", ":80"],
+          "args": ["/bin/logaggregator"],
           "ports": [
             {"port": 80, "proto": "tcp"},
             {"port": 514, "proto": "tcp"}

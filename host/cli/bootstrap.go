@@ -310,6 +310,12 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller');
 		data.Controller.Release.Env["TELEMETRY_BOOTSTRAP_ID"] = telemetryClusterID
 	}
 
+	// update logaggregator args
+	sqlBuf.WriteString(`
+UPDATE releases SET processes = jsonb_set(processes, '{app,args}', '["/bin/logaggregator"]')
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'logaggregator');
+`)
+
 	step := func(id, name string, action bootstrap.Action) bootstrap.Step {
 		if ra, ok := action.(*bootstrap.RunAppAction); ok {
 			ra.ID = id
