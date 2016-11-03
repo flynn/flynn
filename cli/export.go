@@ -161,7 +161,8 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		// pull the Docker image
 		cmd := exec.Command("docker", "pull", ref)
 		log.Printf("flynn: pulling Docker image with %q", strings.Join(cmd.Args, " "))
-		cmd.Stdout = os.Stdout
+		// forward stdout to stderr in case we are writing the backup to stdout
+		cmd.Stdout = os.Stderr
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			return err

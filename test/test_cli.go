@@ -947,6 +947,11 @@ func (s *CLISuite) TestRunLimits(t *c.C) {
 	t.Assert(limits[2], c.Equals, strconv.FormatInt(*defaults[resource.TypeMaxFD].Limit, 10))
 }
 
+func assertExportContains(t *c.C, file string, paths ...string) {
+	cmd := run(t, exec.Command("tar", "--list", "--file="+file, "--strip=1", "--show-transformed"))
+	t.Assert(cmd, SuccessfulOutputContains, strings.Join(paths, "\n")+"\n")
+}
+
 func (s *CLISuite) TestExportImport(t *c.C) {
 	srcApp := "app-export" + random.String(8)
 	dstApp := "app-import" + random.String(8)
@@ -958,16 +963,12 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	// exporting the app without a release should work
 	file := filepath.Join(t.MkDir(), "export.tar")
 	t.Assert(r.flynn("export", "-f", file), Succeeds)
-	assertExportContains := func(paths ...string) {
-		cmd := r.sh(fmt.Sprintf("tar --list --file=%s --strip=1 --show-transformed", file))
-		t.Assert(cmd, Outputs, strings.Join(paths, "\n")+"\n")
-	}
-	assertExportContains("app.json", "routes.json")
+	assertExportContains(t, file, "app.json", "routes.json")
 
 	// exporting the app with an artifact-less release should work
 	t.Assert(r.flynn("env", "set", "FOO=BAR"), Succeeds)
 	t.Assert(r.flynn("export", "-f", file), Succeeds)
-	assertExportContains("app.json", "routes.json", "release.json")
+	assertExportContains(t, file, "app.json", "routes.json", "release.json")
 
 	// release the app and provision some dbs
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
@@ -980,7 +981,7 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 
 	// export app
 	t.Assert(r.flynn("export", "-f", file), Succeeds)
-	assertExportContains(
+	assertExportContains(t, file,
 		"app.json", "routes.json", "release.json", "artifact.json",
 		"formation.json", "slug.tar.gz", "postgres.dump", "mysql.dump",
 	)
@@ -1382,9 +1383,29 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "app=1"), Succeeds)
 	defer flynn(t, "/", "-a", app.Name, "scale", "app=0")
 
-	// export the app
+	// check exporting to stdout works
 	file := filepath.Join(t.MkDir(), "export.tar")
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("%s -a %s export > %s", args.CLI, app.Name, file))
+	cmd.Env = flynnEnv(flynnrc)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if args.Stream {
+		cmd.Stderr = io.MultiWriter(os.Stderr, &stderr)
+	}
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("error exporting docker app to stdout: %s: %s", err, stderr.String())
+	}
+	assertExportContains(t, file,
+		"app.json", "routes.json", "release.json", "artifact.json",
+		"formation.json", "docker-image.tar", "docker-image.json",
+	)
+
+	// export the app directly to the file
 	t.Assert(flynn(t, "/", "-a", app.Name, "export", "-f", file), Succeeds)
+	assertExportContains(t, file,
+		"app.json", "routes.json", "release.json", "artifact.json",
+		"formation.json", "docker-image.tar", "docker-image.json",
+	)
 
 	// delete the image from the registry
 	release, err := client.GetAppRelease(app.Name)
