@@ -4,11 +4,13 @@ interface Node {
 
 type KVPair {
   key: String!
+
   value: String!
 }
 
 type DeploymentConfig {
   strategy: String!
+
   timeout: Int!
 }
 
@@ -25,6 +27,7 @@ type App implements Node {
   currentRelease: Release
 
   createdAt: DateTime!
+
   updatedAt: DateTime!
 }
 
@@ -61,21 +64,65 @@ type ProcessType {
 
   resurrect: Boolean!
 
-  resources: ResourceConfig
+  resources(types: [ResourceType!]): [ResourceSpec]!
 }
 
 type ProcessPort {
   port: Int!
+
   proto: String!
+
   service: HostService
 }
 
 type HostService {
+  name: String!
 
+  create: Boolean!
+
+  check: HealthCheck
 }
 
-type ResourceConfig {
+enum HealthCheckType {
+  TCP
+  HTTP
+  HTTPS
+}
 
+type HealthCheck {
+  type: HealthCheckType!
+
+  interval: Int!
+
+  threshold: Int!
+
+  killDown: Boolean!
+
+  startTimeout: Int!
+
+  path: String
+
+  host: String
+
+  match: String
+
+  status: Int
+}
+
+
+enum ResourceType {
+  MEMORY
+  CPU
+  MAX_FD
+  MAX_PROCS
+}
+
+type ResourceSpec {
+  type: ResourceType!
+
+  request: Int
+
+  limit: Int
 }
 
 type Artifact implements Node {
@@ -86,6 +133,138 @@ type Artifact implements Node {
   uri: URI!
 
   meta(keys: [String!]): [KVPair]!
+
+  createdAt: DateTime!
+}
+
+type Formation implements Node {
+  id: ID!
+
+  app: App!
+
+  release: Release!
+
+  processes(names: [String!]): [FormationProcess]!
+
+  createdAt: DateTime!
+
+  updatedAt: DateTime!
+}
+
+type FormationProcess {
+  count: Int!
+
+  processType: ProcessType!
+
+  tags(keys: [String!]): [KVPair]!
+}
+
+type Job implements Node {
+  id: ID!
+
+  uuid: String!
+
+  hostId: String!
+
+  app: App!
+
+  release: Release!
+
+  processType: ProcessType!
+
+  state: JobState!
+
+  args: [String!]!
+
+  meta(keys: [String!]): [KVPair]!
+
+  exitStatus: Int
+
+  hostError: String
+
+  runAt: DateTime
+
+  restarts: Int
+
+  createdAt: DateTime!
+
+  updatedAt: DateTime!
+}
+
+enum JobState {
+  PENDING
+  STARTING
+  UP
+  STOPPING
+  DOWN
+}
+
+type Deployment implements Node {
+  id: ID!
+
+  app: App!
+
+  oldRelease: Release!
+
+  newRelease: Release!
+
+  strategy: String!
+
+  status: String!
+
+  processes(names: [String!]): [DeploymentProcess]!
+
+  deployTimeout: Int!
+
+  createdAt: DateTime!
+
+  finishedAt: DateTime
+}
+
+type DeploymentProcess {
+  count: Int!
+
+  processType: ProcessType!
+}
+
+type DeploymentEvent {
+  app: App!
+
+  deployment: Deployment!
+
+  release: Release!
+
+  status: String!
+
+  jobType: String!
+
+  jobState: JobState!
+
+  error: String
+}
+
+type ResourceProvider implements Node {
+  id: ID!
+
+  url: URI!
+
+  name: String!
+
+  createdAt: DateTime!
+
+  updatedAt: DateTime!
+}
+
+type Resource implements Node {
+  id: ID!
+
+  provider: ResourceProvider!
+
+  externalId: String!
+
+  env(keys: [String!]): [KVPair]!
+
+  apps(ids: [ID!]): [App]!
 
   createdAt: DateTime!
 }
