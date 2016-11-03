@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/sink#",
+  "title": "Sink",
+  "description": "",
+  "sortIndex": 20,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/sink_create#",
+    "schema/examples/controller/sink_list#"
+  ],
+  "definitions": {
+    "sink_kind": {
+      "type": "string",
+      "enum": ["syslog"]
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "kind": {
+      "$ref": "#/definitions/sink_kind"
+    },
+    "config": {
+      "type": "object"
+    },
+    "host_managed": {
+      "type": "boolean"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    }
+  }
+}

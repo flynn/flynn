@@ -216,6 +216,7 @@ func appHandler(c handlerConfig) http.Handler {
 	deploymentRepo := NewDeploymentRepo(c.db)
 	eventRepo := NewEventRepo(c.db)
 	backupRepo := NewBackupRepo(c.db)
+	sinkRepo := NewSinkRepo(c.db)
 
 	api := controllerAPI{
 		domainMigrationRepo: domainMigrationRepo,
@@ -229,6 +230,7 @@ func appHandler(c handlerConfig) http.Handler {
 		deploymentRepo:      deploymentRepo,
 		eventRepo:           eventRepo,
 		backupRepo:          backupRepo,
+		sinkRepo:            sinkRepo,
 		clusterClient:       c.cc,
 		logaggc:             c.lc,
 		routerc:             c.rc,
@@ -307,6 +309,11 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/events", httphelper.WrapHandler(api.Events))
 	httpRouter.GET("/events/:id", httphelper.WrapHandler(api.GetEvent))
 
+	httpRouter.POST("/sinks", httphelper.WrapHandler(api.CreateSink))
+	httpRouter.GET("/sinks", httphelper.WrapHandler(api.GetSinks))
+	httpRouter.GET("/sinks/:sink_id", httphelper.WrapHandler(api.GetSink))
+	httpRouter.DELETE("/sinks/:sink_id", httphelper.WrapHandler(api.DeleteSink))
+
 	return httphelper.ContextInjector("controller",
 		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keys)))
 }
@@ -357,6 +364,7 @@ type controllerAPI struct {
 	deploymentRepo      *DeploymentRepo
 	eventRepo           *EventRepo
 	backupRepo          *BackupRepo
+	sinkRepo            *SinkRepo
 	clusterClient       utils.ClusterClient
 	logaggc             logClient
 	routerc             routerc.Client

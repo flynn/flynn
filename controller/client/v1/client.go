@@ -746,6 +746,40 @@ func (c *Client) Status() (*status.Status, error) {
 	return &s.Data, nil
 }
 
+// CreateSink creates a new log sink
+func (c *Client) CreateSink(sink *ct.Sink) error {
+	return c.Post("/sinks", sink, sink)
+}
+
+// GetSink gets a log sink
+func (c *Client) GetSink(sinkID string) (*ct.Sink, error) {
+	sink := &ct.Sink{}
+	return sink, c.Get(fmt.Sprintf("/sinks/%s", sinkID), sink)
+}
+
+// DeleteSink removes a log sink
+func (c *Client) DeleteSink(sinkID string) (*ct.Sink, error) {
+	sink := &ct.Sink{}
+	return sink, c.Delete(fmt.Sprintf("/sinks/%s", sinkID), sink)
+}
+
+// ListSink returns all log sinks
+func (c *Client) ListSinks() ([]*ct.Sink, error) {
+	var sinks []*ct.Sink
+	return sinks, c.Get("/sinks", &sinks)
+}
+
+// StreamSinks yields a series of Sink into the provided channel.
+// If since is not nil, only retrieves sink updates since the specified time.
+func (c *Client) StreamSinks(since *time.Time, output chan *ct.Sink) (stream.Stream, error) {
+	if since == nil {
+		s := time.Unix(0, 0)
+		since = &s
+	}
+	t := since.UTC().Format(time.RFC3339Nano)
+	return c.Stream("GET", "/sinks?since="+t, nil, output)
+}
+
 func (c *Client) Put(path string, in, out interface{}) error {
 	return c.send("PUT", path, in, out)
 }

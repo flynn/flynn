@@ -33,6 +33,8 @@
         "resource_deletion",
         "route",
         "route_deletion",
+        "sink",
+        "sink_deletion",
         "scale"
       ]
     }
