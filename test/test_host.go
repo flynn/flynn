@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	osexec "os/exec"
@@ -20,6 +21,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	logagg "github.com/flynn/flynn/logaggregator/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/exec"
@@ -601,6 +603,7 @@ func (s *HostSuite) TestUpdate(t *c.C) {
 		"daemon",
 		"--http-port", "11113",
 		"--state", filepath.Join(dir, "host-state.bolt"),
+		"--sink-state", filepath.Join(dir, "sink-state.bolt"),
 		"--id", id,
 		"--backend", "mock",
 		"--vol-provider", "mock",
@@ -642,6 +645,7 @@ func (s *HostSuite) TestUpdate(t *c.C) {
 		"daemon",
 		"--http-port", "11113",
 		"--state", filepath.Join(dir, "host-state.bolt"),
+		"--sink-state", filepath.Join(dir, "sink-state.bolt"),
 		"--id", id,
 		"--backend", "mock",
 		"--vol-provider", "mock",
@@ -740,4 +744,150 @@ func (s *HostSuite) TestUpdateTags(t *c.C) {
 	if _, ok := meta["tag:foo"]; ok {
 		t.Fatal("expected tag to be deleted but is still present")
 	}
+}
+
+func (s *HostSuite) TestLogSinks(t *c.C) {
+	clusterSize := 3
+	x := s.bootCluster(t, clusterSize)
+	defer x.Destroy()
+
+	// deploy custom logaggregator app
+	client := x.controller
+	logApp := &ct.App{Name: "test-logaggregator"}
+	t.Assert(client.CreateApp(logApp), c.IsNil)
+	release, err := client.GetAppRelease("logaggregator")
+	t.Assert(err, c.IsNil)
+	proc := release.Processes["app"]
+	proc.Env = map[string]string{"SERVICE_NAME": logApp.Name}
+	proc.Ports[1].Port = 55514
+	release.Processes["app"] = proc
+	release.ID = ""
+	t.Assert(client.CreateRelease(logApp.ID, release), c.IsNil)
+	t.Assert(client.SetAppRelease(logApp.ID, release.ID), c.IsNil)
+	t.Assert(client.PutFormation(&ct.Formation{
+		AppID:     logApp.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"app": 1},
+	}), c.IsNil)
+	defer client.DeleteApp(logApp.ID)
+
+	// get hosts
+	hosts, err := x.cluster.Hosts()
+	t.Assert(err, c.IsNil)
+	if len(hosts) != 3 {
+		t.Fatal(fmt.Sprintf("unexpected number of hosts, got: %d, expected %d", len(hosts), clusterSize))
+	}
+
+	// wait for aggregator to come up and get address
+	instances, err := x.discoverd.Instances(logApp.Name, 10*time.Second)
+	t.Assert(len(instances), c.Equals, 1)
+	logaggAddr := instances[0].Addr
+
+	// logagg proxy
+	logHost, _, _ := net.SplitHostPort(logaggAddr)
+	logaggProxy, err := s.clusterProxy(x, fmt.Sprintf("%s:%d", logHost, proc.Ports[0].Port))
+	t.Assert(err, c.IsNil)
+
+	// add sink to controller
+	config, err := json.Marshal(&ct.SyslogSinkConfig{
+		URL:    fmt.Sprintf("syslog://%s", instances[0].Addr),
+		UseIDs: true,
+	})
+	t.Assert(err, c.IsNil)
+	sink := &ct.Sink{
+		Kind:   ct.SinkKindSyslog,
+		Config: config,
+	}
+	t.Assert(client.CreateSink(sink), c.IsNil)
+
+	var sinkAttempts = attempt.Strategy{
+		Min:   5,
+		Total: 10 * time.Second,
+		Delay: 200 * time.Millisecond,
+	}
+
+	// wait for sink to appear on host
+	err = sinkAttempts.Run(func() error {
+		sinks, err := hosts[0].GetSinks()
+		if err != nil {
+			return err
+		}
+		for _, s := range sinks {
+			if s.ID == sink.ID {
+				return nil
+			}
+		}
+		return fmt.Errorf("timed out waiting for sink to appear on host")
+	})
+	t.Assert(err, c.IsNil)
+
+	// create a test app
+	app, release := s.createAppWithClient(t, client)
+	defer client.DeleteApp(app.ID)
+
+	// subscribe to log messages for the test app from the test logaggregator
+	logc, err := logaggc.New("http://" + logaggProxy.addr)
+	t.Assert(err, c.IsNil)
+	log, err := logc.GetLog(app.ID, &logagg.LogOpts{Follow: true})
+	t.Assert(err, c.IsNil)
+	defer log.Close()
+	msgs := make(chan *logaggc.Message)
+	stream := stream.New()
+	defer stream.Close()
+	go func() {
+		defer close(msgs)
+		dec := json.NewDecoder(log)
+		for {
+			var msg logaggc.Message
+			if err := dec.Decode(&msg); err != nil {
+				stream.Error = err
+				return
+			}
+			select {
+			case msgs <- &msg:
+			case <-stream.StopCh:
+				return
+			}
+		}
+	}()
+
+	// deploy an omni job
+	t.Assert(client.PutFormation(&ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"omni": 1},
+	}), c.IsNil)
+
+	// wait for syslog message from each host
+	received := make(map[string]struct{})
+	for {
+		select {
+		case msg := <-msgs:
+			received[msg.HostID] = struct{}{}
+			if len(received) == len(hosts) {
+				return
+			}
+		case <-time.After(30 * time.Second):
+			t.Fatal("timed out waiting for log messages")
+		}
+	}
+
+	// delete the sink
+	_, err = client.DeleteSink(sink.ID)
+	t.Assert(err, c.IsNil)
+
+	// wait for sink to be removed from host
+	err = sinkAttempts.Run(func() error {
+		sinks, err := hosts[0].GetSinks()
+		if err != nil {
+			return err
+		}
+		for _, s := range sinks {
+			if s.ID == sink.ID {
+				return fmt.Errorf("timed out waiting for sink to be removed from host")
+			}
+		}
+		return nil
+	})
+	t.Assert(err, c.IsNil)
 }
