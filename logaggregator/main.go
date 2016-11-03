@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"net"
 	"os"
 
@@ -15,20 +14,26 @@ import (
 func main() {
 	defer shutdown.Exit()
 
-	apiPort := os.Getenv("PORT")
+	apiPort := os.Getenv("PORT_0")
 	if apiPort == "" {
 		apiPort = "5000"
 	}
 
-	logAddr := flag.String("logaddr", ":3000", "syslog input listen address")
-	apiAddr := flag.String("apiaddr", ":"+apiPort, "api listen address")
-	flag.Parse()
+	logPort := os.Getenv("PORT_1")
+	if logPort == "" {
+		logPort = "3000"
+	}
+
+	serviceName := os.Getenv("SERVICE_NAME")
+	if serviceName == "" {
+		serviceName = "logaggregator"
+	}
 
 	conf := ServerConfig{
-		SyslogAddr:  *logAddr,
-		ApiAddr:     *apiAddr,
+		SyslogAddr:  ":" + logPort,
+		ApiAddr:     ":" + apiPort,
 		Discoverd:   discoverd.DefaultClient,
-		ServiceName: "logaggregator",
+		ServiceName: serviceName,
 	}
 
 	srv := NewServer(conf)
