@@ -867,7 +867,7 @@ type failingHostClient struct {
 
 func newFailingHostClient() *failingHostClient {
 	return &failingHostClient{
-		FakeHostClient: NewFakeHostClient("failing-host", false),
+		FakeHostClient: NewFakeHostClient("failing_host", false),
 		addJob:         make(chan struct{}),
 	}
 }
@@ -898,7 +898,7 @@ func (TestSuite) TestFailingAddJob(c *C) {
 	s.waitForError(addJobErr)
 
 	// add an ok host, wait for the job to be scheduled on it
-	okHost := NewFakeHostClient("ok-host", false)
+	okHost := NewFakeHostClient("ok_host", false)
 	events := make(chan *host.Event)
 	stream, err := okHost.StreamEvents("", events)
 	c.Assert(err, IsNil)
