@@ -1092,7 +1092,7 @@ outer:
 		if err == nil {
 			return
 		}
-		log.Error("error adding job to the cluster", "err", err)
+		log.Error("error adding job to the cluster", "attempts", attempt+1, "err", err)
 
 		if attempt > 0 {
 			// when making multiple attempts, backoff in increments
@@ -1101,7 +1101,7 @@ outer:
 			if delay > 30*time.Second {
 				delay = 30 * time.Second
 			}
-			log.Warn(fmt.Sprintf("failed to start job after %d attempts, waiting %s before trying again", attempt, delay))
+			log.Warn(fmt.Sprintf("waiting %s before re-attempting job placement", delay))
 			time.Sleep(delay)
 		}
 	}
