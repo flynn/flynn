@@ -2,6 +2,7 @@ package cli
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
@@ -648,6 +649,32 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 		}
 	}
 
+	runMigrator := func(cmd *exec.Cmd) error {
+		out, err := cmd.StdoutPipe()
+		if err != nil {
+			return err
+		}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			s := bufio.NewScanner(out)
+			for s.Scan() {
+				ch <- &bootstrap.StepInfo{
+					StepMeta:  meta,
+					State:     "info",
+					StepData:  s.Text(),
+					Timestamp: time.Now().UTC(),
+				}
+			}
+		}()
+		err = cmd.Run()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+		}
+		return err
+	}
+
 	if migrateSlugs {
 		cmd = exec.JobUsingHost(state.Hosts[0], artifacts["slugbuilder-image"], nil)
 		cmd.Args = []string{"/bin/slug-migrator"}
@@ -659,15 +686,11 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 			"PGDATABASE":     data.Controller.Release.Env["PGDATABASE"],
 			"PGPASSWORD":     data.Controller.Release.Env["PGPASSWORD"],
 		}
-		out, err = cmd.CombinedOutput()
-		if os.Getenv("DEBUG") != "" {
-			fmt.Println(string(out))
-		}
-		if err != nil {
+		if err := runMigrator(cmd); err != nil {
 			ch <- &bootstrap.StepInfo{
 				StepMeta:  meta,
 				State:     "error",
-				Error:     fmt.Sprintf("error migrating slug artifacts: %s - %q", err, string(out)),
+				Error:     fmt.Sprintf("error migrating slugs: %s", err),
 				Err:       err,
 				Timestamp: time.Now().UTC(),
 			}
@@ -711,16 +734,11 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 			"PGPASSWORD":     data.Controller.Release.Env["PGPASSWORD"],
 		}
 		cmd.Volumes = []*ct.VolumeReq{{Path: "/data", DeleteOnStop: true}}
-
-		out, err = cmd.CombinedOutput()
-		if os.Getenv("DEBUG") != "" {
-			fmt.Println(string(out))
-		}
-		if err != nil {
+		if err := runMigrator(cmd); err != nil {
 			ch <- &bootstrap.StepInfo{
 				StepMeta:  meta,
 				State:     "error",
-				Error:     fmt.Sprintf("error migrating docker artifacts: %s - %q", err, string(out)),
+				Error:     fmt.Sprintf("error migrating Docker images: %s", err),
 				Err:       err,
 				Timestamp: time.Now().UTC(),
 			}
@@ -842,6 +860,8 @@ func textLogger(si *bootstrap.StepInfo) {
 	switch si.State {
 	case "start":
 		log.Printf("%s %s", si.Action, si.ID)
+	case "info":
+		log.Printf("%s %s", si.Action, si.StepData)
 	case "done":
 		if s, ok := si.StepData.(fmt.Stringer); ok {
 			log.Printf("%s %s %s", si.Action, si.ID, s)
