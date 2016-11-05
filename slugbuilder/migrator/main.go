@@ -89,6 +89,9 @@ func convert(slugURL string) (string, error) {
 		return "", err
 	}
 	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected HTTP status: %s", res.Status)
+	}
 
 	id := random.UUID()
 	cmd := exec.Command("/bin/convert-legacy-slug.sh")
