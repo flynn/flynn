@@ -55,7 +55,9 @@ func migrate() error {
 func getImageArtifacts(db *postgres.DB) ([]*ct.Artifact, error) {
 	sql := `
 SELECT artifact_id, uri FROM artifacts
-WHERE type = 'docker' AND meta->>'docker-receive.repository' IS NOT NULL
+WHERE type = 'docker'
+AND meta->>'docker-receive.repository' IS NOT NULL
+AND deleted_at IS NULL
 AND artifact_id IN (
   SELECT artifact_id FROM release_artifacts
   WHERE release_id IN (
