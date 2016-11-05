@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -23,13 +23,18 @@ func main() {
 func migrate() error {
 	db := postgres.Wait(nil, nil)
 
+	slugbuilder, err := getSlugbuilderArtifact(db)
+	if err != nil {
+		return err
+	}
+
 	artifacts, err := getSlugArtifacts(db)
 	if err != nil {
 		return err
 	}
 
 	for _, artifact := range artifacts {
-		newID, err := convert(artifact.URI)
+		newID, err := convert(slugbuilder, artifact.URI)
 		if err != nil {
 			return err
 		}
@@ -51,6 +56,25 @@ func migrate() error {
 	}
 
 	return nil
+}
+
+func getSlugbuilderArtifact(db *postgres.DB) (*ct.Artifact, error) {
+	sql := `
+SELECT manifest, layer_url_template FROM artifacts
+WHERE meta->>'flynn.component' = 'slugbuilder'
+ORDER BY created_at DESC LIMIT 1
+`
+	artifact := &ct.Artifact{
+		Type: ct.ArtifactTypeFlynn,
+	}
+	var layerURLTemplate *string
+	if err := db.QueryRow(sql).Scan(&artifact.RawManifest, &layerURLTemplate); err != nil {
+		return nil, err
+	}
+	if layerURLTemplate != nil {
+		artifact.LayerURLTemplate = *layerURLTemplate
+	}
+	return artifact, nil
 }
 
 func getSlugArtifacts(db *postgres.DB) ([]*ct.Artifact, error) {
@@ -83,7 +107,7 @@ AND artifact_id IN (
 	return artifacts, rows.Err()
 }
 
-func convert(slugURL string) (string, error) {
+func convert(slugbuilder *ct.Artifact, slugURL string) (string, error) {
 	res, err := http.Get(slugURL)
 	if err != nil {
 		return "", err
@@ -94,10 +118,14 @@ func convert(slugURL string) (string, error) {
 	}
 
 	id := random.UUID()
-	cmd := exec.Command("/bin/convert-legacy-slug.sh")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("SLUG_IMAGE_ID=%s", id))
+	cmd := exec.Command(slugbuilder, "/bin/convert-legacy-slug.sh")
+	cmd.Env = map[string]string{
+		"CONTROLLER_KEY": os.Getenv("CONTROLLER_KEY"),
+		"SLUG_IMAGE_ID":  id,
+	}
 	cmd.Stdin = res.Body
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Volumes = []*ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}}
 	return id, cmd.Run()
 }
