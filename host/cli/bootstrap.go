@@ -530,11 +530,11 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
 
 		// update current artifact in database for service
 		sqlBuf.WriteString(fmt.Sprintf(`
-UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s', size = %d, layer_url_template = '%s' WHERE artifact_id = (
+UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s', size = %d, layer_url_template = '%s', meta = '%s' WHERE artifact_id = (
   SELECT artifact_id FROM release_artifacts WHERE release_id = (
     SELECT release_id FROM apps WHERE name = '%s'
   )
-);`, artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, step.ID))
+);`, artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, jsonb(artifact.Meta), step.ID))
 	}
 
 	// create the slugbuilder artifact if gitreceive still references it by
@@ -544,10 +544,10 @@ UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s',
 DO $$
   BEGIN
     IF (SELECT env->>'SLUGBUILDER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive')) IS NULL THEN
-      INSERT INTO artifacts (artifact_id, type, uri, manifest, hashes, size, layer_url_template) VALUES ('%s', 'flynn', '%s', '%s', '%s', %d, '%s');
+      INSERT INTO artifacts (artifact_id, type, uri, manifest, hashes, size, layer_url_template, meta) VALUES ('%s', 'flynn', '%s', '%s', '%s', %d, '%s', '%s');
     END IF;
   END;
-$$;`, random.UUID(), slugBuilder.URI, jsonb(&slugBuilder.RawManifest), jsonb(slugBuilder.Hashes), slugBuilder.Size, slugBuilder.LayerURLTemplate))
+$$;`, random.UUID(), slugBuilder.URI, jsonb(&slugBuilder.RawManifest), jsonb(slugBuilder.Hashes), slugBuilder.Size, slugBuilder.LayerURLTemplate, jsonb(slugBuilder.Meta)))
 
 	// create the slugrunner artifact if it doesn't exist (which can be the
 	// case if no apps were deployed with git push in older clusters where
@@ -558,11 +558,11 @@ DO $$
   BEGIN
     IF (SELECT env->>'SLUGRUNNER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive')) IS NULL THEN
       IF NOT EXISTS (SELECT 1 FROM artifacts WHERE uri = (SELECT env->>'SLUGRUNNER_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'))) THEN
-        INSERT INTO artifacts (artifact_id, type, uri, manifest, hashes, size, layer_url_template) VALUES ('%s', 'flynn', '%s', '%s', '%s', %d, '%s');
+        INSERT INTO artifacts (artifact_id, type, uri, manifest, hashes, size, layer_url_template, meta) VALUES ('%s', 'flynn', '%s', '%s', '%s', %d, '%s', '%s');
       END IF;
     END IF;
   END;
-$$;`, random.UUID(), slugRunner.URI, jsonb(&slugRunner.RawManifest), jsonb(slugRunner.Hashes), slugRunner.Size, slugRunner.LayerURLTemplate))
+$$;`, random.UUID(), slugRunner.URI, jsonb(&slugRunner.RawManifest), jsonb(slugRunner.Hashes), slugRunner.Size, slugRunner.LayerURLTemplate, jsonb(slugRunner.Meta)))
 
 	// update slug artifacts currently being referenced by gitreceive
 	// (which will also update all current user releases to use the
@@ -570,10 +570,10 @@ $$;`, random.UUID(), slugRunner.URI, jsonb(&slugRunner.RawManifest), jsonb(slugR
 	for _, name := range []string{"slugbuilder", "slugrunner"} {
 		artifact := artifacts[name+"-image"]
 		sqlBuf.WriteString(fmt.Sprintf(`
-UPDATE artifacts SET uri = '%[1]s', type = 'flynn', manifest = '%[2]s', hashes = '%[3]s', size = %[4]d, layer_url_template = '%[5]s'
-WHERE artifact_id = (SELECT (env->>'%[6]s_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'))
-OR uri = (SELECT env->>'%[6]s_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'));`,
-			artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, strings.ToUpper(name)))
+UPDATE artifacts SET uri = '%[1]s', type = 'flynn', manifest = '%[2]s', hashes = '%[3]s', size = %[4]d, layer_url_template = '%[5]s', meta = '%[6]s'
+WHERE artifact_id = (SELECT (env->>'%[7]s_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'))
+OR uri = (SELECT env->>'%[7]s_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'));`,
+			artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, jsonb(artifact.Meta), strings.ToUpper(name)))
 	}
 
 	// update the URI of redis artifacts currently being referenced by
@@ -581,10 +581,10 @@ OR uri = (SELECT env->>'%[6]s_IMAGE_URI' FROM releases WHERE release_id = (SELEC
 	// to use the latest redis image)
 	redisImage := artifacts["redis-image"]
 	sqlBuf.WriteString(fmt.Sprintf(`
-UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s', size = %d, layer_url_template = '%s'
+UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s', size = %d, layer_url_template = '%s', meta = '%s'
 WHERE artifact_id = (SELECT (env->>'REDIS_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis'))
 OR uri = (SELECT env->>'REDIS_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis'));`,
-		redisImage.URI, jsonb(&redisImage.RawManifest), jsonb(redisImage.Hashes), redisImage.Size, redisImage.LayerURLTemplate))
+		redisImage.URI, jsonb(&redisImage.RawManifest), jsonb(redisImage.Hashes), redisImage.Size, redisImage.LayerURLTemplate, jsonb(redisImage.Meta)))
 
 	// ensure the image ID environment variables are set for legacy apps
 	// which use image URI variables
