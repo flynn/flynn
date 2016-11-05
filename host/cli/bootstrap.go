@@ -659,7 +659,6 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 			"PGDATABASE":     data.Controller.Release.Env["PGDATABASE"],
 			"PGPASSWORD":     data.Controller.Release.Env["PGPASSWORD"],
 		}
-		cmd.Volumes = []*ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}}
 		out, err = cmd.CombinedOutput()
 		if os.Getenv("DEBUG") != "" {
 			fmt.Println(string(out))
