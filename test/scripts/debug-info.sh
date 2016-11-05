@@ -3,6 +3,20 @@
 # This script is run by the CI runner to collect debugging information
 # which will be printed if any tests fail.
 
+main() {
+  watch_disk_space
+}
+
+watch_disk_space() {
+  while true; do
+    echo "===> $(date +%H:%M:%S.%3N)"
+    trace df -h /
+    trace sudo zpool list
+    echo "==================="
+    sleep 10
+  done
+}
+
 memwatch() {
   interests=("$@")
 
@@ -42,3 +56,5 @@ trace() {
     echo "+ ${cmd}"
     $cmd
 }
+
+main $@
