@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -9,13 +11,17 @@ import (
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
+var ErrNotFound = errors.New("slug not found")
+
 func main() {
-	log15.Info("running slug migrator")
+	log.SetFlags(0)
+	log.SetOutput(os.Stdout)
+
+	log.Printf("running slug migrator")
 	if err := migrate(); err != nil {
-		log15.Error("error running slug migrator", "err", err)
+		log.Printf("error running slug migrator: %s", err)
 		os.Exit(1)
 	}
 }
@@ -25,17 +31,26 @@ func migrate() error {
 
 	slugbuilder, err := getSlugbuilderArtifact(db)
 	if err != nil {
+		log.Printf("error getting slugbuilder artifact: %s", err)
 		return err
 	}
 
 	artifacts, err := getSlugArtifacts(db)
 	if err != nil {
+		log.Printf("error getting slug artifacts: %s", err)
 		return err
 	}
 
-	for _, artifact := range artifacts {
+	log.Printf("converting %d slugs to Flynn images", len(artifacts))
+	for i, artifact := range artifacts {
+		log.Printf("converting slug %s (%d/%d)", artifact.ID, i+1, len(artifacts))
 		newID, err := convert(slugbuilder, artifact.URI)
 		if err != nil {
+			if err == ErrNotFound {
+				log.Printf("skipping slug %s (%d/%d): slug no longer exists", artifact.ID, i+1, len(artifacts))
+				continue
+			}
+			log.Printf("error converting slug %s (%d/%d): %s", artifact.ID, i+1, len(artifacts), err)
 			return err
 		}
 		tx, err := db.Begin()
@@ -113,7 +128,9 @@ func convert(slugbuilder *ct.Artifact, slugURL string) (string, error) {
 		return "", err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	if res.StatusCode == http.StatusNotFound {
+		return "", ErrNotFound
+	} else if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
 

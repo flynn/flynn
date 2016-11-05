@@ -2,19 +2,22 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
 func main() {
-	log15.Info("running image migrator")
+	log.SetFlags(0)
+	log.SetOutput(os.Stdout)
+
+	log.Printf("running Docker image migrator")
 	if err := migrate(); err != nil {
-		log15.Error("error running image migrator", "err", err)
+		log.Printf("error running Docker image migrator: %s", err)
 		os.Exit(1)
 	}
 }
@@ -24,12 +27,16 @@ func migrate() error {
 
 	artifacts, err := getImageArtifacts(db)
 	if err != nil {
+		log.Printf("error getting Docker image artifacts: %s", err)
 		return err
 	}
 
-	for _, artifact := range artifacts {
+	log.Printf("converting %d Docker images to Flynn images", len(artifacts))
+	for i, artifact := range artifacts {
+		log.Printf("converting Docker image %s (%d/%d)", artifact.ID, i+1, len(artifacts))
 		newID, err := convert(artifact.URI)
 		if err != nil {
+			log.Printf("error converting Docker image %s (%d/%d): %s", artifact.ID, i+1, len(artifacts), err)
 			return err
 		}
 		tx, err := db.Begin()
@@ -87,6 +94,6 @@ func convert(imageURL string) (string, error) {
 	cmd := exec.Command("/bin/docker-artifact", imageURL)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("ARTIFACT_ID=%s", id))
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = os.Stdout
 	return id, cmd.Run()
 }
