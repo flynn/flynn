@@ -453,6 +453,7 @@ To rotate an authentication key:
     flynn -a redis env set CONTROLLER_KEY=$NEW_KEY
     flynn -a mariadb env set CONTROLLER_KEY=$NEW_KEY
     flynn -a mongodb env set CONTROLLER_KEY=$NEW_KEY
+    flynn -a status env set AUTH_KEY=$NEW_KEY
 
     # Set the global key to be the new key
     flynn -a controller env set AUTH_KEY=$NEW_KEY
