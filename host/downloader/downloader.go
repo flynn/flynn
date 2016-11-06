@@ -171,7 +171,7 @@ func (d *Downloader) downloadSquashfsLayer(layer *ct.ImageLayer, layerURL string
 		ID:         layer.ID,
 		Data:       tmp,
 		Size:       layer.Length,
-		Type:       "squashfs",
+		Type:       volume.VolumeTypeSquashfs,
 		MountFlags: syscall.MS_RDONLY,
 	})
 	return err
