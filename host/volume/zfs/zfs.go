@@ -173,7 +173,11 @@ func (p *Provider) Kind() string {
 
 func (p *Provider) NewVolume() (volume.Volume, error) {
 	id := random.UUID()
-	info := &volume.Info{ID: id, Type: volume.VolumeTypeData}
+	info := &volume.Info{
+		ID:        id,
+		Type:      volume.VolumeTypeData,
+		CreatedAt: time.Now(),
+	}
 	v := &zfsVolume{
 		info:      info,
 		provider:  p,
@@ -200,6 +204,7 @@ func (p *Provider) ImportFilesystem(fs *volume.Filesystem) (volume.Volume, error
 		fs.ID = random.UUID()
 	}
 	info := fs.Info()
+	info.CreatedAt = time.Now()
 	v := &zfsVolume{
 		info:       info,
 		provider:   p,
