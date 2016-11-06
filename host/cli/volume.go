@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
+	"time"
 
+	"github.com/docker/go-units"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -168,8 +171,14 @@ type hostVolume struct {
 	Volume *volume.Info
 }
 
-func clusterVolumes(hosts []*cluster.Host) ([]hostVolume, error) {
-	var volumes []hostVolume
+type sortVolumes []hostVolume
+
+func (s sortVolumes) Len() int           { return len(s) }
+func (s sortVolumes) Less(i, j int) bool { return s[i].Volume.CreatedAt.Sub(s[j].Volume.CreatedAt) < 0 }
+func (s sortVolumes) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+func clusterVolumes(hosts []*cluster.Host) (sortVolumes, error) {
+	var volumes sortVolumes
 	for _, h := range hosts {
 		hostVolumes, err := h.ListVolumes()
 		if err != nil {
@@ -179,6 +188,7 @@ func clusterVolumes(hosts []*cluster.Host) ([]hostVolume, error) {
 			volumes = append(volumes, hostVolume{Host: h, Volume: v})
 		}
 	}
+	sort.Sort(volumes)
 	return volumes, nil
 }
 
@@ -202,6 +212,7 @@ func runVolumeList(args *docopt.Args, client *cluster.Client) error {
 		"ID",
 		"TYPE",
 		"HOST",
+		"CREATED",
 		"META",
 	)
 
@@ -214,6 +225,7 @@ func runVolumeList(args *docopt.Args, client *cluster.Client) error {
 			volume.Volume.ID,
 			volume.Volume.Type,
 			volume.Host.ID(),
+			units.HumanDuration(time.Now().UTC().Sub(volume.Volume.CreatedAt))+" ago",
 			strings.Join(meta, " "),
 		)
 	}
