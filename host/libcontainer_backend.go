@@ -34,6 +34,7 @@ import (
 	"github.com/flynn/flynn/host/volume/manager"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	logutils "github.com/flynn/flynn/logaggregator/utils"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
@@ -758,7 +759,7 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			res, err := http.Get(url)
+			res, err := hh.RetryClient.Get(url)
 			if err != nil {
 				return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
 			}
