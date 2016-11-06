@@ -28,6 +28,11 @@ type ExpandedFormation struct {
 	Tags      map[string]map[string]string `json:"tags,omitempty"`
 	UpdatedAt time.Time                    `json:"updated_at,omitempty"`
 	Deleted   bool                         `json:"deleted,omitempty"`
+
+	// DeprecatedImageArtifact is for creating backwards compatible cluster
+	// backups (the restore process used to require the ImageArtifact field
+	// to be set).
+	DeprecatedImageArtifact *Artifact `json:"artifact,omitempty"`
 }
 
 type App struct {
