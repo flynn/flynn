@@ -25,7 +25,7 @@ usage: flynn-host volume list
 
 Commands:
     list    Display a list of all volumes of known Flynn hosts
-    create  Creates a volume on a host
+    create  Creates a data volume on a host
     delete  Deletes volumes, destroying any data stored on them
     gc      Garbage collect currently unused volumes
 
@@ -65,7 +65,7 @@ func runVolumeGarbageCollection(args *docopt.Args, client *cluster.Client) error
 		return errors.New("no hosts found")
 	}
 
-	attached := make(map[string]struct{})
+	keep := make(map[string]struct{})
 	for _, h := range hosts {
 		jobs, err := h.ListJobs()
 		if err != nil {
@@ -73,10 +73,21 @@ func runVolumeGarbageCollection(args *docopt.Args, client *cluster.Client) error
 			continue
 		}
 		for _, j := range jobs {
+			if j.Status != host.StatusRunning && j.Status != host.StatusStarting {
+				continue
+			}
+
+			// keep the tmpfs (it has the same ID as the job)
+			keep[j.Job.ID] = struct{}{}
+
+			// keep the data volumes
 			for _, vb := range j.Job.Config.Volumes {
-				if j.Status == host.StatusRunning || j.Status == host.StatusStarting {
-					attached[vb.VolumeID] = struct{}{}
-				}
+				keep[vb.VolumeID] = struct{}{}
+			}
+
+			// keep the mounted layers
+			for _, m := range j.Job.Mountspecs {
+				keep[m.ID] = struct{}{}
 			}
 		}
 	}
@@ -86,13 +97,16 @@ func runVolumeGarbageCollection(args *docopt.Args, client *cluster.Client) error
 		return err
 	}
 
-	// iterate over list of all volumes, deleting any not found in the attached list
+	// iterate over list of all volumes, deleting any not found in the keep list
 	success := true
 outer:
 	for _, v := range volumes {
-		if _, ok := attached[v.Volume.ID]; ok {
-			// volume is attached, continue to next volume
+		if _, ok := keep[v.Volume.ID]; ok {
 			continue outer
+		}
+		// don't delete system images
+		if v.Volume.Meta["flynn.system-image"] == "true" {
+			continue
 		}
 		if err := v.Host.DestroyVolume(v.Volume.ID); err != nil {
 			success = false
