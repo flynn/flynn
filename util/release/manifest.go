@@ -64,7 +64,10 @@ func interpolateManifest(imageDir, imageRepository string, src io.Reader, dest i
 				Type:        ct.ArtifactTypeFlynn,
 				RawManifest: manifest,
 				Size:        int64(len(manifest)),
-				Meta:        map[string]string{"flynn.component": name},
+				Meta: map[string]string{
+					"flynn.component":    name,
+					"flynn.system-image": "true",
+				},
 			}
 			artifact.URI = fmt.Sprintf("%s?target=/%s/images/%s.json", imageRepository, version.String(), artifact.Manifest().ID())
 			artifact.Hashes = artifact.Manifest().Hashes()

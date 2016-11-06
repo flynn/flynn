@@ -137,7 +137,7 @@ func (d *Downloader) downloadImage(artifact *ct.Artifact, info chan *ct.ImagePul
 				Layer: layer,
 			}
 
-			if err := d.downloadSquashfsLayer(layer, artifact.LayerURL(layer)); err != nil {
+			if err := d.downloadSquashfsLayer(layer, artifact.LayerURL(layer), artifact.Meta); err != nil {
 				return fmt.Errorf("error downloading layer: %s", err)
 			}
 		}
@@ -146,7 +146,7 @@ func (d *Downloader) downloadImage(artifact *ct.Artifact, info chan *ct.ImagePul
 	return nil
 }
 
-func (d *Downloader) downloadSquashfsLayer(layer *ct.ImageLayer, layerURL string) error {
+func (d *Downloader) downloadSquashfsLayer(layer *ct.ImageLayer, layerURL string, meta map[string]string) error {
 	if vol := d.vman.GetVolume(layer.ID); vol != nil {
 		return nil
 	}
@@ -173,6 +173,7 @@ func (d *Downloader) downloadSquashfsLayer(layer *ct.ImageLayer, layerURL string
 		Size:       layer.Length,
 		Type:       volume.VolumeTypeSquashfs,
 		MountFlags: syscall.MS_RDONLY,
+		Meta:       meta,
 	})
 	return err
 }

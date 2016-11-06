@@ -77,6 +77,7 @@ type Mountspec struct {
 	URL    string            `json:"url,omitempty"`
 	Size   int64             `json:"size,omitempty"`
 	Hashes map[string]string `json:"hashes,omitempty"`
+	Meta   map[string]string `json:"meta,omitempty"`
 }
 
 type JobResources struct {

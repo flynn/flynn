@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/flynn/flynn/host/types"
@@ -201,13 +202,19 @@ func runVolumeList(args *docopt.Args, client *cluster.Client) error {
 		"ID",
 		"TYPE",
 		"HOST",
+		"META",
 	)
 
 	for _, volume := range volumes {
+		meta := make([]string, 0, len(volume.Volume.Meta))
+		for k, v := range volume.Volume.Meta {
+			meta = append(meta, fmt.Sprintf("%s=%s", k, v))
+		}
 		listRec(w,
 			volume.Volume.ID,
 			volume.Volume.Type,
 			volume.Host.ID(),
+			strings.Join(meta, " "),
 		)
 	}
 	return nil
