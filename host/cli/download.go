@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/docker/go-units"
 	ct "github.com/flynn/flynn/controller/types"
@@ -77,16 +78,32 @@ func runDownload(args *docopt.Args) error {
 
 	configDir := args.String["--config-dir"]
 
-	version := os.Getenv("FLYNN_VERSION")
-	if version == "" {
-		version, err = getChannelVersion(configDir, client, log)
+	requestedVersion := os.Getenv("FLYNN_VERSION")
+	if requestedVersion == "" {
+		requestedVersion, err = getChannelVersion(configDir, client, log)
 		if err != nil {
 			return err
 		}
 	}
-	log.Info(fmt.Sprintf("downloading components with version %s", version))
+	log.Info(fmt.Sprintf("downloading components with version %s", requestedVersion))
 
-	d := downloader.New(client, volMan, version)
+	d := downloader.New(client, volMan, requestedVersion)
+
+	binDir := args.String["--bin-dir"]
+	log.Info(fmt.Sprintf("downloading binaries to %s", binDir))
+	if _, err := d.DownloadBinaries(binDir); err != nil {
+		log.Error("error downloading binaries", "err", err)
+		return err
+	}
+
+	// use the requested version of flynn-host to download the images as
+	// the format changed in v20161106
+	if version.String() != requestedVersion {
+		log.Info(fmt.Sprintf("executing %s flynn-host binary", requestedVersion))
+		binPath := filepath.Join(binDir, "flynn-host")
+		argv := append([]string{binPath}, os.Args[1:]...)
+		return syscall.Exec(binPath, argv, os.Environ())
+	}
 
 	log.Info("downloading images")
 	ch := make(chan *ct.ImagePullInfo)
@@ -109,13 +126,6 @@ func runDownload(args *docopt.Args) error {
 	log.Info(fmt.Sprintf("downloading config to %s", configDir))
 	if _, err := d.DownloadConfig(configDir); err != nil {
 		log.Error("error downloading config", "err", err)
-		return err
-	}
-
-	binDir := args.String["--bin-dir"]
-	log.Info(fmt.Sprintf("downloading binaries to %s", binDir))
-	if _, err := d.DownloadBinaries(binDir); err != nil {
-		log.Error("error downloading binaries", "err", err)
 		return err
 	}
 
