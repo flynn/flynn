@@ -135,6 +135,7 @@ func SetupMountspecs(job *host.Job, artifacts []*ct.Artifact) {
 				URL:    artifact.LayerURL(layer),
 				Size:   layer.Length,
 				Hashes: layer.Hashes,
+				Meta:   artifact.Meta,
 			})
 		}
 	}

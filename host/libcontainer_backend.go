@@ -796,6 +796,7 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 			Size:       m.Size,
 			Type:       volume.VolumeTypeSquashfs,
 			MountFlags: syscall.MS_RDONLY,
+			Meta:       m.Meta,
 		})
 		if err != nil {
 			return "", fmt.Errorf("error importing squashfs layer: %s", err)

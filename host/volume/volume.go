@@ -33,8 +33,9 @@ type Volume interface {
 	It is a serializable structure intended for API use.
 */
 type Info struct {
-	ID   string     `json:"id"`
-	Type VolumeType `json:"type"`
+	ID   string            `json:"id"`
+	Type VolumeType        `json:"type"`
+	Meta map[string]string `json:"meta,omitempty"`
 }
 
 type VolumeType string
@@ -52,9 +53,18 @@ var VolumeTypes = []VolumeType{
 }
 
 type Filesystem struct {
-	ID         string     `json:"id"`
-	Data       io.Reader  `json:"-"`
-	Size       int64      `json:"size"`
-	Type       VolumeType `json:"type"`
-	MountFlags uintptr    `json:"flags"`
+	ID         string            `json:"id"`
+	Data       io.Reader         `json:"-"`
+	Size       int64             `json:"size"`
+	Type       VolumeType        `json:"type"`
+	MountFlags uintptr           `json:"flags"`
+	Meta       map[string]string `json:"meta,omitempty"`
+}
+
+func (f *Filesystem) Info() *Info {
+	return &Info{
+		ID:   f.ID,
+		Type: f.Type,
+		Meta: f.Meta,
+	}
 }

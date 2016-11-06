@@ -199,7 +199,7 @@ func (p *Provider) ImportFilesystem(fs *volume.Filesystem) (volume.Volume, error
 	if fs.ID == "" {
 		fs.ID = random.UUID()
 	}
-	info := &volume.Info{ID: fs.ID, Type: fs.Type}
+	info := fs.Info()
 	v := &zfsVolume{
 		info:       info,
 		provider:   p,
