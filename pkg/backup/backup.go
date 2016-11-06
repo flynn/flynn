@@ -115,6 +115,11 @@ func getApps(client controller.Client) (map[string]*ct.ExpandedFormation, error)
 			App:       app,
 			Release:   release,
 			Processes: formation.Processes,
+
+			// set DeprecatedImageArtifact to support restoring
+			// to old clusters (the URI is overwritten on restore,
+			// but the field is expected to be set)
+			DeprecatedImageArtifact: &ct.Artifact{Type: ct.DeprecatedArtifactTypeDocker},
 		}
 	}
 	return data, nil
