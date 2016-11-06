@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -150,6 +149,17 @@ func NewProvider(config *ProviderConfig) (volume.Provider, error) {
 	if config.WorkingDir == "" {
 		config.WorkingDir = "/var/lib/flynn/volumes/zfs/"
 	}
+	for _, typ := range volume.VolumeTypes {
+		if err := os.MkdirAll(filepath.Join(config.WorkingDir, "mnt", string(typ)), 0755); err != nil {
+			return nil, err
+		}
+		dataset := filepath.Join(config.DatasetName, string(typ))
+		if _, err := zfs.GetDataset(dataset); err != nil {
+			if _, err := zfs.CreateFilesystem(dataset, nil); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return &Provider{
 		config:  config,
 		dataset: dataset,
@@ -163,13 +173,14 @@ func (p *Provider) Kind() string {
 
 func (p *Provider) NewVolume() (volume.Volume, error) {
 	id := random.UUID()
+	info := &volume.Info{ID: id, Type: volume.VolumeTypeData}
 	v := &zfsVolume{
-		info:      &volume.Info{ID: id},
+		info:      info,
 		provider:  p,
-		basemount: p.mountPath(id),
+		basemount: p.mountPath(info),
 	}
 	var err error
-	v.dataset, err = zfs.CreateFilesystem(path.Join(v.provider.dataset.Name, id), map[string]string{
+	v.dataset, err = zfs.CreateFilesystem(p.datasetPath(info), map[string]string{
 		"mountpoint": v.basemount,
 	})
 	if err != nil {
@@ -188,10 +199,11 @@ func (p *Provider) ImportFilesystem(fs *volume.Filesystem) (volume.Volume, error
 	if fs.ID == "" {
 		fs.ID = random.UUID()
 	}
+	info := &volume.Info{ID: fs.ID, Type: fs.Type}
 	v := &zfsVolume{
-		info:       &volume.Info{ID: fs.ID},
+		info:       info,
 		provider:   p,
-		basemount:  p.mountPath(fs.ID),
+		basemount:  p.mountPath(info),
 		filesystem: fs,
 	}
 
@@ -206,7 +218,7 @@ func (p *Provider) ImportFilesystem(fs *volume.Filesystem) (volume.Volume, error
 	}
 
 	var err error
-	v.dataset, err = zfs.CreateVolume(path.Join(v.provider.dataset.Name, fs.ID), uint64(size), opts)
+	v.dataset, err = zfs.CreateVolume(p.datasetPath(info), uint64(size), opts)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +227,7 @@ func (p *Provider) ImportFilesystem(fs *volume.Filesystem) (volume.Volume, error
 	// created asynchronously
 	var dev *os.File
 	err = zvolOpenAttempts.Run(func() (err error) {
-		dev, err = os.OpenFile(p.zvolPath(fs.ID), os.O_WRONLY, 0666)
+		dev, err = os.OpenFile(p.zvolPath(info), os.O_WRONLY, 0666)
 		return
 	})
 	if err != nil {
@@ -245,7 +257,7 @@ func (p *Provider) ImportFilesystem(fs *volume.Filesystem) (volume.Volume, error
 		return nil, err
 	}
 
-	if err := syscall.Mount(dev.Name(), v.basemount, fs.Type, fs.MountFlags, ""); err != nil {
+	if err := syscall.Mount(dev.Name(), v.basemount, string(fs.Type), fs.MountFlags, ""); err != nil {
 		p.destroy(v)
 		return nil, err
 	}
@@ -283,12 +295,16 @@ func (p *Provider) owns(vol volume.Volume) (*zfsVolume, error) {
 	return zvol, nil
 }
 
-func (p *Provider) mountPath(id string) string {
-	return filepath.Join(p.config.WorkingDir, "mnt", id)
+func (p *Provider) mountPath(info *volume.Info) string {
+	return filepath.Join(p.config.WorkingDir, "mnt", string(info.Type), info.ID)
 }
 
-func (p *Provider) zvolPath(id string) string {
-	return filepath.Join("/dev/zvol", p.dataset.Name, id)
+func (p *Provider) datasetPath(info *volume.Info) string {
+	return filepath.Join(p.dataset.Name, string(info.Type), info.ID)
+}
+
+func (p *Provider) zvolPath(info *volume.Info) string {
+	return filepath.Join("/dev/zvol", p.datasetPath(info))
 }
 
 func (p *Provider) DestroyVolume(v volume.Volume) error {
@@ -330,10 +346,11 @@ func (p *Provider) CreateSnapshot(vol volume.Volume) (volume.Volume, error) {
 		return nil, err
 	}
 	id := random.UUID()
+	info := &volume.Info{ID: id, Type: vol.Info().Type}
 	snap := &zfsVolume{
-		info:      &volume.Info{ID: id},
+		info:      info,
 		provider:  zvol.provider,
-		basemount: p.mountPath(id),
+		basemount: p.mountPath(info),
 	}
 	snap.dataset, err = zvol.dataset.Snapshot(id, false)
 	if err != nil {
@@ -378,9 +395,9 @@ func (p *Provider) mountDataset(vol *zfsVolume) error {
 	}
 	if vol.filesystem != nil {
 		return syscall.Mount(
-			p.zvolPath(vol.info.ID),
+			p.zvolPath(vol.info),
 			vol.basemount,
-			vol.filesystem.Type,
+			string(vol.filesystem.Type),
 			vol.filesystem.MountFlags,
 			"",
 		)
@@ -408,10 +425,11 @@ func (p *Provider) ForkVolume(vol volume.Volume) (volume.Volume, error) {
 		return nil, fmt.Errorf("can only fork a snapshot")
 	}
 	id := random.UUID()
+	info := &volume.Info{ID: id, Type: vol.Info().Type}
 	v2 := &zfsVolume{
-		info:      &volume.Info{ID: id},
+		info:      info,
 		provider:  zvol.provider,
-		basemount: p.mountPath(id),
+		basemount: p.mountPath(info),
 	}
 	cloneID := fmt.Sprintf("%s/%s", zvol.provider.dataset.Name, id)
 	v2.dataset, err = zvol.dataset.Clone(cloneID, map[string]string{
@@ -544,11 +562,12 @@ func (p *Provider) ReceiveSnapshot(vol volume.Volume, input io.Reader) (volume.V
 	snapds := snapshots[len(snapshots)-1]
 	// reassemble as a flynn volume for return
 	id := random.UUID()
+	info := &volume.Info{ID: id, Type: vol.Info().Type}
 	snap := &zfsVolume{
-		info:      &volume.Info{ID: id},
+		info:      info,
 		provider:  zvol.provider,
 		dataset:   snapds,
-		basemount: p.mountPath(id),
+		basemount: p.mountPath(info),
 	}
 	if err := p.mountDataset(snap); err != nil {
 		return nil, err
@@ -589,6 +608,14 @@ func (p *Provider) RestoreVolumeState(volInfo *volume.Info, data json.RawMessage
 	record := &zfsVolumeRecord{}
 	if err := json.Unmarshal(data, record); err != nil {
 		return nil, fmt.Errorf("cannot restore volume %q: %s", volInfo.ID, err)
+	}
+	// handle legacy info which don't have a Type
+	if volInfo.Type == "" {
+		if record.Filesystem != nil {
+			volInfo.Type = record.Filesystem.Type
+		} else {
+			volInfo.Type = volume.VolumeTypeData
+		}
 	}
 	dataset, err := zfs.GetDataset(record.Dataset)
 	if err != nil {

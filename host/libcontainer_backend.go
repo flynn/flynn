@@ -794,7 +794,7 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 			ID:         m.ID,
 			Data:       tmp,
 			Size:       m.Size,
-			Type:       "squashfs",
+			Type:       volume.VolumeTypeSquashfs,
 			MountFlags: syscall.MS_RDONLY,
 		})
 		if err != nil {
@@ -830,7 +830,7 @@ func (l *LibcontainerBackend) mountTmpfs(job *host.Job) (string, error) {
 		ID:         job.ID,
 		Data:       sparse.NewBufferedFileIoProcessorByFP(f),
 		Size:       tmpfs.Size,
-		Type:       "ext2",
+		Type:       volume.VolumeTypeExt2,
 		MountFlags: syscall.MS_NOATIME,
 	})
 	if err != nil {

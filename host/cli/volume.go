@@ -92,10 +92,10 @@ outer:
 		}
 		if err := v.Host.DestroyVolume(v.Volume.ID); err != nil {
 			success = false
-			fmt.Printf("could not delete volume %s: %s\n", v.Volume.ID, err)
+			fmt.Printf("could not delete %s volume %s: %s\n", v.Volume.Type, v.Volume.ID, err)
 			continue outer
 		}
-		fmt.Println(v.Volume.ID, "deleted")
+		fmt.Println("Deleted", v.Volume.Type, "volume", v.Volume.ID)
 	}
 	if !success {
 		return errors.New("could not garbage collect all volumes")
@@ -199,12 +199,14 @@ func runVolumeList(args *docopt.Args, client *cluster.Client) error {
 	defer w.Flush()
 	listRec(w,
 		"ID",
+		"TYPE",
 		"HOST",
 	)
 
 	for _, volume := range volumes {
 		listRec(w,
 			volume.Volume.ID,
+			volume.Volume.Type,
 			volume.Host.ID(),
 		)
 	}
