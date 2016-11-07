@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pinkerton"
@@ -19,6 +20,7 @@ import (
 
 func main() {
 	log.SetFlags(0)
+	logrus.SetLevel(logrus.ErrorLevel)
 
 	if len(os.Args) != 2 {
 		log.Fatalf("usage: %s URL", os.Args[0])
@@ -34,7 +36,7 @@ func run(url string) error {
 		return err
 	}
 
-	context, err := pinkerton.BuildContext("flynn", "/data")
+	context, err := pinkerton.BuildContext("flynn", "/tmp/docker")
 	if err != nil {
 		return err
 	}

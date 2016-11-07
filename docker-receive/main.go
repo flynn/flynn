@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -17,7 +16,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/docker-receive/blobstore"
-	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
 )
@@ -36,9 +35,18 @@ func main() {
 		context.GetLogger(ctx).Fatalln(err)
 	}
 
+	release, err := client.GetRelease(os.Getenv("FLYNN_RELEASE_ID"))
+	if err != nil {
+		context.GetLogger(ctx).Fatalln(err)
+	}
+	artifact, err := client.GetArtifact(release.ArtifactIDs[0])
+	if err != nil {
+		context.GetLogger(ctx).Fatalln(err)
+	}
+
 	authKey := os.Getenv("AUTH_KEY")
 
-	middleware.Register("flynn", repositoryMiddleware(client, authKey))
+	middleware.Register("flynn", repositoryMiddleware(client, artifact, authKey))
 
 	config := configuration.Configuration{
 		Version: configuration.CurrentVersion,
@@ -71,11 +79,12 @@ func main() {
 	}
 }
 
-func repositoryMiddleware(client controller.Client, authKey string) middleware.InitFunc {
+func repositoryMiddleware(client controller.Client, artifact *ct.Artifact, authKey string) middleware.InitFunc {
 	return func(ctx context.Context, r distribution.Repository, _ map[string]interface{}) (distribution.Repository, error) {
 		return &repository{
 			Repository: r,
 			client:     client,
+			artifact:   artifact,
 			authKey:    authKey,
 		}, nil
 	}
@@ -86,8 +95,9 @@ func repositoryMiddleware(client controller.Client, authKey string) middleware.I
 type repository struct {
 	distribution.Repository
 
-	client  controller.Client
-	authKey string
+	client   controller.Client
+	artifact *ct.Artifact
+	authKey  string
 }
 
 func (r *repository) Manifests(ctx context.Context, options ...distribution.ManifestServiceOption) (distribution.ManifestService, error) {
@@ -99,6 +109,7 @@ func (r *repository) Manifests(ctx context.Context, options ...distribution.Mani
 		ManifestService: m,
 		repository:      r,
 		client:          r.client,
+		artifact:        r.artifact,
 		authKey:         r.authKey,
 	}, nil
 }
@@ -108,6 +119,7 @@ type manifestService struct {
 
 	repository distribution.Repository
 	client     controller.Client
+	artifact   *ct.Artifact
 	authKey    string
 }
 
@@ -126,24 +138,13 @@ func (m *manifestService) Put(manifest *manifest.SignedManifest) error {
 
 func (m *manifestService) runArtifactJob(dgst digest.Digest) error {
 	url := fmt.Sprintf("http://flynn:%s@docker-receive.discoverd?name=%s&id=%s", m.authKey, m.repository.Name(), dgst)
-	job := &ct.NewJob{
-		Args:       []string{"/bin/docker-artifact", url},
-		ReleaseID:  os.Getenv("FLYNN_RELEASE_ID"),
-		ReleaseEnv: true,
-		Data:       true,
+	cmd := exec.Command(m.artifact, "/bin/docker-artifact", url)
+	cmd.Env = map[string]string{
+		"CONTROLLER_KEY": os.Getenv("CONTROLLER_KEY"),
 	}
-	rwc, err := m.client.RunJobAttached(os.Getenv("FLYNN_APP_ID"), job)
-	if err != nil {
-		return err
-	}
-	defer rwc.Close()
-	attachClient := cluster.NewAttachClient(rwc)
-	var out bytes.Buffer
-	exitStatus, err := attachClient.Receive(&out, &out)
-	if err != nil {
-		return err
-	} else if exitStatus != 0 {
-		return fmt.Errorf("artifact job exited with non-zero exit status %d: output: %s", exitStatus, out.String())
+	cmd.Volumes = []*ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error running artifact job: %s: %s", err, out)
 	}
 	return nil
 }
