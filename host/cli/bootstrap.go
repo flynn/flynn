@@ -733,7 +733,7 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 			"PGDATABASE":     data.Controller.Release.Env["PGDATABASE"],
 			"PGPASSWORD":     data.Controller.Release.Env["PGPASSWORD"],
 		}
-		cmd.Volumes = []*ct.VolumeReq{{Path: "/data", DeleteOnStop: true}}
+		cmd.Volumes = []*ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}}
 		if err := runMigrator(cmd); err != nil {
 			ch <- &bootstrap.StepInfo{
 				StepMeta:  meta,
