@@ -71,6 +71,8 @@ main() {
   backup_mysql_cluster
 
   backup_mongodb_cluster
+
+  backup_docker_cluster
 }
 
 clone_app() {
@@ -114,6 +116,22 @@ backup_mongodb_cluster() {
   backup_cluster "${out}"
 }
 
+backup_docker_cluster() {
+  local version="v20161017.1"
+  local name="${version}-nodejs-docker.tar"
+  local out="${dir}/${name}"
+
+  info "generating ${name}"
+  if [[ -e "${out}" ]] && ! $force; then
+    info "backup ${name} already exists"
+    return
+  fi
+
+  bootstrap_cluster "${version}"
+  docker_deploy_app
+  backup_cluster "${out}"
+}
+
 bootstrap_cluster() {
   local version=$1
 
@@ -152,6 +170,21 @@ git_deploy_app() {
   fi
 
   popd >/dev/null
+}
+
+docker_deploy_app() {
+  info "deploying app using 'flynn docker push'"
+
+  docker build -t "${app}" "${src}"
+
+  flynn create --remote "" --yes "${app}"
+
+  local out="${tmp}/docker-push-${version}.txt"
+  if ! flynn -a "${app}" docker push "${app}" &> "${out}"; then
+    warn "docker push failed:"
+    cat "${out}"
+    fail "docker push failed"
+  fi
 }
 
 add_redis_resource() {
