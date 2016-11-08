@@ -687,17 +687,20 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 }
 
 func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, error) {
+	log := l.Logger.New("fn", "rootOverlayMount", "job.id", job.ID)
 	layers := make([]string, 0, len(job.Mountspecs)+1)
 	for _, spec := range job.Mountspecs {
 		if spec.Type != host.MountspecTypeSquashfs {
 			return nil, fmt.Errorf("unknown mountspec type: %q", spec.Type)
 		}
+		log.Info("mounting squashfs layer", "id", spec.ID)
 		path, err := l.mountSquashfs(spec)
 		if err != nil {
 			return nil, err
 		}
 		layers = append(layers, path)
 	}
+	log.Info("mounting ext2 layer")
 	tmpfs, err := l.mountTmpfs(job)
 	if err != nil {
 		return nil, err
