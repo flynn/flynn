@@ -35,13 +35,13 @@ func migrate() error {
 		return err
 	}
 
-	artifacts, err := getSlugArtifacts(db)
+	artifacts, err := getActiveSlugArtifacts(db)
 	if err != nil {
-		log.Printf("error getting slug artifacts: %s", err)
+		log.Printf("error getting active slug artifacts: %s", err)
 		return err
 	}
 
-	log.Printf("converting %d slugs to Flynn images", len(artifacts))
+	log.Printf("converting %d active slugs to Flynn images", len(artifacts))
 	for i, artifact := range artifacts {
 		log.Printf("converting slug %s (%d/%d)", artifact.ID, i+1, len(artifacts))
 		newID, err := convert(slugbuilder, artifact.URI)
@@ -92,7 +92,7 @@ ORDER BY created_at DESC LIMIT 1
 	return artifact, nil
 }
 
-func getSlugArtifacts(db *postgres.DB) ([]*ct.Artifact, error) {
+func getActiveSlugArtifacts(db *postgres.DB) ([]*ct.Artifact, error) {
 	sql := `
 SELECT artifact_id, uri FROM artifacts
 WHERE type = 'file'
@@ -103,6 +103,16 @@ AND artifact_id IN (
   WHERE release_id IN (
     SELECT release_id FROM releases
     WHERE meta->>'git' = 'true'
+    AND release_id IN (
+      SELECT release_id
+      FROM formations, json_each_text(formations.processes::json)
+      WHERE processes != 'null'
+      GROUP BY app_id, release_id
+      HAVING SUM(value::int) > 0
+    )
+    OR release_id IN (
+      SELECT release_id FROM apps
+    )
   )
 )
 `
