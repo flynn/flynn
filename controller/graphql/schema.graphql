@@ -1,5 +1,44 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  node(id: ID!): Node
+
+  nodes(ids: [ID!]!): [Node]!
+
+  namedNode(type: String!, name: String!): NamedNode
+
+  nodesOfType(type: String!, first: Int, after: String, last: Int, before: String): NodeConnection!
+
+  relay: Query!
+}
+
 interface Node {
   id: ID!
+}
+
+interface NamedNode {
+  name: String!
+}
+
+type NodeConnection {
+  pageInfo: PageInfo!
+
+  edges: [NodeEdge!]!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+
+  hasPreviousPage: Boolean!
+}
+
+type NodeEdge {
+  cursor: String!
+
+  node: Node!
 }
 
 type KVPair {
@@ -14,7 +53,19 @@ type DeploymentConfig {
   timeout: Int!
 }
 
-type App implements Node {
+type AppConnection {
+  pageInfo: PageInfo!
+
+  edges: [AppEdge!]!
+}
+
+type AppEdge {
+  cursor: String!
+
+  node: App!
+}
+
+type App implements Node, Name {
   id: ID!
 
   # The name of the app.
@@ -29,10 +80,40 @@ type App implements Node {
   createdAt: DateTime!
 
   updatedAt: DateTime!
+
+  releases(first: Int, after: String, last: Int, before: String): ReleaseConnection!
+
+  formations(first: Int, after: String, last: Int, before: String): FormationConnection!
+
+  jobs(first: Int, after: String, last: Int, before: String): JobConnection!
+
+  deployments(first: Int, after: String, last: Int, before: String): DeploymentConnection!
+
+  resources(first: Int, after: String, last: Int, before: String): ResourceConnection!
+
+  routes(first: Int, after: String, last: Int, before: String): RouteConnection!
+
+  groups(first: Int, after: String, last: Int, before: String): GroupConnection!
+}
+
+type ReleaseConnection {
+  pageInfo: PageInfo!
+
+  edges: [ReleaseEdge!]!
+}
+
+type ReleaseEdge {
+  cursor: String!
+
+  node: Release!
 }
 
 type Release implements Node {
   id: ID!
+
+  app: App!
+
+  formation: Formation
 
   artifacts: [Artifact!]!
 
@@ -135,6 +216,22 @@ type Artifact implements Node {
   meta(keys: [String!]): [KVPair]!
 
   createdAt: DateTime!
+
+  releases(first: Int, after: String, last: Int, before: String): ReleaseConnection!
+
+  groups(first: Int, after: String, last: Int, before: String): GroupConnection!
+}
+
+type FormationConnection {
+  pageInfo: PageInfo!
+
+  edges: [FormationEdge!]!
+}
+
+type FormationEdge {
+  cursor: String!
+
+  node: Formation!
 }
 
 type Formation implements Node {
@@ -157,6 +254,18 @@ type FormationProcess {
   processType: ProcessType!
 
   tags(keys: [String!]): [KVPair]!
+}
+
+type JobConnection {
+  pageInfo: PageInfo!
+
+  edges: [JobEdge!]!
+}
+
+type JobEdge {
+  cursor: String!
+
+  node: Job!
 }
 
 type Job implements Node {
@@ -197,6 +306,18 @@ enum JobState {
   UP
   STOPPING
   DOWN
+}
+
+type DeploymentConnection {
+  pageInfo: PageInfo!
+
+  edges: [DeploymentEdge!]!
+}
+
+type DeploymentEdge {
+  cursor: String!
+
+  node: Deployment!
 }
 
 type Deployment implements Node {
@@ -243,7 +364,7 @@ type DeploymentEvent {
   error: String
 }
 
-type ResourceProvider implements Node {
+type ResourceProvider implements Node, NamedNode {
   id: ID!
 
   url: URI!
@@ -253,6 +374,22 @@ type ResourceProvider implements Node {
   createdAt: DateTime!
 
   updatedAt: DateTime!
+
+  resources(first: Int, after: String, last: Int, before: String): ResourceConnection!
+
+  groups(first: Int, after: String, last: Int, before: String): GroupConnection!
+}
+
+type ResourceConnection {
+  pageInfo: PageInfo!
+
+  edges: [ResourceEdge!]!
+}
+
+type ResourceEdge {
+  cursor: String!
+
+  node: Resource!
 }
 
 type Resource implements Node {
@@ -264,7 +401,131 @@ type Resource implements Node {
 
   env(keys: [String!]): [KVPair]!
 
-  apps(ids: [ID!]): [App]!
+  createdAt: DateTime!
+
+  apps(first: Int, after: String, last: Int, before: String): AppConnection!
+
+  groups(first: Int, after: String, last: Int, before: String): GroupConnection!
+}
+
+type GroupConnection {
+  pageInfo: PageInfo!
+
+  edges: [GroupEdge!]!
+}
+
+type GroupEdge {
+  cursor: String!
+
+  node: Group!
+}
+
+type Group implements Node, NamedNode {
+  id: ID!
+
+  name: String!
+
+  context: Query!
+}
+
+type RouteConnection {
+  pageInfo: PageInfo!
+
+  edges: [RouteEdge!]!
+}
+
+type RouteEdge {
+  cursor: String!
+
+  node: Route!
+}
+
+interface Route {
+  app: App!
+
+  service: String!
+
+  leader: Boolean!
+
+  drainBackends: Boolean!
 
   createdAt: DateTime!
+
+  updatedAt: DateTime!
+}
+
+type TCPRoute implements Node, Route {
+  id: ID!
+
+  port: Int!
+
+  app: App!
+
+  service: String!
+
+  leader: Boolean!
+
+  drainBackends: Boolean!
+
+  createdAt: DateTime!
+
+  updatedAt: DateTime!
+}
+
+type HTTPRoute implements Node, Route {
+  id: ID!
+
+  domain: String!
+
+  path: String
+
+  sticky: Boolean!
+
+  certChains: [RouteCertificateChain!]!
+
+  service: String!
+
+  app: App!
+
+  leader: Boolean!
+
+  drainBackends: Boolean!
+
+  createdAt: DateTime!
+
+  updatedAt: DateTime!
+}
+
+type RouteCertificateChainConnection {
+  pageInfo: PageInfo!
+
+  edges: [RouteCertificateChainEdge!]!
+}
+
+type RouteCertificateChainEdge {
+  cursor: String!
+
+  node: RouteCertificateChain!
+}
+
+type RouteCertificateChain implements Node {
+  id: ID!
+
+  certificates: [RouteCertificate!]!
+
+  createdAt: DateTime!
+
+  routes(first: Int, after: String, last: Int, before: String): RouteConnection!
+}
+
+type RouteCertificate implements Node {
+  id: ID!
+
+  pem: String!
+
+  createdAt: DateTime!
+
+  chains(first: Int, after: String, last: Int, before: String): RouteCertificateChainConnection!
+
+  groups(first: Int, after: String, last: Int, before: String): GroupConnection!
 }
