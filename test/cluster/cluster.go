@@ -562,7 +562,8 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 		for _, cmd := range cmds {
 			fmt.Fprintln(out, "HostID:", inst.ID, "-", cmd)
 			fmt.Fprintln(out)
-			err := inst.Run(cmd, &Streams{Stdout: out, Stderr: out})
+			script := fmt.Sprintf(`/usr/bin/env DISCOVERD="http://%s:1111" %s`, inst.IP, cmd)
+			err := inst.Run("bash", &Streams{Stdin: strings.NewReader(script), Stdout: out, Stderr: out})
 			fmt.Fprintln(out)
 			if err != nil {
 				return err
