@@ -367,7 +367,7 @@ cmd="bin/flynn-test \
   --backups-dir "/mnt/backups" \
   --debug"
 
-timeout --signal=QUIT --kill-after=10 35m $cmd
+timeout --signal=QUIT --kill-after=10 45m $cmd
 `[1:]))
 
 func formatDuration(d time.Duration) string {
