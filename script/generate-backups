@@ -185,6 +185,8 @@ docker_deploy_app() {
     cat "${out}"
     fail "docker push failed"
   fi
+
+  flynn -a "${app}" scale app=1
 }
 
 add_redis_resource() {
