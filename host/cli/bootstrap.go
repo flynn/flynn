@@ -623,29 +623,23 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 		return err
 	}
 
-	// determine whether any releases have slugs or docker images which
-	// need to be converted to Flynn images
-	releases, err := client.ReleaseList()
-	if err != nil {
-		return fmt.Errorf("error listing releases: %s", err)
-	}
+	// determine if there are any slugs or docker images which need to be
+	// converted to Flynn images
 	migrateSlugs := false
 	migrateDocker := false
-	for _, release := range releases {
+	artifactList, err := client.ArtifactList()
+	if err != nil {
+		return fmt.Errorf("error listing artifacts: %s", err)
+	}
+	for _, artifact := range artifactList {
+		if artifact.Type == ct.DeprecatedArtifactTypeFile && artifact.Meta["blobstore"] == "true" {
+			migrateSlugs = true
+		}
+		if artifact.Type == ct.DeprecatedArtifactTypeDocker && artifact.Meta["docker-receive.repository"] != "" {
+			migrateDocker = true
+		}
 		if migrateSlugs && migrateDocker {
 			break
-		}
-		if !migrateSlugs && release.IsGitDeploy() && len(release.ArtifactIDs) == 2 {
-			artifact, err := client.GetArtifact(release.ArtifactIDs[1])
-			if err == nil && artifact.Type == ct.DeprecatedArtifactTypeFile {
-				migrateSlugs = true
-			}
-		}
-		if !migrateDocker && release.IsDockerReceiveDeploy() && len(release.ArtifactIDs) == 1 {
-			artifact, err := client.GetArtifact(release.ArtifactIDs[0])
-			if err == nil && artifact.Type == ct.DeprecatedArtifactTypeDocker {
-				migrateDocker = true
-			}
 		}
 	}
 
