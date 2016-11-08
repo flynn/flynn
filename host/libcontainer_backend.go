@@ -1404,7 +1404,11 @@ func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jo
 		if state.NetworkConfig != nil && state.NetworkConfig.JobID != "" {
 			if _, ok := readySignals[state.NetworkConfig.JobID]; ok {
 				log.Info("using stored network config", "job.id", state.NetworkConfig.JobID)
-				l.host.ConfigureNetworking(state.NetworkConfig)
+
+				// run ConfigureNetworking in a goroutine to avoid deadlock
+				// between state.Restore and PersistGlobalState which both
+				// access the state database
+				go l.host.ConfigureNetworking(state.NetworkConfig)
 			} else {
 				log.Info("got stored network config, but associated job isn't running", "job.id", state.NetworkConfig.JobID)
 			}
@@ -1413,7 +1417,11 @@ func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jo
 		if state.DiscoverdConfig != nil && state.DiscoverdConfig.JobID != "" {
 			if _, ok := readySignals[state.DiscoverdConfig.JobID]; ok {
 				log.Info("using stored discoverd config", "job.id", state.DiscoverdConfig.JobID)
-				l.host.ConfigureDiscoverd(state.DiscoverdConfig)
+
+				// run ConfigureDiscoverd in a goroutine to avoid deadlock
+				// between state.Restore and PersistGlobalState which both
+				// access the state database
+				go l.host.ConfigureDiscoverd(state.DiscoverdConfig)
 			} else {
 				log.Info("got stored discoverd config, but associated job isn't running", "job.id", state.DiscoverdConfig.JobID)
 			}
