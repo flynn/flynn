@@ -8,7 +8,7 @@ usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
-A script to install Flynn on Ubuntu 14.04.
+A script to install Flynn on Ubuntu 14.04 or 16.04.
 See https://flynn.io/docs/installation/manual for further information.
 
 OPTIONS:
@@ -42,8 +42,8 @@ main() {
     fail "this script must be executed as the root user"
   fi
 
-  if ! is_ubuntu_trusty; then
-    fail "this script is only compatible with Ubuntu 14.04 LTS, Trusty Tahr"
+  if ! is_ubuntu_xenial && ! is_ubuntu_trusty; then
+    fail "this script is only compatible with Ubuntu 16.04 or 14.04"
   fi
 
   if ! check_overlayfs; then
@@ -141,27 +141,36 @@ main() {
 
   repo_url="${repo_url:="https://dl.flynn.io"}"
 
-  info "adding zfs-native APT PPA"
-  run apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
-  mkdir -p "/etc/apt/sources.list.d"
-  echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
-  run apt-get update
+  local packages=("iptables")
 
-  # install linux-headers explicitly before ubuntu-zfs to avoid skipping
-  # building kernel modules due to absent kernel headers.
-  info "installing linux-headers"
-  run apt-get install -y "linux-headers-$(uname -r)"
+  info "installing ZFS"
+  if is_ubuntu_xenial; then
+    run apt-get update
+    packages+=("zfsutils-linux")
+  elif is_ubuntu_trusty; then
+    info "adding zfs-native APT PPA"
+    run apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
+    mkdir -p "/etc/apt/sources.list.d"
+    echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
+    run apt-get update
 
-  local packages=(
-    "aufs-tools"
-    "iptables"
-    "ubuntu-zfs"
-  )
+    # install linux-headers explicitly before ubuntu-zfs to avoid skipping
+    # building kernel modules due to absent kernel headers.
+    info "installing linux-headers"
+    run apt-get install -y "linux-headers-$(uname -r)"
+
+    packages+=("ubuntu-zfs")
+  fi
+
+  # Flynn no longer uses AUFS since version v20161106.0, but install
+  # it in case we end up installing an old version
   if ! modprobe aufs &>/dev/null; then
     packages+=(
+      "aufs-tools"
       "linux-image-extra-$(uname -r)"
     )
   fi
+
   info "installing runtime dependencies"
   run apt-get install --yes ${packages[@]}
   info "loading zfs kernel module"
@@ -217,9 +226,11 @@ main() {
     fi
   fi
 
-  info "installing Upstart job"
-  cp /etc/flynn/upstart.conf /etc/init/flynn-host.conf
-  initctl reload-configuration
+  if is_ubuntu_xenial; then
+    install_systemd_unit
+  elif is_ubuntu_trusty; then
+    install_upstart_job
+  fi
 
   info "installation complete!"
 }
@@ -229,7 +240,55 @@ is_root() {
 }
 
 is_ubuntu_trusty() {
-  grep "Ubuntu 14.04" "/etc/os-release" &>/dev/null
+  grep -qF "Ubuntu 14.04" /etc/os-release &>/dev/null
+}
+
+is_ubuntu_xenial() {
+  grep -qF "Ubuntu 16.04" /etc/os-release &>/dev/null
+}
+
+install_systemd_unit() {
+  info "installing systemd unit"
+
+  cat > /lib/systemd/system/flynn-host.service <<EOF
+[Unit]
+Description=Flynn host daemon
+Documentation=https://flynn.io/docs
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/flynn-host daemon
+Restart=on-failure
+
+# set delegate yes so that systemd does not reset the cgroups of containers
+Delegate=yes
+
+# kill only the flynn-host process, not all processes in the cgroup
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl enable flynn-host.service
+}
+
+install_upstart_job() {
+  info "installing Upstart job"
+
+  cat > /etc/init/flynn-host.conf <<EOF
+description "Flynn host daemon"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+respawn
+respawn limit 100 60
+
+exec /usr/local/bin/flynn-host daemon
+EOF
+
+  initctl reload-configuration
 }
 
 do_remove() {
@@ -254,9 +313,14 @@ do_remove() {
   fi
 
   info "stopping flynn-host daemon"
-  local status="$(status flynn-host)"
-  if [[ "${status:0:16}" = "flynn-host start" ]]; then
-    run stop flynn-host
+  if is_ubuntu_xenial; then
+    run systemctl stop flynn-host
+    run systemctl disable flynn-host
+  elif is_ubuntu_trusty; then
+    local status="$(status flynn-host)"
+    if [[ "${status:0:16}" = "flynn-host start" ]]; then
+      run stop flynn-host
+    fi
   fi
 
   info "killing old containers"
@@ -278,7 +342,12 @@ do_remove() {
   fi
 
   info "removing Flynn files and directories"
-  run rm -rf /usr/local/bin/flynn* /var/lib/flynn /etc/flynn
+  run rm -rf \
+    /usr/local/bin/flynn* \
+    /var/lib/flynn \
+    /etc/flynn \
+    /etc/init/flynn-host.conf \
+    /lib/systemd/system/flynn-host.service
 
   info "Flynn successfully removed"
 }
