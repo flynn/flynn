@@ -323,6 +323,14 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'flannel');
 		`, network))
 	}
 
+	// ensure controller / gitreceive have tmp volumes
+	sqlBuf.WriteString(`
+UPDATE releases SET processes = jsonb_set(processes, '{web,volumes}', '[{"path": "/tmp", "delete_on_stop": true}]')
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'controller');
+UPDATE releases SET processes = jsonb_set(processes, '{app,volumes}', '[{"path": "/tmp", "delete_on_stop": true}]')
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'gitreceive');
+`)
+
 	// start discoverd/flannel/postgres
 	cfg.Singleton = data.Postgres.Release.Env["SINGLETON"] == "true"
 	systemSteps := bootstrap.Manifest{
