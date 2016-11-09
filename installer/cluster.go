@@ -912,15 +912,24 @@ iptables -A FORWARD -i eth0 -j DROP
 `[1:]))
 
 var startScript = template.Must(template.New("start.sh").Parse(`
-#!/bin/sh
-set -e -x
+#!/bin/bash
+set -e -x -o pipefail
 
 FIRST_BOOT="/var/lib/flynn/first-boot"
 mkdir -p /var/lib/flynn
 
-if [ ! -f "${FIRST_BOOT}" ]; then
+if [[ ! -f "${FIRST_BOOT}" ]]; then
   {{if .DataDisk}}
-  zpool create -f flynn-default {{.DataDisk}}
+  zpool create -f -m none flynn-default {{.DataDisk}}
+
+  # if the sparse file zpool exists, copy images to the new zpool
+  if [[ -f /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev ]]; then
+    zpool import -d /var/lib/flynn/volumes/zfs/vdev flynn-default flynn-tmp
+    zfs snapshot -r flynn-tmp/squashfs@snap
+    zfs send -R flynn-tmp/squashfs@snap | zfs recv flynn-default/squashfs
+    zpool destroy flynn-tmp
+    rm /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev
+  fi
   {{end}}
 
   flynn-host init --discovery={{.DiscoveryToken}}
