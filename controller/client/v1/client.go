@@ -36,6 +36,7 @@ type jobWatcher struct {
 
 func (w *jobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callback func(*ct.Job) error) error {
 	actual := make(ct.JobEvents)
+	timeoutCh := time.After(timeout)
 	for {
 		select {
 		case e, ok := <-w.events:
@@ -65,7 +66,7 @@ func (w *jobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callb
 			if jobEventsEqual(expected, actual) {
 				return nil
 			}
-		case <-time.After(timeout):
+		case <-timeoutCh:
 			return fmt.Errorf("Timed out waiting for job events. Waited %.f seconds.\nexpected: %v\nactual: %v", timeout.Seconds(), expected, actual)
 		}
 	}
