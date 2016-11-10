@@ -51,7 +51,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   pushd "${src}" >/dev/null
   sed "s/{{TUF-ROOT-KEYS}}/$(tuf --dir test/release root-keys)/g" host/cli/root_keys.go.tmpl > host/cli/root_keys.go
   vpkg="github.com/flynn/flynn/pkg/version"
-  ldflags="-X ${vpkg}.commit=notdev -X ${vpkg}.branch=dev -X ${vpkg}.tag=v20160711.0-test -X ${vpkg}.dirty=false"
+  ldflags="-X ${vpkg}.commit=notdev -X ${vpkg}.branch=dev -X ${vpkg}.tag=v20161108.0-test -X ${vpkg}.dirty=false"
   go build -o host/bin/flynn-host -ldflags="${ldflags}" ./host
   gzip -9 --keep --force host/bin/flynn-host
   sed "s/{{FLYNN-HOST-CHECKSUM}}/$(sha512sum host/bin/flynn-host.gz | cut -d " " -f 1)/g" script/install-flynn.tmpl > script/install-flynn
@@ -65,7 +65,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   popd >/dev/null
 
   "${src}/script/export-components" "${src}/test/release"
-  "${src}/script/release-channel" --tuf-dir "${src}/test/release" --no-sync --no-changelog "stable" "v20160711.0-test"
+  "${src}/script/release-channel" --tuf-dir "${src}/test/release" --no-sync --no-changelog "stable" "v20161108.0-test"
 
   dir=$(mktemp --directory)
   ln -s "${src}/test/release/repository" "${dir}/tuf"
@@ -144,7 +144,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	// check the flynn-host version is correct
 	var hostVersion bytes.Buffer
 	t.Assert(installHost.Run("flynn-host version", &tc.Streams{Stdout: &hostVersion}), c.IsNil)
-	t.Assert(strings.TrimSpace(hostVersion.String()), c.Equals, "v20160711.0-test")
+	t.Assert(strings.TrimSpace(hostVersion.String()), c.Equals, "v20161108.0-test")
 
 	// check rebuilt images were downloaded
 	assertInstallOutput := func(format string, v ...interface{}) {

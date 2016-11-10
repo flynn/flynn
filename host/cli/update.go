@@ -42,10 +42,9 @@ Update Flynn components`)
 
 // minVersion is the minimum version that can be updated from.
 //
-// The current minimum version is v20160711.0 since versions prior to that used
-// the libvirt-lxc container runtime with an nsumount binary which no longer
-// exists.
-var minVersion = "v20160711.0"
+// The current minimum version is v20161108.0 since versions prior to that used
+// a different image format
+var minVersion = "v20161108.0"
 
 var ErrIncompatibleVersion = fmt.Errorf(`
 Versions prior to %s cannot be updated in-place to this version of Flynn.
