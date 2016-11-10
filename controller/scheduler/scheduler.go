@@ -1063,6 +1063,17 @@ func (s *Scheduler) StartJob(job *Job) {
 
 outer:
 	for attempt := 0; ; attempt++ {
+		if attempt > 0 {
+			// when making multiple attempts, backoff in increments
+			// of 500ms (capped at 30s)
+			delay := 500 * time.Millisecond * time.Duration(attempt)
+			if delay > 30*time.Second {
+				delay = 30 * time.Second
+			}
+			log.Warn(fmt.Sprintf("waiting %s before re-attempting job placement", delay))
+			time.Sleep(delay)
+		}
+
 		log.Info("placing job in the cluster")
 		config, host, err := s.PlaceJob(job)
 		if err == ErrNotLeader {
@@ -1093,17 +1104,6 @@ outer:
 			return
 		}
 		log.Error("error adding job to the cluster", "attempts", attempt+1, "err", err)
-
-		if attempt > 0 {
-			// when making multiple attempts, backoff in increments
-			// of 500ms (capped at 30s)
-			delay := 500 * time.Millisecond * time.Duration(attempt)
-			if delay > 30*time.Second {
-				delay = 30 * time.Second
-			}
-			log.Warn(fmt.Sprintf("waiting %s before re-attempting job placement", delay))
-			time.Sleep(delay)
-		}
 	}
 }
 
