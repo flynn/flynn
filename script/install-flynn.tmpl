@@ -24,6 +24,8 @@ OPTIONS:
 
   --yes                            Automatic yes to prompts
 
+  --no-ntp                         Don't install ntp package
+
   -r, --repo URL                   The TUF repository to download files from [default: https://dl.flynn.io]
 
   --zpool-create-device DEVICE     Device to create the flynn-default zpool on
@@ -55,6 +57,7 @@ main() {
   local install=true
   local remove=false
   local assume_yes=false
+  local install_ntp=true
   local channel="${FLYNN_UPDATE_CHANNEL:-"stable"}"
   local repo_url
   local zpool_dev
@@ -89,6 +92,10 @@ main() {
         ;;
       --yes)
         assume_yes=true
+        shift
+        ;;
+      --no-ntp)
+        install_ntp=false
         shift
         ;;
       --zpool-create-device)
@@ -168,6 +175,12 @@ main() {
     packages+=(
       "aufs-tools"
       "linux-image-extra-$(uname -r)"
+    )
+  fi
+
+  if $install_ntp; then
+    packages+=(
+      "ntp"
     )
   fi
 
