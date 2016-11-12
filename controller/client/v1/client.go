@@ -284,6 +284,107 @@ func (c *Client) DeleteResource(providerID, resourceID string) (*ct.Resource, er
 	return res, err
 }
 
+func (c *Client) PutScaleRequest(req *ct.ScaleRequest) error {
+	if req.AppID == "" || req.ReleaseID == "" {
+		return errors.New("controller: missing app id and/or release id")
+	}
+	return c.Put(fmt.Sprintf("/apps/%s/scale/%s", req.AppID, req.ReleaseID), req, req)
+}
+
+func (c *Client) ScaleAppRelease(appID, releaseID string, opts ct.ScaleOptions) error {
+	if opts.Processes == nil && opts.Tags == nil {
+		return errors.New("controller: missing processes or tags")
+	}
+	if opts.Timeout == nil {
+		opts.Timeout = &ct.DefaultScaleTimeout
+	}
+
+	var events chan *ct.Event
+	var stream stream.Stream
+	if !opts.NoWait {
+		events = make(chan *ct.Event)
+		var err error
+		stream, err = c.StreamEvents(ct.StreamEventsOptions{
+			AppID: appID,
+			ObjectTypes: []ct.EventType{
+				ct.EventTypeJob,
+				ct.EventTypeScaleRequest,
+			},
+		}, events)
+		if err != nil {
+			return err
+		}
+		defer stream.Close()
+	}
+
+	scaleReq := &ct.ScaleRequest{
+		AppID:     appID,
+		ReleaseID: releaseID,
+		State:     ct.ScaleRequestStatePending,
+	}
+	if opts.Processes != nil {
+		scaleReq.NewProcesses = &opts.Processes
+	}
+	if opts.Tags != nil {
+		scaleReq.NewTags = &opts.Tags
+	}
+	if err := c.PutScaleRequest(scaleReq); err != nil {
+		return err
+	}
+
+	if opts.ScaleRequestCallback != nil {
+		opts.ScaleRequestCallback(scaleReq)
+	}
+
+	if opts.NoWait {
+		return nil
+	}
+
+	timeout := time.After(*opts.Timeout)
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return fmt.Errorf("event stream closed unexpectedly: %s", stream.Err())
+			}
+			switch event.ObjectType {
+			case ct.EventTypeJob:
+				if opts.JobEventCallback == nil {
+					continue
+				}
+				var job ct.Job
+				if err := json.Unmarshal(event.Data, &job); err != nil {
+					continue
+				}
+				if job.ReleaseID != releaseID {
+					continue
+				}
+				if err := opts.JobEventCallback(&job); err != nil {
+					return err
+				}
+			case ct.EventTypeScaleRequest:
+				var req ct.ScaleRequest
+				if err := json.Unmarshal(event.Data, &req); err != nil {
+					continue
+				}
+				if req.ID != scaleReq.ID {
+					continue
+				}
+				switch req.State {
+				case ct.ScaleRequestStateCancelled:
+					return errors.New("scale request cancelled")
+				case ct.ScaleRequestStateComplete:
+					return nil
+				}
+			}
+		case <-opts.Stop:
+			return ct.ErrScalingStopped
+		case <-timeout:
+			return fmt.Errorf("timed out waiting for scale to complete (waited %.f seconds)", opts.Timeout.Seconds())
+		}
+	}
+}
+
 // PutFormation updates an existing formation.
 func (c *Client) PutFormation(formation *ct.Formation) error {
 	if formation.AppID == "" || formation.ReleaseID == "" {

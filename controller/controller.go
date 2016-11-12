@@ -273,6 +273,8 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/apps/:apps_id/formations", httphelper.WrapHandler(api.appLookup(api.ListFormations)))
 	httpRouter.GET("/formations", httphelper.WrapHandler(api.GetFormations))
 
+	httpRouter.PUT("/apps/:apps_id/scale/:releases_id", httphelper.WrapHandler(api.appLookup(api.PutScaleRequest)))
+
 	httpRouter.POST("/apps/:apps_id/jobs", httphelper.WrapHandler(api.appLookup(api.RunJob)))
 	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.GetJob)))
 	httpRouter.PUT("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.PutJob)))

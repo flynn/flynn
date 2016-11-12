@@ -164,6 +164,10 @@ func (c *FakeControllerClient) PutFormation(formation *ct.Formation) error {
 	return nil
 }
 
+func (c *FakeControllerClient) PutScaleRequest(req *ct.ScaleRequest) error {
+	return nil
+}
+
 func (c *FakeControllerClient) AppList() ([]*ct.App, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()

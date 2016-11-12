@@ -10,6 +10,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
 )
 
@@ -59,7 +60,9 @@ Example:
 `)
 }
 
-const scaleTimeout = 20 * time.Second
+// minScaleRequestVersion is the minimum API version which supports scaling
+// using scale requests
+const minScaleRequestVersion = "v20170121.0"
 
 // takes args of the form "web=1[,key=val...]", "worker=3[,key=val...]", etc
 func runScale(args *docopt.Args, client controller.Client) error {
@@ -87,30 +90,8 @@ func runScale(args *docopt.Args, client controller.Client) error {
 		return err
 	}
 
-	formation, err := client.GetFormation(app, release.ID)
-	if err == controller.ErrNotFound {
-		formation = &ct.Formation{
-			AppID:     app,
-			ReleaseID: release.ID,
-			Processes: make(map[string]int),
-		}
-	} else if err != nil {
-		return err
-	}
-	if formation.Processes == nil {
-		formation.Processes = make(map[string]int, len(typeSpecs))
-	}
-	if formation.Tags == nil {
-		formation.Tags = make(map[string]map[string]string, len(typeSpecs))
-	}
-
-	currentProcs := formation.Processes
-	currentTags := formation.Tags
-	processes := make(map[string]int, len(currentProcs)+len(typeSpecs))
-	tags := make(map[string]map[string]string, len(currentTags)+len(typeSpecs))
-	for k, v := range currentProcs {
-		processes[k] = v
-	}
+	processes := make(map[string]int, len(typeSpecs))
+	tags := make(map[string]map[string]string, len(typeSpecs))
 	invalid := make([]string, 0, len(release.Processes))
 	for _, arg := range typeSpecs {
 		i := strings.IndexRune(arg, '=')
@@ -151,13 +132,86 @@ func runScale(args *docopt.Args, client controller.Client) error {
 	if len(invalid) > 0 {
 		return fmt.Errorf("ERROR: unknown process types: %s", strings.Join(invalid, ", "))
 	}
+
+	opts := ct.ScaleOptions{
+		Processes: processes,
+		Tags:      tags,
+		NoWait:    args.Bool["--no-wait"],
+	}
+
+	status, err := client.Status()
+	if err != nil {
+		return err
+	}
+	v := version.Parse(status.Version)
+	if !v.Dev && v.Before(version.Parse(minScaleRequestVersion)) {
+		return runScaleWithJobEvents(client, app, release, opts)
+	}
+	return runScaleWithScaleRequest(client, app, release, opts)
+}
+
+func runScaleWithScaleRequest(client controller.Client, app string, release *ct.Release, opts ct.ScaleOptions) error {
+	opts.ScaleRequestCallback = func(req *ct.ScaleRequest) {
+		if req.NewProcesses == nil {
+			return
+		}
+		scale := make([]string, 0, len(release.Processes))
+		for typ := range release.Processes {
+			if count := (*req.NewProcesses)[typ]; count != req.OldProcesses[typ] {
+				scale = append(scale, fmt.Sprintf("%s: %d=>%d", typ, req.OldProcesses[typ], count))
+			}
+		}
+		fmt.Printf("scaling %s\n\n", strings.Join(scale, ", "))
+	}
+	opts.JobEventCallback = func(job *ct.Job) error {
+		id := job.ID
+		if id == "" {
+			id = job.UUID
+		}
+		fmt.Printf("%s ==> %s %s %s\n", time.Now().Format("15:04:05.000"), job.Type, id, job.State)
+		return nil
+	}
+
+	start := time.Now()
+	if err := client.ScaleAppRelease(app, release.ID, opts); err != nil {
+		return err
+	}
+	if !opts.NoWait {
+		fmt.Printf("\nscale completed in %s\n", time.Since(start))
+	}
+	return nil
+}
+
+func runScaleWithJobEvents(client controller.Client, app string, release *ct.Release, opts ct.ScaleOptions) error {
+	processes := opts.Processes
+	tags := opts.Tags
+	formation, err := client.GetFormation(app, release.ID)
+	if err == controller.ErrNotFound {
+		formation = &ct.Formation{
+			AppID:     app,
+			ReleaseID: release.ID,
+			Processes: make(map[string]int),
+		}
+	} else if err != nil {
+		return err
+	}
+	if formation.Processes == nil {
+		formation.Processes = make(map[string]int, len(processes))
+	}
+	if formation.Tags == nil {
+		formation.Tags = make(map[string]map[string]string, len(tags))
+	}
+
+	currentProcs := formation.Processes
+	currentTags := formation.Tags
+	for k, v := range currentProcs {
+		processes[k] = v
+	}
 	formation.Processes = processes
 	formation.Tags = tags
 
 	if scalingComplete(currentProcs, processes) {
 		if !utils.FormationTagsEqual(currentTags, tags) {
-			// TODO: determine the effect of changing tags and wait
-			//       for appropriate events
 			fmt.Println("persisting tag change")
 			return client.PutFormation(formation)
 		}
@@ -181,12 +235,12 @@ func runScale(args *docopt.Args, client controller.Client) error {
 	defer watcher.Close()
 
 	err = client.PutFormation(formation)
-	if err != nil || args.Bool["--no-wait"] {
+	if err != nil || opts.NoWait {
 		return err
 	}
 
 	start := time.Now()
-	err = watcher.WaitFor(expected, scaleTimeout, func(job *ct.Job) error {
+	err = watcher.WaitFor(expected, ct.DefaultScaleTimeout, func(job *ct.Job) error {
 		id := job.ID
 		if id == "" {
 			id = job.UUID

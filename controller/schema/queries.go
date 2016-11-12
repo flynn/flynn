@@ -53,6 +53,9 @@ var preparedStatements = map[string]string{
 	"formation_insert":                      formationInsertQuery,
 	"formation_delete":                      formationDeleteQuery,
 	"formation_delete_by_app":               formationDeleteByAppQuery,
+	"scale_request_insert":                  scaleRequestInsertQuery,
+	"scale_request_cancel":                  scaleRequestCancelQuery,
+	"scale_request_update":                  scaleRequestUpdateQuery,
 	"job_list":                              jobListQuery,
 	"job_list_active":                       jobListActiveQuery,
 	"job_select":                            jobSelectQuery,
@@ -254,10 +257,16 @@ SELECT
 	ORDER BY r.index
   ),
   releases.meta, releases.env, releases.processes, releases.created_at,
+  scale_requests.scale_request_id, scale_requests.old_processes, scale_requests.new_processes,
+  scale_requests.old_tags, scale_requests.new_tags, scale_requests.created_at,
   formations.processes, formations.tags, formations.updated_at, formations.deleted_at IS NOT NULL
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
+LEFT OUTER JOIN scale_requests
+  ON scale_requests.app_id = formations.app_id
+  AND scale_requests.release_id = formations.release_id
+  AND scale_requests.state = 'pending'
 WHERE (formations.app_id, formations.release_id) IN (
   SELECT app_id, release_id
   FROM formations, json_each_text(formations.processes::json)
@@ -279,10 +288,16 @@ SELECT
 	ORDER BY r.index
   ),
   releases.meta, releases.env, releases.processes, releases.created_at,
+  scale_requests.scale_request_id, scale_requests.old_processes, scale_requests.new_processes,
+  scale_requests.old_tags, scale_requests.new_tags, scale_requests.created_at,
   formations.processes, formations.tags, formations.updated_at, formations.deleted_at IS NOT NULL
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
+LEFT OUTER JOIN scale_requests
+  ON scale_requests.app_id = formations.app_id
+  AND scale_requests.release_id = formations.release_id
+  AND scale_requests.state = 'pending'
 WHERE formations.updated_at >= $1 AND formations.deleted_at IS NULL
 ORDER BY formations.updated_at DESC`
 	formationSelectQuery = `
@@ -300,10 +315,16 @@ SELECT
 	ORDER BY a.index
   ),
   releases.meta, releases.env, releases.processes, releases.created_at,
+  scale_requests.scale_request_id, scale_requests.old_processes, scale_requests.new_processes,
+  scale_requests.old_tags, scale_requests.new_tags, scale_requests.created_at,
   formations.processes, formations.tags, formations.updated_at, formations.deleted_at IS NOT NULL
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
+LEFT OUTER JOIN scale_requests
+  ON scale_requests.app_id = formations.app_id
+  AND scale_requests.release_id = formations.release_id
+  AND scale_requests.state = 'pending'
 WHERE formations.app_id = $1 AND formations.release_id = $2`
 	formationInsertQuery = `
 INSERT INTO formations (app_id, release_id, processes, tags)
@@ -317,6 +338,14 @@ WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 	formationDeleteByAppQuery = `
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
 WHERE app_id = $1 AND deleted_at IS NULL`
+	scaleRequestInsertQuery = `
+INSERT INTO scale_requests (scale_request_id, app_id, release_id, state, old_processes, new_processes, old_tags, new_tags)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING created_at, updated_at`
+	scaleRequestCancelQuery = `
+UPDATE scale_requests SET state = 'cancelled' WHERE app_id = $1 AND release_id = $2`
+	scaleRequestUpdateQuery = `
+UPDATE scale_requests SET state = $2 WHERE scale_request_id = $1`
 	jobListQuery = `
 SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at, args
 FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC`

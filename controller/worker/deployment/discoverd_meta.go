@@ -1,10 +1,6 @@
 package deployment
 
-import (
-	ct "github.com/flynn/flynn/controller/types"
-	dd "github.com/flynn/flynn/discoverd/deployment"
-	"gopkg.in/inconshreveable/log15.v2"
-)
+import dd "github.com/flynn/flynn/discoverd/deployment"
 
 // deployDiscoverMeta does a one-by-one deployment but uses discoverd.Deployment
 // to wait for appropriate service metadata before stopping old jobs.
@@ -19,36 +15,36 @@ func (d *DeployJob) deployDiscoverdMeta() (err error) {
 		}
 	}()
 
-	discDeploys := make(map[string]*dd.Deployment)
+	for typ, count := range d.Processes {
+		proc := d.newRelease.Processes[typ]
 
-	for typ, serviceName := range d.serviceNames {
-		discDeploy, err := dd.NewDeployment(serviceName)
+		if proc.Service == "" {
+			if err := d.scaleOneByOne(typ, log); err != nil {
+				return err
+			}
+			continue
+		}
+
+		discDeploy, err := dd.NewDeployment(proc.Service)
 		if err != nil {
 			return err
 		}
-		discDeploys[typ] = discDeploy
 		if err := discDeploy.Create(d.ID); err != nil {
 			return err
 		}
 		defer discDeploy.Close()
-	}
 
-	return d.deployOneByOneWithWaitFn(func(releaseID string, expected ct.JobEvents, log log15.Logger) error {
-		for typ, events := range expected {
-			if count, ok := events[ct.JobStateUp]; ok && count > 0 {
-				if discDeploy, ok := discDeploys[typ]; ok {
-					if err := discDeploy.Wait(d.ID, count, 120, log); err != nil {
-						return err
-					}
-					// clear up events for this type so we can safely
-					// process job down events if needed
-					expected[typ][ct.JobStateUp] = 0
-				}
+		for i := 0; i < count; i++ {
+			if err := d.scaleNewFormationUpByOne(typ, log); err != nil {
+				return err
+			}
+			if err := discDeploy.Wait(d.ID, d.timeout, log); err != nil {
+				return err
+			}
+			if err := d.scaleOldFormationDownByOne(typ, log); err != nil {
+				return err
 			}
 		}
-		if expected.Count() == 0 {
-			return nil
-		}
-		return d.waitForJobEvents(releaseID, expected, log)
-	})
+	}
+	return nil
 }

@@ -1,67 +1,31 @@
 package deployment
 
-import ct "github.com/flynn/flynn/controller/types"
-
 func (d *DeployJob) deployAllAtOnce() error {
 	log := d.logger.New("fn", "deployAllAtOnce")
 	log.Info("starting all-at-once deployment")
 
-	expected := make(ct.JobEvents)
-	newProcs := make(map[string]int, len(d.Processes))
-	for typ, n := range d.Processes {
-		// ignore processes which no longer exist in the new
-		// release
-		if _, ok := d.newRelease.Processes[typ]; !ok {
-			continue
-		}
-		newProcs[typ] = n
-		total := n
-		if d.isOmni(typ) {
-			total *= d.hostCount
-		}
-		existing := d.newReleaseState[typ]
-		if total > existing {
-			expected[typ] = ct.JobUpEvents(total - existing)
+	d.newFormation.Processes = make(map[string]int, len(d.oldFormation.Processes))
+	for typ, count := range d.oldFormation.Processes {
+		// only scale new processes which still exist
+		if _, ok := d.newRelease.Processes[typ]; ok {
+			d.newFormation.Processes[typ] = count
 		}
 	}
-	if expected.Count() > 0 {
-		log := log.New("release_id", d.NewReleaseID)
-		log.Info("creating new formation", "processes", newProcs)
-		if err := d.client.PutFormation(&ct.Formation{
-			AppID:     d.AppID,
-			ReleaseID: d.NewReleaseID,
-			Processes: newProcs,
-			Tags:      d.Tags,
-		}); err != nil {
-			log.Error("error creating new formation", "err", err)
-			return err
-		}
-
-		log.Info("waiting for job events", "expected", expected)
-		if err := d.waitForJobEvents(d.NewReleaseID, expected, log); err != nil {
-			log.Error("error waiting for job events", "err", err)
-			return err
-		}
+	log.Info("scaling up new formation", "release.id", d.NewReleaseID, "processes", d.newFormation.Processes)
+	if err := d.scaleNewRelease(); err != nil {
+		log.Error("error scaling up new formation", "release.id", d.NewReleaseID, "err", err)
+		return err
 	}
 
-	expected = make(ct.JobEvents)
-	for typ := range d.Processes {
-		if existing := d.oldReleaseState[typ]; existing > 0 {
-			expected[typ] = ct.JobDownEvents(existing)
-		}
+	log.Info("scaling old formation to zero", "release.id", d.OldReleaseID)
+	for typ := range d.oldRelease.Processes {
+		d.oldFormation.Processes[typ] = 0
 	}
-
-	log = log.New("release_id", d.OldReleaseID)
-	log.Info("scaling old formation to zero")
-	if err := d.client.PutFormation(&ct.Formation{
-		AppID:     d.AppID,
-		ReleaseID: d.OldReleaseID,
-		Tags:      d.Tags,
-	}); err != nil {
+	if err := d.scaleOldRelease(false); err != nil {
 		// the new jobs have now started and they are up, so return
 		// ErrSkipRollback (rolling back doesn't make a ton of sense
 		// because it involves stopping the new working jobs).
-		log.Error("error scaling old formation to zero", "err", err)
+		log.Error("error scaling old formation to zero", "release.id", d.OldReleaseID, "err", err)
 		return ErrSkipRollback{err.Error()}
 	}
 
