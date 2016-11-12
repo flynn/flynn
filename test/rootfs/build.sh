@@ -4,7 +4,7 @@ set -e -x
 src_dir="$(cd "$(dirname "$0")" && pwd)"
 build_dir=${1:-.}
 
-truncate -s 50G ${build_dir}/rootfs.img
+truncate -s 70G ${build_dir}/rootfs.img
 mkfs.ext4 -FqL rootfs ${build_dir}/rootfs.img
 
 dir=$(mktemp -d)
