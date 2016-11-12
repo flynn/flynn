@@ -86,7 +86,7 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 				e = nil
 			} else {
 				log.Warn("rolling back deployment due to error", "err", e)
-				e = c.rollback(log, deployment, f)
+				e = c.rollback(log, deployment, f, job.Stop)
 			}
 			events <- ct.DeploymentEvent{
 				ReleaseID: deployment.NewReleaseID,
@@ -97,18 +97,11 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 	}()
 
 	j := &DeployJob{
-		Deployment:      deployment,
-		client:          c.client,
-		deployEvents:    events,
-		serviceNames:    make(map[string]string),
-		jobEvents:       make(map[string]chan *JobEvent),
-		useJobEvents:    make(map[string]struct{}),
-		logger:          c.logger,
-		oldReleaseState: make(map[string]int, len(deployment.Processes)),
-		newReleaseState: make(map[string]int, len(deployment.Processes)),
-		knownJobStates:  make(map[jobIDState]struct{}),
-		omni:            make(map[string]struct{}),
-		stop:            job.Stop,
+		Deployment:   deployment,
+		client:       c.client,
+		deployEvents: events,
+		logger:       c.logger,
+		stop:         job.Stop,
 	}
 
 	log.Info("performing deployment")
@@ -137,52 +130,23 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 	return nil
 }
 
-func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *ct.Formation) error {
+func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *ct.Formation, stop chan struct{}) error {
 	log := l.New("fn", "rollback")
 
-	log.Info("creating job watcher")
-	jobWatcher, err := c.client.WatchJobEvents(deployment.AppID, deployment.OldReleaseID)
-	if err != nil {
-		log.Error("error opening job event stream", "err", err)
-		return err
-	}
-	appJobs, err := c.client.JobList(deployment.AppID)
-	if err != nil {
-		log.Error("error listing app jobs", "err", err)
-		return err
-	}
-	runningJobs := make(map[string]int)
-	for _, j := range appJobs {
-		if j.ReleaseID != deployment.OldReleaseID {
-			continue
-		}
-		if j.State == ct.JobStateUp {
-			runningJobs[j.Type]++
-		}
-	}
-	expectedJobEvents := make(ct.JobEvents, len(original.Processes))
-	for name, count := range original.Processes {
-		count = count - runningJobs[name]
-		if count > 0 {
-			expectedJobEvents[name] = ct.JobUpEvents(count)
-		}
-	}
-
 	log.Info("restoring the original formation", "release.id", original.ReleaseID)
-	if err := c.client.PutFormation(original); err != nil {
-		log.Error("error restoring the original formation", "err", err)
-		return err
-	}
-
-	if len(expectedJobEvents) > 0 {
-		log.Info("waiting for job events", "events", expectedJobEvents)
-		callback := func(job *ct.Job) error {
+	timeout := 10 * time.Second
+	opts := ct.ScaleOptions{
+		Processes: original.Processes,
+		Timeout:   &timeout,
+		Stop:      stop,
+		JobEventCallback: func(job *ct.Job) error {
 			log.Info("got job event", "job.id", job.ID, "job.type", job.Type, "job.state", job.State)
 			return nil
-		}
-		if err := jobWatcher.WaitFor(expectedJobEvents, 10*time.Second, callback); err != nil {
-			log.Error("error waiting for job events", "err", err)
-		}
+		},
+	}
+	if err := c.client.ScaleAppRelease(original.AppID, original.ReleaseID, opts); err != nil {
+		log.Error("error restoring the original formation", "err", err)
+		return err
 	}
 
 	log.Info("deleting the new formation")

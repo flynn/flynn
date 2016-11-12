@@ -35,7 +35,8 @@
         "route_deletion",
         "sink",
         "sink_deletion",
-        "scale"
+        "scale",
+        "scale_request"
       ]
     }
   },

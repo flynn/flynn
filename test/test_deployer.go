@@ -257,7 +257,7 @@ func (s *DeployerSuite) TestRollbackFailedJob(t *c.C) {
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 	event := s.waitForDeploymentStatus(t, events, "failed")
-	t.Assert(event.Error, c.Equals, `deployer: printer job failed to start: exec: "this-is-gonna-fail": executable file not found in $PATH`)
+	t.Assert(event.Error, c.Equals, `printer job failed to start: exec: "this-is-gonna-fail": executable file not found in $PATH`)
 
 	s.assertRolledBack(t, deployment, map[string]int{"printer": 2})
 }
@@ -297,7 +297,7 @@ func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 	event := s.waitForDeploymentStatus(t, events, "failed")
-	t.Assert(event.Error, c.Equals, "printer process type failed to start, got down job event")
+	t.Assert(event.Error, c.Equals, "printer job failed to start: got down job event")
 
 	s.assertRolledBack(t, deployment, map[string]int{"printer": 2})
 

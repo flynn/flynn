@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/scale_request#",
+  "title": "Scale Request",
+  "description": "A scale request initiates a formation update",
+  "sortIndex": 21,
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "app": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "release": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "state": {
+      "type": "string",
+      "enum": ["pending", "cancelled", "complete"]
+    },
+    "old_processes": {
+      "description": "the formation's old processes",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "new_processes": {
+      "description": "the formation's new processes",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "old_tags": {
+      "description": "the formation's old tags",
+      "type": "object"
+    },
+    "new_tags": {
+      "description": "the formation's new tags",
+      "type": "object"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    }
+  }
+}

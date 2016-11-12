@@ -101,12 +101,13 @@ func (a *DeployAppAction) Run(s *State) error {
 			formation.Processes[name] = 1
 		}
 	}
-	if err := client.PutFormation(formation); err != nil {
-		return err
+	if len(formation.Processes) > 0 {
+		timeout := 5 * time.Minute
+		opts := ct.ScaleOptions{Timeout: &timeout, Processes: formation.Processes}
+		if err := client.ScaleAppRelease(a.App.ID, a.Release.ID, opts); err != nil {
+			return err
+		}
 	}
 	as.Formation = formation
-
-	timeoutCh := make(chan struct{})
-	time.AfterFunc(5*time.Minute, func() { close(timeoutCh) })
-	return client.DeployAppRelease(a.App.ID, a.Release.ID, timeoutCh)
+	return client.SetAppRelease(a.App.ID, a.Release.ID)
 }

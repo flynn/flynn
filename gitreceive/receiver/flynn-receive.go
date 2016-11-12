@@ -14,7 +14,6 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
@@ -234,58 +233,24 @@ Options:
 	if needsDefaultScale(app.ID, prevRelease.ID, procs, client) {
 		fmt.Println("=====> Scaling initial release to web=1")
 
-		formation := &ct.Formation{
-			AppID:     app.ID,
-			ReleaseID: release.ID,
+		timeout := time.Duration(app.DeployTimeout) * time.Second
+		opts := ct.ScaleOptions{
 			Processes: map[string]int{"web": 1},
-		}
-
-		jobEvents := make(chan *ct.Job)
-		jobStream, err := client.StreamJobEvents(app.ID, jobEvents)
-		if err != nil {
-			return fmt.Errorf("Error streaming job events: %s", err)
-		}
-		defer jobStream.Close()
-
-		serviceEvents := make(chan *discoverd.Event)
-		serviceStream, err := discoverd.NewService(app.Name + "-web").Watch(serviceEvents)
-		if err != nil {
-			return fmt.Errorf("Error streaming service events: %s", err)
-		}
-		defer serviceStream.Close()
-
-		if err := client.PutFormation(formation); err != nil {
-			return fmt.Errorf("Error putting formation: %s", err)
+			Timeout:   &timeout,
+			JobEventCallback: func(job *ct.Job) error {
+				switch job.State {
+				case ct.JobStateUp:
+					fmt.Println("=====> Initial web job started")
+				case ct.JobStateDown:
+					return errors.New("Initial web job failed to start")
+				}
+				return nil
+			},
 		}
 		fmt.Println("-----> Waiting for initial web job to start...")
-
-		err = func() error {
-			for {
-				select {
-				case e, ok := <-serviceEvents:
-					if !ok {
-						return fmt.Errorf("Service stream closed unexpectedly: %s", serviceStream.Err())
-					}
-					if e.Kind == discoverd.EventKindUp && e.Instance.Meta["FLYNN_RELEASE_ID"] == release.ID {
-						fmt.Println("=====> Initial web job started")
-						return nil
-					}
-				case e, ok := <-jobEvents:
-					if !ok {
-						return fmt.Errorf("Job stream closed unexpectedly: %s", jobStream.Err())
-					}
-					if e.State == ct.JobStateDown {
-						return errors.New("Initial web job failed to start")
-					}
-				case <-time.After(time.Duration(app.DeployTimeout) * time.Second):
-					return errors.New("Timed out waiting for initial web job to start")
-				}
-			}
-		}()
-		if err != nil {
+		if err := client.ScaleAppRelease(app.ID, release.ID, opts); err != nil {
 			fmt.Println("-----> WARN: scaling initial release down to web=0 due to error")
-			formation.Processes["web"] = 0
-			if err := client.PutFormation(formation); err != nil {
+			if err := client.DeleteFormation(app.ID, release.ID); err != nil {
 				// just print this error and return the original error
 				fmt.Println("-----> WARN: could not scale the initial release down (it may continue to run):", err)
 			}

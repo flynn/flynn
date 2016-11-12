@@ -47,6 +47,8 @@ outer:
 			switch event.Kind {
 			case discoverd.EventKindServiceMeta:
 				deployment.meta = event.ServiceMeta
+			case discoverd.EventKindUp:
+				deployment.jobCount++
 			case discoverd.EventKindCurrent:
 				break outer
 			}
@@ -58,10 +60,11 @@ outer:
 // Deployment is a wrapper around service metadata for marking jobs as either
 // performing a deployment or done deploying
 type Deployment struct {
-	service discoverd.Service
-	events  chan *discoverd.Event
-	stream  stream.Stream
-	meta    *discoverd.ServiceMeta
+	service  discoverd.Service
+	events   chan *discoverd.Event
+	stream   stream.Stream
+	meta     *discoverd.ServiceMeta
+	jobCount int
 }
 
 // update drains any pending events, updating the service metadata, it doesn't block.
@@ -181,7 +184,8 @@ func (d *Deployment) MarkDone(addr string) error {
 }
 
 // Wait waits for an expected number of "done" addresses in the service metadata
-func (d *Deployment) Wait(id string, expected int, timeout int, log log15.Logger) error {
+func (d *Deployment) Wait(id string, timeout time.Duration, log log15.Logger) error {
+	timeoutCh := time.After(timeout)
 	for {
 		actual := 0
 		select {
@@ -202,7 +206,7 @@ func (d *Deployment) Wait(id string, expected int, timeout int, log log15.Logger
 							actual++
 						}
 					}
-					if actual == expected {
+					if actual == d.jobCount {
 						return nil
 					}
 				} else {
@@ -210,8 +214,8 @@ func (d *Deployment) Wait(id string, expected int, timeout int, log log15.Logger
 				}
 
 			}
-		case <-time.After(time.Duration(timeout) * time.Second):
-			return fmt.Errorf("timed out waiting for discoverd deployment (expected=%d actual=%d)", expected, actual)
+		case <-timeoutCh:
+			return fmt.Errorf("timed out waiting for discoverd deployment (expected=%d actual=%d)", d.jobCount, actual)
 		}
 	}
 }

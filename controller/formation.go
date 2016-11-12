@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/jackc/pgx"
 	"golang.org/x/net/context"
@@ -33,54 +34,157 @@ func NewFormationRepo(db *postgres.DB, appRepo *AppRepo, releaseRepo *ReleaseRep
 	}
 }
 
-func (r *FormationRepo) validateFormProcs(f *ct.Formation) error {
-	release, err := r.releases.Get(f.ReleaseID)
+func (r *FormationRepo) validateProcesses(req *ct.ScaleRequest) error {
+	if req.NewProcesses == nil {
+		return nil
+	}
+	data, err := r.releases.Get(req.ReleaseID)
 	if err != nil {
 		return err
 	}
-	rel := release.(*ct.Release)
-	invalid := make([]string, 0, len(f.Processes))
-	for k := range f.Processes {
-		if _, ok := rel.Processes[k]; !ok {
-			invalid = append(invalid, k)
+	release := data.(*ct.Release)
+	invalid := make([]string, 0, len(*req.NewProcesses))
+	for typ := range *req.NewProcesses {
+		if _, ok := release.Processes[typ]; !ok {
+			invalid = append(invalid, typ)
 		}
 	}
 	if len(invalid) > 0 {
-		return ct.ValidationError{Message: fmt.Sprintf("Requested formation includes process types that do not exist in release. Invalid process types: [%s]", strings.Join(invalid, ", "))}
+		return ct.ValidationError{Message: fmt.Sprintf("requested scale includes process types that do not exist in the release: %s", strings.Join(invalid, ", "))}
 	}
 	return nil
 }
 
-func (r *FormationRepo) Add(f *ct.Formation) error {
-	if err := r.validateFormProcs(f); err != nil {
-		return err
+func (r *FormationRepo) AddScaleRequest(req *ct.ScaleRequest, deleteFormation bool) (*ct.Formation, error) {
+	if req.NewProcesses == nil && req.NewTags == nil {
+		return nil, ct.ValidationError{Message: "scale request must have either processes or tags set"}
 	}
-	scale := &ct.Scale{
-		Processes: f.Processes,
-		ReleaseID: f.ReleaseID,
+
+	if err := r.validateProcesses(req); err != nil {
+		return nil, err
 	}
-	prevFormation, _ := r.Get(f.AppID, f.ReleaseID)
-	if prevFormation != nil {
-		scale.PrevProcesses = prevFormation.Processes
-	}
+
 	tx, err := r.db.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = tx.QueryRow("formation_insert", f.AppID, f.ReleaseID, f.Processes, f.Tags).Scan(&f.CreatedAt, &f.UpdatedAt)
+
+	// get the current formation so we can add the current processes and
+	// tags to the scale request
+	formation, err := scanFormation(tx.QueryRow("formation_select", req.AppID, req.ReleaseID))
+	if err == ErrNotFound {
+		formation = &ct.Formation{
+			AppID:     req.AppID,
+			ReleaseID: req.ReleaseID,
+		}
+	} else if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// cancel any current scale requests for the same formation
+	if err := tx.Exec("scale_request_cancel", req.AppID, req.ReleaseID); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	req.ID = random.UUID()
+	req.State = ct.ScaleRequestStatePending
+
+	// copy the formation's current processes and tags as we may modify
+	// them later on
+	req.OldProcesses = make(map[string]int, len(formation.Processes))
+	for typ, count := range formation.Processes {
+		req.OldProcesses[typ] = count
+	}
+	req.OldTags = make(map[string]map[string]string, len(formation.Tags))
+	for typ, tags := range formation.Tags {
+		req.OldTags[typ] = tags
+	}
+
+	// if the request has no new processes / tags, keep them the same,
+	// otherwise modify the formation's processes / tags accordingly
+	if req.NewProcesses == nil {
+		req.NewProcesses = &formation.Processes
+	} else {
+		if formation.Processes == nil {
+			formation.Processes = make(map[string]int, len(*req.NewProcesses))
+		}
+		for typ, count := range *req.NewProcesses {
+			formation.Processes[typ] = count
+		}
+	}
+	if req.NewTags == nil {
+		req.NewTags = &formation.Tags
+	} else {
+		for typ, tags := range *req.NewTags {
+			if formation.Tags == nil {
+				formation.Tags = make(map[string]map[string]string, len(*req.NewTags))
+			}
+			formation.Tags[typ] = tags
+		}
+	}
+
+	// create the scale request and either insert or delete the formation
+	err = tx.QueryRow(
+		"scale_request_insert",
+		req.ID,
+		req.AppID,
+		req.ReleaseID,
+		string(req.State),
+		req.OldProcesses,
+		req.NewProcesses,
+		req.OldTags,
+		req.NewTags,
+	).Scan(&req.CreatedAt, &req.UpdatedAt)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
-	if err := createEvent(tx.Exec, &ct.Event{
-		AppID:      f.AppID,
-		ObjectID:   f.AppID + ":" + f.ReleaseID,
-		ObjectType: ct.EventTypeScale,
-	}, scale); err != nil {
+	if deleteFormation {
+		err = tx.Exec("formation_delete", formation.AppID, formation.ReleaseID)
+	} else {
+		err = tx.QueryRow(
+			"formation_insert",
+			formation.AppID,
+			formation.ReleaseID,
+			formation.Processes,
+			formation.Tags,
+		).Scan(&formation.CreatedAt, &formation.UpdatedAt)
+	}
+	if err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
-	return tx.Commit()
+
+	// emit a scale request event so clients know scaling has begun
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      req.AppID,
+		ObjectID:   req.ID,
+		ObjectType: ct.EventTypeScaleRequest,
+	}, req); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// emit a deprecated scale event for old clients
+	if req.NewProcesses != nil {
+		deprecatedScale := &ct.DeprecatedScale{
+			Processes:     *req.NewProcesses,
+			PrevProcesses: req.OldProcesses,
+			ReleaseID:     req.ReleaseID,
+		}
+		if err := createEvent(tx.Exec, &ct.Event{
+			AppID:      req.AppID,
+			ObjectID:   req.AppID + ":" + req.ReleaseID,
+			ObjectType: ct.EventTypeDeprecatedScale,
+		}, deprecatedScale); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+
+	return formation, tx.Commit()
 }
 
 func scanFormations(rows *pgx.Rows) ([]*ct.Formation, error) {
@@ -105,7 +209,7 @@ func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 		}
 		return nil, err
 	}
-	return f, err
+	return f, nil
 }
 
 func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
@@ -115,6 +219,8 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 	}
 	var artifactIDs string
 	var appReleaseID *string
+	var req ct.ScaleRequest
+	var reqID *string
 	err := s.Scan(
 		&f.App.ID,
 		&f.App.Name,
@@ -130,6 +236,12 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		&f.Release.Env,
 		&f.Release.Processes,
 		&f.Release.CreatedAt,
+		&reqID,
+		&req.OldProcesses,
+		&req.NewProcesses,
+		&req.OldTags,
+		&req.NewTags,
+		&req.CreatedAt,
 		&f.Processes,
 		&f.Tags,
 		&f.UpdatedAt,
@@ -140,6 +252,13 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 			err = ErrNotFound
 		}
 		return nil, err
+	}
+	if reqID != nil {
+		req.ID = *reqID
+		req.AppID = f.App.ID
+		req.ReleaseID = f.Release.ID
+		req.State = ct.ScaleRequestStatePending
+		f.PendingScaleRequest = &req
 	}
 	if appReleaseID != nil {
 		f.App.ReleaseID = *appReleaseID
@@ -250,35 +369,43 @@ func (r *FormationRepo) listExpanded(rows *pgx.Rows) ([]*ct.ExpandedFormation, e
 	return formations, rows.Err()
 }
 
-func (r *FormationRepo) Remove(appID, releaseID string) error {
-	scale := &ct.Scale{
-		ReleaseID: releaseID,
-	}
-	prevFormation, _ := r.Get(appID, releaseID)
-	if prevFormation != nil {
-		scale.PrevProcesses = prevFormation.Processes
-	}
+func (r *FormationRepo) UpdateScaleRequest(req *ct.ScaleRequest) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
-	err = tx.Exec("formation_delete", appID, releaseID)
-	if err != nil {
+	if err := tx.Exec("scale_request_update", req.ID, string(req.State)); err != nil {
 		tx.Rollback()
 		return err
 	}
 	if err := createEvent(tx.Exec, &ct.Event{
-		AppID:      appID,
-		ObjectID:   appID + ":" + releaseID,
-		ObjectType: ct.EventTypeScale,
-	}, scale); err != nil {
+		AppID:      req.AppID,
+		ObjectID:   req.ID,
+		ObjectType: ct.EventTypeScaleRequest,
+	}, req); err != nil {
 		tx.Rollback()
 		return err
 	}
 	return tx.Commit()
 }
 
-func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+func newScaleRequest(f *ct.Formation, release *ct.Release) *ct.ScaleRequest {
+	// treat nil processes as a request to scale everything down
+	if f.Processes == nil {
+		f.Processes = make(map[string]int, len(release.Processes))
+		for typ := range release.Processes {
+			f.Processes[typ] = 0
+		}
+	}
+	return &ct.ScaleRequest{
+		AppID:        f.AppID,
+		ReleaseID:    f.ReleaseID,
+		NewProcesses: &f.Processes,
+		NewTags:      &f.Tags,
+	}
+}
+
+func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	app := c.getApp(ctx)
 	release, err := c.getRelease(ctx)
 	if err != nil {
@@ -286,8 +413,8 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	var formation ct.Formation
-	if err = httphelper.DecodeJSON(req, &formation); err != nil {
+	formation := &ct.Formation{}
+	if err = httphelper.DecodeJSON(r, formation); err != nil {
 		respondWithError(w, err)
 		return
 	}
@@ -305,11 +432,46 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	if err = c.formationRepo.Add(&formation); err != nil {
+	req := newScaleRequest(formation, release)
+	formation, err = c.formationRepo.AddScaleRequest(req, false)
+	if err != nil {
 		respondWithError(w, err)
 		return
 	}
-	httphelper.JSON(w, 200, &formation)
+	httphelper.JSON(w, 200, formation)
+}
+
+func (c *controllerAPI) PutScaleRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	app := c.getApp(ctx)
+	release, err := c.getRelease(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	var req ct.ScaleRequest
+	if err := httphelper.DecodeJSON(r, &req); err != nil {
+		respondWithError(w, err)
+		return
+	}
+	req.AppID = app.ID
+	req.ReleaseID = release.ID
+
+	if err := schema.Validate(req); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	if req.State == ct.ScaleRequestStatePending {
+		_, err = c.formationRepo.AddScaleRequest(&req, false)
+	} else {
+		err = c.formationRepo.UpdateScaleRequest(&req)
+	}
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, &req)
 }
 
 func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
@@ -335,17 +497,21 @@ func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter,
 	httphelper.JSON(w, 200, formation)
 }
 
-func (c *controllerAPI) DeleteFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params, _ := ctxhelper.ParamsFromContext(ctx)
-
+func (c *controllerAPI) DeleteFormation(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	app := c.getApp(ctx)
-	formation, err := c.formationRepo.Get(app.ID, params.ByName("releases_id"))
+	release, err := c.getRelease(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
-	err = c.formationRepo.Remove(app.ID, formation.ReleaseID)
+	formation, err := c.formationRepo.Get(app.ID, release.ID)
 	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	formation.Processes = nil
+	req := newScaleRequest(formation, release)
+	if _, err := c.formationRepo.AddScaleRequest(req, true); err != nil {
 		respondWithError(w, err)
 		return
 	}
@@ -407,7 +573,7 @@ func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWri
 		return err
 	}
 
-	sub, err := eventListener.Subscribe("", []string{string(ct.EventTypeScale)}, "")
+	sub, err := eventListener.Subscribe("", []string{string(ct.EventTypeScaleRequest)}, "")
 	if err != nil {
 		return err
 	}
@@ -443,14 +609,14 @@ func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWri
 			if !ok {
 				return sub.Err
 			}
-			var scale ct.Scale
-			if err := json.Unmarshal(event.Data, &scale); err != nil {
+			var req ct.ScaleRequest
+			if err := json.Unmarshal(event.Data, &req); err != nil {
 				l.Error("error deserializing scale event", "event.id", event.ID, "err", err)
 				continue
 			}
-			formation, err := c.formationRepo.GetExpanded(event.AppID, scale.ReleaseID, true)
+			formation, err := c.formationRepo.GetExpanded(req.AppID, req.ReleaseID, true)
 			if err != nil {
-				l.Error("error expanding formation", "app.id", event.AppID, "release.id", scale.ReleaseID, "err", err)
+				l.Error("error expanding formation", "app.id", req.AppID, "release.id", req.ReleaseID, "err", err)
 				continue
 			}
 			if formation.UpdatedAt.Before(currentUpdatedAt) {

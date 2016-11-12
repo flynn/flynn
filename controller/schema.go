@@ -487,6 +487,23 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(29,
 		`ALTER TABLE deployments ADD COLUMN tags jsonb`,
 	)
+	migrations.Add(30,
+		`INSERT INTO event_types (name) VALUES ('scale_request')`,
+		`CREATE TABLE scale_request_states (name text PRIMARY KEY)`,
+		`INSERT INTO scale_request_states (name) VALUES ('pending'), ('cancelled'), ('complete')`,
+		`CREATE TABLE scale_requests (
+			scale_request_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+			app_id           uuid NOT NULL REFERENCES apps (app_id),
+			release_id       uuid NOT NULL REFERENCES releases (release_id),
+			state            text NOT NULL REFERENCES scale_request_states (name),
+			old_processes    jsonb,
+			new_processes    jsonb,
+			old_tags         jsonb,
+			new_tags         jsonb,
+			created_at       timestamptz NOT NULL DEFAULT now(),
+			updated_at       timestamptz NOT NULL DEFAULT now()
+		)`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

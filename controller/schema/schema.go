@@ -57,6 +57,9 @@ func schemaForType(thing interface{}) *jsonschema.Schema {
 	if name == "newjob" {
 		name = "new_job"
 	}
+	if name == "scalerequest" {
+		name = "scale_request"
+	}
 	if name == "appupdate" {
 		name = "app"
 	}

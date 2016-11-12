@@ -587,10 +587,10 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 }
 
 func (TestSuite) TestStopJob(c *C) {
-	s := &Scheduler{putJobs: make(chan *ct.Job)}
-	defer close(s.putJobs)
+	s := &Scheduler{controllerPersist: make(chan interface{})}
+	defer close(s.controllerPersist)
 	go func() {
-		for range s.putJobs {
+		for range s.controllerPersist {
 		}
 	}()
 	formation := NewFormation(&ct.ExpandedFormation{

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"strings"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -241,7 +240,7 @@ func (s *S) TestStreamFormationEvents(c *C) {
 
 	events := make(chan *ct.Event)
 	stream, err := s.c.StreamEvents(ct.StreamEventsOptions{
-		ObjectTypes: []ct.EventType{ct.EventTypeScale},
+		ObjectTypes: []ct.EventType{ct.EventTypeScaleRequest},
 	}, events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
@@ -258,15 +257,15 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		var scale *ct.Scale
-		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
+		var req *ct.ScaleRequest
+		c.Assert(json.Unmarshal(e.Data, &req), IsNil)
 		c.Assert(e.AppID, Equals, app.ID)
-		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
-		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
-		c.Assert(scale, NotNil)
-		c.Assert(scale.Processes, DeepEquals, formation.Processes)
+		c.Assert(e.ObjectType, Equals, ct.EventTypeScaleRequest)
+		c.Assert(e.ObjectID, Equals, req.ID)
+		c.Assert(req.NewProcesses, NotNil)
+		c.Assert(*req.NewProcesses, DeepEquals, formation.Processes)
 	case <-time.After(10 * time.Second):
-		c.Fatal("Timed out waiting for scale event")
+		c.Fatal("Timed out waiting for scale request event")
 	}
 
 	nextFormation := s.createTestFormation(c, &ct.Formation{
@@ -281,16 +280,16 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		var scale *ct.Scale
-		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
+		var req *ct.ScaleRequest
+		c.Assert(json.Unmarshal(e.Data, &req), IsNil)
 		c.Assert(e.AppID, Equals, app.ID)
-		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
-		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
-		c.Assert(scale, NotNil)
-		c.Assert(scale.Processes, DeepEquals, nextFormation.Processes)
-		c.Assert(scale.PrevProcesses, DeepEquals, formation.Processes)
+		c.Assert(e.ObjectType, Equals, ct.EventTypeScaleRequest)
+		c.Assert(e.ObjectID, Equals, req.ID)
+		c.Assert(req.NewProcesses, NotNil)
+		c.Assert(*req.NewProcesses, DeepEquals, nextFormation.Processes)
+		c.Assert(req.OldProcesses, DeepEquals, formation.Processes)
 	case <-time.After(10 * time.Second):
-		c.Fatal("Timed out waiting for scale event")
+		c.Fatal("Timed out waiting for scale request event")
 	}
 
 	c.Assert(s.c.DeleteFormation(app.ID, release.ID), IsNil)
@@ -300,14 +299,14 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		var scale *ct.Scale
-		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
+		var req *ct.ScaleRequest
+		c.Assert(json.Unmarshal(e.Data, &req), IsNil)
 		c.Assert(e.AppID, Equals, app.ID)
-		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
-		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
-		c.Assert(scale, NotNil)
-		c.Assert(scale.Processes, IsNil)
-		c.Assert(scale.PrevProcesses, DeepEquals, nextFormation.Processes)
+		c.Assert(e.ObjectType, Equals, ct.EventTypeScaleRequest)
+		c.Assert(e.ObjectID, Equals, req.ID)
+		c.Assert(req.NewProcesses, NotNil)
+		c.Assert(*req.NewProcesses, DeepEquals, map[string]int{"foo": 0})
+		c.Assert(req.OldProcesses, DeepEquals, nextFormation.Processes)
 	case <-time.After(10 * time.Second):
 		c.Fatal("Timed out waiting for scale event")
 	}

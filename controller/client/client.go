@@ -43,6 +43,7 @@ type Client interface {
 	PutResource(resource *ct.Resource) error
 	DeleteResource(providerID, resourceID string) (*ct.Resource, error)
 	PutFormation(formation *ct.Formation) error
+	PutScaleRequest(req *ct.ScaleRequest) error
 	PutJob(job *ct.Job) error
 	DeleteJob(appID, jobID string) error
 	SetAppRelease(appID, releaseID string) error
@@ -67,6 +68,7 @@ type Client interface {
 	DeploymentList(appID string) ([]*ct.Deployment, error)
 	StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEvent) (stream.Stream, error)
 	DeployAppRelease(appID, releaseID string, stopWait <-chan struct{}) error
+	ScaleAppRelease(appID, releaseID string, opts ct.ScaleOptions) error
 	StreamJobEvents(appID string, output chan *ct.Job) (stream.Stream, error)
 	WatchJobEvents(appID, releaseID string) (ct.JobWatcher, error)
 	StreamEvents(opts ct.StreamEventsOptions, output chan *ct.Event) (stream.Stream, error)

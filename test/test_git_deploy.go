@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/term"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	c "github.com/flynn/go-check"
@@ -317,13 +318,12 @@ func (s *GitDeploySuite) TestCrashingApp(t *c.C) {
 	t.Assert(push, c.Not(Succeeds))
 	t.Assert(push, OutputContains, "web job failed to start")
 
-	// check the formation was scaled down
+	// check the formation was deleted
 	client := s.controllerClient(t)
 	release, err := client.GetAppRelease(app)
 	t.Assert(err, c.IsNil)
-	formation, err := client.GetFormation(app, release.ID)
-	t.Assert(err, c.IsNil)
-	t.Assert(formation.Processes["web"], c.Equals, 0)
+	_, err = client.GetFormation(app, release.ID)
+	t.Assert(err, c.Equals, controller.ErrNotFound)
 }
 
 func (s *GitDeploySuite) TestSlugignore(t *c.C) {
