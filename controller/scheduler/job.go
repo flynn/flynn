@@ -99,6 +99,8 @@ type Job struct {
 
 	// hostError is the error from the host if the job fails to start
 	hostError *string
+
+	serviceFirstSeen *time.Time
 }
 
 // Tags returns the tags for the job's process type from the formation
@@ -125,6 +127,13 @@ func (j *Job) Volumes() []ct.VolumeReq {
 		return []ct.VolumeReq{{Path: "/data"}}
 	}
 	return nil
+}
+
+func (j *Job) Service() string {
+	if j.Formation == nil {
+		return ""
+	}
+	return j.Formation.Release.Processes[j.Type].Service
 }
 
 func (j *Job) IsRunning() bool {
