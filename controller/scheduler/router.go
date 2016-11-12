@@ -27,6 +27,7 @@ func NewRouterBackend(backend *router.Backend) *RouterBackend {
 type RouterEvent struct {
 	RouterID string
 	Type     router.EventType
+	Route    *router.Route
 	Backend  *router.Backend
 }
 
@@ -48,12 +49,12 @@ func NewRouter(id, addr string, events chan *RouterEvent, logger log15.Logger) *
 		logger: logger,
 		stop:   make(chan struct{}),
 	}
-	go r.watchBackends()
+	go r.watchEvents()
 	return r
 }
 
-func (r *Router) watchBackends() {
-	log := r.logger.New("fn", "router.watchBackends", "router.id", r.ID)
+func (r *Router) watchEvents() {
+	log := r.logger.New("fn", "router.watchEvents", "router.id", r.ID)
 	var events chan *router.StreamEvent
 	var stream stream.Stream
 	connect := func() (err error) {
@@ -61,6 +62,8 @@ func (r *Router) watchBackends() {
 		events = make(chan *router.StreamEvent)
 		opts := &router.StreamEventsOptions{
 			EventTypes: []router.EventType{
+				router.EventTypeRouteSet,
+				router.EventTypeRouteRemove,
 				router.EventTypeBackendUp,
 				router.EventTypeBackendDrained,
 			},
@@ -96,6 +99,7 @@ func (r *Router) watchBackends() {
 				r.events <- &RouterEvent{
 					RouterID: r.ID,
 					Type:     event.Event,
+					Route:    event.Route,
 					Backend:  event.Backend,
 				}
 			case <-r.stop:
