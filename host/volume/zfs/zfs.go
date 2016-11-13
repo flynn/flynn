@@ -624,6 +624,9 @@ func (p *Provider) RestoreVolumeState(volInfo *volume.Info, data json.RawMessage
 	}
 	dataset, err := zfs.GetDataset(record.Dataset)
 	if err != nil {
+		if isDatasetNotExistsError(err) {
+			return nil, volume.ErrNoSuchVolume
+		}
 		return nil, fmt.Errorf("cannot restore volume %q: %s", volInfo.ID, err)
 	}
 	v := &zfsVolume{

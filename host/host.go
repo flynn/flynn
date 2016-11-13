@@ -276,6 +276,7 @@ func runDaemon(args *docopt.Args) {
 	}
 	vman := volumemanager.New(
 		filepath.Join(volPath, "volumes.bolt"),
+		logger.New("component", "volumemanager"),
 		newVolProvider,
 	)
 	shutdown.BeforeExit(func() { vman.CloseDB() })

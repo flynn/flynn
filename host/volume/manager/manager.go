@@ -12,6 +12,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/flynn/flynn/host/volume"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 /*
@@ -37,22 +38,24 @@ type Manager struct {
 	db     *bolt.DB
 	dbMtx  sync.RWMutex
 
+	logger log15.Logger
+
 	defaultProvider func() (volume.Provider, error)
 }
 
 var (
 	ErrNoSuchProvider = errors.New("no such provider")
 	ErrProviderExists = errors.New("provider exists")
-	ErrNoSuchVolume   = errors.New("no such volume")
 	ErrVolumeExists   = errors.New("volume exists")
 )
 
-func New(dbPath string, defaultProvider func() (volume.Provider, error)) *Manager {
+func New(dbPath string, logger log15.Logger, defaultProvider func() (volume.Provider, error)) *Manager {
 	return &Manager{
 		providers:       make(map[string]volume.Provider),
 		providerIDs:     make(map[volume.Provider]string),
 		volumes:         make(map[string]volume.Volume),
 		dbPath:          dbPath,
+		logger:          logger,
 		defaultProvider: defaultProvider,
 	}
 }
@@ -237,7 +240,7 @@ func (m *Manager) DestroyVolume(id string) error {
 	defer m.mutex.Unlock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return ErrNoSuchVolume
+		return volume.ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
 		return err
@@ -259,7 +262,7 @@ func (m *Manager) CreateSnapshot(id string) (volume.Volume, error) {
 	defer m.mutex.Unlock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return nil, ErrNoSuchVolume
+		return nil, volume.ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
 		return nil, err
@@ -279,7 +282,7 @@ func (m *Manager) ForkVolume(id string) (volume.Volume, error) {
 	defer m.mutex.Unlock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return nil, ErrNoSuchVolume
+		return nil, volume.ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
 		return nil, err
@@ -299,7 +302,7 @@ func (m *Manager) ListHaves(id string) ([]json.RawMessage, error) {
 	defer m.mutex.Unlock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return nil, ErrNoSuchVolume
+		return nil, volume.ErrNoSuchVolume
 	}
 	haves, err := vol.Provider().ListHaves(vol)
 	if err != nil {
@@ -312,7 +315,7 @@ func (m *Manager) SendSnapshot(id string, haves []json.RawMessage, stream io.Wri
 	m.mutex.Lock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return ErrNoSuchVolume
+		return volume.ErrNoSuchVolume
 	}
 	m.mutex.Unlock() // don't lock the manager for the duration of the send operation.
 	return vol.Provider().SendSnapshot(vol, haves, stream)
@@ -322,7 +325,7 @@ func (m *Manager) ReceiveSnapshot(id string, stream io.Reader) (volume.Volume, e
 	m.mutex.Lock()
 	vol := m.volumes[id]
 	if vol == nil {
-		return nil, ErrNoSuchVolume
+		return nil, volume.ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
 		return nil, err
@@ -381,7 +384,13 @@ func (m *Manager) restore() error {
 					return fmt.Errorf("failed in restoring volumes: provider had unknown volumeID %q", volID)
 				}
 				vol, err := provider.RestoreVolumeState(volInfo, v)
-				if err != nil {
+				if err == volume.ErrNoSuchVolume {
+					// ignore volumes which no longer exist (this can be the
+					// case if a volume was destroyed but the change was not
+					// persisted, for example during a hard stop)
+					m.logger.Warn("skipping restore of non-existent volume", "vol.id", volID)
+					return nil
+				} else if err != nil {
 					return err
 				}
 				m.volumes[vol.Info().ID] = vol

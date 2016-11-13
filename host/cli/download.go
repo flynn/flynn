@@ -45,7 +45,7 @@ func runDownload(args *docopt.Args) error {
 	log.Info("initializing ZFS volumes")
 	volPath := args.String["--volpath"]
 	volDB := filepath.Join(volPath, "volumes.bolt")
-	volMan := volumemanager.New(volDB, func() (volume.Provider, error) {
+	volMan := volumemanager.New(volDB, log, func() (volume.Provider, error) {
 		return zfs.NewProvider(&zfs.ProviderConfig{
 			DatasetName: zfs.DefaultDatasetName,
 			Make:        zfs.DefaultMakeDev(volPath, log),
