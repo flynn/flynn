@@ -123,7 +123,7 @@ func (api *HTTPAPI) Destroy(w http.ResponseWriter, r *http.Request, ps httproute
 	err := api.vman.DestroyVolume(volumeID)
 	if err != nil {
 		switch err {
-		case volumemanager.ErrNoSuchVolume:
+		case volume.ErrNoSuchVolume:
 			httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume with id %q", volumeID))
 			return
 		default:
@@ -140,7 +140,7 @@ func (api *HTTPAPI) Snapshot(w http.ResponseWriter, r *http.Request, ps httprout
 	snap, err := api.vman.CreateSnapshot(volumeID)
 	if err != nil {
 		switch err {
-		case volumemanager.ErrNoSuchVolume:
+		case volume.ErrNoSuchVolume:
 			httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume with id %q", volumeID))
 			return
 		default:
@@ -212,7 +212,7 @@ func (api *HTTPAPI) Send(w http.ResponseWriter, r *http.Request, ps httprouter.P
 	err := api.vman.SendSnapshot(volumeID, haves, w)
 	if err != nil {
 		switch err {
-		case volumemanager.ErrNoSuchVolume:
+		case volume.ErrNoSuchVolume:
 			httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume with id %q", volumeID))
 			return
 		default:

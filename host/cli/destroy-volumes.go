@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/go-docopt"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 func init() {
@@ -98,6 +99,7 @@ func loadVolumeState(volumeDBPath string) (*volumemanager.Manager, error) {
 	fmt.Println("opening volume state db...")
 	vman := volumemanager.New(
 		volumeDBPath,
+		log15.New(),
 		func() (volume.Provider, error) {
 			return nil, nil
 		},

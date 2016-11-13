@@ -1,9 +1,12 @@
 package volume
 
 import (
+	"errors"
 	"io"
 	"time"
 )
+
+var ErrNoSuchVolume = errors.New("no such volume")
 
 /*
 	A Volume is a persistent and sharable filesystem.  Unlike most of the filesystem in a job's

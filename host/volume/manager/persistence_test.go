@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/pkg/testutils"
 	. "github.com/flynn/go-check"
 	gzfs "github.com/mistifyio/go-zfs"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -74,12 +75,15 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 	// new volume manager with that shiny new backing zfs vdev file and a new boltdb
 	vman := volumemanager.New(
 		vmanDBfilePath,
+		log15.New(),
 		func() (volume.Provider, error) { return volProv, nil },
 	)
 	c.Assert(vman.OpenDB(), IsNil)
 
-	// make a volume
+	// make two volumes
 	vol1, err := vman.NewVolume()
+	c.Assert(err, IsNil)
+	vol2, err := vman.NewVolume()
 	c.Assert(err, IsNil)
 
 	// assert existence of filesystems; emplace some data
@@ -89,6 +93,10 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 
 	// close persistence
 	c.Assert(vman.CloseDB(), IsNil)
+
+	// delete the second volume so we can check it doesn't prevent
+	// a later restore
+	c.Assert(volProv.DestroyVolume(vol2), IsNil)
 
 	// hack zfs export/umounting to emulate host shutdown
 	err = exec.Command("zpool", "export", "-f", zfsDatasetName).Run()
@@ -102,6 +110,7 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 	// restore
 	vman = volumemanager.New(
 		vmanDBfilePath,
+		log15.New(),
 		func() (volume.Provider, error) {
 			c.Fatal("default provider setup should not be called if the previous provider was restored")
 			return nil, nil
@@ -113,6 +122,7 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 	restoredVolumes := vman.Volumes()
 	c.Assert(restoredVolumes, HasLen, 1)
 	c.Assert(restoredVolumes[vol1.Info().ID], NotNil)
+	c.Assert(restoredVolumes[vol2.Info().ID], IsNil)
 
 	// switch to the new volume references; do a bunch of smell checks on those
 	vol1restored := restoredVolumes[vol1.Info().ID]
@@ -158,6 +168,7 @@ func (s *PersistenceTests) TestVolumeDeletion(c *C) {
 	// new volume manager with that shiny new backing zfs vdev file and a new boltdb
 	vman := volumemanager.New(
 		vmanDBfilePath,
+		log15.New(),
 		func() (volume.Provider, error) { return volProv, nil },
 	)
 	c.Assert(vman.OpenDB(), IsNil)
@@ -190,6 +201,7 @@ func (s *PersistenceTests) TestVolumeDeletion(c *C) {
 	// restore
 	vman = volumemanager.New(
 		vmanDBfilePath,
+		log15.New(),
 		func() (volume.Provider, error) {
 			c.Fatal("default provider setup should not be called if the previous provider was restored")
 			return nil, nil
@@ -240,6 +252,7 @@ func (s *PersistenceTests) TestSnapshotPersistence(c *C) {
 	// new volume manager with that shiny new backing zfs vdev file and a new boltdb
 	vman := volumemanager.New(
 		vmanDBfilePath,
+		log15.New(),
 		func() (volume.Provider, error) { return volProv, nil },
 	)
 	c.Assert(vman.OpenDB(), IsNil)
@@ -273,6 +286,7 @@ func (s *PersistenceTests) TestSnapshotPersistence(c *C) {
 	// restore
 	vman = volumemanager.New(
 		vmanDBfilePath,
+		log15.New(),
 		func() (volume.Provider, error) {
 			c.Fatal("default provider setup should not be called if the previous provider was restored")
 			return nil, nil
@@ -333,6 +347,7 @@ func (s *PersistenceTests) TestTransmittedSnapshotPersistence(c *C) {
 	// new volume manager with that shiny new backing zfs vdev file and a new boltdb
 	vman := volumemanager.New(
 		vmanDBfilePath,
+		log15.New(),
 		func() (volume.Provider, error) { return volProv, nil },
 	)
 	c.Assert(vman.OpenDB(), IsNil)
@@ -378,6 +393,7 @@ func (s *PersistenceTests) TestTransmittedSnapshotPersistence(c *C) {
 	// restore
 	vman = volumemanager.New(
 		vmanDBfilePath,
+		log15.New(),
 		func() (volume.Provider, error) {
 			c.Fatal("default provider setup should not be called if the previous provider was restored")
 			return nil, nil
