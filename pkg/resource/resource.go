@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	hh "github.com/flynn/flynn/pkg/httphelper"
 )
 
 type Resource struct {
@@ -14,7 +16,7 @@ type Resource struct {
 }
 
 func Provision(uri string, config []byte) (*Resource, error) {
-	res, err := http.Post(uri, "application/json", bytes.NewBuffer(config))
+	res, err := hh.RetryClient.Post(uri, "application/json", bytes.NewBuffer(config))
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +38,7 @@ func Deprovision(uri, id string) error {
 	if err != nil {
 		return err
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := hh.RetryClient.Do(req)
 	if err != nil {
 		return err
 	}
