@@ -25,7 +25,7 @@ test-unit: test-unit-deps
 	@$(GO_ENV) PATH=${PWD}/discoverd/bin:${PATH} util/_toolchain/go/bin/go test -race -cover ./...
 
 test-unit-root: test-unit
-	@$(GO_ENV) util/_toolchain/go/bin/go test -race -cover ./host/volume/zfs ./pinkerton
+	@sudo -E $(GO_ENV) util/_toolchain/go/bin/go test -race -cover ./host/volume/...
 
 test-integration: toolchain
 	script/run-integration-tests
