@@ -1027,7 +1027,7 @@ func (s *CLISuite) TestRemote(t *c.C) {
 	remoteApp := "remote-" + random.String(8)
 	customRemote := random.String(8)
 
-	r := s.newGitRepo(t, "http")
+	r := s.newGitRepoWithoutTrace(t, "http")
 	// create app without remote
 	t.Assert(r.flynn("create", remoteApp, "--remote", `""`), Succeeds)
 

@@ -313,13 +313,22 @@ func (h *Helper) testBuildCaching(t *c.C) {
 }
 
 type gitRepo struct {
-	dir string
-	t   *c.C
+	dir   string
+	t     *c.C
+	trace bool
 }
 
 func (h *Helper) newGitRepo(t *c.C, nameOrURL string) *gitRepo {
+	return h.newGitRepoWithTrace(t, nameOrURL, true)
+}
+
+func (h *Helper) newGitRepoWithoutTrace(t *c.C, nameOrURL string) *gitRepo {
+	return h.newGitRepoWithTrace(t, nameOrURL, false)
+}
+
+func (h *Helper) newGitRepoWithTrace(t *c.C, nameOrURL string, trace bool) *gitRepo {
 	dir := filepath.Join(t.MkDir(), "repo")
-	r := &gitRepo{dir, t}
+	r := &gitRepo{dir, t, trace}
 
 	if strings.HasPrefix(nameOrURL, "https://") {
 		t.Assert(run(t, exec.Command("git", "clone", nameOrURL, dir)), Succeeds)
@@ -343,6 +352,9 @@ func (r *gitRepo) flynn(args ...string) *CmdResult {
 
 func (r *gitRepo) git(args ...string) *CmdResult {
 	cmd := exec.Command("git", args...)
+	if r.trace {
+		cmd.Env = append(os.Environ(), "GIT_TRACE=1", "GIT_TRACE_PACKET=1")
+	}
 	cmd.Dir = r.dir
 	return run(r.t, cmd)
 }
