@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,8 +20,6 @@ import (
 )
 
 var flynnHostLogs = map[string]string{
-	"flynn-host.log": "/var/log/flynn/flynn-host.log",
-
 	// the following two entries are legacy paths from when flynn-host used
 	// to log to stdout (which would be redirected to these files)
 	"upstart-flynn-host.log": "/var/log/upstart/flynn-host.log",
@@ -47,6 +46,7 @@ usage: flynn-host collect-debug-info [options]
 Options:
   --tarball          Create a tarball instead of uploading to a gist
   --include-env      Include sensitive environment variables
+  --log-dir=DIR      Path to the log directory [default: /var/log/flynn]
 
 Collect debug information into an anonymous gist or tarball`)
 }
@@ -67,6 +67,8 @@ func runCollectDebugInfo(args *docopt.Args) error {
 	}
 
 	log.Info("getting flynn-host logs")
+	logDir := args.String["--log-dir"]
+	flynnHostLogs["flynn-host.log"] = filepath.Join(logDir, "flynn-host.log")
 	for name, filepath := range flynnHostLogs {
 		if err := gist.AddLocalFile(name, filepath); err != nil && !os.IsNotExist(err) {
 			log.Error(fmt.Sprintf("error getting flynn-host log %q", filepath), "err", err)
@@ -86,7 +88,7 @@ func runCollectDebugInfo(args *docopt.Args) error {
 	log.Info("getting job logs")
 	if err := captureJobs(gist, args.Bool["--include-env"]); err != nil {
 		log.Error("error getting job logs, falling back to on-disk logs", "err", err)
-		debugCmds = append(debugCmds, []string{"bash", "-c", "tail -n+1 /var/log/flynn/*.log"})
+		debugCmds = append(debugCmds, []string{"bash", "-c", fmt.Sprintf("tail -n+1 %s/*.log", logDir)})
 	}
 
 	log.Info("getting system information")
