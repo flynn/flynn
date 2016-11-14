@@ -608,7 +608,7 @@ func (c *BaseCluster) bootstrapTarget(t *TargetServer) error {
 	if c.backupPath != "" {
 		clusterDomain = c.oldDomain
 	}
-	cmd := fmt.Sprintf("CLUSTER_DOMAIN=%s flynn-host bootstrap --timeout 240 --min-hosts=%d --discovery=%s --json", clusterDomain, c.NumInstances, c.DiscoveryToken)
+	cmd := fmt.Sprintf("CLUSTER_DOMAIN=%s flynn-host bootstrap --timeout 600 --min-hosts=%d --discovery=%s --json", clusterDomain, c.NumInstances, c.DiscoveryToken)
 	if c.backupPath != "" {
 		cmd = fmt.Sprintf("%s --from-backup=%s", cmd, c.backupPath)
 	}
