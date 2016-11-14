@@ -171,14 +171,19 @@ func runPgRestore(args *docopt.Args, client controller.Client, config *runConfig
 }
 
 func pgRestore(client controller.Client, config *runConfig, jobs int) error {
-	// Provision a volume at /data to stream the dump to.
 	if jobs > 1 {
 		// Check if controller supports data volumes for one-off jobs
-		compatMessage := "Cluster versions prior to %s don't support the --jobs argument for parallel restore."
-		if err := compatCheck(client, "v20161018.0", compatMessage); err != nil {
+		minVersion := "v20161018.0"
+		compatible, err := compatCheck(client, minVersion)
+		if err != nil {
 			return err
+		} else if !compatible {
+			fmt.Fprintf(os.Stderr, "WARN: cluster versions prior to %s don't support the --jobs argument for parallel restore, falling back to --jobs=1\n", minVersion)
+			jobs = 1
 		}
-
+	}
+	if jobs > 1 {
+		// Provision a volume at /data to stream the dump to.
 		config.Data = true
 		config.Args = []string{
 			"bash",
