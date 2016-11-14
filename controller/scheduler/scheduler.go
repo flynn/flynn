@@ -161,13 +161,11 @@ func main() {
 
 	go s.startHTTPServer(os.Getenv("PORT"))
 
-	if err := s.Run(); err != nil {
-		shutdown.Fatal(err)
-	}
+	s.Run()
 	shutdown.Exit()
 }
 
-func (s *Scheduler) streamFormationEvents() error {
+func (s *Scheduler) streamFormationEvents() {
 	log := s.logger.New("fn", "streamFormationEvents")
 
 	var events chan *ct.ExpandedFormation
@@ -182,16 +180,17 @@ func (s *Scheduler) streamFormationEvents() error {
 		}
 		return
 	}
-	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
-	if err := strategy.Run(connect); err != nil {
-		return err
-	}
 
 	current := make(chan struct{})
 	go func() {
 		var isCurrent bool
-	outer:
 		for {
+			for {
+				if err := connect(); err == nil {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
 			for formation := range events {
 				// an empty formation indicates we now have the
 				// current list of formations.
@@ -213,24 +212,24 @@ func (s *Scheduler) streamFormationEvents() error {
 				s.formationEvents <- formation
 			}
 			log.Warn("formation event stream disconnected", "err", stream.Err())
-			for {
-				if err := connect(); err == nil {
-					continue outer
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
 		}
 	}()
 
-	select {
-	case <-current:
-		return nil
-	case <-time.After(30 * time.Second):
-		return errors.New("timed out waiting for current formation list")
+	// wait until we have the current list of formations before
+	// starting the main scheduler loop
+	start := time.Now()
+	tick := time.Tick(30 * time.Second)
+	for {
+		select {
+		case <-current:
+			return
+		case <-tick:
+			log.Warn("still waiting for current formation list", "duration", time.Since(start))
+		}
 	}
 }
 
-func (s *Scheduler) streamHostEvents() error {
+func (s *Scheduler) streamHostEvents() {
 	log := s.logger.New("fn", "streamHostEvents")
 
 	var events chan *discoverd.Event
@@ -244,15 +243,17 @@ func (s *Scheduler) streamHostEvents() error {
 		}
 		return
 	}
-	if err := connect(); err != nil {
-		return err
-	}
 
 	current := make(chan struct{})
 	go func() {
 		var isCurrent bool
-	outer:
 		for {
+			for {
+				if err := connect(); err == nil {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
 			for event := range events {
 				switch event.Kind {
 				case discoverd.EventKindCurrent:
@@ -272,20 +273,20 @@ func (s *Scheduler) streamHostEvents() error {
 				}
 			}
 			log.Warn("host event stream disconnected", "err", stream.Err())
-			for {
-				if err := connect(); err == nil {
-					continue outer
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
 		}
 	}()
 
-	select {
-	case <-current:
-		return nil
-	case <-time.After(30 * time.Second):
-		return errors.New("timed out waiting for current host list")
+	// wait until we have the current list of hosts and their
+	// jobs before starting the main scheduler loop
+	start := time.Now()
+	tick := time.Tick(30 * time.Second)
+	for {
+		select {
+		case <-current:
+			return
+		case <-tick:
+			log.Warn("still waiting for current host and job list", "duration", time.Since(start))
+		}
 	}
 }
 
@@ -317,29 +318,23 @@ func (s *Scheduler) streamRouterEvents() {
 	}
 }
 
-func (s *Scheduler) Run() error {
+func (s *Scheduler) Run() {
 	log := s.logger.New("fn", "Run")
 	log.Info("starting scheduler loop")
 	defer log.Info("scheduler loop exited")
 
 	go s.RunPutJobs()
+	defer close(s.putJobs)
 
 	// stream host events (which will start watching job events on
 	// all current hosts before returning) *before* registering in
 	// service discovery so that there is always at least one scheduler
 	// watching all job events, even during a deployment.
-	if err := s.streamHostEvents(); err != nil {
-		return err
-	}
+	s.streamHostEvents()
 
-	if err := s.streamFormationEvents(); err != nil {
-		return err
-	}
+	s.streamFormationEvents()
 
-	isLeader, err := s.discoverd.Register()
-	if err != nil {
-		return err
-	}
+	isLeader := s.discoverd.Register()
 	s.HandleLeaderChange(isLeader)
 	leaderCh := s.discoverd.LeaderCh()
 
@@ -354,8 +349,7 @@ func (s *Scheduler) Run() error {
 		select {
 		case <-s.stop:
 			log.Info("stopping scheduler loop")
-			close(s.putJobs)
-			return nil
+			return
 		case isLeader := <-leaderCh:
 			s.HandleLeaderChange(isLeader)
 			continue
@@ -409,8 +403,7 @@ func (s *Scheduler) Run() error {
 			s.HandleRectify()
 		case <-s.stop:
 			log.Info("stopping scheduler loop")
-			close(s.putJobs)
-			return nil
+			return
 		case isLeader := <-leaderCh:
 			s.HandleLeaderChange(isLeader)
 		case req := <-s.placementRequests:

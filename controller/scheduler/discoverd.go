@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 const serviceName = "controller-scheduler"
 
 type Discoverd interface {
-	Register() (bool, error)
+	Register() bool
 	LeaderCh() chan bool
 }
 
@@ -30,14 +29,19 @@ type discoverdWrapper struct {
 	logger log15.Logger
 }
 
-func (d *discoverdWrapper) Register() (bool, error) {
+func (d *discoverdWrapper) Register() bool {
 	log := d.logger.New("fn", "discoverd.Register")
 
-	log.Info("registering with service discovery")
-	hb, err := discoverd.AddServiceAndRegister(serviceName, ":"+os.Getenv("PORT"))
-	if err != nil {
+	var hb discoverd.Heartbeater
+	for {
+		var err error
+		log.Info("registering with service discovery")
+		hb, err = discoverd.AddServiceAndRegister(serviceName, ":"+os.Getenv("PORT"))
+		if err == nil {
+			break
+		}
 		log.Error("error registering with service discovery", "err", err)
-		return false, err
+		time.Sleep(time.Second)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
@@ -56,13 +60,15 @@ func (d *discoverdWrapper) Register() (bool, error) {
 		}
 		return
 	}
-	if err := connect(); err != nil {
-		return false, err
-	}
 
 	go func() {
-	outer:
 		for {
+			for {
+				if err := connect(); err == nil {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
 			for leader := range leaders {
 				if leader == nil {
 					// a nil leader indicates there are no instances for
@@ -74,20 +80,18 @@ func (d *discoverdWrapper) Register() (bool, error) {
 				d.leader <- leader.Addr == selfAddr
 			}
 			log.Warn("service leader stream disconnected", "err", stream.Err())
-			for {
-				if err := connect(); err == nil {
-					continue outer
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
 		}
 	}()
 
-	select {
-	case isLeader := <-d.leader:
-		return isLeader, nil
-	case <-time.After(30 * time.Second):
-		return false, errors.New("timed out waiting for current service leader")
+	start := time.Now()
+	tick := time.Tick(30 * time.Second)
+	for {
+		select {
+		case isLeader := <-d.leader:
+			return isLeader
+		case <-tick:
+			log.Warn("still waiting for current service leader", "duration", time.Since(start))
+		}
 	}
 }
 

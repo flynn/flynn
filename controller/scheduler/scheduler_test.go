@@ -45,8 +45,8 @@ type fakeDiscoverd struct {
 	leader      chan bool
 }
 
-func (d *fakeDiscoverd) Register() (bool, error) {
-	return d.firstLeader, nil
+func (d *fakeDiscoverd) Register() bool {
+	return d.firstLeader
 }
 
 func (d *fakeDiscoverd) LeaderCh() chan bool {
