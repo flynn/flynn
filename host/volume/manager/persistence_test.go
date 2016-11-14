@@ -32,6 +32,13 @@ func (PersistenceTests) SetUpSuite(c *C) {
 	testutils.SkipIfNotRoot(c)
 }
 
+func assertInfoEqual(c *C, volA, volB volume.Volume) {
+	c.Assert(volA.Info().ID, Equals, volB.Info().ID)
+	c.Assert(volA.Info().Type, Equals, volB.Info().Type)
+	c.Assert(volA.Info().Meta, DeepEquals, volB.Info().Meta)
+	c.Assert(volA.Info().CreatedAt.Equal(volB.Info().CreatedAt), Equals, true)
+}
+
 // covers basic volume persistence and named volume persistence
 func (s *PersistenceTests) TestPersistence(c *C) {
 	idString := random.String(12)
@@ -104,12 +111,12 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 
 	// assert volumes
 	restoredVolumes := vman.Volumes()
-	c.Assert(restoredVolumes, HasLen, 2)
+	c.Assert(restoredVolumes, HasLen, 1)
 	c.Assert(restoredVolumes[vol1.Info().ID], NotNil)
 
 	// switch to the new volume references; do a bunch of smell checks on those
 	vol1restored := restoredVolumes[vol1.Info().ID]
-	c.Assert(vol1restored.Info(), DeepEquals, vol1.Info())
+	assertInfoEqual(c, vol1restored, vol1)
 	c.Assert(vol1restored.Provider(), NotNil)
 
 	// assert existences of filesystems and previous data
@@ -282,8 +289,8 @@ func (s *PersistenceTests) TestSnapshotPersistence(c *C) {
 	// switch to the new volume references; do a bunch of smell checks on those
 	vol1restored := restoredVolumes[vol1.Info().ID]
 	snapRestored := restoredVolumes[snap.Info().ID]
-	c.Assert(vol1restored.Info(), DeepEquals, vol1.Info())
-	c.Assert(snapRestored.Info(), DeepEquals, snap.Info())
+	assertInfoEqual(c, vol1restored, vol1)
+	assertInfoEqual(c, snapRestored, snap)
 	c.Assert(vol1restored.Provider(), NotNil)
 	c.Assert(vol1restored.Provider(), Equals, snapRestored.Provider())
 
@@ -388,7 +395,7 @@ func (s *PersistenceTests) TestTransmittedSnapshotPersistence(c *C) {
 
 	// still look like a snapshot?
 	snapRestored := restoredVolumes[snapTransmitted.Info().ID]
-	c.Assert(snapRestored.Info(), DeepEquals, snapTransmitted.Info())
+	assertInfoEqual(c, snapRestored, snapTransmitted)
 	c.Assert(snapRestored.IsSnapshot(), Equals, true)
 
 	// assert existences of filesystems and previous data
