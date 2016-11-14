@@ -79,7 +79,7 @@ non-Flynn MongoDB database, use `mongodump` and `tar` to create a dump file:
 $ mkdir tmp # create a temporary directory
 $ mongodump -o tmp # you will need to use --host and auth flags as appropriate
 $ cd tmp
-$ tar -cf ../mydb.dump
+$ tar -cf ../mydb.dump .
 ```
 
 ### External access
