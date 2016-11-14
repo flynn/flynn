@@ -78,7 +78,24 @@ func (s *ZZBackupSuite) testClusterBackup(t *c.C, index int, path string) {
 	cmd.Stderr = out
 	t.Assert(cmd.Start(), c.IsNil)
 	go cmd.Process.Wait()
-	defer exec.Command("sudo", "kill", strconv.Itoa(cmd.Process.Pid)).Run()
+
+	defer func() {
+		// collect-debug-info if the tests failed then kill flynn-host
+		if t.Failed() {
+			cmd := exec.Command(
+				"sudo",
+				"-E",
+				"../host/bin/flynn-host",
+				"collect-debug-info",
+				"--log-dir", filepath.Join(dir, "logs"),
+			)
+			cmd.Env = []string{fmt.Sprintf("DISCOVERD=%s:1111", ip)}
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		}
+		exec.Command("sudo", "kill", strconv.Itoa(cmd.Process.Pid)).Run()
+	}()
 
 	debugf(t, "bootstrapping flynn from backup")
 	cmd = exec.Command(
