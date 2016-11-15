@@ -5,7 +5,7 @@ layout: docs
 
 # Manual Installation
 
-Flynn can be installed using our install script on **Ubuntu 16.04 amd64** and **14.04 amd64**.
+Flynn can be installed using our install script on **Ubuntu 16.04** and **14.04** amd64.
 
 We recommend starting with a clean Ubuntu installation on machines with at least
 2GB of RAM, 40GB of storage, and two CPU cores each. It's possible to run Flynn
