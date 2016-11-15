@@ -51,11 +51,11 @@ Running the installer script will:
 Some of the filesystem images are quite large (several hundred megabytes) so step 3 could take a while depending on
 your Internet connection.
 
-## Rinse and repeat
+## Rinse and Repeat
 
 You should install Flynn as above on every host that you want to be in the Flynn cluster.
 
-## Set up nodes
+## Set Up Nodes
 
 First, ensure that all network traffic is allowed between all nodes in the cluster (specifically
 all UDP and TCP packets). The following ports should also be open externally on the firewalls
@@ -154,7 +154,7 @@ request.
 Now you have Flynn installed and running, head over to the [Flynn
 Basics](/docs/basics) page for a tutorial on deploying an application to Flynn.
 
-## Release mailing list
+## Release Mailing List
 
 If you'd like to receive email about each month's stable release and security
 updates, subscribe here:
