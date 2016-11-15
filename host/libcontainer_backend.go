@@ -34,7 +34,7 @@ import (
 	"github.com/flynn/flynn/host/volume/manager"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	logutils "github.com/flynn/flynn/logaggregator/utils"
-	hh "github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
@@ -109,7 +109,7 @@ func NewLibcontainerBackend(config *LibcontainerConfig) (Backend, error) {
 	}
 	shutdown.BeforeExit(func() { defaultTmpfs.Delete() })
 
-	return &LibcontainerBackend{
+	l := &LibcontainerBackend{
 		LibcontainerConfig:  config,
 		factory:             factory,
 		logStreams:          make(map[string]map[string]*logmux.LogStream),
@@ -121,7 +121,11 @@ func NewLibcontainerBackend(config *LibcontainerConfig) (Backend, error) {
 		networkConfigured:   make(chan struct{}),
 		globalState:         &libcontainerGlobalState{},
 		defaultTmpfs:        defaultTmpfs,
-	}, nil
+	}
+	l.httpClient = &http.Client{Transport: &http.Transport{
+		Dial: dialer.RetryDial(l.discoverdDial),
+	}}
+	return l, nil
 }
 
 type LibcontainerBackend struct {
@@ -150,8 +154,10 @@ type LibcontainerBackend struct {
 	globalStateMtx sync.Mutex
 	globalState    *libcontainerGlobalState
 
-	defaultTmpfs *Tmpfs
-	layerLoader  singleflight.Group
+	defaultTmpfs    *Tmpfs
+	layerLoader     singleflight.Group
+	httpClient      *http.Client
+	discoverdClient *discoverd.Client
 }
 
 type Container struct {
@@ -334,6 +340,7 @@ func (l *LibcontainerBackend) SetDefaultEnv(k, v string) {
 	l.defaultEnv[k] = v
 	l.envMtx.Unlock()
 	if k == "DISCOVERD" {
+		l.discoverdClient = discoverd.NewClientWithURL(v)
 		close(l.discoverdConfigured)
 	}
 }
@@ -758,11 +765,7 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 			}
 			layer = f
 		case "http", "https":
-			url, err := l.resolveDiscoverdURL(u)
-			if err != nil {
-				return "", err
-			}
-			res, err := hh.RetryClient.Get(url)
+			res, err := l.httpClient.Get(m.URL)
 			if err != nil {
 				return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
 			}
@@ -844,30 +847,28 @@ func (l *LibcontainerBackend) mountTmpfs(job *host.Job) (string, error) {
 	return vol.Location(), nil
 }
 
-// resolveDiscoverdURL resolves a discoverd host in the given URL to an address
-// using the configured discoverd URL as the host is likely not using discoverd
-// to resolve DNS queries
-func (l *LibcontainerBackend) resolveDiscoverdURL(u *url.URL) (string, error) {
-	if !strings.HasSuffix(u.Host, ".discoverd") {
-		return u.String(), nil
-	}
-
-	// ensure discoverd is configured
-	<-l.discoverdConfigured
-	l.envMtx.Lock()
-	discURL := l.defaultEnv["DISCOVERD"]
-	l.envMtx.Unlock()
-
-	// lookup the service and pick a random address
-	service := strings.TrimSuffix(u.Host, ".discoverd")
-	addrs, err := discoverd.NewClientWithURL(discURL).Service(service).Addrs()
+// discoverdDial is a discoverd aware dialer which resolves a discoverd host to
+// an address using the configured discoverd client as the host is likely not
+// using discoverd to resolve DNS queries
+func (l *LibcontainerBackend) discoverdDial(network, addr string) (net.Conn, error) {
+	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", err
-	} else if len(addrs) == 0 {
-		return "", fmt.Errorf("lookup %s: no such host", u.Host)
+		return nil, err
 	}
-	u.Host = addrs[random.Math.Intn(len(addrs))]
-	return u.String(), nil
+	if strings.HasSuffix(host, ".discoverd") {
+		// ensure discoverd is configured
+		<-l.discoverdConfigured
+		// lookup the service and pick a random address
+		service := strings.TrimSuffix(host, ".discoverd")
+		addrs, err := l.discoverdClient.Service(service).Addrs()
+		if err != nil {
+			return nil, err
+		} else if len(addrs) == 0 {
+			return nil, fmt.Errorf("lookup %s: no such host", host)
+		}
+		addr = addrs[random.Math.Intn(len(addrs))]
+	}
+	return dialer.Default.Dial(network, addr)
 }
 
 func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {

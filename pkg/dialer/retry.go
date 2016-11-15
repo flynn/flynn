@@ -7,26 +7,32 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 )
 
+type DialFunc func(network, addr string) (net.Conn, error)
+
 var Default = net.Dialer{
 	Timeout:   time.Second,
 	KeepAlive: 30 * time.Second,
 }
 
-var Retry = RetryDialer{
-	Attempts: attempt.Strategy{
-		Total: 30 * time.Second,
-		Delay: 500 * time.Millisecond,
-	},
+var DialAttempts = attempt.Strategy{
+	Total: 30 * time.Second,
+	Delay: 500 * time.Millisecond,
+}
+
+var Retry = RetryDialer{Default.Dial}
+
+func RetryDial(dial DialFunc) DialFunc {
+	return RetryDialer{dial}.Dial
 }
 
 type RetryDialer struct {
-	Attempts attempt.Strategy
+	dial DialFunc
 }
 
 func (r RetryDialer) Dial(network, addr string) (net.Conn, error) {
 	var conn net.Conn
-	if err := r.Attempts.Run(func() (err error) {
-		conn, err = Default.Dial(network, addr)
+	if err := DialAttempts.Run(func() (err error) {
+		conn, err = r.dial(network, addr)
 		return
 	}); err != nil {
 		return nil, err
