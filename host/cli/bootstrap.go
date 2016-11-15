@@ -98,6 +98,11 @@ func runBootstrap(args *docopt.Args) error {
 		cfg.MinHosts = 1
 	}
 
+	cfg.Singleton = cfg.MinHosts == 1
+	if s := os.Getenv("SINGLETON"); s != "" {
+		cfg.Singleton = s == "true"
+	}
+
 	ch := make(chan *bootstrap.StepInfo)
 	done := make(chan struct{})
 	var last error
@@ -331,8 +336,96 @@ UPDATE releases SET processes = jsonb_set(processes, '{app,volumes}', '[{"path":
 WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'gitreceive');
 `)
 
+	// update the SINGLETON environment variable for database appliances
+	// (which includes updating legacy appliances which had SINGLETON set
+	// on the database type rather than the release)
+	singleton := strconv.FormatBool(cfg.Singleton)
+	data.Postgres.Release.Env["SINGLETON"] = singleton
+	sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE releases SET env = jsonb_set(env, '{SINGLETON}', '%q')
+WHERE release_id IN (SELECT release_id FROM apps WHERE name IN ('postgres', 'mariadb', 'mongodb'));
+`, singleton))
+
+	if data.MariaDB != nil {
+		data.MariaDB.Release.Env["SINGLETON"] = singleton
+		delete(data.MariaDB.Release.Processes["mariadb"].Env, "SINGLETON")
+		sqlBuf.WriteString(`
+UPDATE releases SET processes = jsonb_set(processes, '{mariadb,env}', (processes #> '{mariadb,env}')::jsonb - 'SINGLETON')
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mariadb');
+`)
+	}
+
+	if data.MongoDB != nil {
+		data.MongoDB.Release.Env["SINGLETON"] = singleton
+		delete(data.MongoDB.Release.Processes["mongodb"].Env, "SINGLETON")
+		sqlBuf.WriteString(`
+UPDATE releases SET processes = jsonb_set(processes, '{mongodb,env}', (processes #> '{mongodb,env}')::jsonb - 'SINGLETON')
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mongodb');
+`)
+	}
+
+	// modify app scale based on whether we are booting
+	// a singleton or HA cluster
+	var scale map[string]map[string]int
+	if cfg.Singleton {
+		scale = map[string]map[string]int{
+			"postgres":       {"postgres": 1, "web": 1},
+			"mariadb":        {"web": 1},
+			"mongodb":        {"web": 1},
+			"controller":     {"web": 1, "worker": 1},
+			"redis":          {"web": 1},
+			"blobstore":      {"web": 1},
+			"gitreceive":     {"app": 1},
+			"docker-receive": {"app": 1},
+			"logaggregator":  {"app": 1},
+			"dashboard":      {"web": 1},
+			"status":         {"web": 1},
+		}
+		data.Postgres.Processes["postgres"] = 1
+		data.Postgres.Processes["web"] = 1
+		if data.MariaDB != nil {
+			data.MariaDB.Processes["mariadb"] = 1
+			data.MariaDB.Processes["web"] = 1
+		}
+		if data.MongoDB != nil {
+			data.MongoDB.Processes["mongodb"] = 1
+			data.MongoDB.Processes["web"] = 1
+		}
+	} else {
+		scale = map[string]map[string]int{
+			"postgres":       {"postgres": 3, "web": 2},
+			"mariadb":        {"web": 2},
+			"mongodb":        {"web": 2},
+			"controller":     {"web": 2, "worker": 2},
+			"redis":          {"web": 2},
+			"blobstore":      {"web": 2},
+			"gitreceive":     {"app": 2},
+			"docker-receive": {"app": 2},
+			"logaggregator":  {"app": 2},
+			"dashboard":      {"web": 2},
+			"status":         {"web": 2},
+		}
+		data.Postgres.Processes["postgres"] = 3
+		data.Postgres.Processes["web"] = 2
+		if data.MariaDB != nil {
+			data.MariaDB.Processes["mariadb"] = 3
+			data.MariaDB.Processes["web"] = 2
+		}
+		if data.MongoDB != nil {
+			data.MongoDB.Processes["mongodb"] = 3
+			data.MongoDB.Processes["web"] = 2
+		}
+	}
+	for app, procs := range scale {
+		for typ, count := range procs {
+			sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE formations SET processes = jsonb_set(processes, '{%s}', '%d')
+WHERE release_id = (SELECT release_id FROM apps WHERE name = '%s');
+`, typ, count, app))
+		}
+	}
+
 	// start discoverd/flannel/postgres
-	cfg.Singleton = data.Postgres.Release.Env["SINGLETON"] == "true"
 	systemSteps := bootstrap.Manifest{
 		step("discoverd", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: data.Discoverd,
@@ -412,6 +505,11 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
 	if err != nil {
 		return fmt.Errorf("error getting controller instance: %s", err)
 	}
+	controllerKey := data.Controller.Release.Env["AUTH_KEY"]
+	client, err := controller.NewClient("http://"+controllerInstances[0].Addr, controllerKey)
+	if err != nil {
+		return err
+	}
 
 	// start mariadb and load data if it was present in the backup.
 	mysqldb, err := getFile("mysql.sql.gz")
@@ -426,6 +524,11 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
 		}.RunWithState(ch, state)
 		if err != nil {
 			return err
+		}
+
+		// ensure the formation is correct in the database
+		if err := client.PutFormation(data.MariaDB.Formation()); err != nil {
+			return fmt.Errorf("error updating mariadb formation: %s", err)
 		}
 
 		cmd = exec.JobUsingHost(state.Hosts[0], artifacts["mariadb"], nil)
@@ -468,6 +571,11 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
 			return err
 		}
 
+		// ensure the formation is correct in the database
+		if err := client.PutFormation(data.MongoDB.Formation()); err != nil {
+			return fmt.Errorf("error updating mongodb formation: %s", err)
+		}
+
 		cmd = exec.JobUsingHost(state.Hosts[0], artifacts["mongodb"], nil)
 		cmd.Args = []string{"mongorestore", "-h", "leader.mongodb.discoverd", "-u", "flynn", "-p", data.MongoDB.Release.Env["MONGO_PWD"], "--archive"}
 		cmd.Stdin = mongodb
@@ -488,12 +596,6 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
 			return err
 		}
 		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
-	}
-
-	controllerKey := data.Controller.Release.Env["AUTH_KEY"]
-	client, err := controller.NewClient("http://"+controllerInstances[0].Addr, controllerKey)
-	if err != nil {
-		return err
 	}
 
 	// get blobstore config
