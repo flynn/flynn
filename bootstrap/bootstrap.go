@@ -232,11 +232,6 @@ func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config, only []string) er
 		return err
 	}
 
-	cfg.Singleton = cfg.MinHosts == 1
-	if s := os.Getenv("SINGLETON"); s != "" {
-		cfg.Singleton = s == "true"
-	}
-
 	_, err = manifest.Run(ch, cfg)
 	return err
 }

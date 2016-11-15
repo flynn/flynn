@@ -35,6 +35,16 @@ type ExpandedFormation struct {
 	DeprecatedImageArtifact *Artifact `json:"artifact,omitempty"`
 }
 
+func (e *ExpandedFormation) Formation() *Formation {
+	return &Formation{
+		AppID:     e.App.ID,
+		ReleaseID: e.Release.ID,
+		Processes: e.Processes,
+		Tags:      e.Tags,
+		UpdatedAt: &e.UpdatedAt,
+	}
+}
+
 type App struct {
 	ID            string            `json:"id,omitempty"`
 	Name          string            `json:"name,omitempty"`
