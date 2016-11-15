@@ -327,8 +327,8 @@ do_remove() {
 
   info "stopping flynn-host daemon"
   if is_ubuntu_xenial; then
-    run systemctl stop flynn-host
-    run systemctl disable flynn-host
+    systemctl stop flynn-host
+    systemctl disable flynn-host
   elif is_ubuntu_trusty; then
     local status="$(status flynn-host)"
     if [[ "${status:0:16}" = "flynn-host start" ]]; then
