@@ -9,7 +9,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/pkg/dialer"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -26,8 +26,7 @@ type ServiceFunc func(name string) discoverd.Service
 // NewClientWithServices uses the provided services to find cluster members. If
 // services is nil, the default discoverd client is used.
 func NewClientWithServices(services ServiceFunc) *Client {
-	hc := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
-	return NewClientWithHTTP(services, hc)
+	return NewClientWithHTTP(services, httphelper.RetryClient)
 }
 
 func NewClientWithHTTP(services ServiceFunc, hc *http.Client) *Client {

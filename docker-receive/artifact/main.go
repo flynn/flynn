@@ -14,7 +14,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pinkerton"
-	"github.com/flynn/flynn/pkg/dialer"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/imagebuilder"
 )
 
@@ -100,8 +100,7 @@ func upload(data io.Reader, url string) error {
 	if err != nil {
 		return err
 	}
-	client := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
-	res, err := client.Do(req)
+	res, err := httphelper.RetryClient.Do(req)
 	if err != nil {
 		return err
 	}

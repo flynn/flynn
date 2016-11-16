@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
@@ -34,6 +34,11 @@ type Client struct {
 	c *httpclient.Client
 }
 
+var httpClient = &http.Client{
+	Timeout:   3 * time.Minute, // client operation timeout
+	Transport: httphelper.RetryClient.Transport,
+}
+
 func NewClient(addr string) *Client {
 	// remove port, if any
 	host, p, _ := net.SplitHostPort(addr)
@@ -41,11 +46,8 @@ func NewClient(addr string) *Client {
 
 	return &Client{
 		c: &httpclient.Client{
-			URL: fmt.Sprintf("http://%s:%d", host, port+1),
-			HTTP: &http.Client{
-				Timeout:   3 * time.Minute, // client operation timeout
-				Transport: &http.Transport{Dial: dialer.Default.Dial},
-			},
+			URL:  fmt.Sprintf("http://%s:%d", host, port+1),
+			HTTP: httpClient,
 		},
 	}
 }
