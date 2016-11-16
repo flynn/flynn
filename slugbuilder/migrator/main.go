@@ -96,7 +96,6 @@ func getActiveSlugArtifacts(db *postgres.DB) ([]*ct.Artifact, error) {
 	sql := `
 SELECT artifact_id, uri FROM artifacts
 WHERE type = 'file'
-AND meta->>'blobstore' = 'true'
 AND deleted_at IS NULL
 AND artifact_id IN (
   SELECT artifact_id FROM release_artifacts
