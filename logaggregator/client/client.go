@@ -10,8 +10,8 @@ import (
 
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/logaggregator/utils"
-	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/httphelper"
 )
 
 // ErrNotFound is returned when a resource is not found (HTTP status 404).
@@ -35,8 +35,7 @@ func newClient(url string, http *http.Client) *Client {
 
 // NewClient creates a new Client pointing at uri.
 func New(uri string) (*Client, error) {
-	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
-	return NewWithHTTP(uri, httpClient)
+	return NewWithHTTP(uri, httphelper.RetryClient)
 }
 
 // NewClient creates a new Client pointing at uri with the specified http client.

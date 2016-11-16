@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
@@ -38,9 +38,7 @@ func newRouterClient() *client {
 	return &client{Client: &httpclient.Client{
 		ErrNotFound: ErrNotFound,
 		URL:         "http://router-api.discoverd:5000",
-		HTTP: &http.Client{
-			Transport: &http.Transport{Dial: dialer.Retry.Dial},
-		},
+		HTTP:        httphelper.RetryClient,
 	}}
 }
 
