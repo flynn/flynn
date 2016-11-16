@@ -88,6 +88,7 @@ func (d *DeployJob) deploySirenia() (err error) {
 		}
 		log.Info("waiting for peer to stop")
 		jobEvents := d.ReleaseJobEvents(d.OldReleaseID)
+		timeout := time.After(time.Duration(d.DeployTimeout) * time.Second)
 		for {
 			select {
 			case e := <-jobEvents:
@@ -106,7 +107,7 @@ func (d *DeployJob) deploySirenia() (err error) {
 					}
 					return nil
 				}
-			case <-time.After(time.Duration(d.DeployTimeout) * time.Second):
+			case <-timeout:
 				return loggedErr("timed out waiting for peer to stop")
 			}
 		}
@@ -133,6 +134,7 @@ func (d *DeployJob) deploySirenia() (err error) {
 		log.Info("waiting for new instance to come up")
 		var inst *discoverd.Instance
 		jobEvents := d.ReleaseJobEvents(d.NewReleaseID)
+		timeout := time.After(time.Duration(d.DeployTimeout) * time.Second)
 	loop:
 		for {
 			select {
@@ -151,7 +153,7 @@ func (d *DeployJob) deploySirenia() (err error) {
 					inst = event.Instance
 					break loop
 				}
-			case <-time.After(time.Duration(d.DeployTimeout) * time.Second):
+			case <-timeout:
 				return nil, loggedErr("timed out waiting for new instance to come up")
 			}
 		}
@@ -253,6 +255,7 @@ func (d *DeployJob) deploySirenia() (err error) {
 	log.Info(fmt.Sprintf("waiting for %d job down events", d.Processes[processType]))
 	actual := 0
 	jobEvents := d.ReleaseJobEvents(d.OldReleaseID)
+	timeout := time.After(time.Duration(d.DeployTimeout) * time.Second)
 loop:
 	for {
 		select {
@@ -271,7 +274,7 @@ loop:
 					break loop
 				}
 			}
-		case <-time.After(time.Duration(d.DeployTimeout) * time.Second):
+		case <-timeout:
 			return loggedErr("timed out waiting for job events")
 		}
 	}
