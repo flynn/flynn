@@ -742,7 +742,7 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 		return fmt.Errorf("error listing artifacts: %s", err)
 	}
 	for _, artifact := range artifactList {
-		if artifact.Type == ct.DeprecatedArtifactTypeFile && artifact.Meta["blobstore"] == "true" {
+		if artifact.Type == ct.DeprecatedArtifactTypeFile {
 			migrateSlugs = true
 		}
 		if artifact.Type == ct.DeprecatedArtifactTypeDocker && artifact.Meta["docker-receive.repository"] != "" {
