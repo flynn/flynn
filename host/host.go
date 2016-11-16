@@ -60,6 +60,7 @@ options:
   --bridge-name=NAME         network bridge name [default: flynnbr0]
   --no-resurrect             disable cluster resurrection
   --max-job-concurrency=NUM  maximum number of jobs to start concurrently
+  --max-state-jobs=NUM       maximum number of jobs to store in the state database
   --partitions=PARTITIONS    specify resource partitions for host [default: system=cpu_shares:4096 background=cpu_shares:4096 user=cpu_shares:8192]
   --init-log-level=LEVEL     containerinit log level [default: info]
   --zpool-name=NAME          zpool name
@@ -216,6 +217,10 @@ func runDaemon(args *docopt.Args) {
 		zpoolName = zfsVolume.DefaultDatasetName
 	}
 
+	stateOpts := &StateOptions{}
+	if m, err := strconv.ParseUint(args.String["--max-state-jobs"], 10, 64); err == nil {
+		stateOpts.MaxJobs = m
+	}
 	if path, err := filepath.Abs(flynnInit); err == nil {
 		flynnInit = path
 	}
@@ -272,7 +277,7 @@ func runDaemon(args *docopt.Args) {
 		log.Info("registered with cluster discovery service", "id", discoveryID)
 	}
 
-	state := NewState(hostID, stateFile)
+	state := NewState(hostID, stateFile, stateOpts)
 	shutdown.BeforeExit(func() { state.CloseDB() })
 
 	log.Info("initializing volume manager", "provider", volProvider)

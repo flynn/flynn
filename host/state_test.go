@@ -17,7 +17,7 @@ var _ = Suite(&S{})
 func (S) TestStateHostID(c *C) {
 	workdir := c.MkDir()
 	hostID := "abc123"
-	state := NewState(hostID, filepath.Join(workdir, "host-state-db"))
+	state := NewState(hostID, filepath.Join(workdir, "host-state-db"), nil)
 	c.Assert(state.OpenDB(), IsNil)
 	defer state.CloseDB()
 	state.AddJob(&host.Job{ID: "a"})
@@ -30,14 +30,14 @@ func (S) TestStateHostID(c *C) {
 func (S) TestStatePersistRestore(c *C) {
 	workdir := c.MkDir()
 	hostID := "abc123"
-	state := NewState(hostID, filepath.Join(workdir, "host-state-db"))
+	state := NewState(hostID, filepath.Join(workdir, "host-state-db"), nil)
 	c.Assert(state.OpenDB(), IsNil)
 	state.AddJob(&host.Job{ID: "a"})
 	state.CloseDB()
 
 	// exercise the restore path.  failures will panic.
 	// note that this does not test backend deserialization (the mock, obviously, isn't doing anything).
-	state = NewState(hostID, filepath.Join(workdir, "host-state-db"))
+	state = NewState(hostID, filepath.Join(workdir, "host-state-db"), nil)
 	c.Assert(state.OpenDB(), IsNil)
 	defer state.CloseDB()
 	state.Restore(&MockBackend{}, nil)
@@ -52,7 +52,7 @@ func (S) TestStatePersistRestore(c *C) {
 func (S) TestStateDuplicateID(c *C) {
 	workdir := c.MkDir()
 	hostID := "abc123"
-	state := NewState(hostID, filepath.Join(workdir, "host-state-db"))
+	state := NewState(hostID, filepath.Join(workdir, "host-state-db"), nil)
 	c.Assert(state.OpenDB(), IsNil)
 	defer state.CloseDB()
 
@@ -96,4 +96,25 @@ func (S) TestStateExclusiveVolumes(c *C) {
 	state.SetStatusDone("job2", 0)
 	c.Assert(addJob("job4", "vol1", "vol2"), ErrorMatches, "volumes in use: vol1")
 	c.Assert(addJob("job4", "vol2", "vol3"), IsNil)
+}
+
+func (S) TestStateMaxJobs(c *C) {
+	workdir := c.MkDir()
+	hostID := "abc123"
+	opts := &StateOptions{MaxJobs: 3}
+	state := NewState(hostID, filepath.Join(workdir, "host-state-db"), opts)
+	c.Assert(state.OpenDB(), IsNil)
+	defer state.CloseDB()
+
+	c.Assert(state.AddJob(&host.Job{ID: "1"}), IsNil)
+	c.Assert(state.AddJob(&host.Job{ID: "2"}), IsNil)
+	c.Assert(state.AddJob(&host.Job{ID: "3"}), IsNil)
+	c.Assert(state.AddJob(&host.Job{ID: "4"}), IsNil)
+
+	jobs := state.Get()
+	c.Assert(jobs, HasLen, 3)
+	c.Assert(state.GetJob("1"), IsNil)
+	c.Assert(state.GetJob("2"), NotNil)
+	c.Assert(state.GetJob("3"), NotNil)
+	c.Assert(state.GetJob("4"), NotNil)
 }

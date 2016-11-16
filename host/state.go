@@ -18,8 +18,6 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-// TODO: prune old jobs?
-
 // ErrJobExists is returned when attempting to add a job to the state with an
 // ID which already exists
 var ErrJobExists = errors.New("job already exists")
@@ -31,6 +29,14 @@ type ErrVolumesInUse struct {
 func (e ErrVolumesInUse) Error() string {
 	return fmt.Sprintf("volumes in use: %s", strings.Join(e.volIDs, ", "))
 }
+
+// DefaultMaxJobs is the default maximum number of jobs to store in the
+// state database.
+//
+// The value is 1,000 as jobs tend to have a size of around 2.5k when served
+// via the API, so this caps the size of the full list of jobs at 2.5MB (which
+// is relevant for the scheduler which fetches the full list every 30s)
+var DefaultMaxJobs uint64 = 1000
 
 type State struct {
 	id string
@@ -46,14 +52,26 @@ type State struct {
 	stateDB       *bolt.DB
 	dbUsers       int
 	dbCond        *sync.Cond
+	maxJobs       uint64
 
 	backend Backend
 }
 
-func NewState(id string, stateFilePath string) *State {
+type StateOptions struct {
+	MaxJobs uint64
+}
+
+func NewState(id, stateFilePath string, opts *StateOptions) *State {
+	if opts == nil {
+		opts = &StateOptions{}
+	}
+	if opts.MaxJobs == 0 {
+		opts.MaxJobs = DefaultMaxJobs
+	}
 	return &State{
 		id:            id,
 		stateFilePath: stateFilePath,
+		maxJobs:       opts.MaxJobs,
 		jobs:          make(map[string]*host.ActiveJob),
 		listeners:     make(map[string]map[chan host.Event]struct{}),
 		attachers:     make(map[string]map[chan struct{}]struct{}),
