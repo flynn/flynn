@@ -727,12 +727,14 @@
   {
     "id": "mariadb-wait",
     "action": "wait",
-    "url": "http://mariadb-api.discoverd/ping"
+    "url": "http://mariadb-api.discoverd",
+    "status": 404
   },
   {
     "id": "mongodb-wait",
     "action": "wait",
-    "url": "http://mongodb-api.discoverd/ping"
+    "url": "http://mongodb-api.discoverd",
+    "status": 404
   },
   {
     "id": "blobstore-wait",
