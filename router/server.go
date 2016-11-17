@@ -89,6 +89,8 @@ func main() {
 		shutdown.Fatal("Missing random 32 byte base64-encoded COOKIE_KEY")
 	}
 
+	proxyProtocol := os.Getenv("PROXY_PROTOCOL") == "true"
+
 	httpPort := flag.String("http-port", "8080", "http listen port")
 	httpsPort := flag.String("https-port", "4433", "https listen port")
 	tcpIP := flag.String("tcp-ip", os.Getenv("LISTEN_IP"), "tcp router listen ip")
@@ -148,12 +150,13 @@ func main() {
 			discoverd: discoverd.DefaultClient,
 		},
 		HTTP: &HTTPListener{
-			Addr:      httpAddr,
-			TLSAddr:   httpsAddr,
-			cookieKey: cookieKey,
-			keypair:   keypair,
-			ds:        NewPostgresDataStore("http", db.ConnPool),
-			discoverd: discoverd.DefaultClient,
+			Addr:          httpAddr,
+			TLSAddr:       httpsAddr,
+			cookieKey:     cookieKey,
+			keypair:       keypair,
+			ds:            NewPostgresDataStore("http", db.ConnPool),
+			discoverd:     discoverd.DefaultClient,
+			proxyProtocol: proxyProtocol,
 		},
 	}
 

@@ -20,6 +20,7 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/router/proxy"
+	"github.com/flynn/flynn/router/proxyproto"
 	"github.com/flynn/flynn/router/types"
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
@@ -42,11 +43,12 @@ type HTTPListener struct {
 	wm        *WatchManager
 	stopSync  func()
 
-	listener    net.Listener
-	tlsListener net.Listener
-	closed      bool
-	cookieKey   *[32]byte
-	keypair     tls.Certificate
+	listener      net.Listener
+	tlsListener   net.Listener
+	closed        bool
+	cookieKey     *[32]byte
+	keypair       tls.Certificate
+	proxyProtocol bool
 
 	preSync  func()
 	postSync func(<-chan struct{})
@@ -370,6 +372,9 @@ func (s *HTTPListener) listenAndServe() error {
 	if err != nil {
 		return listenErr{s.Addr, err}
 	}
+	if s.proxyProtocol {
+		s.listener = proxyproto.Listener{s.listener}
+	}
 
 	server := &http.Server{
 		Addr: s.listener.Addr().String(),
@@ -404,6 +409,9 @@ func (s *HTTPListener) listenAndServeTLS() error {
 	l, err := listenFunc("tcp4", s.TLSAddr)
 	if err != nil {
 		return listenErr{s.Addr, err}
+	}
+	if s.proxyProtocol {
+		l = proxyproto.Listener{l}
 	}
 	s.tlsListener = tls.NewListener(l, tlsConfig)
 
