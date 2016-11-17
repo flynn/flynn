@@ -306,6 +306,9 @@ type NewJob struct {
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
 	DeprecatedCmd        []string `json:"cmd,omitempty"`
 	DeprecatedEntrypoint []string `json:"entrypoint,omitempty"`
+
+	// Artifact is DEPRECATED: use Artifacts instead
+	DeprecatedArtifact string `json:"artifact,omitempty"`
 }
 
 const DefaultDeployTimeout = 120 // seconds

@@ -124,13 +124,14 @@ func runExport(args *docopt.Args, client controller.Client) error {
 	download := func(name, url string, release *ct.Release) error {
 		reqR, reqW := io.Pipe()
 		config := runConfig{
-			App:        mustApp(),
-			Release:    release.ID,
-			Artifacts:  release.ArtifactIDs[:1],
-			DisableLog: true,
-			Args:       []string{"curl", "--include", "--location", "--raw", url},
-			Stdout:     reqW,
-			Stderr:     ioutil.Discard,
+			App:                mustApp(),
+			Release:            release.ID,
+			Artifacts:          release.ArtifactIDs[:1],
+			DeprecatedArtifact: release.ArtifactIDs[0],
+			DisableLog:         true,
+			Args:               []string{"curl", "--include", "--location", "--raw", url},
+			Stdout:             reqW,
+			Stderr:             ioutil.Discard,
 		}
 		if bar != nil {
 			config.Stdout = io.MultiWriter(config.Stdout, bar)

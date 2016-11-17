@@ -20,6 +20,10 @@
         "$ref": "/schema/controller/common#/definitions/id"
       }
     },
+    "artifact": {
+      "description": "DEPRECATED (use artifacts instead)",
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
     "cmd": {
       "$ref": "/schema/controller/common#/definitions/cmd"
     },

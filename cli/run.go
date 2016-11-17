@@ -81,18 +81,23 @@ type runConfig struct {
 	DisableLog bool
 	Exit       bool
 	Data       bool
+
+	// DeprecatedArtifact is to support using an explicit artifact
+	// with old clusters which don't accept multiple artifacts
+	DeprecatedArtifact string
 }
 
 func runJob(client controller.Client, config runConfig) error {
 	req := &ct.NewJob{
-		Args:        config.Args,
-		TTY:         config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
-		ReleaseID:   config.Release,
-		ArtifactIDs: config.Artifacts,
-		Env:         config.Env,
-		ReleaseEnv:  config.ReleaseEnv,
-		DisableLog:  config.DisableLog,
-		Data:        config.Data,
+		Args:               config.Args,
+		TTY:                config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
+		ReleaseID:          config.Release,
+		ArtifactIDs:        config.Artifacts,
+		DeprecatedArtifact: config.DeprecatedArtifact,
+		Env:                config.Env,
+		ReleaseEnv:         config.ReleaseEnv,
+		DisableLog:         config.DisableLog,
+		Data:               config.Data,
 	}
 
 	// ensure slug apps from old clusters use /runner/init
