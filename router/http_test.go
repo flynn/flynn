@@ -163,6 +163,14 @@ func newHTTP2Client(serverName string) *http.Client {
 }
 
 func (s *S) newHTTPListener(t testutil.TestingT) *HTTPListener {
+	l := s.buildHTTPListener(t)
+	if err := l.Start(); err != nil {
+		t.Fatal(err)
+	}
+	return l
+}
+
+func (s *S) buildHTTPListener(t testutil.TestingT) *HTTPListener {
 	cert := tlsConfigForDomain("example.com")
 	pair, err := tls.X509KeyPair([]byte(cert.Cert), []byte(cert.PrivateKey))
 	if err != nil {
@@ -174,9 +182,6 @@ func (s *S) newHTTPListener(t testutil.TestingT) *HTTPListener {
 		keypair:   pair,
 		ds:        NewPostgresDataStore("http", s.pgx),
 		discoverd: s.discoverd,
-	}
-	if err := l.Start(); err != nil {
-		t.Fatal(err)
 	}
 	return l
 }
@@ -1706,4 +1711,46 @@ func (s *S) TestDoubleSlashPath(c *C) {
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	assertGet(c, "http://"+l.Addr+"//foo/bar", "example.com", "//foo/bar")
+}
+
+func (s *S) TestHTTPProxyProtocol(c *C) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte(req.Header.Get("X-Forwarded-For")))
+	})
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	l := s.buildHTTPListener(c)
+	l.proxyProtocol = true
+	c.Assert(l.Start(), IsNil)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	req := newReq("http://"+l.Addr, "example.com")
+
+	dialer := func(addr string) func() net.Conn {
+		return func() net.Conn {
+			conn, err := net.Dial("tcp", addr)
+			c.Assert(err, IsNil)
+			conn.Write([]byte("PROXY TCP4 1.1.1.123 20.2.2.2 1000 2000\r\n"))
+			return conn
+		}
+	}
+
+	for _, f := range []func() net.Conn{
+		dialer(l.Addr),
+		func() net.Conn {
+			return tls.Client(dialer(l.TLSAddr)(), newHTTPClient("example.com").Transport.(*http.Transport).TLSClientConfig)
+		},
+	} {
+		conn := f()
+		defer conn.Close()
+		c.Assert(req.Write(conn), IsNil)
+		res, err := http.ReadResponse(bufio.NewReader(conn), req)
+		c.Assert(err, IsNil)
+		data, _ := ioutil.ReadAll(res.Body)
+		c.Assert(string(data), Equals, "1.1.1.123")
+	}
 }

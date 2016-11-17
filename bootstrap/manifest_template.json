@@ -458,7 +458,8 @@
       "env": {
         "TLSCERT": "{{ (index .StepData \"controller-cert\").Cert }}",
         "TLSKEY": "{{ (index .StepData \"controller-cert\").PrivateKey }}",
-        "COOKIE_KEY": "{{ (index .StepData \"router-sticky-key\").Data }}"
+        "COOKIE_KEY": "{{ (index .StepData \"router-sticky-key\").Data }}",
+        "PROXY_PROTOCOL": "{{ getenv \"PROXY_PROTOCOL\" }}"
       },
       "processes": {
         "app": {
