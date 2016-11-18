@@ -393,8 +393,6 @@ func (sm *SubnetManager) LeaseRenewer(cancel chan bool) {
 
 			sm.leaseExp = *resp.Expiration
 			log.Info("Lease renewed, new expiration: ", sm.leaseExp)
-			dur = sm.leaseExp.Sub(time.Now()) - renewMargin
-
 		case <-cancel:
 			return
 		}
