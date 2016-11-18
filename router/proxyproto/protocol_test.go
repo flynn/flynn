@@ -2,7 +2,6 @@ package proxyproto
 
 import (
 	"bytes"
-	"io"
 	"net"
 	"testing"
 )
@@ -18,7 +17,8 @@ func TestPassthrough(t *testing.T) {
 	go func() {
 		conn, err := net.Dial("tcp", pl.Addr().String())
 		if err != nil {
-			t.Fatalf("err: %v", err)
+			t.Errorf("err: %v", err)
+			return
 		}
 		defer conn.Close()
 
@@ -26,10 +26,12 @@ func TestPassthrough(t *testing.T) {
 		recv := make([]byte, 4)
 		_, err = conn.Read(recv)
 		if err != nil {
-			t.Fatalf("err: %v", err)
+			t.Errorf("err: %v", err)
+			return
 		}
 		if !bytes.Equal(recv, []byte("pong")) {
-			t.Fatalf("bad: %v", recv)
+			t.Errorf("bad: %v", recv)
+			return
 		}
 	}()
 
@@ -64,7 +66,8 @@ func TestParse_ipv4(t *testing.T) {
 	go func() {
 		conn, err := net.Dial("tcp", pl.Addr().String())
 		if err != nil {
-			t.Fatalf("err: %v", err)
+			t.Errorf("err: %v", err)
+			return
 		}
 		defer conn.Close()
 
@@ -76,10 +79,12 @@ func TestParse_ipv4(t *testing.T) {
 		recv := make([]byte, 4)
 		_, err = conn.Read(recv)
 		if err != nil {
-			t.Fatalf("err: %v", err)
+			t.Errorf("err: %v", err)
+			return
 		}
 		if !bytes.Equal(recv, []byte("pong")) {
-			t.Fatalf("bad: %v", recv)
+			t.Errorf("bad: %v", recv)
+			return
 		}
 	}()
 
@@ -123,7 +128,8 @@ func TestParse_ipv6(t *testing.T) {
 	go func() {
 		conn, err := net.Dial("tcp", pl.Addr().String())
 		if err != nil {
-			t.Fatalf("err: %v", err)
+			t.Errorf("err: %v", err)
+			return
 		}
 		defer conn.Close()
 
@@ -135,10 +141,12 @@ func TestParse_ipv6(t *testing.T) {
 		recv := make([]byte, 4)
 		_, err = conn.Read(recv)
 		if err != nil {
-			t.Fatalf("err: %v", err)
+			t.Errorf("err: %v", err)
+			return
 		}
 		if !bytes.Equal(recv, []byte("pong")) {
-			t.Fatalf("bad: %v", recv)
+			t.Errorf("bad: %v", recv)
+			return
 		}
 	}()
 
@@ -182,21 +190,12 @@ func TestParse_BadHeader(t *testing.T) {
 	go func() {
 		conn, err := net.Dial("tcp", pl.Addr().String())
 		if err != nil {
-			t.Fatalf("err: %v", err)
+			t.Errorf("err: %v", err)
+			return
 		}
 		defer conn.Close()
 
-		// Write out the header!
-		header := "PROXY TCP4 what 127.0.0.1 1000 2000\r\n"
-		conn.Write([]byte(header))
-
-		conn.Write([]byte("ping"))
-
-		recv := make([]byte, 4)
-		_, err = conn.Read(recv)
-		if err != io.EOF {
-			t.Fatalf("err: %v", err)
-		}
+		conn.Write([]byte("PROXY TCP4 what 127.0.0.1 1000 2000\r\nping"))
 	}()
 
 	conn, err := pl.Accept()
