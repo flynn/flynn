@@ -377,6 +377,7 @@ func (MongoDBSuite) TestIntegration_FourNode(c *C) {
 	err = node3.Reconfigure(Config(state.RolePrimary, nil, node4, topology))
 	c.Assert(err, IsNil)
 	err = node4.Reconfigure(Config(state.RoleSync, node3, nil, topology))
+	c.Assert(err, IsNil)
 
 	// Reconnect to node 3 as primary.
 	db3.Close()

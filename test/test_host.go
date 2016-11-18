@@ -779,6 +779,7 @@ func (s *HostSuite) TestLogSinks(t *c.C) {
 
 	// wait for aggregator to come up and get address
 	instances, err := x.discoverd.Instances(logApp.Name, 10*time.Second)
+	t.Assert(err, c.IsNil)
 	t.Assert(len(instances), c.Equals, 1)
 	logaggAddr := instances[0].Addr
 

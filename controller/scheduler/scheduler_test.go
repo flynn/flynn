@@ -463,6 +463,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	// move host2's job to host3
 	var job *host.ActiveJob
 	jobs, err := host2.ListJobs()
+	c.Assert(err, IsNil)
 	for _, j := range jobs {
 		if j.Status == host.StatusStarting {
 			job = &j

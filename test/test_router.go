@@ -80,6 +80,7 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	certPath, err := writeTemp(cert.Cert, "tls-cert")
 	t.Assert(err, c.IsNil)
 	keyPath, err := writeTemp(cert.PrivateKey, "tls-key")
+	t.Assert(err, c.IsNil)
 	certRoute := x.flynn("/", "-a", "dashboard", "route", "add", "http", "-s", "dashboard-web", "-p", "8081", "--tls-cert", certPath, "--tls-key", keyPath, "dashboard."+x.Domain)
 	t.Assert(certRoute, Succeeds)
 

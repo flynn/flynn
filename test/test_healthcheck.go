@@ -59,8 +59,8 @@ func (s *HealthcheckSuite) TestWithoutChecker(t *c.C) {
 
 	events := make(chan *discoverd.Event)
 	stream, err := s.discoverdClient(t).Service("ping-without-checker").Watch(events)
-	defer stream.Close()
 	t.Assert(err, c.IsNil)
+	defer stream.Close()
 
 	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "ping=0"), Succeeds)
 

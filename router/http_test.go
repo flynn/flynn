@@ -1195,6 +1195,7 @@ func (s *S) TestUpgradeHeaderIsCaseInsensitive(c *C) {
 		req.Header.Set("Connection", value)
 		req.Header.Set("Upgrade", "Some-proto-2")
 		res, err := httpClient.Do(req)
+		c.Assert(err, IsNil)
 		defer res.Body.Close()
 
 		c.Assert(err, IsNil)
@@ -1298,6 +1299,7 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 			req.Header.Set("Connection", "Upgrade")
 			req.Header.Set("Upgrade", "websocket")
 			res, err := httpClient.Do(req)
+			c.Assert(err, IsNil)
 			defer res.Body.Close()
 
 			c.Assert(err, IsNil)
@@ -1711,7 +1713,7 @@ func (s *S) TestHTTPHijackUpgrade(c *C) {
 		rw.Header().Set("Upgrade", "pinger")
 		rw.WriteHeader(101)
 
-		conn, bufrw, err := rw.(http.Hijacker).Hijack()
+		conn, bufrw, _ := rw.(http.Hijacker).Hijack()
 		defer conn.Close()
 
 		line, _, err := bufrw.ReadLine()

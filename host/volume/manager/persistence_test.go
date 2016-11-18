@@ -268,6 +268,7 @@ func (s *PersistenceTests) TestSnapshotPersistence(c *C) {
 
 	// snapshot it
 	snap, err := vman.CreateSnapshot(vol1.Info().ID)
+	c.Assert(err, IsNil)
 
 	// close persistence
 	c.Assert(vman.CloseDB(), IsNil)
@@ -363,6 +364,7 @@ func (s *PersistenceTests) TestTransmittedSnapshotPersistence(c *C) {
 
 	// make a snapshot, make a new volume to receive it, and do the transmit
 	snap, err := vman.CreateSnapshot(vol1.Info().ID)
+	c.Assert(err, IsNil)
 	vol2, err := vman.NewVolume(nil)
 	c.Assert(err, IsNil)
 	var buf bytes.Buffer
@@ -371,6 +373,7 @@ func (s *PersistenceTests) TestTransmittedSnapshotPersistence(c *C) {
 	err = vman.SendSnapshot(snap.Info().ID, haves, &buf)
 	c.Assert(err, IsNil)
 	snapTransmitted, err := vman.ReceiveSnapshot(vol2.Info().ID, &buf)
+	c.Assert(err, IsNil)
 
 	// sanity check: snapshot transmission worked
 	c.Assert(vol2.Location(), testutils.DirContains, []string{"alpha"})
