@@ -219,6 +219,11 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 			return err
 		}
 
+		// don't delete system images
+		if artifact.Meta["flynn.system-image"] == "true" {
+			continue
+		}
+
 		// only delete artifacts which aren't still referenced by other releases
 		var count int64
 		if err := tx.QueryRow("artifact_release_count", artifact.ID).Scan(&count); err != nil {
