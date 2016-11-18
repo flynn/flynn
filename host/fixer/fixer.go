@@ -175,11 +175,23 @@ func (f *ClusterFixer) StartAppJob(app, typ, service string) ([]*discoverd.Insta
 	for _, job = range releases[0] {
 		break
 	}
-	job.ID = cluster.GenerateJobID(f.hosts[0].ID(), "")
+	host := f.hosts[0]
+	job.ID = cluster.GenerateJobID(host.ID(), "")
+	// provision new temporary volumes
+	for i, v := range job.Config.Volumes {
+		if v.DeleteOnStop {
+			f.l.Info(fmt.Sprintf("provisioning volume for %s %s job", app, typ), "job.id", job.ID, "release", job.Metadata["flynn-controller.release"])
+			vol, err := host.CreateVolume("default")
+			if err != nil {
+				return nil, fmt.Errorf("error provisioning volume for %s %s job: %s", app, typ, err)
+			}
+			job.Config.Volumes[i].VolumeID = vol.ID
+		}
+	}
 	f.FixJobEnv(job)
-	// run it on a host
+	// run it on the host
 	f.l.Info(fmt.Sprintf("starting %s %s job", app, typ), "job.id", job.ID, "release", job.Metadata["flynn-controller.release"])
-	if err := f.hosts[0].AddJob(job); err != nil {
+	if err := host.AddJob(job); err != nil {
 		return nil, fmt.Errorf("error starting %s %s job: %s", app, typ, err)
 	}
 	f.l.Info("waiting for job to start")
