@@ -39,15 +39,18 @@ func TestMux_Listen(t *testing.T) {
 	go func() {
 		conn, err := net.Dial("tcp", ln.Addr().String())
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		defer conn.Close()
 
 		// Write data & close.
 		if _, err := conn.Write([]byte("GET")); err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		} else if err = conn.Close(); err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 	}()
 
