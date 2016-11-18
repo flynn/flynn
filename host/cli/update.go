@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"github.com/docker/go-units"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
@@ -238,9 +240,17 @@ func runUpdate(args *docopt.Args) error {
 		return err
 	}
 
+	// create a new cluster client to avoid reusing TCP connections to hosts
+	// which are shutting down as part of the update
+	clusterClient = cluster.NewClientWithHTTP(nil, &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}})
+
 	// use a flag to determine whether to use a TTY log formatter because actually
 	// assigning a TTY to the job causes reading images via stdin to fail.
-	cmd := exec.Command(updaterImage, "/bin/updater", fmt.Sprintf("--tty=%t", term.IsTerminal(os.Stdout.Fd())))
+	cmd := exec.CommandUsingCluster(
+		clusterClient,
+		updaterImage,
+		"/bin/updater", fmt.Sprintf("--tty=%t", term.IsTerminal(os.Stdout.Fd())),
+	)
 	cmd.Stdin = bytes.NewReader(imageJSON)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
