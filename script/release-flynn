@@ -41,6 +41,7 @@ main() {
   local bucket="flynn"
   local domain="dl.flynn.io"
   local tuf_dir="/etc/flynn/tuf"
+  local nightly=false
   local dir=""
 
   while true; do
@@ -61,6 +62,9 @@ main() {
           fail "$1 requires an argument"
         fi
         branch="$2"
+        if [[ "${branch}" = "master" ]]; then
+          nightly=true
+        fi
         shift 2
         ;;
       -v | --version)
@@ -101,6 +105,10 @@ main() {
         fi
         dir="$2"
         shift 2
+        ;;
+      --nightly)
+        nightly=true
+        shift 1
         ;;
       *)
         break
@@ -153,6 +161,9 @@ main() {
     if [[ -n "${version}" ]]; then
       args+=("--version" "${version}")
     fi
+    if $nightly; then
+      args+=("--nightly")
+    fi
     exec "${src}/script/release-flynn" ${args[@]}
   fi
 
@@ -183,7 +194,7 @@ main() {
     "--resume"  "${dir}"
     "--keep"
   )
-  if [[ "${branch}" = "master" ]]; then
+  if $nightly; then
     flags+=("--channel" "nightly")
   fi
   info "releasing components"
