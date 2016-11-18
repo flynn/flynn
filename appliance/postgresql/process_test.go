@@ -313,6 +313,7 @@ func (PostgresSuite) TestIntegration(c *C) {
 	err = node3.Reconfigure(pgConfig(state.RolePrimary, nil, node4))
 	c.Assert(err, IsNil)
 	err = node4.Reconfigure(pgConfig(state.RoleSync, node3, nil))
+	c.Assert(err, IsNil)
 
 	// check replication
 	waitRecovered(c, node3Conn)

@@ -545,6 +545,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	certPath, err := writeTemp(cert.Cert, "tls-cert")
 	t.Assert(err, c.IsNil)
 	keyPath, err := writeTemp(cert.PrivateKey, "tls-key")
+	t.Assert(err, c.IsNil)
 	certRoute := app.flynn("route", "add", "http", "--tls-cert", certPath, "--tls-key", keyPath, "example.com")
 	t.Assert(certRoute, Succeeds)
 	routeID = strings.TrimSpace(certRoute.Output)
@@ -561,6 +562,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	certPath, err = writeTemp(cert.Cert, "tls-cert")
 	t.Assert(err, c.IsNil)
 	keyPath, err = writeTemp(cert.PrivateKey, "tls-key")
+	t.Assert(err, c.IsNil)
 	certRoute = app.flynn("route", "update", routeID, "--tls-cert", certPath, "--tls-key", keyPath)
 	t.Assert(certRoute, Succeeds)
 	r, err = client.GetRoute(app.id, routeID)
@@ -895,6 +897,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	t.Assert(envLog, SuccessfulOutputContains, "ENV_UPDATE=QUUX")
 	t.Assert(envLog, c.Not(SuccessfulOutputContains), "ECHOER_ONLY=BAR")
 	t.Assert(envLog, c.Not(SuccessfulOutputContains), "ECHOER_UPDATE=BAT")
+	t.Assert(scaleCmd, Succeeds)
 }
 
 func (s *CLISuite) TestLimits(t *c.C) {

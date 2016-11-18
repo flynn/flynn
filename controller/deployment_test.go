@@ -27,6 +27,7 @@ func (s *S) TestCreateDeployment(c *C) {
 	c.Assert(d.FinishedAt, NotNil)
 	// but the app release should now be set
 	gotRelease, err := s.c.GetAppRelease(app.ID)
+	c.Assert(err, IsNil)
 	c.Assert(release.ID, Equals, gotRelease.ID)
 
 	newRelease := s.createTestRelease(c, app.ID, &ct.Release{})

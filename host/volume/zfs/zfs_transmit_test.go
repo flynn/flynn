@@ -65,6 +65,7 @@ func (s *ZfsTransmitTests) TestZfsSendRecvFull(c *C) {
 
 	// send stream to another pool; should get a new volume
 	v2, err = s.pool2.VolProv.NewVolume(nil)
+	c.Assert(err, IsNil)
 	snapRestored, err = s.pool2.VolProv.ReceiveSnapshot(v2, bytes.NewBuffer(buf.Bytes()))
 	c.Assert(err, IsNil)
 	c.Assert(snapRestored.IsSnapshot(), Equals, true)
