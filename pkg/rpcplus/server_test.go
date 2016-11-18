@@ -450,10 +450,12 @@ func benchmarkEndToEnd(dial func() (*Client, error), b *testing.B) {
 			for atomic.AddInt32(&N, -1) >= 0 {
 				err := client.Call("Arith.Add", args, reply)
 				if err != nil {
-					b.Fatalf("rpc error: Add: expected no error but got string %q", err.Error())
+					b.Errorf("rpc error: Add: expected no error but got string %q", err.Error())
+					return
 				}
 				if reply.C != args.A+args.B {
-					b.Fatalf("rpc error: Add: expected %d got %d", reply.C, args.A+args.B)
+					b.Errorf("rpc error: Add: expected %d got %d", reply.C, args.A+args.B)
+					return
 				}
 			}
 			wg.Done()
@@ -496,7 +498,8 @@ func benchmarkEndToEndAsync(dial func() (*Client, error), b *testing.B) {
 				B := call.Args.(*Args).B
 				C := call.Reply.(*Reply).C
 				if A+B != C {
-					b.Fatalf("incorrect reply: Add: expected %d got %d", A+B, C)
+					b.Errorf("incorrect reply: Add: expected %d got %d", A+B, C)
+					return
 				}
 				<-gate
 				if atomic.AddInt32(&recv, -1) == 0 {
