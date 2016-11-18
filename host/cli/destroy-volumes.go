@@ -117,7 +117,6 @@ func loadVolumeState(volumeDBPath string) (*volumemanager.Manager, error) {
 
 func destroyVolumes(vman *volumemanager.Manager, keepSystemImages bool) error {
 	someVolumesNotDestroyed := false
-	var secondPass []string
 	for id, vol := range vman.Volumes() {
 		if keepSystemImages && vol.Info().Meta["flynn.system-image"] == "true" {
 			continue
@@ -127,7 +126,6 @@ func destroyVolumes(vman *volumemanager.Manager, keepSystemImages bool) error {
 			fmt.Println("success")
 		} else if zfs.IsDatasetHasChildrenError(err) {
 			fmt.Println("has children, coming back to it later")
-			secondPass = append(secondPass, id)
 		} else {
 			fmt.Printf("error: %s\n", err)
 			someVolumesNotDestroyed = true
