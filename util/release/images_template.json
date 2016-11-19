@@ -1,4 +1,5 @@
 {
+  "host":           $image_artifact[host],
   "flannel":        $image_artifact[flannel],
   "discoverd":      $image_artifact[discoverd],
   "postgres":       $image_artifact[postgres],

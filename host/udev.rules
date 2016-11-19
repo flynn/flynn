@@ -1,0 +1,2 @@
+# A udev rule to run a custom script when ZFS zvols are added
+KERNEL=="zd*" RUN+="/usr/local/bin/zfs-mknod"
