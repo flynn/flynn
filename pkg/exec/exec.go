@@ -30,6 +30,8 @@ type Cmd struct {
 
 	Volumes []*ct.VolumeReq
 
+	HostNetwork bool
+
 	Stdin io.Reader
 
 	Stdout io.Writer
@@ -188,10 +190,11 @@ func (c *Cmd) Start() error {
 	if c.Job == nil {
 		c.Job = &host.Job{
 			Config: host.ContainerConfig{
-				Args:  c.Args,
-				TTY:   c.TTY,
-				Env:   c.Env,
-				Stdin: c.Stdin != nil || c.stdinPipe != nil,
+				Args:        c.Args,
+				TTY:         c.TTY,
+				Env:         c.Env,
+				Stdin:       c.Stdin != nil || c.stdinPipe != nil,
+				HostNetwork: c.HostNetwork,
 			},
 			Metadata: c.Meta,
 		}
