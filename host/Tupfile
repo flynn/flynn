@@ -4,3 +4,4 @@ include_rules
 : bin/flynn-host |> gzip -9 --keep bin/flynn-host |> bin/flynn-host.gz
 : |> !go ./flynn-init |> bin/flynn-init
 : bin/flynn-host.gz $(ROOT)/script/install-flynn.tmpl |> sed "s/{{FLYNN-HOST-CHECKSUM}}/\$(sha512sum bin/flynn-host.gz | cut -d " " -f 1)/g" $(ROOT)/script/install-flynn.tmpl > %o |> $(ROOT)/script/install-flynn
+: bin/* |> !image-bootstrapped |>
