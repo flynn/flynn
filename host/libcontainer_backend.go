@@ -269,8 +269,11 @@ func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) er
 	}
 
 	// enable IP forwarding
-	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1\n"), 0644); err != nil {
-		return err
+	ipFwd := "/proc/sys/net/ipv4/ip_forward"
+	if data, err := ioutil.ReadFile(ipFwd); err != nil && !bytes.HasPrefix(data, []byte("1")) {
+		if err := ioutil.WriteFile(ipFwd, []byte("1\n"), 0644); err != nil {
+			return err
+		}
 	}
 
 	// Set up iptables for outbound traffic masquerading from containers to the
