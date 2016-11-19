@@ -108,6 +108,13 @@ func CommandUsingCluster(c ClusterClient, artifact *ct.Artifact, args ...string)
 	return command
 }
 
+func CommandUsingHost(h *cluster.Host, artifact *ct.Artifact, args ...string) *Cmd {
+	command := Command(artifact, args...)
+	command.HostID = h.ID()
+	command.host = h
+	return command
+}
+
 func JobUsingCluster(c ClusterClient, artifact *ct.Artifact, job *host.Job) *Cmd {
 	command := Job(artifact, job)
 	command.cluster = c
