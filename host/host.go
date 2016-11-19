@@ -57,6 +57,7 @@ options:
   --max-job-concurrency=NUM  maximum number of jobs to start concurrently
   --partitions=PARTITIONS    specify resource partitions for host [default: system=cpu_shares:4096 background=cpu_shares:4096 user=cpu_shares:8192]
   --init-log-level=LEVEL     containerinit log level [default: info]
+  --zpool-name=NAME          zpool name
 	`)
 }
 
@@ -199,6 +200,11 @@ func runDaemon(args *docopt.Args) {
 		maxJobConcurrency = m
 	}
 
+	zpoolName := args.String["--zpool-name"]
+	if zpoolName == "" {
+		zpoolName = zfsVolume.DefaultDatasetName
+	}
+
 	if path, err := filepath.Abs(flynnInit); err == nil {
 		flynnInit = path
 	}
@@ -264,7 +270,7 @@ func runDaemon(args *docopt.Args) {
 	case "zfs":
 		newVolProvider = func() (volume.Provider, error) {
 			return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
-				DatasetName: zfsVolume.DefaultDatasetName,
+				DatasetName: zpoolName,
 				Make:        zfsVolume.DefaultMakeDev(volPath, log),
 				WorkingDir:  filepath.Join(volPath, "zfs"),
 			})
