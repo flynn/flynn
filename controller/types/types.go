@@ -102,6 +102,7 @@ type ProcessType struct {
 	Service     string             `json:"service,omitempty"`
 	Resurrect   bool               `json:"resurrect,omitempty"`
 	Resources   resource.Resources `json:"resources,omitempty"`
+	Mounts      []host.Mount       `json:"mounts,omitempty"`
 
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
 	DeprecatedCmd        []string `json:"cmd,omitempty"`
