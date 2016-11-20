@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	units "github.com/docker/go-units"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -929,6 +930,13 @@ func (s *CLISuite) TestRunLimits(t *c.C) {
 	t.Assert(limits[0], c.Equals, strconv.FormatInt(*defaults[resource.TypeMemory].Limit, 10))
 	t.Assert(limits[1], c.Equals, strconv.FormatInt(1024, 10))
 	t.Assert(limits[2], c.Equals, strconv.FormatInt(*defaults[resource.TypeMaxFD].Limit, 10))
+	cmd = app.flynn("run", "--limits", "memory=200MB,max_fd=9000", "sh", "-c", resourceCmd)
+	t.Assert(cmd, Succeeds)
+	limits = strings.Split(strings.TrimSpace(cmd.Output), "\n")
+	t.Assert(limits, c.HasLen, 3)
+	t.Assert(limits[0], c.Equals, strconv.FormatInt(200*units.MiB, 10))
+	t.Assert(limits[1], c.Equals, strconv.FormatInt(1024, 10))
+	t.Assert(limits[2], c.Equals, strconv.FormatInt(9000, 10))
 }
 
 func assertExportContains(t *c.C, file string, paths ...string) {
