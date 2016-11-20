@@ -49,6 +49,7 @@ type Config struct {
 	Uid       *uint32
 	Gid       *uint32
 	Gateway   string
+	Hostname  string
 	WorkDir   string
 	IP        string
 	TTY       bool
@@ -680,6 +681,15 @@ func containerInitApp(c *Config, logFile *os.File) error {
 	log.Debug("resuming")
 	init.mtx.Lock()
 
+	if c.Hostname != "" {
+		log.Debug("writing /etc/hosts")
+		if err := writeEtcHosts(c.Hostname); err != nil {
+			log.Error("error writing /etc/hosts", "err", err)
+			init.changeState(StateFailed, fmt.Sprintf("error writing /etc/hosts: %s", err), -1)
+			init.exit(1)
+		}
+	}
+
 	log.Info("starting the job", "args", cmd.Args)
 	if cmdErr != nil {
 		log.Error("error starting the job", "err", cmdErr)
@@ -720,6 +730,14 @@ func containerInitApp(c *Config, logFile *os.File) error {
 	log.Info("exiting")
 	init.exit(exitCode)
 	return nil
+}
+
+func writeEtcHosts(hostname string) error {
+	return ioutil.WriteFile(
+		"/etc/hosts",
+		[]byte(fmt.Sprintf("127.0.0.1 localhost %s\n", hostname)),
+		0644,
+	)
 }
 
 func newSocketPair(name string) (*os.File, *os.File, error) {
