@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -14,21 +15,24 @@ import (
 	"github.com/flynn/flynn/pkg/imagebuilder"
 )
 
+var dir = flag.String("dir", ".", "directory to build")
+
 func main() {
 	log.SetFlags(0)
+	flag.Parse()
 
-	if len(os.Args) != 2 {
-		log.Fatalf("usage: %s NAME", os.Args[0])
+	if len(flag.Args()) != 1 {
+		log.Fatalf("usage: %s [--dir DIR] NAME", os.Args[0])
 	}
-	if err := build(os.Args[1]); err != nil {
+	if err := build(flag.Args()[0], *dir); err != nil {
 		log.Fatalln("ERROR:", err)
 	}
 }
 
-func build(name string) error {
+func build(name, dir string) error {
 	name = "flynn/" + name
 
-	cmd := exec.Command("docker", "build", "-t", name, ".")
+	cmd := exec.Command("docker", "build", "-t", name, dir)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

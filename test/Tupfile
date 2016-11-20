@@ -1,4 +1,6 @@
 include_rules
-: |> !cgo |> bin/flynn-test
+# use an 'image' directory so docker only reads the files it needs
+: |> !cgo |> image/bin/flynn-test
 : |> !cgo ./runner |> bin/flynn-test-runner
-: |> !cgo ./util/file-server |> bin/flynn-test-file-server
+: |> !cgo ./util/file-server |> image/bin/flynn-test-file-server
+: image/bin/* | $(ROOT)/util/imagebuilder/build-image |> ^ build-image test^ $(BUILDIMAGE) --dir image test > %o |> $(ROOT)/image/test.json

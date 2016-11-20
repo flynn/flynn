@@ -3,6 +3,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/util.sh"
 
 usage() {
   cat <<USAGE >&2
@@ -74,8 +75,6 @@ main() {
   make
   popd >/dev/null
 
-  export BACKOFF_PERIOD="5s"
-
   local boot_flags=(
     "--size" "${size}"
   )
@@ -89,23 +88,10 @@ main() {
     exit 1
   fi
 
-  sudo mv /etc/resolv.conf{,.backup}
-  trap 'sudo mv /etc/resolv.conf{.backup,}' EXIT
-  echo "nameserver $(ifconfig flynnbr0 | grep -oP 'inet addr:\S+' | cut -d: -f2)" | sudo tee /etc/resolv.conf
-
   "${ROOT}/script/configure-docker" "${CLUSTER_DOMAIN:-"${size}.localflynn.com"}"
-
-  export FLYNNRC=/tmp/flynnrc
-  "${flynn}" cluster remove default
-  "${flynn}" cluster add --docker ${cluster_add:18}
-
-  cd "${ROOT}/test"
 
   local args=(
     "--concurrency 1"
-    "--flynnrc ${FLYNNRC}"
-    "--cli ${flynn}"
-    "--flynn-host ${flynn_host}"
     "--backups-dir" "${ROOT}/backups"
     "--debug"
   )
@@ -118,7 +104,20 @@ main() {
   fi
   args+=("--router-ip=192.0.2.200")
 
-  bin/flynn-test ${args[@]}
+  local mounts=(
+    "${ROOT}:${ROOT}"
+    "/var/run/docker.sock:/var/run/docker.sock"
+  )
+
+  local image="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[test]')"
+  "${flynn_host}" run \
+    --bind "$(join "," ${mounts[@]})" \
+    <(echo "${image}") \
+    /usr/bin/env \
+    ROOT="${ROOT}" \
+    CLUSTER_ADD_ARGS="${cluster_add:18}" \
+    /bin/run-flynn-test.sh \
+    ${args[@]}
 }
 
 main $@
