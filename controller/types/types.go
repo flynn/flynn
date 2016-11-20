@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
 	"github.com/jtacoma/uritemplates"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/tent/canonical-json-go"
 )
 
@@ -93,16 +94,19 @@ func (r *Release) IsDockerReceiveDeploy() bool {
 }
 
 type ProcessType struct {
-	Args        []string           `json:"args,omitempty"`
-	Env         map[string]string  `json:"env,omitempty"`
-	Ports       []Port             `json:"ports,omitempty"`
-	Volumes     []VolumeReq        `json:"volumes,omitempty"`
-	Omni        bool               `json:"omni,omitempty"` // omnipresent - present on all hosts
-	HostNetwork bool               `json:"host_network,omitempty"`
-	Service     string             `json:"service,omitempty"`
-	Resurrect   bool               `json:"resurrect,omitempty"`
-	Resources   resource.Resources `json:"resources,omitempty"`
-	Mounts      []host.Mount       `json:"mounts,omitempty"`
+	Args              []string           `json:"args,omitempty"`
+	Env               map[string]string  `json:"env,omitempty"`
+	Ports             []Port             `json:"ports,omitempty"`
+	Volumes           []VolumeReq        `json:"volumes,omitempty"`
+	Omni              bool               `json:"omni,omitempty"` // omnipresent - present on all hosts
+	HostNetwork       bool               `json:"host_network,omitempty"`
+	Service           string             `json:"service,omitempty"`
+	Resurrect         bool               `json:"resurrect,omitempty"`
+	Resources         resource.Resources `json:"resources,omitempty"`
+	Mounts            []host.Mount       `json:"mounts,omitempty"`
+	LinuxCapabilities []string           `json:"linux_capabilities,omitempty"`
+	AllowedDevices    []*configs.Device  `json:"allowed_devices,omitempty"`
+	WriteableCgroups  bool               `json:"writeable_cgroups,omitempty"`
 
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
 	DeprecatedCmd        []string `json:"cmd,omitempty"`
