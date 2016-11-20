@@ -8,28 +8,32 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/flynn/go-docopt"
 )
 
 func init() {
 	cmd := register("run", runRun, `
-usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [-l] [--] <command> [<argument>...]
+usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [-l] [--limits <limits>] [--] <command> [<argument>...]
 
 Run a job.
 
 Options:
-	-d, --detached    run job without connecting io streams (implies --enable-log)
-	-r <release>      id of release to run (defaults to current app release)
-	-e <entrypoint>   [DEPRECATED] overwrite the default entrypoint of the release's image
-	-l, --enable-log  send output to log streams
+	-d, --detached     run job without connecting io streams (implies --enable-log)
+	-r <release>       id of release to run (defaults to current app release)
+	-e <entrypoint>    [DEPRECATED] overwrite the default entrypoint of the release's image
+	-l, --enable-log   send output to log streams
+	--limits <limits>  comma separated limits for the run job (see "flynn limit -h" for format)
 `)
 	cmd.optsFirst = true
 }
@@ -64,6 +68,25 @@ func runRun(args *docopt.Args, client controller.Client) error {
 		fmt.Fprintln(os.Stderr, "WARN: The -e flag is deprecated and will be removed in future versions, use <command> as the entrypoint")
 		config.Args = append([]string{e}, config.Args...)
 	}
+	if args.String["--limits"] != "" {
+		config.Resources = resource.Defaults()
+		limits := strings.Split(args.String["--limits"], ",")
+		for _, limit := range limits {
+			typVal := strings.SplitN(limit, "=", 2)
+			if len(typVal) != 2 {
+				return fmt.Errorf("invalid resource limit: %q", limit)
+			}
+			typ, ok := resource.ToType(typVal[0])
+			if !ok {
+				return fmt.Errorf("invalid resource limit type: %q", typVal)
+			}
+			val, err := resource.ParseLimit(typ, typVal[1])
+			if err != nil {
+				return fmt.Errorf("invalid resource limit value: %q", typVal[1])
+			}
+			config.Resources[typ] = resource.Spec{Limit: typeconv.Int64Ptr(val)}
+		}
+	}
 	return runJob(client, config)
 }
 
@@ -81,6 +104,7 @@ type runConfig struct {
 	DisableLog bool
 	Exit       bool
 	Data       bool
+	Resources  resource.Resources
 
 	// DeprecatedArtifact is to support using an explicit artifact
 	// with old clusters which don't accept multiple artifacts
@@ -98,6 +122,7 @@ func runJob(client controller.Client, config runConfig) error {
 		ReleaseEnv:         config.ReleaseEnv,
 		DisableLog:         config.DisableLog,
 		Data:               config.Data,
+		Resources:          config.Resources,
 	}
 
 	// ensure slug apps from old clusters use /runner/init
