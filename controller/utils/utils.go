@@ -51,19 +51,26 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		ID:       id,
 		Metadata: metadata,
 		Config: host.ContainerConfig{
-			Args:        entrypoint.Args,
-			Env:         env,
-			WorkingDir:  entrypoint.WorkingDir,
-			Uid:         entrypoint.Uid,
-			Gid:         entrypoint.Gid,
-			HostNetwork: t.HostNetwork,
-			Mounts:      t.Mounts,
+			Args:             entrypoint.Args,
+			Env:              env,
+			WorkingDir:       entrypoint.WorkingDir,
+			Uid:              entrypoint.Uid,
+			Gid:              entrypoint.Gid,
+			HostNetwork:      t.HostNetwork,
+			Mounts:           t.Mounts,
+			WriteableCgroups: t.WriteableCgroups,
 		},
 		Resurrect: t.Resurrect,
 		Resources: t.Resources,
 	}
 	if len(t.Args) > 0 {
 		job.Config.Args = t.Args
+	}
+	if len(t.LinuxCapabilities) > 0 {
+		job.Config.LinuxCapabilities = &t.LinuxCapabilities
+	}
+	if len(t.AllowedDevices) > 0 {
+		job.Config.AllowedDevices = &t.AllowedDevices
 	}
 
 	// job.Config.Args may be empty if restoring from an old backup which

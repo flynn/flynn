@@ -417,8 +417,16 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	container.RootPath = rootPath
 	container.TmpPath = tmpPath
 
+	cgroupMountFlags := defaultMountFlags
+	if !job.Config.WriteableCgroups {
+		cgroupMountFlags |= syscall.MS_RDONLY
+	}
+
 	if job.Config.LinuxCapabilities == nil {
 		job.Config.LinuxCapabilities = &host.DefaultCapabilities
+	}
+	if job.Config.AllowedDevices == nil {
+		job.Config.AllowedDevices = &host.DefaultAllowedDevices
 	}
 	config := &configs.Config{
 		Rootfs:       rootPath,
@@ -432,7 +440,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		Cgroups: &configs.Cgroup{
 			Path: filepath.Join("/flynn", job.Partition, job.ID),
 			Resources: &configs.Resources{
-				AllowedDevices: configs.DefaultAllowedDevices,
+				AllowedDevices: *job.Config.AllowedDevices,
 				Memory:         defaultMemory,
 			},
 		},
@@ -480,7 +488,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			{
 				Destination: "/sys/fs/cgroup",
 				Device:      "cgroup",
-				Flags:       defaultMountFlags | syscall.MS_RDONLY,
+				Flags:       cgroupMountFlags,
 			},
 		}...),
 	}
