@@ -182,25 +182,6 @@ func writeContainerConfig(path string, c *containerinit.Config, envs ...map[stri
 	return json.NewEncoder(f).Encode(c)
 }
 
-func writeHostname(path, hostname string) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	pos, err := f.Seek(0, os.SEEK_END)
-	if err != nil {
-		return err
-	}
-	if pos > 0 {
-		if _, err := f.Write([]byte("\n")); err != nil {
-			return err
-		}
-	}
-	_, err = fmt.Fprintf(f, "127.0.0.1 localhost %s\n", hostname)
-	return err
-}
-
 func readDockerImageConfig(id string) (*dockerImageConfig, error) {
 	res := &struct{ Config dockerImageConfig }{}
 	f, err := os.Open(filepath.Join(imageRoot, "graph", id, "json"))
@@ -529,11 +510,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		log.Error("error creating container /etc", "err", err)
 		return err
 	}
-	etcHosts := filepath.Join(tmpPath, "etc/hosts")
-	if err := writeHostname(etcHosts, hostname); err != nil {
-		log.Error("error writing hosts file", "err", err)
-		return err
-	}
 	sharedDir := filepath.Join(tmpPath, ".container-shared")
 	if err := os.MkdirAll(sharedDir, 0700); err != nil {
 		log.Error("error creating .container-shared", "err", err)
@@ -543,7 +519,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	config.Mounts = append(config.Mounts,
 		bindMount(l.InitPath, "/.containerinit", false),
 		bindMount(l.resolvConf, "/etc/resolv.conf", false),
-		bindMount(etcHosts, "/etc/hosts", true),
 		bindMount(sharedDir, "/.container-shared", true),
 	)
 	for _, m := range job.Config.Mounts {
@@ -600,6 +575,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		Gid:       job.Config.Gid,
 		Resources: job.Resources,
 		LogLevel:  l.InitLogLevel,
+		Hostname:  hostname,
 	}
 	if !job.Config.HostNetwork {
 		initConfig.IP = container.IP.String() + "/24"
