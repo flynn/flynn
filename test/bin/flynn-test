@@ -1,0 +1,47 @@
+#!/bin/bash
+#
+# A script to start flynn-test in Flynn.
+#
+# TODO: Remove once the CI runner does this directly
+
+set -e
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "${ROOT}/script/lib/util.sh"
+
+main() {
+  local mounts=(
+    "${ROOT}:${ROOT}"
+    "/var/run/docker.sock:/var/run/docker.sock"
+    "/var/lib/flynn:/var/lib/flynn"
+    "/mnt/backups:/mnt/backups"
+  )
+
+  local tlspin="$(grep -F "TLSPin =" ~/.flynnrc | sed 's|  TLSPin = "\(.*\)"|\1|')"
+  local domain="$(grep -F "ControllerURL =" ~/.flynnrc | sed 's|  ControllerURL = "https://controller.\(.*\)"|\1|')"
+  local key="$(grep -F "Key =" ~/.flynnrc | sed 's|  Key = "\(.*\)"|\1|')"
+
+  local ip="$(ifconfig eth0 | grep -oP 'inet addr:\S+' | cut -d: -f2)"
+  export DISCOVERD="http://${ip}:1111"
+
+  local host="$(curl -s http://${ip}:1113/host/status | jq -r .id)"
+
+  local image="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[test]')"
+  "${ROOT}/host/bin/flynn-host" run \
+    --host "${host}" \
+    --bind "$(join "," ${mounts[@]})" \
+    <(echo "${image}") \
+    /usr/bin/env \
+    ROOT="${ROOT}" \
+    CLUSTER_ADD_ARGS="-p ${tlspin} default ${domain} ${key}" \
+    ROUTER_IP="${ip}" \
+    DOMAIN="${domain}" \
+    TEST_RUNNER_AUTH_KEY="${TEST_RUNNER_AUTH_KEY}" \
+    BLOBSTORE_S3_CONFIG="${BLOBSTORE_S3_CONFIG}" \
+    BLOBSTORE_GCS_CONFIG="${BLOBSTORE_GCS_CONFIG}" \
+    BLOBSTORE_AZURE_CONFIG="${BLOBSTORE_AZURE_CONFIG}" \
+    /bin/run-flynn-test.sh \
+    $@
+}
+
+main "$@"

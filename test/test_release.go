@@ -79,7 +79,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
     --start \
     --background \
     --chdir "${dir}" \
-    --exec "${src}/test/bin/flynn-test-file-server"
+    --exec "${src}/test/image/bin/flynn-test-file-server"
 ) >&2
 
 cat "${src}/images.json"
