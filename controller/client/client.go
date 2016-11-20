@@ -21,6 +21,7 @@ import (
 )
 
 type Client interface {
+	SetKey(newKey string)
 	GetCACert() ([]byte, error)
 	StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error)
 	PutDomain(dm *ct.DomainMigration) error

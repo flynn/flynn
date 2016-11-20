@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/typeconv"
 	tc "github.com/flynn/flynn/test/cluster"
+	"github.com/flynn/flynn/test/cluster2"
 	c "github.com/flynn/go-check"
 )
 
@@ -41,6 +43,61 @@ type Helper struct {
 
 	hostsMtx sync.Mutex
 	hosts    map[string]*cluster.Host
+}
+
+type Cluster struct {
+	*cluster2.Cluster
+
+	t          *c.C
+	discoverd  *discoverd.Client
+	cluster    *cluster.Client
+	config     *config.Config
+	controller controller.Client
+	flynnrc    string
+}
+
+func (x *Cluster) flynn(dir string, cmdArgs ...string) *CmdResult {
+	cmd := exec.Command(args.CLI, cmdArgs...)
+	cmd.Env = flynnEnv(x.flynnrc)
+	cmd.Dir = dir
+	return run(x.t, cmd)
+}
+
+func (x *Cluster) setKey(newKey string) {
+	for _, c := range x.config.Clusters {
+		c.Key = newKey
+	}
+	x.t.Assert(x.config.SaveTo(x.flynnrc), c.IsNil)
+	x.controller.SetKey(newKey)
+}
+
+func (h *Helper) bootCluster(t *c.C, size int) *Cluster {
+	s, err := cluster2.Boot(&cluster2.BootConfig{
+		Size:         size,
+		ImagesPath:   "../images.json",
+		ManifestPath: "../bootstrap/bin/manifest.json",
+		Client:       h.controllerClient(t),
+	})
+	t.Assert(err, c.IsNil)
+	x := &Cluster{
+		Cluster:   s,
+		t:         t,
+		discoverd: discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", s.IP)),
+		flynnrc:   filepath.Join(t.MkDir(), ".flynnrc"),
+	}
+	x.cluster = cluster.NewClientWithServices(x.discoverd.Service)
+	pin, err := base64.StdEncoding.DecodeString(s.Pin)
+	t.Assert(err, c.IsNil)
+	x.controller, _ = controller.NewClientWithConfig("https://controller."+s.Domain, s.Key, controller.Config{Pin: pin})
+
+	Hostnames.Add(t, s.IP, "controller."+s.Domain, "git."+s.Domain, "docker."+s.Domain, "dashboard."+s.Domain)
+
+	t.Assert(x.flynn("/", "cluster", "add", "--tls-pin", s.Pin, s.Domain, s.Domain, s.Key), Succeeds)
+
+	x.config, err = config.ReadFile(x.flynnrc)
+	t.Assert(err, c.IsNil)
+
+	return x
 }
 
 func (h *Helper) clusterConf(t *c.C) *config.Cluster {
@@ -105,6 +162,22 @@ func (h *Helper) anyHostClient(t *c.C) *cluster.Host {
 	hosts, err := cluster.Hosts()
 	t.Assert(err, c.IsNil)
 	return hosts[0]
+}
+
+var Hostnames hostnames
+
+type hostnames struct {
+	sync.Mutex
+}
+
+func (h *hostnames) Add(t *c.C, ip string, names ...string) {
+	h.Lock()
+	defer h.Unlock()
+	f, err := os.OpenFile("/etc/hosts", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	t.Assert(err, c.IsNil)
+	defer f.Close()
+	_, err = fmt.Fprintf(f, "%s %s\n", ip, strings.Join(names, " "))
+	t.Assert(err, c.IsNil)
 }
 
 const (
