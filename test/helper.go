@@ -445,8 +445,9 @@ func (h *Helper) buildDockerImage(t *c.C, repo string, lines ...string) {
 	t.Assert(run(t, cmd), Succeeds)
 }
 
-func (h *Helper) testBuildCaching(t *c.C) {
+func (h *Helper) testBuildCaching(t *c.C, x *Cluster) {
 	r := h.newGitRepo(t, "build-cache")
+	r.cluster = x
 	t.Assert(r.flynn("create"), Succeeds)
 	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
 
@@ -465,9 +466,10 @@ func (h *Helper) testBuildCaching(t *c.C) {
 }
 
 type gitRepo struct {
-	dir   string
-	t     *c.C
-	trace bool
+	dir     string
+	t       *c.C
+	cluster *Cluster
+	trace   bool
 }
 
 func (h *Helper) newGitRepo(t *c.C, nameOrURL string) *gitRepo {
@@ -480,7 +482,7 @@ func (h *Helper) newGitRepoWithoutTrace(t *c.C, nameOrURL string) *gitRepo {
 
 func (h *Helper) newGitRepoWithTrace(t *c.C, nameOrURL string, trace bool) *gitRepo {
 	dir := filepath.Join(t.MkDir(), "repo")
-	r := &gitRepo{dir, t, trace}
+	r := &gitRepo{dir: dir, t: t, trace: trace}
 
 	if strings.HasPrefix(nameOrURL, "https://") {
 		t.Assert(run(t, exec.Command("git", "clone", nameOrURL, dir)), Succeeds)
@@ -499,13 +501,20 @@ func (h *Helper) newGitRepoWithTrace(t *c.C, nameOrURL string, trace bool) *gitR
 }
 
 func (r *gitRepo) flynn(args ...string) *CmdResult {
+	if r.cluster != nil {
+		return r.cluster.flynn(r.dir, args...)
+	}
 	return flynn(r.t, r.dir, args...)
 }
 
 func (r *gitRepo) git(args ...string) *CmdResult {
 	cmd := exec.Command("git", args...)
+	cmd.Env = os.Environ()
+	if r.cluster != nil {
+		cmd.Env = flynnEnv(r.cluster.flynnrc)
+	}
 	if r.trace {
-		cmd.Env = append(os.Environ(), "GIT_TRACE=1", "GIT_TRACE_PACKET=1")
+		cmd.Env = append(cmd.Env, "GIT_TRACE=1", "GIT_TRACE_PACKET=1")
 	}
 	cmd.Dir = r.dir
 	return run(r.t, cmd)
