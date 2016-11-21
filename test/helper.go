@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	flynnexec "github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/typeconv"
 	tc "github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/cluster2"
@@ -54,6 +56,15 @@ type Cluster struct {
 	config     *config.Config
 	controller controller.Client
 	flynnrc    string
+	log        log15.Logger
+}
+
+func (x *Cluster) Destroy() error {
+	Hostnames.Remove(x.t, x.IP)
+	if x.t.Failed() {
+		x.collectDebugInfo()
+	}
+	return x.Cluster.Destroy()
 }
 
 func (x *Cluster) flynn(dir string, cmdArgs ...string) *CmdResult {
@@ -71,19 +82,69 @@ func (x *Cluster) setKey(newKey string) {
 	x.controller.SetKey(newKey)
 }
 
+func (x *Cluster) collectDebugInfo() {
+	hosts, err := x.cluster.Hosts()
+	if err != nil {
+		return
+	}
+	cmd := flynnexec.CommandUsingHost(
+		hosts[0],
+		x.HostImage,
+		"flynn-host",
+		"collect-debug-info",
+		"--log-dir", filepath.Join("/var/lib/flynn", x.JobIDs[hosts[0].ID()], "logs"),
+	)
+	cmd.Env = map[string]string{"DISCOVERD": fmt.Sprintf("http://%s:1111", x.IP)}
+	cmd.Mounts = []host.Mount{{
+		Location: "/var/lib/flynn",
+		Target:   "/var/lib/flynn",
+	}}
+	// stream output to the log
+	logR, logW := io.Pipe()
+	go func() {
+		buf := bufio.NewReader(logR)
+		for {
+			line, err := buf.ReadString('\n')
+			if err != nil {
+				return
+			}
+			x.log.Info(line[0 : len(line)-1])
+		}
+	}()
+	cmd.Stdout = logW
+	cmd.Stderr = logW
+	// don't allow it to block the tests
+	done := make(chan struct{})
+	go func() {
+		cmd.Run()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+	}
+}
+
 func (h *Helper) bootCluster(t *c.C, size int) *Cluster {
-	s, err := cluster2.Boot(&cluster2.BootConfig{
-		Size:         size,
-		ImagesPath:   "../images.json",
-		ManifestPath: "../bootstrap/bin/manifest.json",
-		Client:       h.controllerClient(t),
-	})
+	return h.bootClusterWithConfig(t, &cluster2.BootConfig{Size: size})
+}
+
+func (h *Helper) bootClusterFromBackup(t *c.C, backup string) *Cluster {
+	return h.bootClusterWithConfig(t, &cluster2.BootConfig{Backup: backup, Size: 1})
+}
+
+func (h *Helper) bootClusterWithConfig(t *c.C, conf *cluster2.BootConfig) *Cluster {
+	conf.ImagesPath = "../images.json"
+	conf.ManifestPath = "../bootstrap/bin/manifest.json"
+	conf.Client = h.controllerClient(t)
+	s, err := cluster2.Boot(conf)
 	t.Assert(err, c.IsNil)
 	x := &Cluster{
 		Cluster:   s,
 		t:         t,
 		discoverd: discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", s.IP)),
 		flynnrc:   filepath.Join(t.MkDir(), ".flynnrc"),
+		log:       conf.Logger,
 	}
 	x.cluster = cluster.NewClientWithServices(x.discoverd.Service)
 	pin, err := base64.StdEncoding.DecodeString(s.Pin)
@@ -178,6 +239,24 @@ func (h *hostnames) Add(t *c.C, ip string, names ...string) {
 	defer f.Close()
 	_, err = fmt.Fprintf(f, "%s %s\n", ip, strings.Join(names, " "))
 	t.Assert(err, c.IsNil)
+}
+
+func (h *hostnames) Remove(t *c.C, ip string) {
+	h.Lock()
+	defer h.Unlock()
+	f, err := os.Open("/etc/hosts")
+	t.Assert(err, c.IsNil)
+	var data bytes.Buffer
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		if strings.HasPrefix(s.Text(), ip) {
+			continue
+		}
+		data.Write(append(s.Bytes(), '\n'))
+	}
+	f.Close()
+	t.Assert(s.Err(), c.IsNil)
+	t.Assert(ioutil.WriteFile("/etc/hosts", data.Bytes(), 0644), c.IsNil)
 }
 
 const (

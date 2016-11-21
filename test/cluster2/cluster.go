@@ -2,13 +2,17 @@ package cluster2
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +32,7 @@ import (
 
 type BootConfig struct {
 	Size         int
+	Backup       string
 	ImagesPath   string
 	ManifestPath string
 	Logger       log15.Logger
@@ -38,12 +43,14 @@ type BootConfig struct {
 }
 
 type Cluster struct {
-	App     *ct.App
-	Release *ct.Release
-	IP      string
-	Domain  string
-	Key     string
-	Pin     string
+	App       *ct.App
+	Release   *ct.Release
+	HostImage *ct.Artifact
+	JobIDs    map[string]string
+	IP        string
+	Domain    string
+	Key       string
+	Pin       string
 
 	config *BootConfig
 }
@@ -154,6 +161,14 @@ func Boot(c *BootConfig) (*Cluster, error) {
 			},
 		},
 	}
+	if c.Backup != "" {
+		proc := release.Processes["host"]
+		proc.Mounts = append(proc.Mounts, host.Mount{
+			Location: c.Backup,
+			Target:   c.Backup,
+		})
+		release.Processes["host"] = proc
+	}
 	if err := c.Client.CreateRelease(release); err != nil {
 		log.Error("error creating release", "err", err)
 		return nil, err
@@ -189,6 +204,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 	timeout := time.After(*c.HostTimeout)
 
 	hosts := make([]*cluster.Host, 0, c.Size)
+	jobIDs := make(map[string]string, c.Size)
 loop:
 	for {
 		select {
@@ -198,11 +214,13 @@ loop:
 			}
 			switch event.Kind {
 			case discoverd.EventKindUp:
-				id, _ := cluster.ExtractUUID(event.Instance.Meta["FLYNN_JOB_ID"])
+				jobID := event.Instance.Meta["FLYNN_JOB_ID"]
+				id, _ := cluster.ExtractUUID(jobID)
 				id = strings.Replace(id, "-", "", -1)
 				addr := event.Instance.Addr
 				log.Info("host is up", "addr", addr, "id", id)
 				hosts = append(hosts, cluster.NewHost(id, addr, hh.RetryClient, nil))
+				jobIDs[id] = jobID
 				if len(hosts) == c.Size {
 					break loop
 				}
@@ -231,16 +249,22 @@ loop:
 		ip, _, _ := net.SplitHostPort(host.Addr())
 		peerIPs[i] = ip
 	}
-	log.Info("bootstrapping cluster", "size", c.Size, "domain", domain, "peers", peerIPs)
-	cmd := exec.CommandUsingHost(
-		hosts[0],
-		hostImage,
-		"flynn-host",
-		"bootstrap",
-		"--min-hosts="+strconv.Itoa(c.Size),
-		"--peer-ips="+strings.Join(peerIPs, ","),
-		"-",
-	)
+	log.Info("bootstrapping cluster", "size", c.Size, "domain", domain, "peers", peerIPs, "backup", filepath.Base(c.Backup))
+	bootstrapArgs := []string{
+		"--min-hosts", strconv.Itoa(c.Size),
+		"--peer-ips", strings.Join(peerIPs, ","),
+	}
+	if c.Backup != "" {
+		bootstrapArgs = append(bootstrapArgs, "--from-backup", c.Backup)
+	}
+	bootstrapArgs = append(bootstrapArgs, "-")
+	cmd := exec.CommandUsingHost(hosts[0], hostImage, append([]string{"flynn-host", "bootstrap"}, bootstrapArgs...)...)
+	if c.Backup != "" {
+		cmd.Mounts = []host.Mount{{
+			Location: c.Backup,
+			Target:   c.Backup,
+		}}
+	}
 	key := c.Key
 	if key == "" {
 		key = random.String(32)
@@ -276,15 +300,39 @@ loop:
 		return nil, err
 	}
 
+	if c.Backup != "" {
+		jobs, err := hosts[0].ListJobs()
+		if err != nil {
+			log.Error("error getting job list", "err", err)
+			return nil, err
+		}
+		for _, job := range jobs {
+			app := job.Job.Metadata["flynn-controller.app_name"]
+			typ := job.Job.Metadata["flynn-controller.type"]
+			if app == "controller" && typ == "web" {
+				domain = job.Job.Config.Env["DEFAULT_ROUTE_DOMAIN"]
+				key = job.Job.Config.Env["AUTH_KEY"]
+			}
+			if app == "router" && typ == "app" {
+				b, _ := pem.Decode([]byte(job.Job.Config.Env["TLSCERT"]))
+				sha := sha256.Sum256(b.Bytes)
+				cert.Pin = base64.StdEncoding.EncodeToString(sha[:])
+			}
+		}
+		log.Info("retrieved cluster domain, pin and key from backup", "domain", domain, "key", key, "pin", cert.Pin)
+	}
+
 	log.Info("successfully bootstrapped cluster", "app", app.Name, "size", c.Size, "peers", peerIPs)
 	return &Cluster{
-		App:     app,
-		Release: release,
-		IP:      peerIPs[0],
-		Domain:  domain,
-		Key:     key,
-		Pin:     cert.Pin,
-		config:  c,
+		App:       app,
+		Release:   release,
+		HostImage: hostImage,
+		JobIDs:    jobIDs,
+		IP:        peerIPs[0],
+		Domain:    domain,
+		Key:       key,
+		Pin:       cert.Pin,
+		config:    c,
 	}, nil
 }
 

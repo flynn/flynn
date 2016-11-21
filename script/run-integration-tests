@@ -107,6 +107,7 @@ main() {
   local mounts=(
     "${ROOT}:${ROOT}"
     "/var/run/docker.sock:/var/run/docker.sock"
+    "/var/lib/flynn:/var/lib/flynn"
   )
 
   local image="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[test]')"
