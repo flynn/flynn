@@ -29,6 +29,7 @@ type Cmd struct {
 	Env map[string]string
 
 	Volumes []*ct.VolumeReq
+	Mounts  []host.Mount
 
 	HostNetwork bool
 
@@ -195,6 +196,7 @@ func (c *Cmd) Start() error {
 				Env:         c.Env,
 				Stdin:       c.Stdin != nil || c.stdinPipe != nil,
 				HostNetwork: c.HostNetwork,
+				Mounts:      c.Mounts,
 			},
 			Metadata: c.Meta,
 		}
