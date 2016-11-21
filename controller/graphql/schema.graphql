@@ -190,7 +190,6 @@ type HealthCheck {
   status: Int
 }
 
-
 enum ResourceType {
   MEMORY
   CPU
