@@ -57,7 +57,7 @@ func (s *GitDeploySuite) TestEmptyRelease(t *c.C) {
 }
 
 func (s *GitDeploySuite) TestBuildCaching(t *c.C) {
-	s.testBuildCaching(t)
+	s.testBuildCaching(t, nil)
 }
 
 func (s *GitDeploySuite) TestAppRecreation(t *c.C) {

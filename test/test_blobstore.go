@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,7 +18,7 @@ type BlobstoreSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&BlobstoreSuite{})
+var _ = c.ConcurrentSuite(&BlobstoreSuite{})
 
 func (s *BlobstoreSuite) TestBlobstoreBackendS3(t *c.C) {
 	s3Config := os.Getenv("BLOBSTORE_S3_CONFIG")
@@ -59,13 +59,17 @@ func (s *BlobstoreSuite) TestBlobstoreBackendAzure(t *c.C) {
 }
 
 func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern string, env ...string) {
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
 	r := s.newGitRepo(t, "http")
+	r.cluster = x
 	t.Assert(r.flynn("create", "blobstore-backend-test-"+name), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 
 	// set default backend to external backend without printing secrets
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("%s -a blobstore env set %s DEFAULT_BACKEND=%s", args.CLI, strings.Join(env, " "), name))
-	cmd.Env = flynnEnv(flynnrc)
+	cmd.Env = flynnEnv(x.flynnrc)
 	cmd.Dir = "/"
 	t.Assert(cmd.Run(), c.IsNil)
 
@@ -73,9 +77,9 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	t.Assert(r.flynn("run", "echo", "1"), Succeeds)
 
 	// get slug artifact details
-	release, err := s.controllerClient(t).GetAppRelease("blobstore-backend-test-" + name)
+	release, err := x.controller.GetAppRelease("blobstore-backend-test-" + name)
 	t.Assert(err, c.IsNil)
-	artifact, err := s.controllerClient(t).GetArtifact(release.ArtifactIDs[1])
+	artifact, err := x.controller.GetArtifact(release.ArtifactIDs[1])
 	t.Assert(err, c.IsNil)
 	t.Assert(artifact.Type, c.Equals, ct.ArtifactTypeFlynn)
 
@@ -83,19 +87,19 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	layer := artifact.Manifest().Rootfs[0].Layers[0]
 	u, err := url.Parse(artifact.LayerURL(layer))
 	t.Assert(err, c.IsNil)
-	migration := flynn(t, "/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore", "migrate", "--delete", "--prefix", u.Path)
+	migration := x.flynn("/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore", "migrate", "--delete", "--prefix", u.Path)
 	t.Assert(migration, Succeeds)
 	t.Assert(migration, OutputContains, "Moving "+u.Path)
 	t.Assert(migration, OutputContains, "from postgres to "+name)
 
 	// check that slug is now stored in external backend
-	noRedirectsClient := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error { return errors.New("no redirects") },
-	}
-	res, err := noRedirectsClient.Get(u.String())
+	curl := x.flynn("/", "-a", "blobstore", "run", "curl", "--silent", "--include", "--raw", u.String())
+	t.Assert(curl, Succeeds)
+	res, err := http.ReadResponse(bufio.NewReader(curl.OutputBuf), nil)
 	if res == nil {
 		t.Fatal(err)
 	}
+	res.Body.Close()
 	t.Assert(res.StatusCode, c.Equals, 302)
 	t.Assert(res.Header.Get("Location"), c.Matches, redirectPattern)
 
@@ -107,13 +111,13 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 
 	// test that build caching still works
-	s.testBuildCaching(t)
+	s.testBuildCaching(t, x)
 
 	// test that exporting the app works
 	t.Assert(r.flynn("export", "--file", "/dev/null"), Succeeds)
 
 	// change default backend back to postgres
-	t.Assert(flynn(t, "/", "-a", "blobstore", "env", "set", "DEFAULT_BACKEND=postgres"), Succeeds)
+	t.Assert(x.flynn("/", "-a", "blobstore", "env", "set", "DEFAULT_BACKEND=postgres"), Succeeds)
 
 	// test that downloading blob from s3 still works
 	t.Assert(r.flynn("run", "echo", "1"), Succeeds)
@@ -128,7 +132,7 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	t.Assert(run(t, exec.Command("docker", "push", tag)), Succeeds)
 
 	// migrate blobs back to postgres
-	migration = flynn(t, "/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore", "migrate", "--delete")
+	migration = x.flynn("/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore", "migrate", "--delete")
 	t.Assert(migration, Succeeds)
 	t.Assert(migration, OutputContains, fmt.Sprintf("from %s to postgres", name))
 
@@ -136,5 +140,5 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	t.Assert(r.flynn("run", "echo", "1"), Succeeds)
 
 	// check that all blobs are in postgres
-	t.Assert(flynn(t, "/", "-a", "blobstore", "pg", "psql", "--", "-c", fmt.Sprintf("SELECT count(*) FROM files WHERE backend = '%s' AND deleted_at IS NULL", name)), OutputContains, "0")
+	t.Assert(x.flynn("/", "-a", "blobstore", "pg", "psql", "--", "-c", fmt.Sprintf("SELECT count(*) FROM files WHERE backend = '%s' AND deleted_at IS NULL", name)), OutputContains, "0")
 }
