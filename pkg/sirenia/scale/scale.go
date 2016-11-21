@@ -2,9 +2,11 @@ package scale
 
 import (
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/pkg/dialer"
 	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
 	"gopkg.in/inconshreveable/log15.v2"
 )
@@ -12,7 +14,11 @@ import (
 // ScaleUp scales up a dormant Sirenia cluster
 func ScaleUp(app, controllerKey, serviceAddr, procName, singleton string, logger log15.Logger) error {
 	logger = logger.New("fn", "ScaleUp")
-	sc := sirenia.NewClient(serviceAddr)
+
+	// use an explicit HTTP client which doesn't use a retry dialer so we
+	// don't retry dialling the cluster if it isn't scaled up
+	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Default.Dial}}
+	sc := sirenia.NewClientWithHTTP(serviceAddr, httpClient)
 
 	logger.Info("checking status", "host", serviceAddr)
 	if status, err := sc.Status(); err == nil && status.Database != nil && status.Database.ReadWrite {
@@ -81,6 +87,7 @@ func ScaleUp(app, controllerKey, serviceAddr, procName, singleton string, logger
 		return err
 	}
 
+	sc = sirenia.NewClient(serviceAddr)
 	if err := sc.WaitForReadWrite(5 * time.Minute); err != nil {
 		logger.Error("wait for read write", "err", err)
 		return errors.New("timed out while starting sirenia cluster")
