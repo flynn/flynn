@@ -677,7 +677,10 @@ func (c *Client) ProviderList() ([]*ct.Provider, error) {
 // Backup takes a backup of the cluster
 func (c *Client) Backup() (io.ReadCloser, error) {
 	res, err := c.RawReq("GET", "/backup", nil, nil, nil)
-	return res.Body, err
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
 }
 
 // GetBackupMeta returns metadata for latest backup
