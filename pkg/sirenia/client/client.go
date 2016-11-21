@@ -40,6 +40,10 @@ var httpClient = &http.Client{
 }
 
 func NewClient(addr string) *Client {
+	return NewClientWithHTTP(addr, httpClient)
+}
+
+func NewClientWithHTTP(addr string, httpClient *http.Client) *Client {
 	// remove port, if any
 	host, p, _ := net.SplitHostPort(addr)
 	port, _ := strconv.Atoi(p)
