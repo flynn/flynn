@@ -36,7 +36,7 @@ import (
 
 var logger = log15.New("component", "controller")
 
-var ErrNotFound = ct.ErrNotFound
+var ErrNotFound = errors.New("controller: resource not found")
 var ErrShutdown = errors.New("controller: shutting down")
 
 var schemaRoot = "/etc/flynn-controller/jsonschema"
@@ -307,10 +307,6 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/events", httphelper.WrapHandler(api.Events))
 	httpRouter.GET("/events/:id", httphelper.WrapHandler(api.GetEvent))
 
-	graphqlHandler := httphelper.WrapHandler(api.GraphQLHandler())
-	httpRouter.GET("/graphql", graphqlHandler)
-	httpRouter.POST("/graphql", graphqlHandler)
-
 	return httphelper.ContextInjector("controller",
 		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keys)))
 }
@@ -411,14 +407,10 @@ func routeParentRef(appID string) string {
 	return ct.RouteParentRefPrefix + appID
 }
 
-func (c *controllerAPI) getRouteFromContext(ctx context.Context) (*router.Route, error) {
+func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
-	return c.getRoute(c.getApp(ctx).ID, params.ByName("routes_type"), params.ByName("routes_id"))
-}
-
-func (c *controllerAPI) getRoute(appID, typ, id string) (*router.Route, error) {
-	route, err := c.routerc.GetRoute(typ, id)
-	if err == routerc.ErrNotFound || err == nil && route.ParentRef != routeParentRef(appID) {
+	route, err := c.routerc.GetRoute(params.ByName("routes_type"), params.ByName("routes_id"))
+	if err == routerc.ErrNotFound || err == nil && route.ParentRef != routeParentRef(c.getApp(ctx).ID) {
 		err = ErrNotFound
 	}
 	if err != nil {

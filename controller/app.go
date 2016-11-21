@@ -150,30 +150,6 @@ func (r *AppRepo) Get(id string) (interface{}, error) {
 	return selectApp(r.db, id, false)
 }
 
-func (r *AppRepo) ListIDs(ids ...string) (interface{}, error) {
-	ch := make(chan map[int]*ct.App)
-	errCh := make(chan error)
-	apps := make([]*ct.App, len(ids))
-	for idx, id := range ids {
-		go func(idx int, id string) {
-			app, err := selectApp(r.db, id, false)
-			errCh <- err
-			if err == nil {
-				ch <- map[int]*ct.App{idx: app}
-			}
-		}(idx, id)
-	}
-	for range ids {
-		if err := <-errCh; err != nil {
-			return nil, err
-		}
-		for idx, app := range <-ch {
-			apps[idx] = app
-		}
-	}
-	return apps, nil
-}
-
 func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
