@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -108,18 +107,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	}
 
 	// stream script output to t.Log
-	logReader, logWriter := io.Pipe()
-	defer logWriter.Close()
-	go func() {
-		buf := bufio.NewReader(logReader)
-		for {
-			line, err := buf.ReadString('\n')
-			if err != nil {
-				return
-			}
-			debug(t, line[0:len(line)-1])
-		}
-	}()
+	logWriter := debugLogWriter(t)
 
 	// boot the release cluster, release components to a blobstore and output the new images.json
 	releaseCluster := s.addReleaseHosts(t)
