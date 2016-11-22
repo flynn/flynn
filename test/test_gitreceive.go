@@ -14,10 +14,14 @@ type GitreceiveSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&GitreceiveSuite{})
+var _ = c.ConcurrentSuite(&GitreceiveSuite{})
 
 func (s *GitreceiveSuite) TestRepoCaching(t *c.C) {
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
 	r := s.newGitRepo(t, "empty")
+	r.cluster = x
 	t.Assert(r.flynn("create"), Succeeds)
 
 	r.git("commit", "-m", "bump", "--allow-empty")
@@ -27,9 +31,9 @@ func (s *GitreceiveSuite) TestRepoCaching(t *c.C) {
 	t.Assert(push, c.Not(OutputContains), "cached")
 
 	// cycle the receiver to clear any cache
-	t.Assert(flynn(t, "/", "-a", "gitreceive", "scale", "app=0"), Succeeds)
-	t.Assert(flynn(t, "/", "-a", "gitreceive", "scale", "app=1"), Succeeds)
-	_, err := s.discoverdClient(t).Instances("gitreceive", 10*time.Second)
+	t.Assert(x.flynn("/", "-a", "gitreceive", "scale", "app=0"), Succeeds)
+	t.Assert(x.flynn("/", "-a", "gitreceive", "scale", "app=1"), Succeeds)
+	_, err := x.discoverd.Instances("gitreceive", 10*time.Second)
 	t.Assert(err, c.IsNil)
 
 	r.git("commit", "-m", "bump", "--allow-empty")
@@ -39,9 +43,13 @@ func (s *GitreceiveSuite) TestRepoCaching(t *c.C) {
 }
 
 func (s *GitreceiveSuite) TestSlugbuilderLimit(t *c.C) {
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
 	r := s.newGitRepo(t, "slugbuilder-limit")
+	r.cluster = x
 	t.Assert(r.flynn("create"), Succeeds)
-	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=git@github.com:kr/heroku-buildpack-inline.git"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
 	t.Assert(r.flynn("-a", "gitreceive", "env", "set", "SLUGBUILDER_DEFAULT_MEMORY_LIMIT=2GB"), Succeeds)
 
 	push := r.git("push", "flynn", "master")

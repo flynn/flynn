@@ -28,7 +28,7 @@ type ControllerSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&ControllerSuite{})
+var _ = c.ConcurrentSuite(&ControllerSuite{})
 
 func (s *ControllerSuite) SetUpSuite(t *c.C) {
 	var schemaPaths []string
@@ -539,8 +539,10 @@ func (s *ControllerSuite) TestAppEvents(t *c.C) {
 }
 
 func (s *ControllerSuite) TestBackup(t *c.C) {
-	client := s.controllerClient(t)
-	out, err := client.Backup()
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
+	out, err := x.controller.Backup()
 	t.Assert(err, c.IsNil)
 	defer out.Close()
 	data := make(map[string][]byte)

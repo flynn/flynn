@@ -7,23 +7,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/dialer"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
 	c "github.com/flynn/go-check"
 )
 
-// Prefix the suite with "Z" so that it runs after all other tests because
-// if it fails, all other tests after it will be affected
-type ZDomainMigrationSuite struct {
+type DomainMigrationSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&ZDomainMigrationSuite{})
+var _ = c.ConcurrentSuite(&DomainMigrationSuite{})
 
-func (s *ZDomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) *ct.DomainMigration {
+func (s *DomainMigrationSuite) migrateDomain(t *c.C, client controller.Client, dm *ct.DomainMigration) *ct.DomainMigration {
 	debugf(t, "migrating domain from %s to %s", dm.OldDomain, dm.Domain)
-	client := s.controllerClient(t)
 
 	events := make(chan *ct.Event)
 	stream, err := client.StreamEvents(ct.StreamEventsOptions{
@@ -134,24 +133,28 @@ func (s *ZDomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) *c
 	return event.DomainMigration
 }
 
-func (s *ZDomainMigrationSuite) TestDomainMigration(t *c.C) {
-	cc := s.controllerClient(t)
+func (s *DomainMigrationSuite) TestDomainMigration(t *c.C) {
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
+	cc := x.controller
 	release, err := cc.GetAppRelease("controller")
 	t.Assert(err, c.IsNil)
 	oldDomain := release.Env["DEFAULT_ROUTE_DOMAIN"]
 
 	// create app
-	app, _ := s.createApp(t)
+	app, _ := s.createAppWithClient(t, cc)
 	appRoutes, err := cc.RouteList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(len(appRoutes), c.Equals, 1)
 
-	// using xip.io to get around modifying /etc/hosts
+	newDomain := random.String(32) + ".local"
+	Hostnames.Add(t, x.IP, "controller."+newDomain, "dashboard."+newDomain)
 	dm := &ct.DomainMigration{
 		OldDomain: oldDomain,
-		Domain:    fmt.Sprintf("%s.xip.io", routerIP),
+		Domain:    newDomain,
 	}
-	dm = s.migrateDomain(t, dm)
+	dm = s.migrateDomain(t, cc, dm)
 
 	// make sure a new route was created for the app
 	appRoutes, err = cc.RouteList(app.ID)
@@ -160,7 +163,7 @@ func (s *ZDomainMigrationSuite) TestDomainMigration(t *c.C) {
 	t.Assert(strings.HasSuffix(appRoutes[0].Domain, dm.Domain), c.Equals, true)
 	t.Assert(strings.HasSuffix(appRoutes[1].Domain, dm.OldDomain), c.Equals, true)
 
-	s.migrateDomain(t, &ct.DomainMigration{
+	s.migrateDomain(t, cc, &ct.DomainMigration{
 		OldDomain: dm.Domain,
 		Domain:    dm.OldDomain,
 		TLSCert:   dm.OldTLSCert,
