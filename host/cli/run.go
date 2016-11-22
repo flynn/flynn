@@ -26,6 +26,7 @@ Run an interactive job.
 Options:
 	--host=<host>        run on a specific host
 	--bind=<mountspecs>  bind mount a directory into the job (ex: /foo:/data,/bar:/baz)
+	--volume=<path>      mount a temporary volume at <path>
 
 Example:
 	$ flynn-host run <(jq '.mongodb' images.json) mongo --version
@@ -77,6 +78,12 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 				Writeable: true,
 			}
 		}
+	}
+	if path := args.String["--volume"]; path != "" {
+		cmd.Volumes = []*ct.VolumeReq{{
+			Path:         path,
+			DeleteOnStop: true,
+		}}
 	}
 
 	var termState *term.State

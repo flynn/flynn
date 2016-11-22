@@ -30,6 +30,7 @@ main() {
   "${ROOT}/host/bin/flynn-host" run \
     --host "${host}" \
     --bind "$(join "," ${mounts[@]})" \
+    --volume "/tmp" \
     <(echo "${image}") \
     /usr/bin/env \
     ROOT="${ROOT}" \
