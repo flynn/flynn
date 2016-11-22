@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -28,6 +29,7 @@ import (
 	tc "github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/cluster2"
 	c "github.com/flynn/go-check"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 type Helper struct {
@@ -133,10 +135,29 @@ func (h *Helper) bootClusterFromBackup(t *c.C, backup string) *Cluster {
 	return h.bootClusterWithConfig(t, &cluster2.BootConfig{Backup: backup, Size: 1})
 }
 
+func debugLogWriter(t *c.C) io.Writer {
+	r, w := io.Pipe()
+	go func() {
+		buf := bufio.NewReader(r)
+		for {
+			line, err := buf.ReadString('\n')
+			if err != nil {
+				return
+			}
+			debug(t, line[0:len(line)-1])
+		}
+	}()
+	return w
+}
+
 func (h *Helper) bootClusterWithConfig(t *c.C, conf *cluster2.BootConfig) *Cluster {
 	conf.ImagesPath = "../images.json"
 	conf.ManifestPath = "../bootstrap/bin/manifest.json"
 	conf.Client = h.controllerClient(t)
+
+	conf.Logger = log15.New()
+	conf.Logger.SetHandler(log15.StreamHandler(debugLogWriter(t), log15.LogfmtFormat()))
+
 	s, err := cluster2.Boot(conf)
 	t.Assert(err, c.IsNil)
 	x := &Cluster{
