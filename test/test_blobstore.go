@@ -123,8 +123,8 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	t.Assert(r.flynn("run", "echo", "1"), Succeeds)
 
 	// test a docker push
-	repo := "s3-test"
-	s.buildDockerImage(t, repo, "RUN echo foo > /foo.txt")
+	repo := name + "-test"
+	s.buildDockerImage(t, repo, fmt.Sprintf("RUN echo %s > /foo.txt", name))
 	u, err = url.Parse(s.clusterConf(t).DockerPushURL)
 	t.Assert(err, c.IsNil)
 	tag := fmt.Sprintf("%s/%s:latest", u.Host, repo)
