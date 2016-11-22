@@ -307,15 +307,15 @@ func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
 }
 
 func (s *DeployerSuite) TestOmniProcess(t *c.C) {
-	if testCluster == nil {
-		t.Skip("cannot determine test cluster size")
-	}
+	clusterSize := 3
+	x := s.bootCluster(t, clusterSize)
+	defer x.Destroy()
 
 	// create and scale an omni release
 	omniScale := 2
-	totalJobs := omniScale * testCluster.Size()
-	client := s.controllerClient(t)
-	app, release := s.createApp(t)
+	totalJobs := omniScale * clusterSize
+	client := x.controller
+	app, release := s.createAppWithClient(t, client)
 
 	watcher, err := client.WatchJobEvents(app.Name, release.ID)
 	t.Assert(err, c.IsNil)
@@ -372,9 +372,9 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	stream, err = client.StreamDeployment(deployment, events)
 	t.Assert(err, c.IsNil)
 	expected = make([]*ct.Job, 0, 4*totalJobs+1)
-	appendEvents(deployment.NewReleaseID, ct.JobStateUp, testCluster.Size())
-	appendEvents(deployment.OldReleaseID, ct.JobStateDown, testCluster.Size())
-	appendEvents(deployment.NewReleaseID, ct.JobStateUp, testCluster.Size())
-	appendEvents(deployment.OldReleaseID, ct.JobStateDown, testCluster.Size())
+	appendEvents(deployment.NewReleaseID, ct.JobStateUp, clusterSize)
+	appendEvents(deployment.OldReleaseID, ct.JobStateDown, clusterSize)
+	appendEvents(deployment.NewReleaseID, ct.JobStateUp, clusterSize)
+	appendEvents(deployment.OldReleaseID, ct.JobStateDown, clusterSize)
 	s.waitForDeploymentStatus(t, events, "complete")
 }

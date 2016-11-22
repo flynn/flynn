@@ -29,7 +29,7 @@ type SchedulerSuite struct {
 
 const scaleTimeout = 60 * time.Second
 
-var _ = c.Suite(&SchedulerSuite{})
+var _ = c.ConcurrentSuite(&SchedulerSuite{})
 
 func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID string, state ct.JobState) {
 	job, err := s.controllerClient(t).GetJob(appID, jobID)
@@ -71,17 +71,17 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestScaleTags(t *c.C) {
-	// ensure we have more than 1 host to test with
-	hosts, err := s.clusterClient(t).Hosts()
+	x := s.bootCluster(t, 3)
+	defer x.Destroy()
+
+	hosts, err := x.cluster.Hosts()
 	t.Assert(err, c.IsNil)
-	if len(hosts) <= 1 {
-		t.Skip("not enough hosts to test tagged based scheduling")
-	}
+	t.Assert(hosts, c.HasLen, 3)
 
 	// stream the scheduler leader log so we can synchronize tag changes
-	leader, err := s.discoverdClient(t).Service("controller-scheduler").Leader()
+	leader, err := x.discoverd.Service("controller-scheduler").Leader()
 	t.Assert(err, c.IsNil)
-	client := s.controllerClient(t)
+	client := x.controller
 	res, err := client.GetAppLog("controller", &logagg.LogOpts{
 		Follow:      true,
 		JobID:       leader.Meta["FLYNN_JOB_ID"],
@@ -114,7 +114,7 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 
 	// watch service events so we can wait for tag changes
 	events := make(chan *discoverd.Event)
-	stream, err := s.discoverdClient(t).Service("flynn-host").Watch(events)
+	stream, err := x.discoverd.Service("flynn-host").Watch(events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 	waitServiceEvent := func(kind discoverd.EventKind) *discoverd.Event {
@@ -148,7 +148,7 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 	}
 
 	// create an app with a tagged process and watch job events
-	app, release := s.createApp(t)
+	app, release := s.createAppWithClient(t, client)
 	formation := &ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
@@ -256,14 +256,18 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
+	client := x.controller
 	// get the current controller details
-	app, err := s.controllerClient(t).GetApp("controller")
+	app, err := client.GetApp("controller")
 	t.Assert(err, c.IsNil)
-	release, err := s.controllerClient(t).GetAppRelease("controller")
+	release, err := client.GetAppRelease("controller")
 	t.Assert(err, c.IsNil)
-	formation, err := s.controllerClient(t).GetFormation(app.ID, release.ID)
+	formation, err := client.GetFormation(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
-	list, err := s.controllerClient(t).JobList("controller")
+	list, err := client.JobList("controller")
 	t.Assert(err, c.IsNil)
 	var jobs []*ct.Job
 	for _, job := range list {
@@ -279,7 +283,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 
 	// subscribe to service events, wait for current event
 	events := make(chan *discoverd.Event)
-	stream, err := s.discoverdClient(t).Service("controller").Watch(events)
+	stream, err := x.discoverd.Service("controller").Watch(events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 	type serviceEvents map[discoverd.EventKind]int
@@ -306,12 +310,11 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	// start another controller and wait for it to come up
 	debug(t, "scaling the controller up")
 	formation.Processes["web"]++
-	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
+	t.Assert(client.PutFormation(formation), c.IsNil)
 	wait(serviceEvents{discoverd.EventKindUp: 1})
 
 	// kill the first controller and check the scheduler brings it back online
-	cc := cluster.NewClientWithServices(s.discoverdClient(t).Service)
-	hc, err := cc.Host(hostID)
+	hc, err := x.cluster.Host(hostID)
 	t.Assert(err, c.IsNil)
 	debug(t, "stopping job ", jobID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
@@ -320,11 +323,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	// scale back down
 	debug(t, "scaling the controller down")
 	formation.Processes["web"]--
-	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
+	t.Assert(client.PutFormation(formation), c.IsNil)
 	wait(serviceEvents{discoverd.EventKindDown: 1})
-
-	// unset the suite's client so other tests use a new client
-	s.controller = nil
 }
 
 func (s *SchedulerSuite) TestJobMeta(t *c.C) {
@@ -421,13 +421,14 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
-	if testCluster == nil {
-		t.Skip("cannot boot new hosts")
-	}
+	clusterSize := 3
+	x := s.bootCluster(t, clusterSize)
+	defer x.Destroy()
 
-	app, release := s.createApp(t)
+	client := x.controller
+	app, release := s.createAppWithClient(t, client)
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
+	watcher, err := client.WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -447,9 +448,9 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	for _, procs := range updates {
 		debugf(t, "scaling formation to %v", procs)
 		formation.Processes = procs
-		t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
+		t.Assert(client.PutFormation(formation), c.IsNil)
 
-		expected := s.controllerClient(t).ExpectedScalingEvents(current, procs, release.Processes, testCluster.Size())
+		expected := client.ExpectedScalingEvents(current, procs, release.Processes, clusterSize)
 		err = watcher.WaitFor(expected, scaleTimeout, nil)
 		t.Assert(err, c.IsNil)
 
@@ -457,8 +458,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	}
 
 	// Check that new hosts get omni jobs
-	newHosts := s.addHosts(t, 2, false, "router-api")
-	defer s.removeHosts(t, newHosts, "router-api")
+	x.AddHosts(2)
 	err = watcher.WaitFor(ct.JobEvents{"omni": {ct.JobStateUp: 2}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 }
@@ -541,14 +541,22 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestRollbackController(t *c.C) {
+	clusterSize := 3
+	x := s.bootCluster(t, clusterSize)
+	defer x.Destroy()
+
+	hosts, err := x.cluster.Hosts()
+	t.Assert(err, c.IsNil)
+	t.Assert(hosts, c.HasLen, clusterSize)
+
 	// get the current controller release
-	client := s.controllerClient(t)
+	client := x.controller
 	app, err := client.GetApp("controller")
 	t.Assert(err, c.IsNil)
 	release, err := client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
+	watcher, err := client.WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -593,7 +601,6 @@ loop:
 	}
 
 	// wait for jobs to come back up
-	hosts, err := s.clusterClient(t).Hosts()
 	expected := map[string]map[ct.JobState]int{
 		"web":       {ct.JobStateUp: formation.Processes["web"]},
 		"scheduler": {ct.JobStateUp: len(hosts)},
@@ -602,7 +609,6 @@ loop:
 
 	// check the correct controller jobs are running
 	t.Assert(err, c.IsNil)
-	t.Assert(hosts, c.Not(c.HasLen), 0)
 	actual := make(map[string]map[string]int)
 	for _, h := range hosts {
 		jobs, err := h.ListJobs()
@@ -636,8 +642,11 @@ loop:
 }
 
 func (s *SchedulerSuite) TestDeployController(t *c.C) {
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
 	// get the current controller release
-	client := s.controllerClient(t)
+	client := x.controller
 	app, err := client.GetApp("controller")
 	t.Assert(err, c.IsNil)
 	release, err := client.GetAppRelease(app.ID)
@@ -687,7 +696,7 @@ loop:
 	}
 
 	// wait for the old release to be fully scaled down
-	hosts, err := s.clusterClient(t).Hosts()
+	hosts, err := x.cluster.Hosts()
 	t.Assert(err, c.IsNil)
 	t.Assert(hosts, c.Not(c.HasLen), 0)
 	err = watcher.WaitFor(ct.JobEvents{

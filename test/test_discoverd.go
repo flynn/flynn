@@ -1,31 +1,27 @@
 package main
 
 import (
+	"net"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
-	tc "github.com/flynn/flynn/test/cluster"
+	"github.com/flynn/flynn/pkg/cluster"
 	c "github.com/flynn/go-check"
 )
 
-// Prefix the suite with "Z" so that it runs after all other tests
-type ZDiscoverdSuite struct {
+type DiscoverdSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&ZDiscoverdSuite{})
+var _ = c.ConcurrentSuite(&DiscoverdSuite{})
 
-func (s *ZDiscoverdSuite) TestDeploy(t *c.C) {
-	// ensure we have enough hosts in the cluster
-	hosts, err := s.clusterClient(t).Hosts()
-	t.Assert(err, c.IsNil)
-	if len(hosts) <= 1 {
-		t.Skip("cannot deploy discoverd in a single node cluster")
-	}
+func (s *DiscoverdSuite) TestDeploy(t *c.C) {
+	x := s.bootCluster(t, 3)
+	defer x.Destroy()
 
-	client := s.controllerClient(t)
+	client := x.controller
 	app, err := client.GetApp("discoverd")
 	t.Assert(err, c.IsNil)
 	release, err := client.GetAppRelease(app.ID)
@@ -61,15 +57,18 @@ loop:
 	}
 }
 
-func peerPresent(host *tc.Instance, peers []string) bool {
-	present := false
+func discoverdAddr(host *cluster.Host) string {
+	ip, _, _ := net.SplitHostPort(host.Addr())
+	return ip + ":1111"
+}
+
+func peerPresent(host *cluster.Host, peers []string) bool {
 	for _, p := range peers {
-		if p == host.IP+":1111" {
-			present = true
-			break
+		if p == discoverdAddr(host) {
+			return true
 		}
 	}
-	return present
+	return false
 }
 
 var pingAttempts = attempt.Strategy{
@@ -78,28 +77,22 @@ var pingAttempts = attempt.Strategy{
 	Delay: time.Second,
 }
 
-func (s *ZDiscoverdSuite) TestPromoteDemote(t *c.C) {
-	if testCluster == nil {
-		t.Skip("cannot boot new hosts")
-	}
-	// ensure we have 3 node cluster, TODO(jpg): Support running test on anything larger than 2 node cluster
-	hosts, err := s.clusterClient(t).Hosts()
-	t.Assert(err, c.IsNil)
-	if len(hosts) != 3 {
-		t.Skip("promotion and demotion tests require a 3 node cluster")
-	}
+func (s *DiscoverdSuite) TestPromoteDemote(t *c.C) {
+	x := s.bootCluster(t, 3)
+	defer x.Destroy()
 
 	// Check the original number of peers is correct
-	initialPeers, err := s.discoverdClient(t).RaftPeers()
+	initialPeers, err := x.discoverd.RaftPeers()
 	t.Assert(err, c.IsNil)
 	t.Assert(len(initialPeers), c.Equals, 3)
 
 	// Add a new host to the cluster, initially it will join as a proxy
-	newHost := s.addHost(t, "discoverd")
-	defer s.removeHost(t, newHost, "discoverd")
+	newHosts, err := x.AddHosts(1)
+	t.Assert(err, c.IsNil)
+	newHost := newHosts[0]
 
 	// Ping the new node until it comes up
-	url := "http://" + newHost.IP + ":1111"
+	url := "http://" + discoverdAddr(newHost)
 	dd := discoverd.NewClientWithURL(url)
 	err = pingAttempts.Run(func() error { return dd.Ping(url) })
 	t.Assert(err, c.IsNil)
@@ -109,7 +102,7 @@ func (s *ZDiscoverdSuite) TestPromoteDemote(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	// Check that we now have one additional peer, also ensure our new peer is in the list
-	newPeers, err := s.discoverdClient(t).RaftPeers()
+	newPeers, err := x.discoverd.RaftPeers()
 	t.Assert(err, c.IsNil)
 	t.Assert(len(newPeers), c.Equals, 4)
 	t.Assert(peerPresent(newHost, newPeers), c.Equals, true)
@@ -122,7 +115,7 @@ func (s *ZDiscoverdSuite) TestPromoteDemote(t *c.C) {
 	time.Sleep(2 * time.Second)
 
 	// We are going to ask the leader for the list of peers as it's definitely canonical
-	leader, err := s.discoverdClient(t).RaftLeader()
+	leader, err := x.discoverd.RaftLeader()
 	t.Assert(err, c.IsNil)
 	dd = discoverd.NewClientWithURL(leader.Host)
 

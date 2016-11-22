@@ -305,14 +305,16 @@ func assertResourceLimits(t *c.C, out string) {
 }
 
 func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
-	client := h.controllerClient(t)
+	return h.createAppWithClient(t, h.controllerClient(t))
+}
 
+func (h *Helper) createAppWithClient(t *c.C, client controller.Client) (*ct.App, *ct.Release) {
 	app := &ct.App{}
 	t.Assert(client.CreateApp(app), c.IsNil)
 	debugf(t, "created app %s (%s)", app.Name, app.ID)
 
 	release := &ct.Release{
-		ArtifactIDs: []string{h.createArtifact(t, "test-apps").ID},
+		ArtifactIDs: []string{h.createArtifactWithClient(t, "test-apps", client).ID},
 		Processes: map[string]ct.ProcessType{
 			"echoer": {
 				Args:    []string{"/bin/echoer"},
@@ -368,6 +370,10 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 }
 
 func (h *Helper) createArtifact(t *c.C, name string) *ct.Artifact {
+	return h.createArtifactWithClient(t, name, h.controllerClient(t))
+}
+
+func (h *Helper) createArtifactWithClient(t *c.C, name string, client controller.Client) *ct.Artifact {
 	path := fmt.Sprintf("../image/%s.json", name)
 	manifest, err := ioutil.ReadFile(path)
 	t.Assert(err, c.IsNil)
@@ -377,7 +383,7 @@ func (h *Helper) createArtifact(t *c.C, name string) *ct.Artifact {
 		RawManifest:      manifest,
 		LayerURLTemplate: "file:///var/lib/flynn/layer-cache/{id}.squashfs",
 	}
-	t.Assert(h.controllerClient(t).CreateArtifact(artifact), c.IsNil)
+	t.Assert(client.CreateArtifact(artifact), c.IsNil)
 	return artifact
 }
 

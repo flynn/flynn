@@ -42,5 +42,15 @@ if [[ -n "${DISCOVERY_SERVICE}" ]]; then
   )
 fi
 
-# start flynn-host
-exec /usr/local/bin/flynn-host daemon ${ARGS[@]}
+# start flynn-host in the background and just block so that the container
+# doesn't exit if flynn-host is updated in-place
+start-stop-daemon \
+  --start \
+  --background \
+  --no-close \
+  --exec "/usr/local/bin/flynn-host" \
+  -- \
+  "daemon" \
+  ${ARGS[@]}
+
+sleep infinity

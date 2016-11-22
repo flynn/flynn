@@ -2,16 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"net/http"
 	"syscall"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	logagg "github.com/flynn/flynn/logaggregator/types"
-	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/exec"
 	c "github.com/flynn/go-check"
 )
@@ -20,26 +17,27 @@ type HostUpdateSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&HostUpdateSuite{})
+var _ = c.ConcurrentSuite(&HostUpdateSuite{})
 
 func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
-	if testCluster == nil {
-		t.Skip("cannot boot new hosts")
-	}
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
 
-	instance := s.addHost(t, "router-api")
-	defer s.removeHost(t, instance, "router-api")
-	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
-	client := cluster.NewHost(instance.ID, fmt.Sprintf("http://%s:1113", instance.IP), httpClient, nil)
+	hosts, err := x.cluster.Hosts()
+	t.Assert(err, c.IsNil)
+	t.Assert(hosts, c.HasLen, 1)
+
+	app := &ct.App{Name: "partial-logger"}
+	t.Assert(x.controller.CreateApp(app), c.IsNil)
 
 	// start partial logger job
 	cmd := exec.JobUsingHost(
-		client,
-		s.createArtifact(t, "test-apps"),
+		hosts[0],
+		s.createArtifactWithClient(t, "test-apps", x.controller),
 		&host.Job{
 			Config: host.ContainerConfig{Args: []string{"/bin/partial-logger"}},
 			Metadata: map[string]string{
-				"flynn-controller.app": "partial-logger",
+				"flynn-controller.app": app.ID,
 			},
 		},
 	)
@@ -47,21 +45,20 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	defer cmd.Kill()
 
 	// wait for partial line
-	_, err := s.discoverdClient(t).Instances("partial-logger", 10*time.Second)
+	_, err = x.discoverd.Instances("partial-logger", 10*time.Second)
 	t.Assert(err, c.IsNil)
 
-	// update flynn-host
-	pid, err := client.Update("/usr/local/bin/flynn-host", "daemon", "--id", cmd.HostID)
+	// update flynn-host using the same flags
+	status, err := hosts[0].GetStatus()
 	t.Assert(err, c.IsNil)
-	// update the pid file so removeHost works
-	t.Assert(instance.Run(fmt.Sprintf("echo -n %d | sudo tee /var/run/flynn-host.pid", pid), nil), c.IsNil)
+	_, err = hosts[0].Update("/usr/local/bin/flynn-host", append([]string{"daemon"}, status.Flags...)...)
+	t.Assert(err, c.IsNil)
 
-	// stream the log from the logaggregator
-	logc, err := logaggc.New("")
-	t.Assert(err, c.IsNil)
-	log, err := logc.GetLog("partial-logger", &logagg.LogOpts{Follow: true})
+	// stream the log
+	log, err := x.controller.GetAppLog(app.ID, &logagg.LogOpts{Follow: true})
 	t.Assert(err, c.IsNil)
 	defer log.Close()
+
 	msgs := make(chan *logaggc.Message)
 	go func() {
 		defer close(msgs)
@@ -77,7 +74,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	}()
 
 	// finish logging
-	t.Assert(client.SignalJob(cmd.Job.ID, int(syscall.SIGUSR1)), c.IsNil)
+	t.Assert(hosts[0].SignalJob(cmd.Job.ID, int(syscall.SIGUSR1)), c.IsNil)
 
 	// check we get a single log line
 	for {

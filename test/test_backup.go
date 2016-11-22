@@ -2,8 +2,9 @@ package main
 
 import (
 	"errors"
-	"io/ioutil"
+	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -11,38 +12,63 @@ import (
 	c "github.com/flynn/go-check"
 )
 
-// Prefix the suite with "ZZ" so that it runs after all other tests as it is
-// pretty disruptive
-type ZZBackupSuite struct {
+type BackupSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&ZZBackupSuite{})
+var _ = c.ConcurrentSuite(&BackupSuite{})
 
-func (s *ZZBackupSuite) TestClusterBackups(t *c.C) {
+func (s *BackupSuite) Test_v20160309_0_nodejs_redis(t *c.C) {
+	s.testClusterBackup(t, "v20160309.0-nodejs-redis.tar")
+}
+
+func (s *BackupSuite) Test_v20160423_0_nodejs_redis(t *c.C) {
+	s.testClusterBackup(t, "v20160423.0-nodejs-redis.tar")
+}
+
+func (s *BackupSuite) Test_v20160624_1_nodejs_redis(t *c.C) {
+	s.testClusterBackup(t, "v20160624.1-nodejs-redis.tar")
+}
+
+func (s *BackupSuite) Test_v20160721_2_nodejs_redis(t *c.C) {
+	s.testClusterBackup(t, "v20160721.2-nodejs-redis.tar")
+}
+
+func (s *BackupSuite) Test_v20160814_0_nodejs_mongodb(t *c.C) {
+	s.testClusterBackup(t, "v20160814.0-nodejs-mongodb.tar")
+}
+
+func (s *BackupSuite) Test_v20160814_0_nodejs_redis(t *c.C) {
+	s.testClusterBackup(t, "v20160814.0-nodejs-redis.tar")
+}
+
+func (s *BackupSuite) Test_v20160814_0_nodejs_mysql(t *c.C) {
+	s.testClusterBackup(t, "v20160814.0-nodejs-mysql.tar")
+}
+
+func (s *BackupSuite) Test_v20161017_1_nodejs_docker(t *c.C) {
+	s.testClusterBackup(t, "v20161017.1-nodejs-docker.tar")
+}
+
+func (s *BackupSuite) testClusterBackup(t *c.C, name string) {
 	if args.BootConfig.BackupsDir == "" {
 		t.Skip("--backups-dir not set")
 	}
 
-	backups, err := ioutil.ReadDir(args.BootConfig.BackupsDir)
+	path := filepath.Join(args.BootConfig.BackupsDir, name)
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		t.Skip(fmt.Sprintf("missing backup %s", name))
+	}
 	t.Assert(err, c.IsNil)
-	if len(backups) == 0 {
-		t.Fatal("backups dir is empty")
-	}
 
-	for i, backup := range backups {
-		s.testClusterBackup(t, i, filepath.Join(args.BootConfig.BackupsDir, backup.Name()))
-	}
-}
-
-func (s *ZZBackupSuite) testClusterBackup(t *c.C, index int, path string) {
-	debugf(t, "restoring cluster backup %s", filepath.Base(path))
+	debugf(t, "restoring cluster backup %s", name)
 
 	x := s.bootClusterFromBackup(t, path)
 	defer x.Destroy()
 
 	debug(t, "waiting for nodejs-web service")
-	_, err := x.discoverd.Instances("nodejs-web", 30*time.Second)
+	_, err = x.discoverd.Instances("nodejs-web", 30*time.Second)
 	t.Assert(err, c.IsNil)
 
 	debug(t, "checking HTTP requests")

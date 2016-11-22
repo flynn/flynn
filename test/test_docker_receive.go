@@ -15,7 +15,7 @@ type DockerReceiveSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&DockerReceiveSuite{})
+var _ = c.ConcurrentSuite(&DockerReceiveSuite{})
 
 func (s *DockerReceiveSuite) TestPushImage(t *c.C) {
 	// build a Docker image
