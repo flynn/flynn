@@ -113,6 +113,7 @@ main() {
   local image="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[test]')"
   "${flynn_host}" run \
     --bind "$(join "," ${mounts[@]})" \
+    --volume "/tmp" \
     <(echo "${image}") \
     /usr/bin/env \
     ROOT="${ROOT}" \
