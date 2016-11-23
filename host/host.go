@@ -13,8 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/flynn/flynn/bootstrap/discovery"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/logmux"
@@ -51,6 +53,7 @@ options:
   --flynn-init=PATH          path to flynn-init binary [default: /usr/local/bin/flynn-init]
   --log-dir=DIR              directory to store job logs [default: /var/log/flynn]
   --discovery=TOKEN          join cluster with discovery token
+  --discovery-service=NAME   join cluster using service discovery
   --peer-ips=IPLIST          join existing cluster using IPs
   --bridge-name=NAME         network bridge name [default: flynnbr0]
   --no-resurrect             disable cluster resurrection
@@ -174,6 +177,7 @@ func runDaemon(args *docopt.Args) {
 	flynnInit := args.String["--flynn-init"]
 	logDir := args.String["--log-dir"]
 	discoveryToken := args.String["--discovery"]
+	discoveryService := args.String["--discovery-service"]
 	bridgeName := args.String["--bridge-name"]
 
 	logger, err := setupLogger(logDir)
@@ -485,8 +489,33 @@ func runDaemon(args *docopt.Args) {
 			peerIPs = append(peerIPs, ip)
 		}
 		log.Info("got cluster peer IPs", "peers", peerIPs)
+	} else if discoveryService != "" {
+		log.Info("getting cluster peers from service discovery", "service", discoveryService)
+		instances, err := discoverd.GetInstances(discoveryService, 30*time.Second)
+		if err != nil {
+			log.Error("error getting cluster peers from service discovery", "err", err)
+			shutdown.Fatal(err)
+		}
+		meta, err := discoverd.NewService(discoveryService).GetMeta()
+		if err != nil {
+			log.Error("error getting discovery service metadata", "err", err)
+			shutdown.Fatal(err)
+		}
+		var cluster struct{ Size int }
+		if err := json.Unmarshal(meta.Data, &cluster); err != nil {
+			log.Error("error parsing discovery service metadata", "err", err)
+			shutdown.Fatal(err)
+		}
+		if len(instances) >= cluster.Size {
+			peerIPs = make([]string, 0, len(instances))
+			for _, inst := range instances {
+				if ip := inst.Host(); ip != externalIP {
+					peerIPs = append(peerIPs, ip)
+				}
+			}
+		}
 	}
-	log.Info("connecting to cluster peers")
+	log.Info("connecting to cluster peers", "ips", peerIPs)
 	if err := discoverdManager.ConnectPeer(peerIPs); err != nil {
 		log.Info("no cluster peers available")
 	}
