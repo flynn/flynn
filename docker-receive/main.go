@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/docker-receive/blobstore"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/version"
@@ -143,6 +144,11 @@ func (m *manifestService) runArtifactJob(dgst digest.Digest) error {
 		"CONTROLLER_KEY": os.Getenv("CONTROLLER_KEY"),
 	}
 	cmd.Volumes = []*ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}}
+
+	// the job needs CAP_SYS_ADMIN so it can convert AUFS opaque
+	// directories using setxattr(2)
+	cmd.LinuxCapabilities = append(host.DefaultCapabilities, "CAP_SYS_ADMIN")
+
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("error running artifact job: %s: %s", err, out)
 	}
