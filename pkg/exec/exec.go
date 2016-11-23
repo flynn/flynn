@@ -37,6 +37,8 @@ type Cmd struct {
 
 	TermHeight, TermWidth uint16
 
+	LinuxCapabilities []string
+
 	// cluster is used to communicate with the layer 0 cluster
 	cluster ClusterClient
 
@@ -201,6 +203,10 @@ func (c *Cmd) Start() error {
 	}
 	if c.Job.ID == "" {
 		c.Job.ID = cluster.GenerateJobID(c.HostID, "")
+	}
+
+	if len(c.LinuxCapabilities) > 0 {
+		c.Job.Config.LinuxCapabilities = &c.LinuxCapabilities
 	}
 
 	if c.host == nil {

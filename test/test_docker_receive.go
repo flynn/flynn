@@ -66,3 +66,28 @@ loop:
 	// check running a job uses the image
 	t.Assert(flynn(t, "/", "-a", app.ID, "run", "cat", "/foo.txt"), SuccessfulOutputContains, "foo")
 }
+
+// TestConvertWhitouts ensures that AUFS whiteouts are converted to OverlayFS
+// whiteouts and have the same effect (i.e. hiding removed files)
+func (s *DockerReceiveSuite) TestConvertWhiteouts(t *c.C) {
+	// build a Docker image with whiteouts
+	repo := "docker-receive-test-whiteouts"
+	s.buildDockerImage(t, repo,
+		"RUN echo foo > /foo.txt",
+		"RUN rm /foo.txt",
+		"RUN mkdir /opaque && touch /opaque/file.txt",
+		"RUN rm -rf /opaque && mkdir /opaque",
+	)
+
+	// create app
+	client := s.controllerClient(t)
+	app := &ct.App{Name: repo}
+	t.Assert(client.CreateApp(app), c.IsNil)
+
+	// flynn docker push image
+	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
+
+	// check the whiteouts are effective
+	t.Assert(flynn(t, "/", "-a", app.Name, "run", "sh", "-c", "[[ ! -f /foo.txt ]]"), Succeeds)
+	t.Assert(flynn(t, "/", "-a", app.Name, "run", "sh", "-c", "[[ ! -f /opaque/file.txt ]]"), Succeeds)
+}
