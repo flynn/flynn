@@ -59,25 +59,6 @@ const (
 	RLIMIT_NPROC      = 6
 )
 
-// defaultCapabilities is a list of capabilities which are set inside a
-// container, taken from:
-// https://github.com/opencontainers/runc/blob/v1.0.0-rc1/libcontainer/SPEC.md#security
-var defaultCapabilities = []string{
-	"CAP_NET_RAW",
-	"CAP_NET_BIND_SERVICE",
-	"CAP_DAC_OVERRIDE",
-	"CAP_SETFCAP",
-	"CAP_SETPCAP",
-	"CAP_SETGID",
-	"CAP_SETUID",
-	"CAP_MKNOD",
-	"CAP_CHOWN",
-	"CAP_FOWNER",
-	"CAP_FSETID",
-	"CAP_KILL",
-	"CAP_SYS_CHROOT",
-}
-
 type LibcontainerConfig struct {
 	State            *State
 	VolManager       *volumemanager.Manager
@@ -436,9 +417,12 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	container.RootPath = rootPath
 	container.TmpPath = tmpPath
 
+	if job.Config.LinuxCapabilities == nil {
+		job.Config.LinuxCapabilities = &host.DefaultCapabilities
+	}
 	config := &configs.Config{
 		Rootfs:       rootPath,
-		Capabilities: defaultCapabilities,
+		Capabilities: *job.Config.LinuxCapabilities,
 		Namespaces: configs.Namespaces([]configs.Namespace{
 			{Type: configs.NEWNS},
 			{Type: configs.NEWUTS},

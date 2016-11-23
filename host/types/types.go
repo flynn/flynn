@@ -10,6 +10,25 @@ import (
 // TagPrefix is the prefix added to tags in discoverd instance metadata
 const TagPrefix = "tag:"
 
+// DefaultCapabilities is the default list of capabilities which are set inside
+// a container, taken from:
+// https://github.com/opencontainers/runc/blob/v1.0.0-rc1/libcontainer/SPEC.md#security
+var DefaultCapabilities = []string{
+	"CAP_NET_RAW",
+	"CAP_NET_BIND_SERVICE",
+	"CAP_DAC_OVERRIDE",
+	"CAP_SETFCAP",
+	"CAP_SETPCAP",
+	"CAP_SETGID",
+	"CAP_SETUID",
+	"CAP_MKNOD",
+	"CAP_CHOWN",
+	"CAP_FOWNER",
+	"CAP_FSETID",
+	"CAP_KILL",
+	"CAP_SYS_CHROOT",
+}
+
 type Job struct {
 	ID string `json:"id,omitempty"`
 
@@ -85,19 +104,20 @@ type JobResources struct {
 }
 
 type ContainerConfig struct {
-	Args        []string          `json:"args,omitempty"`
-	TTY         bool              `json:"tty,omitempty"`
-	Stdin       bool              `json:"stdin,omitempty"`
-	Data        bool              `json:"data,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	Mounts      []Mount           `json:"mounts,omitempty"`
-	Volumes     []VolumeBinding   `json:"volumes,omitempty"`
-	Ports       []Port            `json:"ports,omitempty"`
-	WorkingDir  string            `json:"working_dir,omitempty"`
-	Uid         *uint32           `json:"uid,omitempty"`
-	Gid         *uint32           `json:"gid,omitempty"`
-	HostNetwork bool              `json:"host_network,omitempty"`
-	DisableLog  bool              `json:"disable_log,omitempty"`
+	Args              []string          `json:"args,omitempty"`
+	TTY               bool              `json:"tty,omitempty"`
+	Stdin             bool              `json:"stdin,omitempty"`
+	Data              bool              `json:"data,omitempty"`
+	Env               map[string]string `json:"env,omitempty"`
+	Mounts            []Mount           `json:"mounts,omitempty"`
+	Volumes           []VolumeBinding   `json:"volumes,omitempty"`
+	Ports             []Port            `json:"ports,omitempty"`
+	WorkingDir        string            `json:"working_dir,omitempty"`
+	Uid               *uint32           `json:"uid,omitempty"`
+	Gid               *uint32           `json:"gid,omitempty"`
+	HostNetwork       bool              `json:"host_network,omitempty"`
+	DisableLog        bool              `json:"disable_log,omitempty"`
+	LinuxCapabilities *[]string         `json:"linux_capabilities,omitempty"`
 }
 
 // Apply 'y' to 'x', returning a new structure.  'y' trumps.
