@@ -41,9 +41,16 @@ func JobHandler(db *postgres.DB, client controller.Client, logger log15.Logger) 
 	return (&context{db, client, logger}).HandleDomainMigration
 }
 
-func deployTimeout() <-chan struct{} {
+func (m *migration) cancelDeploy() <-chan struct{} {
 	ch := make(chan struct{})
-	time.AfterFunc(5*time.Minute, func() { close(ch) })
+	timeout := time.After(5 * time.Minute)
+	go func() {
+		defer close(ch)
+		select {
+		case <-m.stop:
+		case <-timeout:
+		}
+	}()
 	return ch
 }
 
@@ -233,9 +240,14 @@ func (m *migration) maybeDeployController() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID, deployTimeout()); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, m.cancelDeploy()); err != nil {
 		log.Error("error deploying release", "error", err)
-		return err
+		select {
+		case <-m.stop:
+			return worker.ErrStopped
+		default:
+			return err
+		}
 	}
 	return nil
 }
@@ -262,9 +274,14 @@ func (m *migration) maybeDeployRouter() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID, deployTimeout()); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, m.cancelDeploy()); err != nil {
 		log.Error("error deploying release", "error", err)
-		return err
+		select {
+		case <-m.stop:
+			return worker.ErrStopped
+		default:
+			return err
+		}
 	}
 	return nil
 }
@@ -293,9 +310,14 @@ func (m *migration) maybeDeployDashboard() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID, deployTimeout()); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, m.cancelDeploy()); err != nil {
 		log.Error("error deploying release", "error", err)
-		return err
+		select {
+		case <-m.stop:
+			return worker.ErrStopped
+		default:
+			return err
+		}
 	}
 	return nil
 }
@@ -391,6 +413,9 @@ func (m *migration) appMaybeCreateRoute(appID string, oldRoute *router.Route, ro
 }
 
 func (m *migration) createEvent(err error) error {
+	if err == worker.ErrStopped {
+		return nil
+	}
 	e := ct.DomainMigrationEvent{DomainMigration: m.dm}
 	if err != nil {
 		e.Error = err.Error()
