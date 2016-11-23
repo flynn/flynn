@@ -53,6 +53,8 @@ type Cluster struct {
 	Pin       string
 
 	config *BootConfig
+	size   int
+	log    log15.Logger
 }
 
 func Boot(c *BootConfig) (*Cluster, error) {
@@ -114,10 +116,15 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		return nil, err
 	}
 
+	var hostEnv map[string]string
+	if c.Size >= 3 {
+		hostEnv = map[string]string{"DISCOVERY_SERVICE": app.Name}
+	}
 	release := &ct.Release{
 		ArtifactIDs: []string{hostImage.ID},
 		Processes: map[string]ct.ProcessType{
 			"host": {
+				Env: hostEnv,
 				Mounts: []host.Mount{
 					{
 						Location:  "/var/lib/flynn",
@@ -178,60 +185,27 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		return nil, err
 	}
 
-	formation := &ct.Formation{
-		AppID:     app.ID,
-		ReleaseID: release.ID,
-		Processes: map[string]int{"host": c.Size},
+	if err := discoverd.DefaultClient.AddService(app.Name, nil); err != nil {
+		log.Error("error creating service", "err", err)
+		return nil, err
 	}
-	if err := c.Client.PutFormation(formation); err != nil {
-		log.Error("error scaling hosts", "err", err)
+	serviceData, _ := json.Marshal(&struct{ Size int }{c.Size})
+	if err := discoverd.NewService(app.Name).SetMeta(&discoverd.ServiceMeta{Data: serviceData}); err != nil {
+		log.Error("error setting service metadata", "err", err)
 		return nil, err
 	}
 
-	log.Info("waiting for hosts", "count", c.Size)
-	events := make(chan *discoverd.Event)
-	stream, err := discoverd.NewService(app.Name).Watch(events)
+	cluster := &Cluster{
+		App:       app,
+		Release:   release,
+		HostImage: hostImage,
+		config:    c,
+		log:       log,
+	}
+
+	hosts, err := cluster.AddHosts(c.Size)
 	if err != nil {
-		log.Error("error streaming service events", "err", err)
 		return nil, err
-	}
-	defer stream.Close()
-
-	if c.HostTimeout == nil {
-		t := 60 * time.Second
-		c.HostTimeout = &t
-	}
-	timeout := time.After(*c.HostTimeout)
-
-	hosts := make([]*cluster.Host, 0, c.Size)
-	jobIDs := make(map[string]string, c.Size)
-loop:
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				return nil, stream.Err()
-			}
-			switch event.Kind {
-			case discoverd.EventKindUp:
-				jobID := event.Instance.Meta["FLYNN_JOB_ID"]
-				id, _ := cluster.ExtractUUID(jobID)
-				id = strings.Replace(id, "-", "", -1)
-				addr := event.Instance.Addr
-				log.Info("host is up", "addr", addr, "id", id)
-				hosts = append(hosts, cluster.NewHost(id, addr, hh.RetryClient, nil))
-				jobIDs[id] = jobID
-				if len(hosts) == c.Size {
-					break loop
-				}
-			case discoverd.EventKindDown:
-				log.Info("host is down", "addr", event.Instance.Addr, "id", event.Instance.Meta["FLYNN_JOB_ID"])
-				return nil, fmt.Errorf("a host failed to start: %v", event.Instance)
-			}
-		case <-timeout:
-			log.Error("timed out waiting for hosts to start")
-			return nil, errors.New("timed out waiting for hosts to start")
-		}
 	}
 
 	domain := c.Domain
@@ -323,17 +297,88 @@ loop:
 	}
 
 	log.Info("successfully bootstrapped cluster", "app", app.Name, "size", c.Size, "peers", peerIPs)
-	return &Cluster{
-		App:       app,
-		Release:   release,
-		HostImage: hostImage,
-		JobIDs:    jobIDs,
-		IP:        peerIPs[0],
-		Domain:    domain,
-		Key:       key,
-		Pin:       cert.Pin,
-		config:    c,
-	}, nil
+	cluster.IP = peerIPs[0]
+	cluster.Domain = domain
+	cluster.Key = key
+	cluster.Pin = cert.Pin
+	return cluster, nil
+}
+
+func (c *Cluster) AddHosts(count int) ([]*cluster.Host, error) {
+	c.log.Info("adding hosts", "count", count)
+	events := make(chan *discoverd.Event)
+	stream, err := discoverd.NewService(c.App.Name).Watch(events)
+	if err != nil {
+		c.log.Error("error streaming service events", "err", err)
+		return nil, err
+	}
+	defer stream.Close()
+
+	timeout := 60 * time.Second
+	if c.config.HostTimeout != nil {
+		timeout = *c.config.HostTimeout
+	}
+	timeoutCh := time.After(timeout)
+
+	// wait for the current hosts before scaling up
+loop:
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return nil, stream.Err()
+			}
+			if event.Kind == discoverd.EventKindCurrent {
+				break loop
+			}
+		case <-timeoutCh:
+			c.log.Error("timed out waiting for current hosts")
+			return nil, errors.New("timed out waiting for current hosts")
+		}
+	}
+
+	c.size += count
+	formation := &ct.Formation{
+		AppID:     c.App.ID,
+		ReleaseID: c.Release.ID,
+		Processes: map[string]int{"host": c.size},
+	}
+	if err := c.config.Client.PutFormation(formation); err != nil {
+		c.log.Error("error scaling hosts", "err", err)
+		return nil, err
+	}
+
+	hosts := make([]*cluster.Host, 0, count)
+	if c.JobIDs == nil {
+		c.JobIDs = make(map[string]string, count)
+	}
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return nil, stream.Err()
+			}
+			switch event.Kind {
+			case discoverd.EventKindUp:
+				jobID := event.Instance.Meta["FLYNN_JOB_ID"]
+				id, _ := cluster.ExtractUUID(jobID)
+				id = strings.Replace(id, "-", "", -1)
+				addr := event.Instance.Addr
+				c.log.Info("host is up", "addr", addr, "id", id)
+				hosts = append(hosts, cluster.NewHost(id, addr, hh.RetryClient, nil))
+				c.JobIDs[id] = jobID
+				if len(hosts) == count {
+					return hosts, nil
+				}
+			case discoverd.EventKindDown:
+				c.log.Info("host is down", "addr", event.Instance.Addr, "id", event.Instance.Meta["FLYNN_JOB_ID"])
+				return nil, fmt.Errorf("a host failed to start: %v", event.Instance)
+			}
+		case <-timeoutCh:
+			c.log.Error("timed out waiting for hosts to start")
+			return nil, errors.New("timed out waiting for hosts to start")
+		}
+	}
 }
 
 func (c *Cluster) Destroy() error {

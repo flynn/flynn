@@ -28,10 +28,19 @@ mkdir -p "${TMPDIR}"
 # use a unique zpool to avoid conflicts with other daemons
 ZPOOL="flynn-${FLYNN_JOB_ID}"
 
-# start flynn-host
-exec /usr/local/bin/flynn-host daemon \
-  --state      "${DIR}/host-state.bolt" \
-  --volpath    "${DIR}/volumes" \
-  --log-dir    "${DIR}/logs" \
-  --zpool-name "${ZPOOL}" \
+ARGS=(
+  --state      "${DIR}/host-state.bolt"
+  --volpath    "${DIR}/volumes"
+  --log-dir    "${DIR}/logs"
+  --zpool-name "${ZPOOL}"
   --no-resurrect
+)
+
+if [[ -n "${DISCOVERY_SERVICE}" ]]; then
+  ARGS+=(
+    --discovery-service "${DISCOVERY_SERVICE}"
+  )
+fi
+
+# start flynn-host
+exec /usr/local/bin/flynn-host daemon ${ARGS[@]}
