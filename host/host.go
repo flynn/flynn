@@ -321,11 +321,9 @@ func runDaemon(args *docopt.Args) {
 		id:  hostID,
 		url: publishURL,
 		status: &host.HostStatus{
-			ID:      hostID,
-			PID:     os.Getpid(),
-			URL:     publishURL,
-			Tags:    tags,
-			Version: version.String(),
+			ID:   hostID,
+			URL:  publishURL,
+			Tags: tags,
 		},
 		state:   state,
 		backend: backend,
@@ -345,11 +343,15 @@ func runDaemon(args *docopt.Args) {
 			log.Error("error restoring host status from parent", "err", err)
 			shutdown.Fatal(err)
 		}
-		pid := os.Getpid()
-		log.Info("setting status PID", "pid", pid)
-		host.status.PID = pid
 		// keep the same tags as the parent
 		discoverdManager.UpdateTags(host.status.Tags)
+	}
+	pid := os.Getpid()
+	log.Info("setting host status PID", "pid", pid)
+	host.status.PID = pid
+	host.status.Version = version.String()
+	if len(os.Args) > 2 {
+		host.status.Flags = os.Args[2:]
 	}
 
 	log.Info("creating HTTP listener")
