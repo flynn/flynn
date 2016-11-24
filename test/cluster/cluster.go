@@ -290,18 +290,20 @@ func (c *Cluster) startVMs(typ ClusterType, rootFS string, count int, initial bo
 }
 
 func (c *Cluster) startFlynnHost(inst *Instance, peerInstances []*Instance) error {
-	peers := make([]string, 0, len(peerInstances))
-	for _, inst := range peerInstances {
-		if !inst.initial {
-			continue
-		}
-		peers = append(peers, inst.IP)
-	}
 	var script bytes.Buffer
 	data := hostScriptData{
-		ID:    inst.ID,
-		IP:    inst.IP,
-		Peers: strings.Join(peers, ","),
+		ID: inst.ID,
+		IP: inst.IP,
+	}
+	if len(peerInstances) > 1 {
+		peers := make([]string, 0, len(peerInstances))
+		for _, inst := range peerInstances {
+			if !inst.initial {
+				continue
+			}
+			peers = append(peers, inst.IP)
+		}
+		data.Peers = strings.Join(peers, ",")
 	}
 	flynnHostScript.Execute(&script, data)
 	c.logf("Starting flynn-host on %s [id: %s]\n", inst.IP, inst.ID)
@@ -469,7 +471,7 @@ sudo start-stop-daemon \
   --external-ip {{ .IP }} \
   --listen-ip {{ .IP }} \
   --force \
-  --peer-ips {{ .Peers }} \
+  {{ if .Peers }} --peer-ips {{ .Peers }} {{ end }} \
   --max-job-concurrency 8 \
   --init-log-level debug \
   &>/tmp/flynn-host.log

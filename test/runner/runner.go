@@ -456,7 +456,7 @@ func (r *Runner) build(b *Build) (err error) {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 
-	if _, err := c.Boot(cluster.ClusterTypeDefault, 3, buildLog, false); err != nil {
+	if _, err := c.Boot(cluster.ClusterTypeDefault, 1, buildLog, false); err != nil {
 		return fmt.Errorf("could not boot cluster: %s", err)
 	}
 
