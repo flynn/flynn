@@ -309,6 +309,7 @@ type HostStatus struct {
 	Discoverd *DiscoverdConfig  `json:"discoverd,omitempty"`
 	Network   *NetworkConfig    `json:"network,omitempty"`
 	Version   string            `json:"version"`
+	Flags     []string          `json:"flags"`
 }
 
 type JobEventType string
