@@ -138,6 +138,7 @@ bootstrap_cluster() {
   local out="${tmp}/bootstrap-${version}.txt"
 
   info "bootstrapping ${version} cluster"
+  export CLUSTER_DOMAIN="$(openssl rand -hex 16).1.localflynn.com"
   local cluster_add=$("${ROOT}/script/bootstrap-flynn" --version "${version}" &> >(tee "${out}") | tail -3 | head -1)
 
   if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
@@ -149,6 +150,7 @@ bootstrap_cluster() {
   flynn cluster remove default
 
   if [[ "${version:1:8}" -ge "20160609" ]]; then
+    "${ROOT}/script/configure-docker" "${CLUSTER_DOMAIN}"
     flynn cluster add --docker ${cluster_add:18}
   else
     flynn cluster add ${cluster_add:18}
