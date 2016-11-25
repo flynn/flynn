@@ -124,7 +124,7 @@ main() {
   done
 
   info "bootstrapping Flynn"
-  export CLUSTER_DOMAIN="${size}.localflynn.com"
+  export CLUSTER_DOMAIN="${CLUSTER_DOMAIN:-"${size}.localflynn.com"}"
   export DISCOVERD="$(join "," ${ips[@]/%/:1111})"
   local flags=(
     "--min-hosts=${size}"
