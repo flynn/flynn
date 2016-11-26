@@ -12,5 +12,6 @@ ADD bin/flynn-init   /usr/local/bin/flynn-init
 ADD zfs-mknod.sh     /usr/local/bin/zfs-mknod
 ADD udev.rules       /lib/udev/rules.d/10-local.rules
 ADD start.sh         /usr/local/bin/start-flynn-host.sh
+ADD cleanup.sh       /usr/local/bin/cleanup-flynn-host.sh
 
 CMD ["/usr/local/bin/start-flynn-host.sh"]

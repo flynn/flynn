@@ -42,39 +42,5 @@ if [[ -n "${DISCOVERY_SERVICE}" ]]; then
   )
 fi
 
-# start flynn-host in the background and just block so that the container
-# doesn't exit if flynn-host is updated in-place
-PIDFILE="/tmp/flynn-host.pid"
-start-stop-daemon \
-  --start \
-  --background \
-  --no-close \
-  --pidfile "${PIDFILE}" \
-  --make-pidfile \
-  --exec "/usr/local/bin/flynn-host" \
-  -- \
-  "daemon" \
-  ${ARGS[@]}
-
-cleanup() {
-  set -x
-
-  start-stop-daemon \
-    --stop \
-    --oknodo \
-    --retry 5 \
-    --pidfile "${PIDFILE}"
-
-  flynn-host destroy-volumes --volpath "${DIR}/volumes" --include-data
-
-  zpool destroy "${ZPOOL}"
-
-  rm -rf "${DIR}"
-
-  exit
-}
-trap cleanup TERM
-
-# sleep in the background so we can catch the SIGTERM
-sleep infinity &
-wait
+# start flynn-host
+exec /usr/local/bin/flynn-host daemon ${ARGS[@]}
