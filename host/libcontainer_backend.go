@@ -1354,13 +1354,11 @@ func (l *LibcontainerBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jo
 	}
 	// gather connection attempts and finish reconstruction if success.  failures will time out.
 	for _, j := range jobs {
-		container, ok := containers[j.Job.ID]
-		if !ok {
+		if _, ok := containers[j.Job.ID]; !ok {
 			continue
 		}
 		if err := <-readySignals[j.Job.ID]; err != nil {
 			// log error
-			container.cleanup()
 			delete(readySignals, j.Job.ID)
 			continue
 		}
