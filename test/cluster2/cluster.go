@@ -42,11 +42,18 @@ type BootConfig struct {
 	Domain       string
 }
 
+type Host struct {
+	*cluster.Host
+	JobID string
+	IP    string
+}
+
 type Cluster struct {
 	App       *ct.App
 	Release   *ct.Release
 	HostImage *ct.Artifact
-	JobIDs    map[string]string
+	Hosts     map[string]*Host
+	Host      *Host
 	IP        string
 	Domain    string
 	Key       string
@@ -203,8 +210,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		log:       log,
 	}
 
-	hosts, err := cluster.AddHosts(c.Size)
-	if err != nil {
+	if _, err := cluster.AddHosts(c.Size); err != nil {
 		return nil, err
 	}
 
@@ -218,10 +224,9 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		return nil, err
 	}
 
-	peerIPs := make([]string, len(hosts))
-	for i, host := range hosts {
-		ip, _, _ := net.SplitHostPort(host.Addr())
-		peerIPs[i] = ip
+	peerIPs := make([]string, 0, len(cluster.Hosts))
+	for _, host := range cluster.Hosts {
+		peerIPs = append(peerIPs, host.IP)
 	}
 	log.Info("bootstrapping cluster", "size", c.Size, "domain", domain, "peers", peerIPs, "backup", filepath.Base(c.Backup))
 	bootstrapArgs := []string{
@@ -232,7 +237,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		bootstrapArgs = append(bootstrapArgs, "--from-backup", c.Backup)
 	}
 	bootstrapArgs = append(bootstrapArgs, "-")
-	cmd := exec.CommandUsingHost(hosts[0], hostImage, append([]string{"flynn-host", "bootstrap"}, bootstrapArgs...)...)
+	cmd := exec.CommandUsingHost(cluster.Host.Host, hostImage, append([]string{"flynn-host", "bootstrap"}, bootstrapArgs...)...)
 	if c.Backup != "" {
 		cmd.Mounts = []host.Mount{{
 			Location: c.Backup,
@@ -275,7 +280,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 	}
 
 	if c.Backup != "" {
-		jobs, err := hosts[0].ListJobs()
+		jobs, err := cluster.Host.ListJobs()
 		if err != nil {
 			log.Error("error getting job list", "err", err)
 			return nil, err
@@ -348,9 +353,9 @@ loop:
 		return nil, err
 	}
 
-	hosts := make([]*cluster.Host, 0, count)
-	if c.JobIDs == nil {
-		c.JobIDs = make(map[string]string, count)
+	newHosts := make([]*cluster.Host, 0, count)
+	if c.Hosts == nil {
+		c.Hosts = make(map[string]*Host, count)
 	}
 	for {
 		select {
@@ -364,11 +369,20 @@ loop:
 				id, _ := cluster.ExtractUUID(jobID)
 				id = strings.Replace(id, "-", "", -1)
 				addr := event.Instance.Addr
+				ip, _, _ := net.SplitHostPort(addr)
 				c.log.Info("host is up", "addr", addr, "id", id)
-				hosts = append(hosts, cluster.NewHost(id, addr, hh.RetryClient, nil))
-				c.JobIDs[id] = jobID
-				if len(hosts) == count {
-					return hosts, nil
+				host := &Host{
+					Host:  cluster.NewHost(id, addr, hh.RetryClient, nil),
+					JobID: jobID,
+					IP:    ip,
+				}
+				newHosts = append(newHosts, host.Host)
+				c.Hosts[id] = host
+				if c.Host == nil {
+					c.Host = host
+				}
+				if len(newHosts) == count {
+					return newHosts, nil
 				}
 			case discoverd.EventKindDown:
 				c.log.Info("host is down", "addr", event.Instance.Addr, "id", event.Instance.Meta["FLYNN_JOB_ID"])
@@ -382,7 +396,57 @@ loop:
 }
 
 func (c *Cluster) Destroy() error {
-	_, err := c.config.Client.DeleteApp(c.App.ID)
+	log := c.log.New("fn", "Destroy", "app", c.App.Name)
+
+	// scale down and delete the zpools before deleting the app
+	watcher, err := c.config.Client.WatchJobEvents(c.App.Name, c.Release.ID)
+	if err != nil {
+		log.Error("error watching job events", "err", err)
+		return err
+	}
+	defer watcher.Close()
+
+	if err := c.config.Client.PutFormation(&ct.Formation{
+		AppID:     c.App.ID,
+		ReleaseID: c.Release.ID,
+		Processes: map[string]int{"host": 0},
+	}); err != nil {
+		log.Error("error scaling formation down", "err", err)
+		return err
+	}
+
+	if err := watcher.WaitFor(ct.JobEvents{"host": ct.JobDownEvents(c.size)}, 30*time.Second, nil); err != nil {
+		log.Error("error waiting for hosts to stop", "err", err)
+		return err
+	}
+
+	proc := c.Release.Processes["host"]
+	for _, host := range c.Hosts {
+		log.Info("running host cleanup", "job.id", host.JobID)
+		cmd := exec.Command(c.HostImage, "/usr/local/bin/cleanup-flynn-host.sh", host.JobID)
+		logR, logW := io.Pipe()
+		go func() {
+			buf := bufio.NewReader(logR)
+			for {
+				line, err := buf.ReadString('\n')
+				if err != nil {
+					return
+				}
+				log.Info(line[0 : len(line)-1])
+			}
+		}()
+		cmd.Stdout = logW
+		cmd.Stderr = logW
+		cmd.Mounts = proc.Mounts
+		cmd.LinuxCapabilities = proc.LinuxCapabilities
+		cmd.AllowedDevices = proc.AllowedDevices
+		if err := cmd.Run(); err != nil {
+			log.Error("error running host cleanup", "job.id", host.JobID, "err", err)
+			continue
+		}
+	}
+
+	_, err = c.config.Client.DeleteApp(c.App.ID)
 	return err
 }
 

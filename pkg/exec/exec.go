@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/schedutil"
 	"github.com/flynn/flynn/pkg/stream"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 type Cmd struct {
@@ -41,6 +42,7 @@ type Cmd struct {
 	TermHeight, TermWidth uint16
 
 	LinuxCapabilities []string
+	AllowedDevices    []*configs.Device
 
 	// cluster is used to communicate with the layer 0 cluster
 	cluster ClusterClient
@@ -219,6 +221,9 @@ func (c *Cmd) Start() error {
 
 	if len(c.LinuxCapabilities) > 0 {
 		c.Job.Config.LinuxCapabilities = &c.LinuxCapabilities
+	}
+	if len(c.AllowedDevices) > 0 {
+		c.Job.Config.AllowedDevices = &c.AllowedDevices
 	}
 
 	if c.host == nil {

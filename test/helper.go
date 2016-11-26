@@ -85,16 +85,12 @@ func (x *Cluster) setKey(newKey string) {
 }
 
 func (x *Cluster) collectDebugInfo() {
-	hosts, err := x.cluster.Hosts()
-	if err != nil {
-		return
-	}
 	cmd := flynnexec.CommandUsingHost(
-		hosts[0],
+		x.Host.Host,
 		x.HostImage,
 		"flynn-host",
 		"collect-debug-info",
-		"--log-dir", filepath.Join("/var/lib/flynn", x.JobIDs[hosts[0].ID()], "logs"),
+		"--log-dir", filepath.Join("/var/lib/flynn", x.Host.JobID, "logs"),
 	)
 	cmd.Env = map[string]string{"DISCOVERD": fmt.Sprintf("http://%s:1111", x.IP)}
 	cmd.Mounts = []host.Mount{{
