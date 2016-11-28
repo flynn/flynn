@@ -240,18 +240,18 @@ func (s *CLISuite) TestRun(t *c.C) {
 	// this shouldn't be logged
 	t.Assert(app.sh("echo foo"), Outputs, "foo\n")
 	// drain the events
-	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	app.waitFor(ct.JobEvents{"": {ct.JobStateDown: 1}})
 
 	// this should be logged due to the --enable-log flag
 	t.Assert(app.flynn("run", "--enable-log", "echo", "hello"), Outputs, "hello\n")
-	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	app.waitFor(ct.JobEvents{"": {ct.JobStateDown: 1}})
 
 	detached := app.flynn("run", "-d", "echo", "world")
 	t.Assert(detached, Succeeds)
 	t.Assert(detached, c.Not(Outputs), "world\n")
 
 	id := strings.TrimSpace(detached.Output)
-	jobID := app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
+	jobID := app.waitFor(ct.JobEvents{"": {ct.JobStateDown: 1}})
 	t.Assert(jobID, c.Equals, id)
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello\nworld\n")
 
