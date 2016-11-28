@@ -6,12 +6,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -215,6 +217,11 @@ func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req 
 	}
 }
 
+var runJobAttempts = attempt.Strategy{
+	Total: 30 * time.Second,
+	Delay: 100 * time.Millisecond,
+}
+
 func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	var newJob ct.NewJob
 	if err := httphelper.DecodeJSON(req, &newJob); err != nil {
@@ -345,7 +352,10 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		defer attachClient.Close()
 	}
 
-	if err := client.AddJob(job); err != nil {
+	err = runJobAttempts.RunWithValidator(func() error {
+		return client.AddJob(job)
+	}, httphelper.IsRetryableError)
+	if err != nil {
 		respondWithError(w, fmt.Errorf("schedule failed: %s", err.Error()))
 		return
 	}
