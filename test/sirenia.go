@@ -85,6 +85,7 @@ func testSireniaDeploy(client controller.Client, disc *discoverd.Client, t *c.C,
 	// create app
 	app := &ct.App{Name: d.name, Strategy: "sirenia"}
 	t.Assert(client.CreateApp(app), c.IsNil)
+	defer client.DeleteApp(app.ID)
 
 	// copy release from default app
 	release, err := client.GetAppRelease(d.db.appName)

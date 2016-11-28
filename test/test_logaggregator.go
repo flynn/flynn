@@ -18,18 +18,20 @@ type LogAggregatorSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&LogAggregatorSuite{})
+var _ = c.ConcurrentSuite(&LogAggregatorSuite{})
 
 func (s *LogAggregatorSuite) TestReplication(t *c.C) {
-	app := s.newCliTestApp(t)
-	app.flynn("scale", "ish=1")
-	defer app.flynn("scale", "ish=0")
-	defer app.cleanup()
+	x := s.bootCluster(t, 3)
+	defer x.Destroy()
+
+	ish, err := s.makeIshApp(t, &IshApp{cluster: x})
+	t.Assert(err, c.IsNil)
+	defer ish.Cleanup()
 
 	aggHost := "logaggregator.discoverd"
 	waitForAggregator := func(wantUp bool) func() {
 		ch := make(chan *discoverd.Event)
-		stream, err := app.disc.Service("logaggregator").Watch(ch)
+		stream, err := x.discoverd.Service("logaggregator").Watch(ch)
 		t.Assert(err, c.IsNil)
 		up := make(chan struct{})
 		go func() {
@@ -64,25 +66,23 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 	longLine0 := longLine[:10000]
 	longLine1 := longLine[10000:]
 
-	aggregators, err := app.disc.Instances("logaggregator", time.Second)
+	aggregators, err := x.discoverd.Instances("logaggregator", time.Second)
 	t.Assert(err, c.IsNil)
 	if len(aggregators) == 0 || len(aggregators) > 2 {
 		t.Errorf("unexpected number of aggregators: %d", len(aggregators))
 	} else if len(aggregators) == 2 {
 		wait := waitForAggregator(false)
-		flynn(t, "/", "-a", "logaggregator", "scale", "app=1")
+		x.flynn("/", "-a", "logaggregator", "scale", "app=1")
 		wait()
 	}
 
-	instances, err := app.disc.Instances(app.name, time.Second*100)
-	t.Assert(err, c.IsNil)
-	ish := instances[0]
-	cc := s.controllerClient(t)
-
 	readLines := func(expectedLines ...string) {
 		lineCount := 10
-		lc, _ := client.New("http://" + aggHost)
-		out, err := lc.GetLog(app.id, &logagg.LogOpts{Follow: true, Lines: &lineCount})
+		proxy, err := s.clusterProxy(x, aggHost+":80")
+		t.Assert(err, c.IsNil)
+		defer proxy.Stop()
+		lc, _ := client.New("http://" + proxy.addr)
+		out, err := lc.GetLog(ish.app.ID, &logagg.LogOpts{Follow: true, Lines: &lineCount})
 		t.Assert(err, c.IsNil)
 
 		done := make(chan struct{})
@@ -111,32 +111,32 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 		t.Assert(lines, c.DeepEquals, expectedLines)
 	}
 
-	runIshCommand(ish, "echo line1")
-	runIshCommand(ish, "echo line2")
-	runIshCommand(ish, "echo "+longLine)
+	ish.run("echo line1")
+	ish.run("echo line2")
+	ish.run("echo " + longLine)
 	readLines("line1", "line2", longLine0, longLine1)
 
 	// kill logaggregator
 	wait := waitForAggregator(true)
-	jobs, err := cc.JobList("logaggregator")
+	jobs, err := x.controller.JobList("logaggregator")
 	t.Assert(err, c.IsNil)
 	for _, j := range jobs {
 		if j.State == ct.JobStateUp {
-			t.Assert(cc.DeleteJob(app.name, j.ID), c.IsNil)
+			t.Assert(x.controller.DeleteJob("logaggregator", j.ID), c.IsNil)
 		}
 	}
 	wait()
 
 	// confirm that logs are replayed when it comes back
-	runIshCommand(ish, "echo line3")
+	ish.run("echo line3")
 	readLines("line1", "line2", longLine0, longLine1, "line3")
 
 	// start new logaggregator
 	wait = waitForAggregator(true)
-	flynn(t, "/", "-a", "logaggregator", "scale", "app=2")
+	x.flynn("/", "-a", "logaggregator", "scale", "app=2")
 	wait()
 
 	// confirm that logs show up in the new aggregator
-	runIshCommand(ish, "echo line4")
+	ish.run("echo line4")
 	readLines("line1", "line2", longLine0, longLine1, "line3", "line4")
 }

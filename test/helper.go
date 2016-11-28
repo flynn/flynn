@@ -25,6 +25,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	flynnexec "github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/typeconv"
 	tc "github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/cluster2"
@@ -176,6 +177,41 @@ func (h *Helper) bootClusterWithConfig(t *c.C, conf *cluster2.BootConfig) *Clust
 	t.Assert(err, c.IsNil)
 
 	return x
+}
+
+type clusterProxy struct {
+	addr string
+	cmd  *flynnexec.Cmd
+}
+
+func (c *clusterProxy) Stop() error {
+	return c.cmd.Kill()
+}
+
+// clusterProxy starts a TCP proxy inside the cluster listening on the host
+// network and proxying to the given internal address (without this there is
+// no way for the tests to access internal services like blobstore.discoverd)
+func (h *Helper) clusterProxy(x *Cluster, addr string) (*clusterProxy, error) {
+	cmd := flynnexec.CommandUsingHost(
+		x.Host.Host,
+		h.createArtifactWithClient(x.t, "test-apps", x.controller),
+		"/bin/proxy",
+	)
+	service := "cluster-proxy-" + random.String(8)
+	cmd.Env = map[string]string{
+		"ADDR":    addr,
+		"SERVICE": service,
+	}
+	cmd.HostNetwork = true
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	instances, err := x.discoverd.Instances(service, 30*time.Second)
+	if err != nil {
+		cmd.Kill()
+		return nil, err
+	}
+	return &clusterProxy{instances[0].Addr, cmd}, nil
 }
 
 func (h *Helper) clusterConf(t *c.C) *config.Cluster {

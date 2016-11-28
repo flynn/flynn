@@ -10,24 +10,32 @@ type VolumeSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&VolumeSuite{})
+var _ = c.ConcurrentSuite(&VolumeSuite{})
 
 func (s *VolumeSuite) TestVolumeTransmitAPI(t *c.C) {
-	hosts, err := s.clusterClient(t).Hosts()
-	t.Assert(err, c.IsNil)
-	s.doVolumeTransmitAPI(hosts[0], hosts[0], t)
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+	s.doVolumeTransmitAPI(t, x, x.Host.Host, x.Host.Host)
 }
 
 func (s *VolumeSuite) TestInterhostVolumeTransmitAPI(t *c.C) {
-	hosts, err := s.clusterClient(t).Hosts()
-	t.Assert(err, c.IsNil)
-	if len(hosts) < 2 {
-		t.Skip("need multiple hosts for this test")
+	x := s.bootCluster(t, 3)
+	defer x.Destroy()
+	var host1, host2 *cluster.Host
+	for _, h := range x.Hosts {
+		if host1 == nil {
+			host1 = h.Host
+		} else if host2 == nil {
+			host2 = h.Host
+		} else {
+			break
+		}
 	}
-	s.doVolumeTransmitAPI(hosts[0], hosts[1], t)
+
+	s.doVolumeTransmitAPI(t, x, host1, host2)
 }
 
-func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 *cluster.Host, t *c.C) {
+func (s *VolumeSuite) doVolumeTransmitAPI(t *c.C, x *Cluster, h0, h1 *cluster.Host) {
 	// create a volume!
 	vol, err := h0.CreateVolume("default")
 	t.Assert(err, c.IsNil)
@@ -35,16 +43,16 @@ func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 *cluster.Host, t *c.C) {
 		t.Assert(h0.DestroyVolume(vol.ID), c.IsNil)
 	}()
 	// create a job and use it to add data to the volume
-	cmd, service, err := s.makeIshApp(t, h0, host.ContainerConfig{
+	ish, err := s.makeIshApp(t, &IshApp{cluster: x, host: h0, extraConfig: host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
 			VolumeID:  vol.ID,
 			Writeable: true,
 		}},
-	})
+	}})
 	t.Assert(err, c.IsNil)
-	defer cmd.Kill()
-	resp, err := runIshCommand(service, "echo 'testcontent' > /vol/alpha ; echo $?")
+	defer ish.Cleanup()
+	resp, err := ish.run("echo 'testcontent' > /vol/alpha ; echo $?")
 	t.Assert(err, c.IsNil)
 	t.Assert(resp, c.Equals, "0\n")
 
@@ -68,17 +76,17 @@ func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 *cluster.Host, t *c.C) {
 	}()
 
 	// start a job on the other host that mounts and inspects the transmitted volume
-	cmd, service, err = s.makeIshApp(t, h1, host.ContainerConfig{
+	ish, err = s.makeIshApp(t, &IshApp{cluster: x, host: h1, extraConfig: host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
 			VolumeID:  vol2.ID,
 			Writeable: false,
 		}},
-	})
+	}})
 	t.Assert(err, c.IsNil)
-	defer cmd.Kill()
+	defer ish.Cleanup()
 	// read data back from the volume
-	resp, err = runIshCommand(service, "cat /vol/alpha")
+	resp, err = ish.run("cat /vol/alpha")
 	t.Assert(err, c.IsNil)
 	t.Assert(resp, c.Equals, "testcontent\n")
 }

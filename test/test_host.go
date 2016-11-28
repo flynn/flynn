@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
@@ -152,54 +153,115 @@ func (s *HostSuite) TestExecCrashingJob(t *c.C) {
 	}
 }
 
+type IshApp struct {
+	t           *c.C
+	cmd         *exec.Cmd
+	addr        string
+	client      controller.Client
+	discoverd   *discoverd.Client
+	cluster     *Cluster
+	proxy       *clusterProxy
+	host        *cluster.Host
+	app         *ct.App
+	extraConfig host.ContainerConfig
+}
+
+func (a *IshApp) Cleanup() {
+	if a.cmd != nil {
+		a.cmd.Kill()
+	}
+	if a.proxy != nil {
+		a.proxy.Stop()
+	}
+	if a.app != nil {
+		a.client.DeleteApp(a.app.ID)
+	}
+}
+
 /*
 	Make an 'ish' application on the given host, returning it when
 	it has registered readiness with discoverd.
 
-	User will want to defer cmd.Kill() to clean up.
+	User will want to defer a.Cleanup() to clean up.
 */
-func (s *Helper) makeIshApp(t *c.C, h *cluster.Host, extraConfig host.ContainerConfig) (*exec.Cmd, *discoverd.Instance, error) {
+func (s *Helper) makeIshApp(t *c.C, a *IshApp) (*IshApp, error) {
 	// pick a unique string to use as service name so this works with concurrent tests.
 	serviceName := "ish-service-" + random.String(6)
 
+	if a == nil {
+		a = &IshApp{}
+	}
+	if a.cluster != nil {
+		a.discoverd = a.cluster.discoverd
+		a.client = a.cluster.controller
+		if a.host == nil {
+			a.host = a.cluster.Host.Host
+		}
+	} else {
+		a.discoverd = s.discoverdClient(t)
+		a.client = s.controllerClient(t)
+		if a.host == nil {
+			a.host = s.anyHostClient(t)
+		}
+	}
+
+	app := &ct.App{Name: serviceName}
+	if err := a.client.CreateApp(app); err != nil {
+		a.Cleanup()
+		return nil, err
+	}
+	a.app = app
+
 	// run a job that accepts tcp connections and performs tasks we ask of it in its container
-	cmd := exec.JobUsingCluster(s.clusterClient(t), s.createArtifact(t, "test-apps"), &host.Job{
+	a.cmd = exec.JobUsingHost(a.host, s.createArtifactWithClient(t, "test-apps", a.client), &host.Job{
+		Metadata: map[string]string{"flynn-controller.app": app.ID},
 		Config: host.ContainerConfig{
 			Args:  []string{"/bin/ish"},
 			Ports: []host.Port{{Proto: "tcp"}},
 			Env: map[string]string{
 				"NAME": serviceName,
 			},
-		}.Merge(extraConfig),
+		}.Merge(a.extraConfig),
 	})
-	cmd.HostID = h.ID()
-	if err := cmd.Start(); err != nil {
-		return nil, nil, err
+	if err := a.cmd.Start(); err != nil {
+		a.Cleanup()
+		return nil, err
 	}
 
-	// wait for the job to heartbeat and return its address
-	services, err := s.discoverdClient(t).Instances(serviceName, time.Second*100)
+	// wait for the job to start
+	services, err := a.discoverd.Instances(serviceName, time.Second*100)
 	if err != nil {
-		cmd.Kill()
-		return nil, nil, err
-	}
-	if len(services) != 1 {
-		cmd.Kill()
-		return nil, nil, fmt.Errorf("test setup: expected exactly one service instance, got %d", len(services))
+		a.Cleanup()
+		return nil, err
+	} else if len(services) != 1 {
+		a.Cleanup()
+		return nil, fmt.Errorf("test setup: expected exactly one service instance, got %d", len(services))
 	}
 
-	return cmd, services[0], nil
+	a.addr = services[0].Addr
+	if a.cluster != nil {
+		proxy, err := s.clusterProxy(a.cluster, a.addr)
+		if err != nil {
+			a.Cleanup()
+			return nil, err
+		}
+		a.proxy = proxy
+		a.addr = proxy.addr
+	}
+
+	return a, nil
 }
 
-func runIshCommand(service *discoverd.Instance, cmd string) (string, error) {
+func (a *IshApp) run(cmd string) (string, error) {
 	resp, err := http.Post(
-		fmt.Sprintf("http://%s/ish", service.Addr),
+		fmt.Sprintf("http://%s/ish", a.addr),
 		"text/plain",
 		strings.NewReader(cmd),
 	)
 	if err != nil {
 		return "", err
 	}
+	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -212,12 +274,12 @@ func (s *HostSuite) TestNetworkedPersistentJob(t *c.C) {
 	// but the idea is to use this basic design to enable testing a series manipulations on a single container.
 
 	// run a job that accepts tcp connections and performs tasks we ask of it in its container
-	cmd, service, err := s.makeIshApp(t, s.anyHostClient(t), host.ContainerConfig{})
+	ish, err := s.makeIshApp(t, nil)
 	t.Assert(err, c.IsNil)
-	defer cmd.Kill()
+	defer ish.Cleanup()
 
 	// test that we can interact with that job
-	resp, err := runIshCommand(service, "echo echocococo")
+	resp, err := ish.run("echo echocococo")
 	t.Assert(err, c.IsNil)
 	t.Assert(resp, c.Equals, "echocococo\n")
 }
@@ -252,32 +314,32 @@ func (s *HostSuite) TestVolumePersistence(t *c.C) {
 	}()
 
 	// create first job
-	cmd, service, err := s.makeIshApp(t, h, host.ContainerConfig{
+	ish, err := s.makeIshApp(t, &IshApp{host: h, extraConfig: host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
 			VolumeID:  vol.ID,
 			Writeable: true,
 		}},
-	})
+	}})
 	t.Assert(err, c.IsNil)
-	defer cmd.Kill()
+	defer ish.Cleanup()
 	// add data to the volume
-	resp, err := runIshCommand(service, "echo 'testcontent' > /vol/alpha ; echo $?")
+	resp, err := ish.run("echo 'testcontent' > /vol/alpha ; echo $?")
 	t.Assert(err, c.IsNil)
 	t.Assert(resp, c.Equals, "0\n")
 
 	// start another one that mounts the same volume
-	cmd, service, err = s.makeIshApp(t, h, host.ContainerConfig{
+	ish, err = s.makeIshApp(t, &IshApp{host: h, extraConfig: host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
 			VolumeID:  vol.ID,
 			Writeable: false,
 		}},
-	})
+	}})
 	t.Assert(err, c.IsNil)
-	defer cmd.Kill()
+	defer ish.Cleanup()
 	// read data back from the volume
-	resp, err = runIshCommand(service, "cat /vol/alpha")
+	resp, err = ish.run("cat /vol/alpha")
 	t.Assert(err, c.IsNil)
 	t.Assert(resp, c.Equals, "testcontent\n")
 }
