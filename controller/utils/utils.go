@@ -10,6 +10,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -149,8 +150,23 @@ func SetupMountspecs(job *host.Job, artifacts []*ct.Artifact) {
 	}
 }
 
+// provisionVolumeAttempts is the retry strategy when creating volumes, and
+// is relatively short to avoid slowing down clients trying to provision a
+// volume on a host which is perhaps down (so clients can potentially pick a
+// different host rather than waiting for this host)
+var provisionVolumeAttempts = attempt.Strategy{
+	Total: 5 * time.Second,
+	Delay: 100 * time.Millisecond,
+}
+
 func ProvisionVolume(req *ct.VolumeReq, h VolumeCreator, job *host.Job) (*volume.Info, error) {
-	vol, err := h.CreateVolume("default")
+	var vol *volume.Info
+	// this potentially leaks volumes on the host, but we'll leave it up
+	// to the volume garbage collector to clean up
+	err := provisionVolumeAttempts.Run(func() (err error) {
+		vol, err = h.CreateVolume("default")
+		return
+	})
 	if err != nil {
 		return nil, err
 	}
