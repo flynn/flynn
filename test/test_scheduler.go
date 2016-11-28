@@ -736,8 +736,11 @@ loop:
 }
 
 func (s *SchedulerSuite) TestGracefulShutdown(t *c.C) {
-	app, release := s.createApp(t)
-	client := s.controllerClient(t)
+	x := s.bootCluster(t, 3)
+	defer x.Destroy()
+
+	client := x.controller
+	app, release := s.createAppWithClient(t, client)
 
 	debug(t, "scaling to blocker=1")
 	watcher, err := client.WatchJobEvents(app.ID, release.ID)
@@ -754,18 +757,24 @@ func (s *SchedulerSuite) TestGracefulShutdown(t *c.C) {
 		return nil
 	})
 	t.Assert(err, c.IsNil)
-	jobs, err := s.discoverdClient(t).Instances("test-http-blocker", 10*time.Second)
+	jobs, err := x.discoverd.Instances("test-http-blocker", 10*time.Second)
 	t.Assert(err, c.IsNil)
 	t.Assert(jobs, c.HasLen, 1)
-	jobAddr := jobs[0].Addr
+	proxy, err := s.clusterProxy(x, jobs[0].Addr)
+	t.Assert(err, c.IsNil)
+	defer proxy.Stop()
+	jobAddr := proxy.addr
 
 	debug(t, "subscribing to backend events from all routers")
-	routers, err := s.discoverdClient(t).Instances("router-api", 10*time.Second)
+	routers, err := x.discoverd.Instances("router-api", 10*time.Second)
 	t.Assert(err, c.IsNil)
 	routerEvents := make(chan *router.StreamEvent)
 	for _, r := range routers {
 		events := make(chan *router.StreamEvent)
-		stream, err := routerc.NewWithAddr(r.Addr).StreamEvents(&router.StreamEventsOptions{
+		proxy, err := s.clusterProxy(x, r.Addr)
+		t.Assert(err, c.IsNil)
+		defer proxy.Stop()
+		stream, err := routerc.NewWithAddr(proxy.addr).StreamEvents(&router.StreamEventsOptions{
 			EventTypes: []router.EventType{
 				router.EventTypeBackendUp,
 				router.EventTypeBackendDown,
