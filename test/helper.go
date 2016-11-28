@@ -282,6 +282,7 @@ var Hostnames hostnames
 
 type hostnames struct {
 	sync.Mutex
+	lastModified time.Time
 }
 
 func (h *hostnames) Add(t *c.C, ip string, names ...string) {
@@ -292,6 +293,12 @@ func (h *hostnames) Add(t *c.C, ip string, names ...string) {
 	defer f.Close()
 	_, err = fmt.Fprintf(f, "%s %s\n", ip, strings.Join(names, " "))
 	t.Assert(err, c.IsNil)
+
+	// wait for the Go resolver's /etc/hosts cache to expire
+	if time.Since(h.lastModified) < 5*time.Second {
+		time.Sleep(5 * time.Second)
+	}
+	h.lastModified = time.Now()
 }
 
 func (h *hostnames) Remove(t *c.C, ip string) {
