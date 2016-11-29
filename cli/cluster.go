@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -29,6 +30,9 @@ usage: flynn cluster
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
        flynn cluster backup [--file <file>]
+       flynn cluster log-sink
+       flynn cluster log-sink add syslog [--use-ids] <url> [<prefix>]
+       flynn cluster log-sink remove <id>
 
 Manage Flynn clusters.
 
@@ -70,6 +74,22 @@ Commands:
         options:
             --file=<backup-file>  file to write backup to (defaults to stdout)
 
+    log-sink
+        With no arguments, prints a list of registerd log-sinks for this cluster
+
+    log-sink add syslog
+        Creates a new syslog log sink with specified <url> and optionally <prefix> template.
+        Supported schemes are syslog and syslog+tls
+
+        options:
+            --use-ids  Use app IDs instead of app names in the syslog APP-NAME field
+
+        examples:
+			$ flynn cluster log-sink add syslog syslog+tls://rsyslog.host:514/
+
+    log-sink remove
+        Removes a log sink with <id>
+
 Examples:
 
 	$ flynn cluster add -p KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs= default dev.localflynn.com e09dc5301d72be755a3d666f617c4600
@@ -87,7 +107,9 @@ func runCluster(args *docopt.Args) error {
 		return err
 	}
 
-	if args.Bool["add"] {
+	if args.Bool["log-sink"] {
+		return runLogSink(args)
+	} else if args.Bool["add"] {
 		return runClusterAdd(args)
 	} else if args.Bool["remove"] {
 		return runClusterRemove(args)
@@ -410,6 +432,84 @@ func runClusterBackup(args *docopt.Args) error {
 		bar.Finish()
 	}
 	fmt.Fprintln(os.Stderr, "Backup complete.")
+
+	return nil
+}
+
+func runLogSink(args *docopt.Args) error {
+	client, err := getClusterClient()
+	if err != nil {
+		return err
+	}
+
+	if args.Bool["add"] {
+		switch {
+		case args.Bool["syslog"]:
+			return runLogSinkAddSyslog(args, client)
+		default:
+			return fmt.Errorf("Sink kind not supported")
+		}
+	}
+	if args.Bool["remove"] {
+		return runLogSinkRemove(args, client)
+	}
+
+	sinks, err := client.ListSinks()
+	if err != nil {
+		return err
+	}
+
+	w := tabWriter()
+	defer w.Flush()
+
+	listRec(w, "ID", "KIND", "CONFIG")
+	for _, j := range sinks {
+		listRec(w, j.ID, j.Kind, string(j.Config))
+	}
+
+	return nil
+}
+
+func runLogSinkAddSyslog(args *docopt.Args, client controller.Client) error {
+	u, err := url.Parse(args.String["<url>"])
+	if err != nil {
+		return fmt.Errorf("Invalid syslog URL: %s", err)
+	}
+	switch u.Scheme {
+	case "syslog", "syslog+tls":
+	default:
+		return fmt.Errorf("Invalid syslog protocol: %s", u.Scheme)
+	}
+
+	config, _ := json.Marshal(ct.SyslogSinkConfig{
+		Prefix: args.String["<prefix>"],
+		URL:    u.String(),
+		UseIDs: args.Bool["--use-ids"],
+	})
+
+	sink := &ct.Sink{
+		Kind:   ct.SinkKindSyslog,
+		Config: config,
+	}
+
+	if err := client.CreateSink(sink); err != nil {
+		return err
+	}
+
+	log.Printf("Created sink %s.", sink.ID)
+
+	return nil
+}
+
+func runLogSinkRemove(args *docopt.Args, client controller.Client) error {
+	id := args.String["<id>"]
+
+	res, err := client.DeleteSink(id)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Deleted sink %s.", res.ID)
 
 	return nil
 }
