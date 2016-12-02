@@ -47,6 +47,7 @@ Options:
   --tarball          Create a tarball instead of uploading to a gist
   --include-env      Include sensitive environment variables
   --log-dir=DIR      Path to the log directory [default: /var/log/flynn]
+  --filename=PATH    Path to write tarball, only valid if --tarball is specified
 
 Collect debug information into an anonymous gist or tarball`)
 }
@@ -108,7 +109,15 @@ func runCollectDebugInfo(args *docopt.Args) error {
 	}
 
 	if args.Bool["--tarball"] || gist.Size > GistMaxSize {
-		path, err := gist.CreateTarball()
+		path := args.String["--filename"]
+		if path == "" {
+			tmpDir, err := ioutil.TempDir("", "flynn-host-debug")
+			if err != nil {
+				return err
+			}
+			path = filepath.Join(tmpDir, "flynn-host-debug.tar.gz")
+		}
+		err := gist.CreateTarball(path)
 		if err != nil {
 			log.Error("error creating tarball", "err", err)
 			return err
