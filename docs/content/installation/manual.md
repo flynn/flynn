@@ -94,13 +94,13 @@ $ sudo flynn-host init --discovery https://discovery.flynn.io/clusters/53e8402e-
 Then, start the daemon by running:
 
 ```
-$ sudo start flynn-host
+$ sudo service start flynn-host
 ```
 
 You can check the status of the daemon by running:
 
 ```
-$ sudo status flynn-host
+$ sudo service status flynn-host
 flynn-host start/running, process 4090
 ```
 
