@@ -2,8 +2,8 @@
 
 set -eo pipefail
 
-version=1.7.3
-shasum=508028aac0654e993564b6e2014bf2d4a9751e3b286661b0b0040046cf18028e
+version=1.7.4
+shasum=47fda42e46b4c3ec93fa5d4d4cc6a748aa3f9411a2a2b7e08e3a6d80d753ec8b
 pkg="go${version}.linux-amd64"
 go=go/bin/go
 
