@@ -414,7 +414,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			return err
 		}
 	}
-	rootMount, err := l.rootOverlayMount(job)
+	rootMount, diffDir, err := l.rootOverlayMount(job)
 	if err != nil {
 		log.Error("error setting up rootfs", "err", err)
 		return err
@@ -545,6 +545,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		bindMount(l.InitPath, "/.containerinit", false),
 		bindMount(l.resolvConf, "/etc/resolv.conf", false),
 		bindMount(sharedDir, "/.container-shared", true),
+		bindMount(diffDir, host.DiffPath, false),
 	)
 	for _, m := range job.Config.Mounts {
 		if m.Target == "" {
@@ -696,24 +697,24 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	return nil
 }
 
-func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, error) {
+func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, string, error) {
 	log := l.Logger.New("fn", "rootOverlayMount", "job.id", job.ID)
 	layers := make([]string, 0, len(job.Mountspecs)+1)
 	for _, spec := range job.Mountspecs {
 		if spec.Type != host.MountspecTypeSquashfs {
-			return nil, fmt.Errorf("unknown mountspec type: %q", spec.Type)
+			return nil, "", fmt.Errorf("unknown mountspec type: %q", spec.Type)
 		}
 		log.Info("mounting squashfs layer", "id", spec.ID)
 		path, err := l.mountSquashfs(spec)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		layers = append(layers, path)
 	}
 	log.Info("mounting ext2 layer")
 	tmpfs, err := l.mountTmpfs(job)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	layers = append(layers, tmpfs)
 	dirs := make([]string, len(layers))
@@ -726,7 +727,7 @@ func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, e
 	workDir := filepath.Join(tmpfs, "overlay-workdir")
 	for _, dir := range []string{upperDir, workDir} {
 		if err := os.Mkdir(dir, 0755); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 	return &configs.Mount{
@@ -734,7 +735,7 @@ func (l *LibcontainerBackend) rootOverlayMount(job *host.Job) (*configs.Mount, e
 		Destination: "/",
 		Device:      "overlay",
 		Data:        fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(dirs[1:], ":"), upperDir, workDir),
-	}, nil
+	}, upperDir, nil
 }
 
 func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {

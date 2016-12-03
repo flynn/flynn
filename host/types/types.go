@@ -11,6 +11,8 @@ import (
 // TagPrefix is the prefix added to tags in discoverd instance metadata
 const TagPrefix = "tag:"
 
+const DiffPath = "/.container-diff"
+
 type Job struct {
 	ID string `json:"id,omitempty"`
 
