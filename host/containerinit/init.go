@@ -48,9 +48,11 @@ var logger log15.Logger
 type Config struct {
 	Uid       *uint32
 	Gid       *uint32
+	Bridge    string
 	Gateway   string
 	Hostname  string
 	WorkDir   string
+	MAC       string
 	IP        string
 	TTY       bool
 	OpenStdin bool

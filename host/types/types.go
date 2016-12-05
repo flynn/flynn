@@ -106,6 +106,7 @@ type ContainerConfig struct {
 	Uid                *uint32            `json:"uid,omitempty"`
 	Gid                *uint32            `json:"gid,omitempty"`
 	HostNetwork        bool               `json:"host_network,omitempty"`
+	AssignIP           bool               `json:"assign_ip,omitempty"`
 	HostPIDNamespace   bool               `json:"host_pid_namespace,omitempty"`
 	DisableLog         bool               `json:"disable_log,omitempty"`
 	LinuxCapabilities  *[]string          `json:"linux_capabilities,omitempty"`
