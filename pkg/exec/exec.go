@@ -9,6 +9,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/schedutil"
@@ -28,8 +29,9 @@ type Cmd struct {
 
 	Env map[string]string
 
-	Volumes []*ct.VolumeReq
-	Mounts  []host.Mount
+	Volumes   []*ct.VolumeReq
+	Mounts    []host.Mount
+	Resources resource.Resources
 
 	HostNetwork      bool
 	HostPIDNamespace bool
@@ -204,7 +206,8 @@ func (c *Cmd) Start() error {
 				HostPIDNamespace: c.HostPIDNamespace,
 				Mounts:           c.Mounts,
 			},
-			Metadata: c.Meta,
+			Resources: c.Resources,
+			Metadata:  c.Meta,
 		}
 		// if attaching to stdout / stderr, avoid round tripping the
 		// streams via on-disk log files.
@@ -228,6 +231,8 @@ func (c *Cmd) Start() error {
 			return err
 		}
 	}
+
+	resource.SetDefaults(&c.Job.Resources)
 
 	utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
 
