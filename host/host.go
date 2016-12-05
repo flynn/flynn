@@ -28,9 +28,9 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
+	"github.com/inconshreveable/log15"
 	"github.com/opencontainers/runc/libcontainer"
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
-	"github.com/inconshreveable/log15"
 )
 
 const configFile = "/etc/flynn/host.json"
@@ -63,6 +63,7 @@ options:
   --partitions=PARTITIONS    specify resource partitions for host [default: system=cpu_shares:4096 background=cpu_shares:4096 user=cpu_shares:8192]
   --init-log-level=LEVEL     containerinit log level [default: info]
   --zpool-name=NAME          zpool name
+  --enable-dhcp              enable DHCP server (useful to provide container IPs to VMs running in Flynn jobs)
 	`)
 }
 
@@ -186,6 +187,7 @@ func runDaemon(args *docopt.Args) {
 	discoveryToken := args.String["--discovery"]
 	discoveryService := args.String["--discovery-service"]
 	bridgeName := args.String["--bridge-name"]
+	enableDHCP := args.Bool["--enable-dhcp"]
 
 	logger, err := setupLogger(logDir, logFile)
 	if err != nil {
@@ -315,6 +317,7 @@ func runDaemon(args *docopt.Args) {
 			LogMux:           mux,
 			PartitionCGroups: partitionCGroups,
 			Logger:           logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"),
+			EnableDHCP:       enableDHCP,
 		})
 	case "mock":
 		backend = MockBackend{}
