@@ -25,7 +25,7 @@ type Cmd struct {
 
 	Args []string
 
-	ImageArtifact *ct.Artifact
+	Artifacts []*ct.Artifact
 
 	Env map[string]string
 
@@ -92,11 +92,15 @@ type Cmd struct {
 }
 
 func Command(artifact *ct.Artifact, args ...string) *Cmd {
-	return &Cmd{ImageArtifact: artifact, Args: args}
+	return CommandUsingArtifacts([]*ct.Artifact{artifact}, args...)
+}
+
+func CommandUsingArtifacts(artifacts []*ct.Artifact, args ...string) *Cmd {
+	return &Cmd{Artifacts: artifacts, Args: args}
 }
 
 func Job(artifact *ct.Artifact, job *host.Job) *Cmd {
-	return &Cmd{ImageArtifact: artifact, Job: job}
+	return &Cmd{Artifacts: []*ct.Artifact{artifact}, Job: job}
 }
 
 type ClusterClient interface {
@@ -240,7 +244,7 @@ func (c *Cmd) Start() error {
 		}
 	}
 
-	utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
+	utils.SetupMountspecs(c.Job, c.Artifacts)
 
 	if c.Stdout != nil || c.Stderr != nil || c.Stdin != nil || c.stdinPipe != nil {
 		req := &host.AttachReq{

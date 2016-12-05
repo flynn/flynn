@@ -40,7 +40,7 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 		return err
 	}
 	cmd := exec.Cmd{
-		ImageArtifact: artifact,
+		Artifacts: []*ct.Artifact{artifact},
 		Job: &host.Job{
 			Config: host.ContainerConfig{
 				Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
