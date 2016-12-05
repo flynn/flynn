@@ -51,6 +51,7 @@ type Config struct {
 	Gateway   string
 	Hostname  string
 	WorkDir   string
+	MAC       string
 	IP        string
 	TTY       bool
 	OpenStdin bool
