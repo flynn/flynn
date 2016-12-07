@@ -19,9 +19,8 @@ import (
 type Cmd struct {
 	Job *host.Job
 
-	HostID string
-	TTY    bool
-	Meta   map[string]string
+	TTY  bool
+	Meta map[string]string
 
 	Args []string
 
@@ -48,8 +47,8 @@ type Cmd struct {
 	// cluster is used to communicate with the layer 0 cluster
 	cluster ClusterClient
 
-	// host is used to communicate with the host that the job will run on
-	host *cluster.Host
+	// Host is used to communicate with the host that the job will run on
+	Host *cluster.Host
 
 	// started is true if Start has been called
 	started bool
@@ -113,8 +112,7 @@ func CommandUsingCluster(c ClusterClient, artifact *ct.Artifact, args ...string)
 
 func CommandUsingHost(h *cluster.Host, artifact *ct.Artifact, args ...string) *Cmd {
 	command := Command(artifact, args...)
-	command.HostID = h.ID()
-	command.host = h
+	command.Host = h
 	return command
 }
 
@@ -126,8 +124,7 @@ func JobUsingCluster(c ClusterClient, artifact *ct.Artifact, job *host.Job) *Cmd
 
 func JobUsingHost(h *cluster.Host, artifact *ct.Artifact, job *host.Job) *Cmd {
 	command := Job(artifact, job)
-	command.HostID = h.ID()
-	command.host = h
+	command.Host = h
 	return command
 }
 
@@ -174,7 +171,7 @@ func (c *Cmd) Start() error {
 	}
 	c.done = make(chan struct{})
 	c.started = true
-	if c.host == nil && c.cluster == nil {
+	if c.Host == nil && c.cluster == nil {
 		var err error
 		c.cluster = cluster.NewClient()
 		if err != nil {
@@ -183,7 +180,7 @@ func (c *Cmd) Start() error {
 		c.closeCluster = true
 	}
 
-	if c.HostID == "" {
+	if c.Host == nil {
 		hosts, err := c.cluster.Hosts()
 		if err != nil {
 			return err
@@ -191,9 +188,7 @@ func (c *Cmd) Start() error {
 		if len(hosts) == 0 {
 			return errors.New("exec: no hosts found")
 		}
-		host := schedutil.PickHost(hosts)
-		c.HostID = host.ID()
-		c.host = host
+		c.Host = schedutil.PickHost(hosts)
 	}
 
 	// Use the pre-defined host.Job configuration if provided;
@@ -218,7 +213,7 @@ func (c *Cmd) Start() error {
 		}
 	}
 	if c.Job.ID == "" {
-		c.Job.ID = cluster.GenerateJobID(c.HostID, "")
+		c.Job.ID = cluster.GenerateJobID(c.Host.ID(), "")
 	}
 
 	if len(c.LinuxCapabilities) > 0 {
@@ -228,16 +223,8 @@ func (c *Cmd) Start() error {
 		c.Job.Config.AllowedDevices = &c.AllowedDevices
 	}
 
-	if c.host == nil {
-		var err error
-		c.host, err = c.cluster.Host(c.HostID)
-		if err != nil {
-			return err
-		}
-	}
-
 	for _, vol := range c.Volumes {
-		if _, err := utils.ProvisionVolume(vol, c.host, c.Job); err != nil {
+		if _, err := utils.ProvisionVolume(vol, c.Host, c.Job); err != nil {
 			return err
 		}
 	}
@@ -261,7 +248,7 @@ func (c *Cmd) Start() error {
 			req.Flags |= host.AttachFlagStdin
 		}
 		var err error
-		c.attachClient, err = c.host.Attach(req, true)
+		c.attachClient, err = c.Host.Attach(req, true)
 		if err != nil {
 			c.close()
 			return err
@@ -280,7 +267,7 @@ func (c *Cmd) Start() error {
 	if c.attachClient == nil {
 		c.eventChan = make(chan *host.Event)
 		var err error
-		c.eventStream, err = c.host.StreamEvents(c.Job.ID, c.eventChan)
+		c.eventStream, err = c.Host.StreamEvents(c.Job.ID, c.eventChan)
 		if err != nil {
 			return err
 		}
@@ -309,7 +296,7 @@ func (c *Cmd) Start() error {
 		}
 	}()
 
-	return c.host.AddJob(c.Job)
+	return c.Host.AddJob(c.Job)
 }
 
 func (c *Cmd) close() {
@@ -349,7 +336,7 @@ func (c *Cmd) Kill() error {
 	if !c.started {
 		return errors.New("exec: not started")
 	}
-	return c.host.StopJob(c.Job.ID)
+	return c.Host.StopJob(c.Job.ID)
 }
 
 func (c *Cmd) Run() error {
