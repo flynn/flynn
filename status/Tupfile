@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> bin/flynn-status
-: bin/* |> !image-bootstrapped |>

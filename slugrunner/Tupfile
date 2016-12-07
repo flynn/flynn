@@ -1,2 +1,0 @@
-include_rules
-: $(ROOT)/util/cedarish/<image> |> !image-cedarish |>

@@ -1,13 +1,8 @@
-.tup
 bin
-*.deb
 .vagrant
-/images.json
-/log
 script/custom-vagrant
 demo/*.log
-util/_toolchain/go
 *.swp
 *.test
 /tmp
-/image
+/build

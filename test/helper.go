@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -181,8 +182,8 @@ func debugLogWriter(t *c.C) io.Writer {
 }
 
 func (h *Helper) bootClusterWithConfig(t *c.C, conf *cluster2.BootConfig) *Cluster {
-	conf.ImagesPath = "../images.json"
-	conf.ManifestPath = "../bootstrap/bin/manifest.json"
+	conf.ImagesPath = "../build/images.json"
+	conf.ManifestPath = "../build/manifests/bootstrap-manifest.json"
 	conf.Client = h.controllerClient(t)
 
 	conf.Logger = log15.New()
@@ -464,15 +465,12 @@ func (h *Helper) createArtifact(t *c.C, name string) *ct.Artifact {
 }
 
 func (h *Helper) createArtifactWithClient(t *c.C, name string, client controller.Client) *ct.Artifact {
-	path := fmt.Sprintf("../image/%s.json", name)
-	manifest, err := ioutil.ReadFile(path)
+	f, err := os.Open(fmt.Sprintf("../build/image/%s.json", name))
 	t.Assert(err, c.IsNil)
-	artifact := &ct.Artifact{
-		Type:             ct.ArtifactTypeFlynn,
-		URI:              fmt.Sprintf("https://example.com?target=/images/%s.json", name),
-		RawManifest:      manifest,
-		LayerURLTemplate: "file:///var/lib/flynn/layer-cache/{id}.squashfs",
-	}
+	defer f.Close()
+	artifact := &ct.Artifact{}
+	t.Assert(json.NewDecoder(f).Decode(artifact), c.IsNil)
+	artifact.URI = "http://127.0.0.1/" + random.UUID()
 	t.Assert(client.CreateArtifact(artifact), c.IsNil)
 	return artifact
 }

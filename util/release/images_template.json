@@ -17,5 +17,6 @@
   "redis":          $image_artifact[redis],
   "mariadb":        $image_artifact[mariadb],
   "docker-receive": $image_artifact[docker-receive],
-  "mongodb":        $image_artifact[mongodb]
+  "mongodb":        $image_artifact[mongodb],
+  "builder":        $image_artifact[builder]
 }

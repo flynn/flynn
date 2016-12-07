@@ -68,8 +68,8 @@ main() {
     exit 1
   fi
 
-  local flynn="${ROOT}/cli/bin/flynn"
-  local flynn_host="${ROOT}/host/bin/flynn-host"
+  local flynn="${ROOT}/build/bin/flynn"
+  local flynn_host="${ROOT}/build/bin/flynn-host"
 
   pushd "${ROOT}" >/dev/null
   make
@@ -92,10 +92,19 @@ main() {
 
   local args=(
     "--concurrency 1"
-    "--backups-dir" "${ROOT}/backups"
     "--debug"
   )
 
+  local mounts=(
+    "${ROOT}:/go/src/github.com/flynn/flynn"
+    "/var/run/docker.sock:/var/run/docker.sock"
+    "/var/lib/flynn:/var/lib/flynn"
+  )
+
+  if [[ -d "${ROOT}/backups" ]]; then
+    args+=("--backups-dir" "${ROOT}/backups")
+    mounts+=("${ROOT}/backups:${ROOT}/backups")
+  fi
   if [[ -n "${filter}" ]]; then
     args+=("--run ${filter}")
   fi
@@ -107,19 +116,12 @@ main() {
   fi
   args+=("--router-ip=192.0.2.200")
 
-  local mounts=(
-    "${ROOT}:${ROOT}"
-    "/var/run/docker.sock:/var/run/docker.sock"
-    "/var/lib/flynn:/var/lib/flynn"
-  )
-
-  local image="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[test]')"
   "${flynn_host}" run \
     --bind "$(join "," ${mounts[@]})" \
     --volume "/tmp" \
-    <(echo "${image}") \
+    "${ROOT}/build/image/test.json" \
     /usr/bin/env \
-    ROOT="${ROOT}" \
+    ROOT="/go/src/github.com/flynn/flynn" \
     CLUSTER_ADD_ARGS="${cluster_add:18}" \
     /bin/run-flynn-test.sh \
     ${args[@]}

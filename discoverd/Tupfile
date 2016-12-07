@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> bin/discoverd
-: bin/* |> !image-bootstrapped |>

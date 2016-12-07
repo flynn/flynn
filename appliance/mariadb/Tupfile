@@ -1,4 +1,0 @@
-include_rules
-: |> !go ./cmd/flynn-mariadb |> bin/flynn-mariadb
-: |> !go ./cmd/flynn-mariadb-api |> bin/flynn-mariadb-api
-: bin/* |> !image-bootstrapped |>

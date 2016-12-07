@@ -25,7 +25,6 @@ var binaries = []string{
 }
 
 var config = []string{
-	"upstart.conf",
 	"bootstrap-manifest.json",
 }
 

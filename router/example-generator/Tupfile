@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> flynn-router-examples
-: flynn-router-examples |> docker build -t flynn/router-examples . |>

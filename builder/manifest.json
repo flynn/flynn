@@ -1,0 +1,670 @@
+{
+  "tuf": {
+    "repository": "https://s3.amazonaws.com/flynn-temp/builder/tuf",
+    "root_keys": [
+      {"keytype":"ed25519","keyval":{"public":"6a120f60077bbad0e3e16103fb25253ac49ff5e3d238a452ba7d303d0f385767"}}
+    ]
+  },
+  "base_layer": {
+    "type":   "squashfs",
+    "id":     "4b6eb1c283dac64590f32a38e61cc448fb3ca499946d41dba51edab97b46a10e",
+    "url":    "https://s3.amazonaws.com/flynn-temp/builder/tuf/targets/layers/8804e92cba40018baec15a29dae84d210c0fe57da12654aa53928fb4c4a2ff6a65158906d4f3d044a282ec61d59fd340694f48130023bce22243279a6af3d900.4b6eb1c283dac64590f32a38e61cc448fb3ca499946d41dba51edab97b46a10e.squashfs",
+    "size":   62631936,
+    "hashes": {"sha512_256": "066e1829132a8571b7a1c59e86b54340b22cfa47427725c322ca21ec63946ec5"}
+  },
+  "images": [
+    {
+      "id": "ubuntu-trusty",
+      "layers": [{
+        "script": "builder/img/ubuntu-trusty.sh",
+        "inputs": ["builder/ubuntu-setup.sh"],
+        "limits": { "temp_disk": "1G" }
+      }]
+    },
+    {
+      "id": "ubuntu-xenial",
+      "layers": [{
+        "script": "builder/img/ubuntu-xenial.sh",
+        "inputs": ["builder/ubuntu-setup.sh"],
+        "limits": { "temp_disk": "1G" },
+        "linux_capabilities": ["CAP_SYS_ADMIN"]
+      }]
+    },
+    {
+      "id": "busybox",
+      "layers": [{
+        "script": "builder/img/busybox.sh",
+        "limits": { "temp_disk": "1G" }
+      }]
+    },
+    {
+      "id": "go",
+      "base": "ubuntu-trusty",
+      "layers": [{
+        "script": "builder/img/go.sh",
+        "inputs": ["builder/go-wrapper.sh"],
+        "limits": { "temp_disk": "1G" }
+      }]
+    },
+    {
+      "id": "builder",
+      "base": "go",
+      "layers": [{
+        "gobuild": {
+          "builder": "/bin/flynn-builder"
+        }
+      }]
+    },
+    {
+      "id": "discoverd",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "discoverd": "/bin/discoverd"
+        },
+        "copy": {
+          "discoverd/start.sh": "/bin/start-discoverd"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/start-discoverd"
+        ]
+      }
+    },
+    {
+      "id": "flannel",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "flannel":         "/bin/flanneld",
+          "flannel/wrapper": "/bin/flannel-wrapper"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/flannel-wrapper"
+        ]
+      }
+    },
+    {
+      "id": "host",
+      "base": "ubuntu-xenial",
+      "layers": [
+        {
+          "name": "host-packages",
+          "script": "host/img/packages.sh",
+          "limits": { "temp_disk": "1G" }
+        },
+        {
+          "name": "host-binaries",
+          "env": {
+            "TUF_ROOT_KEYS": "{{ .TUFRootKeys }}"
+          },
+          "cgobuild": {
+            "host": "/usr/local/bin/flynn-host"
+          },
+          "gobuild": {
+            "host/flynn-init": "/usr/local/bin/flynn-init"
+          },
+          "copy": {
+            "util/ca-certs/ca-certs.pem": "/etc/ssl/certs/ca-certs.pem",
+            "host/zfs-mknod.sh":          "/usr/local/bin/zfs-mknod",
+            "host/udev.rules":            "/lib/udev/rules.d/10-local.rules",
+            "host/start.sh":              "/usr/local/bin/start-flynn-host.sh",
+            "host/cleanup.sh":            "/usr/local/bin/cleanup-flynn-host.sh"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/usr/local/bin/start-flynn-host.sh"
+        ]
+      }
+    },
+    {
+      "id": "controller",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "controller":           "/bin/flynn-controller",
+          "controller/scheduler": "/bin/flynn-scheduler",
+          "controller/worker":    "/bin/flynn-worker"
+        },
+        "copy": {
+          "controller/start.sh":        "/bin/start-flynn-controller",
+          "util/ca-certs/ca-certs.pem": "/etc/ssl/certs/ca-certs.pem"
+        },
+        "inputs": [
+          "schema/*.json",
+          "schema/controller/*.json",
+          "schema/router/*.json"
+        ],
+        "run": [
+          "mkdir -p /etc/flynn-controller",
+          "cp -r schema /etc/flynn-controller/jsonschema"
+        ]
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/start-flynn-controller"
+        ]
+      }
+    },
+    {
+      "id": "controller-examples",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "controller/examples": "/bin/flynn-controller-examples"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/flynn-controller-examples"
+        ]
+      }
+    },
+    {
+      "id": "postgres",
+      "base": "ubuntu-trusty",
+      "layers": [
+        {
+          "name": "postgres-packages",
+          "script": "appliance/postgresql/img/packages.sh",
+          "limits": { "temp_disk": "1G" },
+          "linux_capabilities": ["CAP_AUDIT_WRITE"]
+        },
+        {
+          "name": "postgres-binaries",
+          "gobuild": {
+            "appliance/postgresql/cmd/flynn-postgres":     "/bin/flynn-postgres",
+            "appliance/postgresql/cmd/flynn-postgres-api": "/bin/flynn-postgres-api"
+          },
+          "copy": {
+            "appliance/postgresql/start.sh": "/bin/start-flynn-postgres"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/bin/start-flynn-postgres"
+        ]
+      }
+    },
+    {
+      "id": "mariadb",
+      "base": "ubuntu-trusty",
+      "layers": [
+        {
+          "name": "mariadb-packages",
+          "script": "appliance/mariadb/img/packages.sh",
+          "limits": { "temp_disk": "1G" },
+          "linux_capabilities": ["CAP_AUDIT_WRITE"]
+        },
+        {
+          "name": "mariadb-binaries",
+          "gobuild": {
+            "appliance/mariadb/cmd/flynn-mariadb":     "/bin/flynn-mariadb",
+            "appliance/mariadb/cmd/flynn-mariadb-api": "/bin/flynn-mariadb-api"
+          },
+          "copy": {
+            "appliance/mariadb/start.sh": "/bin/start-flynn-mariadb"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/bin/start-flynn-mariadb"
+        ]
+      }
+    },
+    {
+      "id": "mongodb",
+      "base": "ubuntu-trusty",
+      "layers": [
+        {
+          "name": "mongodb-packages",
+          "script": "appliance/mongodb/img/packages.sh",
+          "limits": { "temp_disk": "1G" },
+          "linux_capabilities": ["CAP_AUDIT_WRITE"]
+        },
+        {
+          "name": "mongodb-binaries",
+          "gobuild": {
+            "appliance/mongodb/cmd/flynn-mongodb":     "/bin/flynn-mongodb",
+            "appliance/mongodb/cmd/flynn-mongodb-api": "/bin/flynn-mongodb-api"
+          },
+          "copy": {
+            "appliance/mongodb/start.sh":   "/bin/start-flynn-mongodb",
+            "appliance/mongodb/dump.sh":    "/bin/dump-flynn-mongodb",
+            "appliance/mongodb/restore.sh": "/bin/restore-flynn-mongodb"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/bin/start-flynn-mongodb"
+        ]
+      }
+    },
+    {
+      "id": "redis",
+      "base": "ubuntu-trusty",
+      "layers": [
+        {
+          "name": "redis-packages",
+          "script": "appliance/redis/img/packages.sh",
+          "limits": { "temp_disk": "1G" },
+          "linux_capabilities": ["CAP_AUDIT_WRITE"]
+        },
+        {
+          "name": "redis-binaries",
+          "gobuild": {
+            "appliance/redis/cmd/flynn-redis":     "/bin/flynn-redis",
+            "appliance/redis/cmd/flynn-redis-api": "/bin/flynn-redis-api"
+          },
+          "copy": {
+            "appliance/redis/start.sh":   "/bin/start-flynn-redis",
+            "appliance/redis/dump.sh":    "/bin/dump-flynn-redis",
+            "appliance/redis/restore.sh": "/bin/restore-flynn-redis"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/bin/start-flynn-redis"
+        ]
+      }
+    },
+    {
+      "id": "blobstore",
+      "base": "ubuntu-trusty",
+      "layers": [{
+        "gobuild": {
+          "blobstore": "/bin/flynn-blobstore"
+        },
+        "copy": {
+          "util/ca-certs/ca-certs.pem": "/etc/ssl/certs/ca-certs.pem"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/flynn-blobstore", "server"
+        ]
+      }
+    },
+    {
+      "id": "router",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "router": "/bin/flynn-router"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/flynn-router"
+        ]
+      }
+    },
+    {
+      "id": "router-examples",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "router/example-generator": "/bin/flynn-router-examples"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/flynn-router-examples"
+        ]
+      }
+    },
+    {
+      "id": "gitreceive",
+      "base": "ubuntu-trusty",
+      "layers": [
+        {
+          "name": "gitreceive-packages",
+          "script": "gitreceive/img/packages.sh"
+        },
+        {
+          "name": "gitreceive-binaries",
+          "gobuild": {
+            "gitreceive":          "/bin/gitreceived",
+            "gitreceive/receiver": "/bin/flynn-receiver"
+          },
+          "copy": {
+            "gitreceive/start.sh": "/bin/start-flynn-receiver"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/bin/start-flynn-receiver"
+        ]
+      }
+    },
+    {
+      "id": "docker-receive",
+      "base": "ubuntu-trusty",
+      "layers": [{
+        "gobuild": {
+          "docker-receive":          "/bin/docker-receive",
+          "docker-receive/artifact": "/bin/docker-artifact",
+          "docker-receive/migrator": "/bin/docker-migrator"
+        },
+        "copy": {
+          "util/ca-certs/ca-certs.pem": "/etc/ssl/certs/ca-certs.pem"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/docker-receive"
+        ]
+      }
+    },
+    {
+      "id": "logaggregator",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "logaggregator": "/bin/logaggregator"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/logaggregator"
+        ]
+      }
+    },
+    {
+      "id": "taffy",
+      "base": "ubuntu-trusty",
+      "layers": [
+        {
+          "name": "taffy-packages",
+          "script": "gitreceive/img/packages.sh"
+        },
+        {
+          "name": "taffy-binaries",
+          "gobuild": {
+            "taffy":               "/bin/taffy",
+            "gitreceive/receiver": "/bin/flynn-receiver"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/bin/taffy"
+        ]
+      }
+    },
+    {
+      "id": "cedarish",
+      "base": "ubuntu-trusty",
+      "layers": [{
+        "script": "util/cedarish/img/build.sh",
+        "limits": { "temp_disk": "2G" },
+        "linux_capabilities": ["CAP_AUDIT_WRITE"]
+      }]
+    },
+    {
+      "id": "slugbuilder",
+      "base": "cedarish",
+      "layers": [
+        {
+          "name": "slugbuilder-packages",
+          "script": "slugbuilder/img/packages.sh",
+          "inputs": [
+            "slugbuilder/builder/buildpacks.txt",
+            "slugbuilder/builder/install-buildpack"
+          ]
+        },
+        {
+          "name": "slugbuilder-binaries",
+          "gobuild": {
+            "slugbuilder/artifact": "/bin/create-artifact",
+            "slugbuilder/migrator": "/bin/slug-migrator"
+          },
+          "copy": {
+            "slugbuilder/convert-legacy-slug.sh": "/bin/convert-legacy-slug.sh",
+            "slugbuilder/builder/build.sh":       "/builder/build.sh",
+            "slugbuilder/builder/create-user.sh": "/builder/create-user.sh"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/builder/build.sh"
+        ]
+      }
+    },
+    {
+      "id": "slugrunner",
+      "base": "cedarish",
+      "layers": [{
+        "copy": {
+          "slugrunner/runner/init": "/runner/init"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/runner/init"
+        ]
+      }
+    },
+    {
+      "id": "dashboard-builder",
+      "base": "go",
+      "layers": [{
+        "script": "util/assetbuilder/build.sh",
+        "env": {"TARGET": "dashboard"},
+        "gobuild": {
+          "dashboard/app": "/bin/dashboard-compile"
+        },
+        "inputs": [
+          "dashboard/app/Gemfile",
+          "dashboard/app/Gemfile.lock"
+        ],
+        "limits": { "temp_disk": "1G" }
+      }]
+    },
+    {
+      "id": "dashboard-compiled",
+      "base": "dashboard-builder",
+      "layers": [{
+        "script": "dashboard/img/compile.sh",
+        "inputs": [
+          "dashboard/app/lib/dashboard.html.tmpl",
+          "dashboard/app/lib/images/*.png",
+          "dashboard/app/lib/javascripts/dashboard.js",
+          "dashboard/app/lib/javascripts/dashboard/*.js",
+          "dashboard/app/lib/javascripts/dashboard/*.erb",
+          "dashboard/app/lib/javascripts/dashboard/actions/*.js",
+          "dashboard/app/lib/javascripts/dashboard/routers/*.js",
+          "dashboard/app/lib/javascripts/dashboard/stores/*.js",
+          "dashboard/app/lib/javascripts/dashboard/views/*.js",
+          "dashboard/app/lib/javascripts/dashboard/views/*.js.jsx",
+          "dashboard/app/lib/javascripts/dashboard/views/*.js.jsx.erb",
+          "dashboard/app/lib/javascripts/dashboard/views/css/*.js",
+          "dashboard/app/lib/javascripts/dashboard/views/helpers/*.js",
+          "dashboard/app/lib/javascripts/dashboard/views/models/*.js",
+          "dashboard/app/lib/stylesheets/dashboard.scss",
+          "dashboard/app/lib/stylesheets/dashboard/*.scss",
+          "dashboard/app/vendor/fonts/*.eot",
+          "dashboard/app/vendor/fonts/*.svg",
+          "dashboard/app/vendor/fonts/*.ttf",
+          "dashboard/app/vendor/fonts/*.woff",
+          "dashboard/app/vendor/javascripts/*.js",
+          "dashboard/app/vendor/stylesheets/*.scss"
+        ],
+        "limits": { "memory": "2G", "temp_disk": "1G" }
+      }]
+    },
+    {
+      "id": "dashboard",
+      "base": "busybox",
+      "layers": [{
+        "build_with": "dashboard-compiled",
+        "run": [
+          "cp /bindata.go dashboard"
+        ],
+        "gobuild": {
+          "dashboard": "/bin/flynn-dashboard"
+        },
+        "limits": { "temp_disk": "1G" }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/flynn-dashboard"
+        ]
+      }
+    },
+    {
+      "id": "status",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "status": "/bin/flynn-status"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/flynn-status"
+        ]
+      }
+    },
+    {
+      "id": "updater",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "updater": "/bin/updater"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/updater"
+        ]
+      }
+    },
+    {
+      "id": "release",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "util/release": "/bin/flynn-release"
+        }
+      }]
+    },
+    {
+      "id": "cli-linux-amd64",
+      "base": "busybox",
+      "env": { "GOOS": "linux", "GOARCH": "amd64"},
+      "template": "cli"
+    },
+    {
+      "id": "cli-linux-386",
+      "base": "busybox",
+      "env": { "GOOS": "linux", "GOARCH": "386"},
+      "template": "cli"
+    },
+    {
+      "id": "cli-darwin-amd64",
+      "base": "busybox",
+      "env": { "GOOS": "darwin", "GOARCH": "amd64"},
+      "template": "cli"
+    },
+    {
+      "id": "cli-freebsd-amd64",
+      "base": "busybox",
+      "env": { "GOOS": "freebsd", "GOARCH": "amd64"},
+      "template": "cli"
+    },
+    {
+      "id": "cli-windows-amd64",
+      "base": "busybox",
+      "env": { "GOOS": "windows", "GOARCH": "amd64"},
+      "template": "cli"
+    },
+    {
+      "id": "cli-windows-386",
+      "base": "busybox",
+      "env": { "GOOS": "windows", "GOARCH": "386"},
+      "template": "cli"
+    },
+    {
+      "id": "test",
+      "base": "ubuntu-trusty",
+      "layers": [
+        {
+          "name": "test-packages",
+          "script": "test/img/packages.sh"
+        },
+        {
+          "name": "test-binaries",
+          "cgobuild": {
+            "test":                  "/bin/flynn-test",
+            "test/runner":           "/bin/flynn-test-runner"
+          },
+          "gobuild": {
+            "test/util/file-server": "/bin/flynn-test-file-server"
+          },
+          "copy": {
+            "test/run.sh": "/bin/run-flynn-test.sh"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/bin/run-flynn-test.sh"
+        ]
+      }
+    },
+    {
+      "id": "test-apps",
+      "base": "busybox",
+      "layers": [
+        {
+          "build_with": "ubuntu-trusty",
+          "name": "test-apps-minio",
+          "script": "test/apps/minio.sh"
+        },
+        {
+          "name": "test-apps-binaries",
+          "gobuild": {
+            "test/apps/echoer":         "/bin/echoer",
+            "test/apps/ping":           "/bin/pingserv",
+            "test/apps/signal":         "/bin/signal",
+            "test/apps/ish":            "/bin/ish",
+            "test/apps/partial-logger": "/bin/partial-logger",
+            "test/apps/http-blocker":   "/bin/http-blocker",
+            "test/apps/oom":            "/bin/oom",
+            "test/apps/proxy":          "/bin/proxy"
+          }
+        }
+      ]
+    }
+  ],
+  "templates": {
+    "cli": {
+      "layers": [{
+        "env": {
+          "TUF_ROOT_KEYS":  "{{ .TUFRootKeys }}",
+          "TUF_REPOSITORY": "{{ .TUFRepository }}"
+        },
+        "gobuild": {
+          "cli": "/bin/flynn-${GOOS}-${GOARCH}"
+        },
+        "limits": { "temp_disk": "1G" }
+      }]
+    }
+  },
+  "manifests": {
+    "bootstrap/manifest_template.json":  "bootstrap-manifest.json",
+    "util/release/images_template.json": "images.json"
+  }
+}

@@ -30,58 +30,61 @@ func (s *ReleaseSuite) addReleaseHosts(t *c.C) *tc.BootResult {
 	return res
 }
 
-var releaseScript = template.Must(template.New("release-script").Delims("[[", "]]").Parse(`
+var releaseScript = template.Must(template.New("release-script").Parse(`
+export DISCOVERD="{{ .Discoverd }}"
 export TUF_TARGETS_PASSPHRASE="flynn-test"
 export TUF_SNAPSHOT_PASSPHRASE="flynn-test"
 export TUF_TIMESTAMP_PASSPHRASE="flynn-test"
-
 export GOPATH=~/go
-src="${GOPATH}/src/github.com/flynn/flynn"
+
+ROOT="${GOPATH}/src/github.com/flynn/flynn"
+cd "${ROOT}"
 
 # send all output to stderr so only images.json is output to stdout
 (
+  # update the TUF root keys and create new image manifests for each released
+  # image by updating entrypoints
+  curl -fsSLo jq "https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"
+  chmod +x jq
+  ./jq \
+    --argjson root_keys       "$(tuf --dir test/release root-keys)" \
+    --argjson released_images "$(jq --compact-output 'keys | reduce .[] as $name ({}; .[$name] = true)' build/manifests/images.json)" \
+    '.tuf.root_keys = $root_keys | .images = (.images | map(if (.id | in($released_images)) then .entrypoint.env = {"FOO":"BAR"} else . end))' \
+    builder/manifest.json \
+    > /tmp/manifest.json
+  mv /tmp/manifest.json builder/manifest.json
 
-  # rebuild components.
-  #
-  # ideally we would use tup to do this, but it hangs waiting on the
-  # FUSE socket after building, so for now we do it manually.
-  #
-  # See https://github.com/flynn/flynn/issues/949
-  pushd "${src}" >/dev/null
-  sed "s/{{TUF-ROOT-KEYS}}/$(tuf --dir test/release root-keys)/g" host/cli/root_keys.go.tmpl > host/cli/root_keys.go
-  vpkg="github.com/flynn/flynn/pkg/version"
-  ldflags="-X ${vpkg}.commit=notdev -X ${vpkg}.branch=dev -X ${vpkg}.tag=v20161108.0-test -X ${vpkg}.dirty=false"
-  go build -o host/bin/flynn-host -ldflags="${ldflags}" ./host
-  gzip -9 --keep --force host/bin/flynn-host
-  sed "s/{{FLYNN-HOST-CHECKSUM}}/$(sha512sum host/bin/flynn-host.gz | cut -d " " -f 1)/g" script/install-flynn.tmpl > script/install-flynn
+  # build new images and binaries
+  FLYNN_VERSION="v20161108.0-test"
+  script/build-flynn --host "{{ .HostID }}" --version "${FLYNN_VERSION}"
 
-  # create new image manifests by adding some metadata
-  for name in $(jq -r 'keys | .[]' images.json); do
-    jq ".[\"${name}\"].manifest + {meta: {foo: \"bar\"}}" images.json > "image/bootstrapped/${name}.json"
-  done
-  go build -o util/release/flynn-release -ldflags="${ldflags}" ./util/release
-  util/release/flynn-release manifest --image-dir "${src}/image/bootstrapped" util/release/images_template.json > images.json
-  popd >/dev/null
-
-  "${src}/script/export-components" "${src}/test/release"
-  "${src}/script/release-channel" --tuf-dir "${src}/test/release" --no-sync --no-changelog "stable" "v20161108.0-test"
-
-  dir=$(mktemp --directory)
-  ln -s "${src}/test/release/repository" "${dir}/tuf"
-  ln -s "${src}/script/install-flynn" "${dir}/install-flynn"
+  # release components
+  script/export-components --host "{{ .HostID }}" "${ROOT}/test/release"
+  script/release-channel --tuf-dir "${ROOT}/test/release" --no-sync --no-changelog "stable" "${FLYNN_VERSION}"
 
   # create a slug for testing slug based app updates
-  tar c -C "${src}/test/apps/http" . | docker run -i -a stdin -a stdout -a stderr --dns "$(ip addr show flynnbr0 | grep -oP '100\.100\.\d+\.\d+')" -e CONTROLLER_KEY="[[ .ControllerKey ]]" -e SLUG_IMAGE_ID="[[ .SlugImageID ]]" flynn/slugbuilder
+  build/bin/flynn-host run \
+    --volume /tmp \
+    build/image/slugbuilder.json \
+    /usr/bin/env \
+    CONTROLLER_KEY="{{ .ControllerKey }}" \
+    SLUG_IMAGE_ID="{{ .SlugImageID }}" \
+    /builder/build.sh \
+    < <(tar c -C test/apps/http .)
 
-  # start a file server to serve the exported components
+  # serve the TUF repository over HTTP
+  dir="$(mktemp --directory)"
+  ln -s "${ROOT}/test/release/repository" "${dir}/tuf"
+  ln -s "${ROOT}/script/install-flynn" "${dir}/install-flynn"
   sudo start-stop-daemon \
     --start \
     --background \
     --chdir "${dir}" \
-    --exec "${src}/test/image/bin/flynn-test-file-server"
-) >&2
+    --exec "${ROOT}/build/bin/flynn-test-file-server"
 
-cat "${src}/images.json"
+) </dev/null >&2
+
+cat "${ROOT}/build/manifests/images.json"
 `))
 
 var installScript = template.Must(template.New("install-script").Parse(`
@@ -97,7 +100,7 @@ cd ~/go/src/github.com/flynn/flynn
 tuf --dir test/release root-keys | tuf-client init --store /tmp/tuf.db http://{{ .Blobstore }}/tuf
 echo stable | sudo tee /etc/flynn/channel.txt
 export DISCOVERD="{{ .Discoverd }}"
-flynn-host update --repository http://{{ .Blobstore }}/tuf --tuf-db /tmp/tuf.db
+build/bin/flynn-host update --repository http://{{ .Blobstore }}/tuf --tuf-db /tmp/tuf.db
 SCRIPT
 `))
 
@@ -115,7 +118,9 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	var imagesJSON bytes.Buffer
 	var script bytes.Buffer
 	slugImageID := random.UUID()
-	releaseScript.Execute(&script, struct{ ControllerKey, SlugImageID string }{releaseCluster.ControllerKey, slugImageID})
+	releaseScript.Execute(&script, struct {
+		Discoverd, HostID, HostIP, ControllerKey, SlugImageID string
+	}{fmt.Sprintf("http://%s:1111", buildHost.IP), buildHost.ID, buildHost.IP, releaseCluster.ControllerKey, slugImageID})
 	t.Assert(buildHost.Run("bash -ex", &tc.Streams{Stdin: &script, Stdout: &imagesJSON, Stderr: logWriter}), c.IsNil)
 	var images map[string]*ct.Artifact
 	t.Assert(json.Unmarshal(imagesJSON.Bytes(), &images), c.IsNil)
@@ -234,7 +239,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		debugf(t, "new %s release ID: %s", app.Name, release.ID)
 		artifact, err := client.GetArtifact(release.ArtifactIDs[0])
 		t.Assert(err, c.IsNil)
-		debugf(t, "new %s artifact: %+v", app.Name, artifact)
+		debugf(t, "new %s artifact: ID: %s, URI: %s", app.Name, artifact.ID, artifact.URI)
 		assertImage(artifact.URI, app.Name)
 	}
 

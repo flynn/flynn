@@ -1,3 +1,0 @@
-include_rules
-: | $(ROOT)/<bootstrapped> |> ^ BOOTSTRAPPED^ cat $(ROOT)/image/bootstrapped/* > %o |> $(ROOT)/image/bootstrapped.json
-: $(ROOT)/util/release/flynn-release $(ROOT)/image/bootstrapped.json |> ^ bootstrap_manifest.json^ cat $(ROOT)/image/bootstrapped.json > /dev/null && $(ROOT)/util/release/flynn-release manifest --output=%o --image-dir=$(ROOT)/image/bootstrapped --image-repository=@(IMAGE_REPOSITORY) manifest_template.json |> bin/manifest.json <manifest>

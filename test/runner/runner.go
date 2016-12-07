@@ -339,7 +339,7 @@ cd ~/go/src/github.com/flynn/flynn
 
 script/configure-docker "{{ .Cluster.ClusterDomain }}"
 
-cli/bin/flynn cluster add \
+build/bin/flynn cluster add \
   --tls-pin "{{ .Config.TLSPin }}" \
   --git-url "{{ .Config.GitURL }}" \
   --docker-push-url "{{ .Config.DockerPushURL }}" \
@@ -355,8 +355,8 @@ cd test
 cmd="bin/flynn-test \
   --flynnrc $HOME/.flynnrc \
   --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .Cluster.ID }} \
-  --cli $(pwd)/../cli/bin/flynn \
-  --flynn-host $(pwd)/../host/bin/flynn-host \
+  --cli $(pwd)/../build/bin/flynn \
+  --flynn-host $(pwd)/../build/bin/flynn-host \
   --router-ip {{ .Cluster.RouterIP }} \
   --backups-dir "/mnt/backups" \
   --debug"

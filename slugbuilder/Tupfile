@@ -1,4 +1,0 @@
-include_rules
-: |> !go ./artifact |> bin/create-artifact
-: |> !go ./migrator |> bin/migrator
-: bin/create-artifact bin/migrator $(ROOT)/util/cedarish/<image> |> !image-cedarish |>

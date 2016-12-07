@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> updater
-: updater |> !image-bootstrapped |>

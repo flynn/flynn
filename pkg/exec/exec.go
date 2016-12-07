@@ -29,9 +29,10 @@ type Cmd struct {
 
 	Env map[string]string
 
-	Volumes   []*ct.VolumeReq
-	Mounts    []host.Mount
-	Resources resource.Resources
+	Volumes    []*ct.VolumeReq
+	Mounts     []host.Mount
+	Resources  resource.Resources
+	WorkingDir string
 
 	HostNetwork      bool
 	HostPIDNamespace bool
@@ -205,6 +206,7 @@ func (c *Cmd) Start() error {
 				HostNetwork:      c.HostNetwork,
 				HostPIDNamespace: c.HostPIDNamespace,
 				Mounts:           c.Mounts,
+				WorkingDir:       c.WorkingDir,
 			},
 			Resources: c.Resources,
 			Metadata:  c.Meta,
@@ -234,7 +236,9 @@ func (c *Cmd) Start() error {
 
 	resource.SetDefaults(&c.Job.Resources)
 
-	utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
+	if c.ImageArtifact != nil {
+		utils.SetupMountspecs(c.Job, []*ct.Artifact{c.ImageArtifact})
+	}
 
 	if c.Stdout != nil || c.Stderr != nil || c.Stdin != nil || c.stdinPipe != nil {
 		req := &host.AttachReq{

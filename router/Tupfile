@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> bin/flynn-router
-: bin/* example-generator/flynn-router-examples |> !image-bootstrapped |>

@@ -1,31 +1,19 @@
 package version
 
-import (
-	"fmt"
-	"strconv"
-)
+import "strconv"
 
-var commit, branch, tag, dirty string
+// version is set at build time (see builder/go-wrapper.sh)
+var version string
 
 func String() string {
-	if Dev() {
-		return "dev"
+	if version != "" {
+		return version
 	}
-	if Tagged() {
-		return tag
-	}
-	if dirty == "true" {
-		commit += "+"
-	}
-	return fmt.Sprintf("%s (%s)", commit, branch)
+	return "dev"
 }
 
 func Dev() bool {
-	return commit == "" || commit == "dev"
-}
-
-func Tagged() bool {
-	return tag != "none" && dirty == "false"
+	return String() == "dev"
 }
 
 type Version struct {

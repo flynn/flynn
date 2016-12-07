@@ -58,11 +58,9 @@ main() {
 
   info "generating ${component} examples..." >&2
 
-  local artifact="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[controller-examples]')"
-
   ${ROOT}/host/bin/flynn-host run \
     --bind="${ROOT}/docs/api-examples:/data" \
-    <(echo "${artifact}") \
+    "${ROOT}/build/image/${component}-examples.json" \
     sh -c "CONTROLLER_KEY=${CONTROLLER_KEY} PORT=${port} /bin/flynn-${component}-examples /data/${component}.json"
 }
 

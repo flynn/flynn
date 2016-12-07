@@ -1,9 +1,0 @@
-include_rules
-: |> !go |> bin/flynn-controller
-: |> !go ./scheduler |> bin/flynn-scheduler
-: |> !go ./worker |> bin/flynn-worker
-: $(ROOT)/util/ca-certs/ca-certs.pem |> !cp |> bin/ca-certs.pem
-: foreach $(ROOT)/schema/*.json |> !cp |> bin/jsonschema/%g.json
-: foreach $(ROOT)/schema/controller/*.json |> !cp |> bin/jsonschema/controller/%g.json
-: foreach $(ROOT)/schema/router/*.json |> !cp |> bin/jsonschema/router/%g.json
-: bin/* bin/jsonschema/*.json bin/jsonschema/controller/*.json bin/jsonschema/router/*.json examples/flynn-controller-examples |> !image-bootstrapped |>

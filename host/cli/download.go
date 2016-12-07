@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/host/volume/zfs"
+	"github.com/flynn/flynn/pkg/tufconfig"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
@@ -148,7 +149,7 @@ func updateTUFClient(client *tuf.Client) error {
 		return nil
 	}
 	if err == tuf.ErrNoRootKeys {
-		if err := client.Init(rootKeys, len(rootKeys)); err != nil {
+		if err := client.Init(tufconfig.RootKeys, len(tufconfig.RootKeys)); err != nil {
 			return err
 		}
 		return updateTUFClient(client)
