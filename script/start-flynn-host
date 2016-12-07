@@ -14,7 +14,7 @@ Start a flynn node with specific binary, ip and index.
 
 Options:
 
-  -b, --bin-dir=DIR        Host binary dir [default: ROOT/host/bin]
+  -b, --bin-dir=DIR        Host binary dir [default: ROOT/build/bin]
 
   -k, --no-destroy-state   Don't destroy job state
 
@@ -28,7 +28,7 @@ USAGE
 }
 
 main() {
-  local bin_dir="${ROOT}/host/bin"
+  local bin_dir="${ROOT}/build/bin"
   local destroy_vols=true
   local destroy_state=true
   local peers=()
@@ -149,6 +149,7 @@ main() {
     --flynn-init "${bin_dir}/flynn-init" \
     --init-log-level "debug" \
     --tags "host_id=${id}" \
+    --max-job-concurrency=100 \
     ${peer_ips} \
     &>"${log}"
 

@@ -1,6 +1,0 @@
-include_rules
-: |> !go |> bin/docker-receive
-: |> !go ./artifact |> bin/docker-artifact
-: |> !go ./migrator |> bin/docker-migrator
-: $(ROOT)/util/ca-certs/ca-certs.pem |> !cp |> bin/ca-certs.pem
-: bin/docker-receive bin/docker-artifact bin/docker-migrator bin/ca-certs.pem |> !image-bootstrapped |>

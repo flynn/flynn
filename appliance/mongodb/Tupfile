@@ -1,4 +1,0 @@
-include_rules
-: |> !go ./cmd/flynn-mongodb |> bin/flynn-mongodb
-: |> !go ./cmd/flynn-mongodb-api |> bin/flynn-mongodb-api
-: bin/* |> !image-bootstrapped |>

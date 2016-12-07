@@ -1,4 +1,0 @@
-include_rules
-: |> !go ./wrapper |> bin/flannel-wrapper
-: |> !go |> bin/flanneld
-: bin/* |> !image-bootstrapped |>

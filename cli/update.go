@@ -15,10 +15,10 @@ import (
 
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/tufconfig"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 	tuf "github.com/flynn/go-tuf/client"
-	tufdata "github.com/flynn/go-tuf/data"
 	"github.com/kardianos/osext"
 	"gopkg.in/inconshreveable/go-update.v0"
 )
@@ -26,19 +26,16 @@ import (
 const upcktimePath = "cktime"
 
 var updateDir = filepath.Join(cfg.Dir(), "update")
-var updater *Updater
+var updater = &Updater{}
 
 func runUpdate() error {
-	if updater == nil || !version.Tagged() {
+	if version.Dev() {
 		return errors.New("Dev builds don't support auto-updates")
 	}
 	return updater.update()
 }
 
-type Updater struct {
-	repo     string
-	rootKeys []*tufdata.Key
-}
+type Updater struct{}
 
 func (u *Updater) backgroundRun() {
 	if u == nil {
@@ -64,7 +61,7 @@ func (u *Updater) backgroundRun() {
 
 func (u *Updater) wantUpdate() bool {
 	path := filepath.Join(updateDir, upcktimePath)
-	if !version.Tagged() || readTime(path).After(time.Now()) {
+	if version.Dev() || readTime(path).After(time.Now()) {
 		return false
 	}
 	wait := 12*time.Hour + randDuration(8*time.Hour)
@@ -89,7 +86,7 @@ func (u *Updater) update() error {
 		UserAgent: fmt.Sprintf("flynn-cli/%s %s", version.String(), plat),
 		Retries:   tufutil.DefaultHTTPRetries,
 	}
-	remote, err := tuf.HTTPRemoteStore(u.repo, opts)
+	remote, err := tuf.HTTPRemoteStore(tufconfig.Repository, opts)
 	if err != nil {
 		return err
 	}
@@ -136,7 +133,7 @@ func (u *Updater) updateTUFClient(client *tuf.Client) error {
 		return nil
 	}
 	if err == tuf.ErrNoRootKeys {
-		if err := client.Init(u.rootKeys, len(u.rootKeys)); err != nil {
+		if err := client.Init(tufconfig.RootKeys, len(tufconfig.RootKeys)); err != nil {
 			return err
 		}
 		return u.updateTUFClient(client)

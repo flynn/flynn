@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> bin/flynn-blobstore
-: bin/* |> !image-bootstrapped |>

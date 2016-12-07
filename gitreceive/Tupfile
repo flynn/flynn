@@ -1,4 +1,0 @@
-include_rules
-: |> !go ./receiver |> flynn-receiver
-: flynn-receiver |> !go |> gitreceived
-: gitreceived flynn-receiver |> !image-bootstrapped |>

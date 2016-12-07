@@ -11,7 +11,7 @@ source "${ROOT}/script/lib/util.sh"
 
 main() {
   local mounts=(
-    "${ROOT}:${ROOT}"
+    "${ROOT}:/go/src/github.com/flynn/flynn"
     "/var/run/docker.sock:/var/run/docker.sock"
     "/var/lib/flynn:/var/lib/flynn"
     "/mnt/backups:/mnt/backups"
@@ -26,14 +26,13 @@ main() {
 
   local host="$(curl -s http://${ip}:1113/host/status | jq -r .id)"
 
-  local image="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[test]')"
-  "${ROOT}/host/bin/flynn-host" run \
+  "${ROOT}/build/bin/flynn-host" run \
     --host "${host}" \
     --bind "$(join "," ${mounts[@]})" \
     --volume "/tmp" \
-    <(echo "${image}") \
+    "${ROOT}/build/image/test.json" \
     /usr/bin/env \
-    ROOT="${ROOT}" \
+    ROOT="/go/src/github.com/flynn/flynn" \
     CLUSTER_ADD_ARGS="-p ${tlspin} default ${domain} ${key}" \
     ROUTER_IP="${ip}" \
     DOMAIN="${domain}" \

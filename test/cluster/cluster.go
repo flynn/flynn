@@ -399,21 +399,16 @@ git config user.name "CI"
 git merge origin/master
 {{ end }}
 
-test/scripts/wait-for-docker
+make < /dev/null
 
-# pull flynn/busybox before building to avoid the following Docker error when
-# building images from scratch concurrently:
-# "could not find image: no such id: flynn/busybox"
-docker pull flynn/busybox
-
-make
+script/kill-flynn
 
 if [[ -f test/scripts/debug-info.sh ]]; then
   sudo cp test/scripts/debug-info.sh /usr/local/bin/debug-info.sh
 fi
 
-sudo cp host/bin/flynn-* /usr/local/bin
-sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
+sudo cp build/bin/flynn-{host,init} /usr/local/bin
+sudo cp build/manifests/bootstrap-manifest.json /etc/flynn-bootstrap.json
 `[1:]))
 
 type buildData struct {

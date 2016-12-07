@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> flynn-controller-examples
-: flynn-controller-examples | $(ROOT)/util/imagebuilder/build-image |> ^ build-image controller-examples^ $(BUILDIMAGE) controller-examples > %o |> $(ROOT)/image/controller-examples.json

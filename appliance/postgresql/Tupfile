@@ -1,4 +1,0 @@
-include_rules
-: |> !go ./cmd/flynn-postgres|> bin/flynn-postgres
-: |> !go ./cmd/flynn-postgres-api |> bin/flynn-postgres-api
-: bin/* | $(ROOT)/util/imagebuilder/build-image |> ^ build-image postgres^ $(BUILDIMAGE) postgres > %o |> $(ROOT)/image/bootstrapped/postgres.json $(ROOT)/<bootstrapped>

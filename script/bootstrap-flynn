@@ -81,9 +81,9 @@ main() {
     exit 1
   fi
 
-  local bin_dir="${ROOT}/host/bin"
+  local bin_dir="${ROOT}/build/bin"
   local flynn_host="${bin_dir}/flynn-host"
-  local manifest="${ROOT}/bootstrap/bin/manifest.json"
+  local manifest="${ROOT}/build/manifests/bootstrap-manifest.json"
 
   if [[ -n "${backup_url}" ]]; then
     info "using backup URL ${backup_url}"
