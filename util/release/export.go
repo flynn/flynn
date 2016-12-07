@@ -108,7 +108,7 @@ func (e *Exporter) exportLayer(layer *ct.ImageLayer) error {
 		return fmt.Errorf("unknown layer type %q", layer.Type)
 	}
 
-	src, err := os.Open(filepath.Join("/var/lib/flynn/layer-cache", layer.ID+".squashfs"))
+	src, err := os.Open(filepath.Join("/var/lib/flynn/local/layers", layer.ID+".squashfs"))
 	if err != nil {
 		return fmt.Errorf("error opening layer %q: %s", layer.ID, err)
 	}

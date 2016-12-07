@@ -1,4 +1,7 @@
 include_rules
 : |> !go ./cmd/flynn-mariadb |> bin/flynn-mariadb
 : |> !go ./cmd/flynn-mariadb-api |> bin/flynn-mariadb-api
-: bin/* |> !image-bootstrapped |>
+
+: img/packages.sh |> !build-layer |> layer/packages.json
+: img/files.sh bin/* start.sh |> !build-layer |> layer/files.json
+: layer/packages.json layer/files.json |> !build-artifact |>

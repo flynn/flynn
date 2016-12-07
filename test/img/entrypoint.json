@@ -1,0 +1,5 @@
+{
+  "args": [
+    "/bin/run-flynn-test.sh"
+  ]
+}

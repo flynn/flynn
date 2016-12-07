@@ -590,6 +590,7 @@ type ImageLayer struct {
 	Type   ImageLayerType    `json:"type,omitempty"`
 	Length int64             `json:"length,omitempty"`
 	Hashes map[string]string `json:"hashes,omitempty"`
+	Meta   map[string]string `json:"meta,omitempty"`
 }
 
 type ImagePullInfo struct {

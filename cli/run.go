@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
-	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/flynn/go-docopt"
 )
 
@@ -68,23 +66,14 @@ func runRun(args *docopt.Args, client controller.Client) error {
 		fmt.Fprintln(os.Stderr, "WARN: The -e flag is deprecated and will be removed in future versions, use <command> as the entrypoint")
 		config.Args = append([]string{e}, config.Args...)
 	}
-	if args.String["--limits"] != "" {
+	if limits := args.String["--limits"]; limits != "" {
 		config.Resources = resource.Defaults()
-		limits := strings.Split(args.String["--limits"], ",")
-		for _, limit := range limits {
-			typVal := strings.SplitN(limit, "=", 2)
-			if len(typVal) != 2 {
-				return fmt.Errorf("invalid resource limit: %q", limit)
-			}
-			typ, ok := resource.ToType(typVal[0])
-			if !ok {
-				return fmt.Errorf("invalid resource limit type: %q", typVal)
-			}
-			val, err := resource.ParseLimit(typ, typVal[1])
-			if err != nil {
-				return fmt.Errorf("invalid resource limit value: %q", typVal[1])
-			}
-			config.Resources[typ] = resource.Spec{Limit: typeconv.Int64Ptr(val)}
+		resources, err := resource.ParseCSV(limits)
+		if err != nil {
+			return err
+		}
+		for typ, limit := range resources {
+			config.Resources[typ] = limit
 		}
 	}
 	return runJob(client, config)

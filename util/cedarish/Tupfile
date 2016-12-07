@@ -1,2 +1,3 @@
 include_rules
-: |> !image |>
+: img/packages.sh | $(ROOT)/<builder> |> ^ build-layer cedarish^ $(ROOT)/builder/bin/flynn-build layer --limits temp_disk=2G ubuntu-trusty %f > %o |> layer/packages.json
+: layer/packages.json | $(ROOT)/<builder> |> ^ build-artifact cedarish^ $(ROOT)/builder/bin/flynn-build artifact ubuntu-trusty %f > %o |> $(ROOT)/image/cedarish.json <image>

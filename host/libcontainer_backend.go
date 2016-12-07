@@ -68,6 +68,7 @@ type LibcontainerConfig struct {
 	LogMux           *logmux.Mux
 	PartitionCGroups map[string]int64
 	Logger           log15.Logger
+	DiscoverdEnabled bool
 }
 
 func NewLibcontainerBackend(config *LibcontainerConfig) (Backend, error) {
@@ -267,26 +268,30 @@ func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) er
 		return err
 	}
 
-	// Read DNS config, discoverd uses the nameservers
-	dnsConf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
-	if err != nil {
-		return err
-	}
-	config.Resolvers = dnsConf.Servers
+	l.resolvConf = "/etc/resolv.conf"
+	if l.DiscoverdEnabled {
+		// Read DNS config, discoverd uses the nameservers
+		dnsConf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
+		if err != nil {
+			return err
+		}
+		config.Resolvers = dnsConf.Servers
 
-	// Write a resolv.conf to be bind-mounted into containers pointing at the
-	// future discoverd DNS listener
-	if err := os.MkdirAll("/etc/flynn", 0755); err != nil {
-		return err
+		// Write a resolv.conf to be bind-mounted into containers pointing at the
+		// future discoverd DNS listener
+		if err := os.MkdirAll("/etc/flynn", 0755); err != nil {
+			return err
+		}
+		var resolvSearch string
+		if len(dnsConf.Search) > 0 {
+			resolvSearch = fmt.Sprintf("search %s\n", strings.Join(dnsConf.Search, " "))
+		}
+		resolvConf := fmt.Sprintf("/etc/flynn/%s-resolv.conf", l.BridgeName)
+		if err := ioutil.WriteFile(resolvConf, []byte(fmt.Sprintf("%snameserver %s\n", resolvSearch, l.bridgeAddr.String())), 0644); err != nil {
+			return err
+		}
+		l.resolvConf = resolvConf
 	}
-	var resolvSearch string
-	if len(dnsConf.Search) > 0 {
-		resolvSearch = fmt.Sprintf("search %s\n", strings.Join(dnsConf.Search, " "))
-	}
-	if err := ioutil.WriteFile("/etc/flynn/resolv.conf", []byte(fmt.Sprintf("%snameserver %s\n", resolvSearch, l.bridgeAddr.String())), 0644); err != nil {
-		return err
-	}
-	l.resolvConf = "/etc/flynn/resolv.conf"
 
 	// Allocate IPs for running jobs
 	l.containersMtx.Lock()
@@ -353,7 +358,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	if !job.Config.HostNetwork {
 		wait(l.networkConfigured)
 	}
-	if _, ok := job.Config.Env["DISCOVERD"]; !ok {
+	if _, ok := job.Config.Env["DISCOVERD"]; !ok && l.DiscoverdEnabled {
 		wait(l.discoverdConfigured)
 	}
 
@@ -629,6 +634,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	} else {
 		ifaceName, err := netutils.GenerateIfaceName("veth", 4)
 		if err != nil {
+			log.Error("error creating veth interface name", "err", err)
 			return err
 		}
 		config.Hostname = hostname
@@ -659,6 +665,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 
 	c, err := l.factory.Create(job.ID, config)
 	if err != nil {
+		log.Error("error creating container", "err", err)
 		return err
 	}
 
@@ -667,6 +674,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		User: "root",
 	}
 	if err := c.Run(process); err != nil {
+		log.Error("error starting containerinit", "err", err)
 		c.Destroy()
 		return err
 	}

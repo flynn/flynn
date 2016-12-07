@@ -461,7 +461,10 @@ func (s *HostSuite) TestDevSHM(t *c.C) {
 		t.Fatal("timed out waiting for /dev/shm job")
 	}
 
-	t.Assert(out.String(), c.Equals, "Filesystem                Size      Used Available Use% Mounted on\nshm                      64.0M         0     64.0M   0% /dev/shm\n")
+	t.Assert(out.String(), c.Equals, `
+Filesystem      Size  Used Avail Use% Mounted on
+shm              64M     0   64M   0% /dev/shm
+`[1:])
 }
 
 func (s *HostSuite) TestNotifyOOM(t *c.C) {

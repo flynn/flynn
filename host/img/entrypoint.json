@@ -1,0 +1,5 @@
+{
+  "args": [
+    "/usr/local/bin/start-flynn-host.sh"
+  ]
+}

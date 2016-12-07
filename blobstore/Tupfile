@@ -1,3 +1,6 @@
 include_rules
 : |> !go |> bin/flynn-blobstore
-: bin/* |> !image-bootstrapped |>
+
+: img/packages.sh |> !build-layer |> layer/packages.json
+: img/files.sh bin/* |> !build-layer |> layer/files.json
+: layer/packages.json layer/files.json |> !build-artifact |>

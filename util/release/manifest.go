@@ -55,25 +55,22 @@ func interpolateManifest(imageDir, imageRepository string, src io.Reader, dest i
 		manifest = imageArtifactPattern.ReplaceAllFunc(manifest, func(raw []byte) []byte {
 			name := string(raw[16 : len(raw)-1])
 
-			manifest, err := ioutil.ReadFile(filepath.Join(imageDir, name+".json"))
+			f, err := os.Open(filepath.Join(imageDir, name+".json"))
 			if err != nil {
 				panic(err)
 			}
-
-			artifact := &ct.Artifact{
-				Type:        ct.ArtifactTypeFlynn,
-				RawManifest: manifest,
-				Size:        int64(len(manifest)),
-				Meta: map[string]string{
-					"flynn.component":    name,
-					"flynn.system-image": "true",
-				},
+			defer f.Close()
+			artifact := &ct.Artifact{}
+			if err := json.NewDecoder(f).Decode(artifact); err != nil {
+				panic(err)
+			}
+			artifact.Meta = map[string]string{
+				"flynn.component":    name,
+				"flynn.system-image": "true",
 			}
 			artifact.URI = fmt.Sprintf("%s?target=/%s/images/%s.json", imageRepository, version.String(), artifact.Manifest().ID())
 			artifact.Hashes = artifact.Manifest().Hashes()
-			if version.Dev() {
-				artifact.LayerURLTemplate = "file:///var/lib/flynn/layer-cache/{id}.squashfs"
-			} else {
+			if !version.Dev() {
 				artifact.LayerURLTemplate = fmt.Sprintf("%s?target=/%s/layers/{id}.squashfs", imageRepository, version.String())
 			}
 			data, err := json.Marshal(artifact)

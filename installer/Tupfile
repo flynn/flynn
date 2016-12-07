@@ -1,0 +1,2 @@
+include_rules
+run $(ROOT)/util/assetbuilder/tuprules.sh "installer"

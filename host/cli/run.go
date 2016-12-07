@@ -59,6 +59,8 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 			return err
 		}
 		cmd.Host = host
+	} else if hostAddr := os.Getenv("FLYNN_HOST_ADDR"); hostAddr != "" {
+		cmd.Host = cluster.NewHost("", hostAddr, nil, nil)
 	}
 	if cmd.Job.Config.TTY {
 		ws, err := term.GetWinsize(os.Stdin.Fd())

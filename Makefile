@@ -5,21 +5,30 @@ GIT_TAG=`git tag --list "v*" --sort "v:refname" --points-at HEAD 2>/dev/null | t
 GIT_DIRTY=`test -n "$(git status --porcelain)" && echo true || echo false`
 GIT_DEV=GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false
 GO_ENV=GOROOT=`readlink -f util/_toolchain/go`
+BUILD_ENV=FLYNN_HOST_ADDR="192.0.2.100:1113"
 
-all: toolchain
-	@$(GIT_DEV) $(GO_ENV) tup
+all: toolchain dashboard-assets
+	@$(GIT_DEV) $(GO_ENV) $(BUILD_ENV) tup
 
-release: toolchain
-	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) $(GO_ENV) tup
+release: toolchain dashboard-assets
+	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) $(GO_ENV) $(BUILD_ENV) tup
 
 clean:
 	git clean -Xdf -e '!.tup' -e '!.vagrant' -e '!script/custom-vagrant'
 	sudo rm -rf "/var/lib/flynn/layer-cache"
 
+# copy the static installer assets to the dashboard here rather than in tup
+# to avoid tup complaining about generated directories
+dashboard-assets:
+	@mkdir -p dashboard/app/lib/installer/images dashboard/app/lib/installer/views/css
+	@cp installer/app/src/images/*.png dashboard/app/lib/installer/images
+	@cp installer/app/src/views/*.js.jsx dashboard/app/lib/installer/views
+	@cp installer/app/src/views/css/*.js dashboard/app/lib/installer/views/css
+
 test: test-unit test-integration
 
 test-unit-deps: toolchain
-	@$(GIT_DEV) $(GO_ENV) tup discoverd host/cli/root_keys.go installer/bindata.go dashboard/bindata.go
+	@$(GIT_DEV) $(GO_ENV) $(BUILD_ENV) tup discoverd host/cli/root_keys.go installer/bindata.go dashboard/bindata.go
 
 test-unit: test-unit-deps
 	@$(GO_ENV) PATH=${PWD}/discoverd/bin:${PATH} util/_toolchain/go/bin/go test -race -cover ./...

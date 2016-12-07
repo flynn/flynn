@@ -5,20 +5,6 @@ tup.export("GIT_BRANCH")
 tup.export("GIT_TAG")
 tup.export("GIT_DIRTY")
 
-tup.rule({"../util/assetbuilder/*", "../util/cedarish/<image>"},
-          "^ docker build installer-builder^ cat ../image/cedarish.json > /dev/null && ../util/assetbuilder/build.sh image installer | tee %o",
-          {"../log/docker-installer-builder.log", "<image>"})
-
-tup.rule("../util/_toolchain/go/bin/go build -o ../installer/bin/go-bindata ../vendor/github.com/jteeuwen/go-bindata/go-bindata",
-          {"../installer/bin/go-bindata"})
-
-tup.rule("../util/_toolchain/go/bin/go build -o ../installer/app/compiler ../installer/app",
-          {"../installer/app/compiler"})
-
-tup.rule({"../installer/bin/go-bindata", "../installer/app/compiler", "../log/docker-installer-builder.log"},
-          "../util/assetbuilder/build.sh app installer",
-          {"../installer/bindata.go"})
-
 tup.rule({"tuf.go.tmpl"},
          "cat %f | sed 's|{{TUF-ROOT-KEYS}}|@(TUF_ROOT_KEYS)|' | sed 's|{{TUF-REPO}}|@(IMAGE_REPOSITORY)|' > %o",
          {"tuf.go"})

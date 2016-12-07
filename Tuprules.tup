@@ -5,6 +5,7 @@ export GIT_BRANCH
 export GIT_TAG
 export GIT_DIRTY
 export GO_BUILD_TAGS
+export FLYNN_HOST_ADDR
 
 VPKG = github.com/flynn/flynn/pkg/version
 ROOT = $(TUP_CWD)
@@ -14,8 +15,12 @@ BUILDIMAGE = sudo $(ROOT)/util/imagebuilder/build-image
 
 !go = |> ^c go build %o^ CGO_ENABLED=0 $(GO) build $(GO_LDFLAGS) -o %o -tags="$GO_BUILD_TAGS" |>
 !cgo = |> ^c go build %o^ $(GO) build -o %o $(GO_LDFLAGS) -tags="$GO_BUILD_TAGS" |>
-!image = | $(ROOT)/util/imagebuilder/build-image |> ^ build-image %d^ $(BUILDIMAGE) %d > %o |> $(ROOT)/image/%d.json <image>
-!image-bootstrapped = | $(ROOT)/util/imagebuilder/build-image |> ^ build-image %d^ $(BUILDIMAGE) %d > %o |> $(ROOT)/image/bootstrapped/%d.json $(ROOT)/<bootstrapped>
-!image-cedarish = | $(ROOT)/util/imagebuilder/build-image |> ^ build-image %d^ cat $(ROOT)/image/cedarish.json > /dev/null && $(BUILDIMAGE) %d > %o |> $(ROOT)/image/bootstrapped/%d.json $(ROOT)/<bootstrapped>
 !cp = |> cp %f %o |>
 !manifest = | $(ROOT)/util/release/flynn-release |> $(ROOT)/util/release/flynn-release manifest --output=%o --image-repository=@(IMAGE_REPOSITORY) manifest_template.json |> bin/manifest.json
+
+!build-layer = | $(ROOT)/<builder> |> ^ build-layer %d^ $(ROOT)/builder/bin/flynn-build layer ubuntu-trusty %f > %o |>
+!build-layer-xenial = | $(ROOT)/<builder> |> ^ build-layer %d^ $(ROOT)/builder/bin/flynn-build layer ubuntu-xenial %f > %o |>
+!build-layer-cedarish = | $(ROOT)/<builder> $(ROOT)/util/cedarish/<image> |> ^ build-layer %d^ $(ROOT)/builder/bin/flynn-build layer cedarish %f > %o |>
+!build-artifact = | $(ROOT)/<builder> |> ^ build-artifact %d^ $(ROOT)/builder/bin/flynn-build artifact ubuntu-trusty %f > %o |> $(ROOT)/image/bootstrapped/%d.json $(ROOT)/<bootstrapped>
+!build-artifact-xenial = | $(ROOT)/<builder> |> ^ build-artifact %d^ $(ROOT)/builder/bin/flynn-build artifact ubuntu-xenial %f > %o |> $(ROOT)/image/bootstrapped/%d.json $(ROOT)/<bootstrapped>
+!build-artifact-cedarish = | $(ROOT)/<builder> $(ROOT)/util/cedarish/<image> |> ^ build-artifact %d^ $(ROOT)/builder/bin/flynn-build artifact cedarish %f > %o |> $(ROOT)/image/bootstrapped/%d.json $(ROOT)/<bootstrapped>

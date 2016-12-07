@@ -5,4 +5,8 @@ include_rules
 : |> !go ./flynn-init |> bin/flynn-init
 : bin/flynn-host.gz $(ROOT)/script/install-flynn.tmpl |> sed "s/{{FLYNN-HOST-CHECKSUM}}/\$(sha512sum bin/flynn-host.gz | cut -d " " -f 1)/g" $(ROOT)/script/install-flynn.tmpl > %o |> $(ROOT)/script/install-flynn
 : $(ROOT)/util/ca-certs/ca-certs.pem |> !cp |> bin/ca-certs.pem
-: bin/* |> !image-bootstrapped |>
+: bin/* |> sudo ./start-build-daemon.sh |> $(ROOT)/<builder>
+
+: img/packages.sh |> !build-layer-xenial |> layer/packages.json
+: img/files.sh bin/* zfs-mknod.sh udev.rules start.sh cleanup.sh |> !build-layer-xenial |> layer/files.json
+: layer/packages.json layer/files.json |> !build-artifact-xenial |>

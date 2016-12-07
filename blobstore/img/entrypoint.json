@@ -1,0 +1,6 @@
+{
+  "args": [
+    "/bin/flynn-blobstore",
+    "server"
+  ]
+}

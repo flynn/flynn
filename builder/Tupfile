@@ -1,0 +1,5 @@
+include_rules
+: |> bootstrap/build.sh ubuntu trusty > %o |> $(ROOT)/image/ubuntu-trusty.json $(ROOT)/<builder>
+: |> bootstrap/build.sh ubuntu xenial > %o |> $(ROOT)/image/ubuntu-xenial.json $(ROOT)/<builder>
+: |> !go |> bin/flynn-build
+: bin/flynn-build |> bootstrap/build.sh builder > %o |> $(ROOT)/image/builder.json $(ROOT)/<builder>

@@ -1,3 +1,5 @@
 include_rules
 : |> !go |> bin/flynn-router
-: bin/* example-generator/flynn-router-examples |> !image-bootstrapped |>
+
+: img/files.sh bin/* |> !build-layer |> layer/files.json
+: layer/files.json |> !build-artifact |>
