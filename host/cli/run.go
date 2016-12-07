@@ -49,10 +49,16 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 				DisableLog: true,
 			},
 		},
-		HostID: args.String["--host"],
 		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
+	}
+	if hostID := args.String["--host"]; hostID != "" {
+		host, err := cluster.NewClient().Host(hostID)
+		if err != nil {
+			return err
+		}
+		cmd.Host = host
 	}
 	if cmd.Job.Config.TTY {
 		ws, err := term.GetWinsize(os.Stdin.Fd())

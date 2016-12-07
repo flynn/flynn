@@ -121,7 +121,7 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 		t.Fatal("timed out waiting for interactive job")
 	}
 
-	h, err := cluster.Host(cmd.HostID)
+	h, err := cluster.Host(cmd.Host.ID())
 	t.Assert(err, c.IsNil)
 
 	// Getting the logs for the job should fail, as it has none because it was
@@ -353,13 +353,12 @@ func (s *HostSuite) TestSignalJob(t *c.C) {
 	client := schedutil.PickHost(hosts)
 
 	// start a signal-service job
-	cmd := exec.JobUsingCluster(cluster, s.createArtifact(t, "test-apps"), &host.Job{
+	cmd := exec.JobUsingHost(client, s.createArtifact(t, "test-apps"), &host.Job{
 		Config: host.ContainerConfig{
 			Args:       []string{"/bin/signal"},
 			DisableLog: true,
 		},
 	})
-	cmd.HostID = client.ID()
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	t.Assert(cmd.Start(), c.IsNil)
@@ -569,8 +568,7 @@ func (s *HostSuite) TestVolumeDeleteOnStop(t *c.C) {
 		defer h.DestroyVolume(vol.ID)
 
 		// run the job
-		cmd := exec.JobUsingCluster(s.clusterClient(t), s.createArtifact(t, "test-apps"), job)
-		cmd.HostID = h.ID()
+		cmd := exec.JobUsingHost(h, s.createArtifact(t, "test-apps"), job)
 		out, err := cmd.CombinedOutput()
 		t.Assert(err, c.IsNil)
 		t.Assert(string(out), c.Equals, "/foo\n")
