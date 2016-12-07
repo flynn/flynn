@@ -530,7 +530,18 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		if m.Target == "" {
 			return errors.New("host: invalid empty mount target")
 		}
-		config.Mounts = append(config.Mounts, bindMount(m.Target, m.Location, m.Writeable))
+		if m.Device == "" {
+			// assume it is a bind mount
+			config.Mounts = append(config.Mounts, bindMount(m.Target, m.Location, m.Writeable))
+			continue
+		}
+		config.Mounts = append(config.Mounts, &configs.Mount{
+			Source:      m.Target,
+			Destination: m.Location,
+			Device:      m.Device,
+			Data:        m.Data,
+			Flags:       m.Flags,
+		})
 	}
 
 	// apply volumes
