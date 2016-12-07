@@ -190,6 +190,9 @@ type Mount struct {
 	Location  string `json:"location,omitempty"`
 	Target    string `json:"target,omitempty"`
 	Writeable bool   `json:"writeable,omitempty"`
+	Device    string `json:"device,omitempty"`
+	Data      string `json:"data,omitempty"`
+	Flags     int    `json:"flags,omitempty"`
 }
 
 type VolumeBinding struct {
