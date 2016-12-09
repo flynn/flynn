@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v74",
+	"GodepVersion": "v75",
 	"Packages": [
 		"./..."
 	],
@@ -1047,6 +1047,10 @@
 		{
 			"ImportPath": "github.com/rancher/sparse-tools/sparse",
 			"Rev": "9cac891ad8a2029146df905ae09622eb1de8b19c"
+		},
+		{
+			"ImportPath": "github.com/rminnich/go9p",
+			"Rev": "d5b889a79786f72043b32e4294abc40c5cd050c9"
 		},
 		{
 			"ImportPath": "github.com/rnd42/go-jsonpointer",
