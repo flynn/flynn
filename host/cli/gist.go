@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/cheggaaa/pb"
@@ -91,25 +90,15 @@ func (g *Gist) Upload(log log15.Logger) error {
 	return nil
 }
 
-func (g *Gist) CreateTarball() (path string, err error) {
-	tmpDir, err := ioutil.TempDir("", "flynn-host-debug")
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		if err != nil {
-			os.RemoveAll(tmpDir)
-		}
-	}()
-	path = filepath.Join(tmpDir, "flynn-host-debug.tar.gz")
+func (g *Gist) CreateTarball(path string) error {
 	tmpFile, err := os.Create(path)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer tmpFile.Close()
 	gz, err := gzip.NewWriterLevel(tmpFile, gzip.BestCompression)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer gz.Close()
 	tarball := tar.NewWriter(gz)
@@ -121,16 +110,16 @@ func (g *Gist) CreateTarball() (path string, err error) {
 			Size:    int64(len(file.Content)),
 		}
 		if err := tarball.WriteHeader(hdr); err != nil {
-			return "", err
+			return err
 		}
 		if _, err := tarball.Write([]byte(file.Content)); err != nil {
-			return "", err
+			return err
 		}
 	}
 	if err := tarball.Close(); err != nil {
-		return "", err
+		return err
 	}
-	return path, nil
+	return nil
 }
 
 type File struct {
