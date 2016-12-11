@@ -62,9 +62,6 @@ main() {
           fail "$1 requires an argument"
         fi
         branch="$2"
-        if [[ "${branch}" = "master" ]]; then
-          nightly=true
-        fi
         shift 2
         ;;
       -v | --version)
@@ -119,6 +116,10 @@ main() {
   if [[ $# -ne 0 ]]; then
     usage
     exit 1
+  fi
+
+  if [[ "${branch}" = "master" ]]; then
+    nightly=true
   fi
 
   check_aws_keys
