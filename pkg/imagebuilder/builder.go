@@ -32,30 +32,28 @@ func (b *Builder) Build(name string, groupByTags bool) (*ct.ImageManifest, error
 		return nil, err
 	}
 
-	history, err := b.Context.History(name)
+	history, err := b.Context.History(image)
 	if err != nil {
 		return nil, err
 	}
 
-	ids := make([]string, 0, len(history))
 	layers := make([]*ct.ImageLayer, 0, len(history))
-	for i := len(history) - 1; i >= 0; i-- {
-		layer := history[i]
-		ids = append(ids, layer.ID)
+	from := 0
+	for i, layer := range history {
 		if !groupByTags || len(layer.Tags) > 0 {
-			l, err := b.CreateLayer(ids)
+			l, err := b.CreateLayer(history[from : i+1])
 			if err != nil {
 				return nil, err
 			}
-			ids = make([]string, 0, len(history))
 			layers = append(layers, l)
+			from = i
 		}
 	}
 
 	entrypoint := &ct.ImageEntrypoint{
 		WorkingDir: image.Config.WorkingDir,
 		Env:        make(map[string]string, len(image.Config.Env)),
-		Args:       append(image.Config.Entrypoint.Slice(), image.Config.Cmd.Slice()...),
+		Args:       append(image.Config.Entrypoint, image.Config.Cmd...),
 	}
 	for _, env := range image.Config.Env {
 		keyVal := strings.SplitN(env, "=", 2)
@@ -84,23 +82,23 @@ type LayerLocker interface {
 	DoLocked(id string, f func() error) error
 }
 
-// CreateLayer creates a squashfs layer from a docker layer ID chain by
+// CreateLayer creates a squashfs layer from a list of docker layers by
 // creating a temporary directory, applying the relevant diffs then calling
 // mksquashfs.
 //
 // Each squashfs layer is serialized as JSON and cached in a temporary file to
 // avoid regenerating existing layers, with access wrapped with a lock file in
 // case multiple images are being built at the same time.
-func (b *Builder) CreateLayer(ids []string) (*ct.ImageLayer, error) {
-	imageID := ids[len(ids)-1]
+func (b *Builder) CreateLayer(dockerLayers []*pinkerton.DockerLayer) (*ct.ImageLayer, error) {
+	imageID := dockerLayers[len(dockerLayers)-1].ID
 
 	locker, ok := b.Store.(LayerLocker)
 	if !ok {
-		return b.createLayer(ids)
+		return b.createLayer(dockerLayers)
 	}
 	var layer *ct.ImageLayer
 	err := locker.DoLocked(imageID, func() (err error) {
-		layer, err = b.createLayer(ids)
+		layer, err = b.createLayer(dockerLayers)
 		return
 	})
 	if err != nil {
@@ -110,8 +108,8 @@ func (b *Builder) CreateLayer(ids []string) (*ct.ImageLayer, error) {
 
 }
 
-func (b *Builder) createLayer(ids []string) (*ct.ImageLayer, error) {
-	imageID := ids[len(ids)-1]
+func (b *Builder) createLayer(dockerLayers []*pinkerton.DockerLayer) (*ct.ImageLayer, error) {
+	imageID := dockerLayers[len(dockerLayers)-1].ID
 
 	layer, err := b.Store.Load(imageID)
 	if err != nil {
@@ -126,11 +124,16 @@ func (b *Builder) createLayer(ids []string) (*ct.ImageLayer, error) {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
-	for _, id := range ids {
-		diff, err := b.Context.Diff(id, "")
+	for _, l := range dockerLayers {
+		if l.ChainID == "" {
+			continue
+		}
+		diff, err := b.Context.Diff(l.ChainID)
 		if err != nil {
 			return nil, err
 		}
+		defer diff.Close()
+
 		if err := archive.Untar(diff, dir, &archive.TarOptions{}); err != nil {
 			return nil, err
 		}

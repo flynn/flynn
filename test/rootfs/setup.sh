@@ -118,14 +118,13 @@ EOF
 
 # install docker
 # apparmor is required - see https://github.com/dotcloud/docker/issues/4734
-# pin docker version due to https://github.com/flynn/flynn/issues/2459
 apt-key adv \
   --keyserver hkp://p80.pool.sks-keyservers.net:80 \
   --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
 echo deb https://apt.dockerproject.org/repo ubuntu-trusty main \
   > /etc/apt/sources.list.d/docker.list
 apt-get update
-apt-get install -y "docker-engine=1.9.1-0~trusty" "aufs-tools" "apparmor"
+apt-get install -y "docker-engine=1.12.2-0~trusty" "aufs-tools" "apparmor"
 apt-mark hold docker-engine
 
 # install flynn build dependencies: tup

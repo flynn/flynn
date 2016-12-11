@@ -45,7 +45,11 @@ func (d *GraphDriver) Cleanup() error {
 	return nil
 }
 
-func (d *GraphDriver) Create(id, parent string) error {
+func (d *GraphDriver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) error {
+	return d.Create(id, parent, mountLabel, storageOpt)
+}
+
+func (d *GraphDriver) Create(id, parent, mountLabel string, storageOpt map[string]string) error {
 	return os.MkdirAll(d.dir(id), 0755)
 }
 

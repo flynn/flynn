@@ -19,7 +19,7 @@ func fixVolumePathPrefix(srcPath string) string {
 }
 
 // getWalkRoot calculates the root path when performing a TarWithOptions.
-// We use a seperate function as this is platform specific. On Linux, we
+// We use a separate function as this is platform specific. On Linux, we
 // can't use filepath.Join(srcPath,include) because this will clean away
 // a trailing "." or "/" which may be important.
 func getWalkRoot(srcPath string, include string) string {
@@ -40,7 +40,7 @@ func chmodTarEntry(perm os.FileMode) os.FileMode {
 	return perm // noop for unix as golang APIs provide perm bits correctly
 }
 
-func setHeaderForSpecialDevice(hdr *tar.Header, ta *tarAppender, name string, stat interface{}) (nlink uint32, inode uint64, err error) {
+func setHeaderForSpecialDevice(hdr *tar.Header, ta *tarAppender, name string, stat interface{}) (inode uint64, err error) {
 	s, ok := stat.(*syscall.Stat_t)
 
 	if !ok {
@@ -48,7 +48,6 @@ func setHeaderForSpecialDevice(hdr *tar.Header, ta *tarAppender, name string, st
 		return
 	}
 
-	nlink = uint32(s.Nlink)
 	inode = uint64(s.Ino)
 
 	// Currently go does not fill in the major/minors

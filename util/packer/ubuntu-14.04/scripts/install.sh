@@ -172,7 +172,7 @@ install_packages() {
     "git"
     "iptables"
     "linux-image-extra-$(uname -r)"
-    "docker-engine=1.9.1-0~trusty"
+    "docker-engine=1.12.2-0~trusty"
     "make"
     "mercurial"
     "squashfs-tools"

@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -61,7 +62,7 @@ func (d *driver) Name() string {
 }
 
 func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
-	body, err := d.ReadStream(ctx, path, 0)
+	body, err := d.Reader(ctx, path, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -70,11 +71,18 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 }
 
 func (d *driver) PutContent(ctx context.Context, path string, content []byte) error {
-	_, err := d.WriteStream(ctx, path, 0, bytes.NewReader(content))
-	return err
+	w, err := d.Writer(ctx, path, false)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+	if _, err := io.Copy(w, bytes.NewReader(content)); err != nil {
+		return err
+	}
+	return w.Commit()
 }
 
-func (d *driver) ReadStream(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
+func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
 	req, err := http.NewRequest("GET", d.blobstoreURL(path), nil)
 	if err != nil {
 		return nil, err
@@ -96,38 +104,79 @@ func (d *driver) ReadStream(ctx context.Context, path string, offset int64) (io.
 	return res.Body, nil
 }
 
-// readCounter wraps an io.Reader and counts how many bytes are read
-type readCounter struct {
-	r io.Reader
-	n int64
+func (d *driver) Writer(ctx context.Context, path string, append bool) (storage.FileWriter, error) {
+	var offset int64
+	if append {
+		info, err := d.Stat(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		offset = info.Size()
+	}
+	tmp, err := ioutil.TempFile("", "")
+	if err != nil {
+		return nil, err
+	}
+	return &fileWriter{driver: d, path: path, tmp: tmp, size: offset, offset: offset}, nil
 }
 
-func (r *readCounter) Read(p []byte) (int, error) {
-	n, err := r.r.Read(p)
-	atomic.AddInt64(&r.n, int64(n))
+type fileWriter struct {
+	driver *driver
+	path   string
+	tmp    *os.File
+	offset int64
+	size   int64
+}
+
+func (f *fileWriter) Write(p []byte) (int, error) {
+	n, err := f.tmp.Write(p)
+	atomic.AddInt64(&f.size, int64(n))
 	return n, err
 }
 
-func (d *driver) WriteStream(ctx context.Context, path string, offset int64, reader io.Reader) (int64, error) {
-	// use a readCounter so we can return how many bytes were uploaded
-	// from the given reader
-	r := &readCounter{r: reader}
-	req, err := http.NewRequest("PUT", d.blobstoreURL(path), r)
-	if err != nil {
-		return 0, err
+func (f *fileWriter) Close() error {
+	if err := f.put(); err != nil {
+		return err
 	}
-	if offset > 0 {
-		req.Header.Set("Blobstore-Offset", fmt.Sprintf("%d", offset))
+	f.tmp.Close()
+	return os.Remove(f.tmp.Name())
+}
+
+func (f *fileWriter) Size() int64 {
+	return atomic.LoadInt64(&f.size)
+}
+
+func (f *fileWriter) Cancel() error {
+	return f.Close()
+}
+
+func (f *fileWriter) Commit() error {
+	return f.put()
+}
+
+func (f *fileWriter) put() error {
+	if err := f.tmp.Sync(); err != nil {
+		return err
+	}
+	if _, err := f.tmp.Seek(0, os.SEEK_SET); err != nil {
+		return err
+	}
+	req, err := http.NewRequest("PUT", f.driver.blobstoreURL(f.path), f.tmp)
+	if err != nil {
+		return err
+	}
+	if f.offset > 0 {
+		req.Header.Set("Blobstore-Offset", fmt.Sprintf("%d", f.offset))
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("unexpected HTTP status from blobstore: %s", res.Status)
+		return fmt.Errorf("unexpected HTTP status from blobstore: %s", res.Status)
 	}
-	return r.n, nil
+	return nil
 }
 
 func (d *driver) Stat(ctx context.Context, path string) (storage.FileInfo, error) {
@@ -211,7 +260,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 }
 
 func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
-	return "", storage.ErrUnsupportedMethod
+	return "", storage.ErrUnsupportedMethod{}
 }
 
 func (d *driver) blobstoreURL(path string) string {
