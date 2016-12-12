@@ -30,7 +30,7 @@ test: test-unit test-integration
 test-unit-deps: toolchain
 	@$(GIT_DEV) $(GO_ENV) $(BUILD_ENV) tup discoverd host/cli/root_keys.go installer/bindata.go dashboard/bindata.go
 
-test-unit: test-unit-deps
+test-unit:
 	@$(GO_ENV) PATH=${PWD}/discoverd/bin:${PATH} util/_toolchain/go/bin/go test -race -cover ./...
 
 test-unit-root: test-unit
@@ -40,6 +40,7 @@ test-integration: toolchain
 	script/run-integration-tests
 
 toolchain:
+	@git clean -Xdf
 	@cd util/_toolchain && ./build.sh
 
 .PHONY: all clean dev release test test-unit test-integration
