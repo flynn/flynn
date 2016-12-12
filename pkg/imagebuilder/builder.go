@@ -48,7 +48,10 @@ func (b *Builder) Build(name string, groupByTags bool) (*ct.ImageManifest, error
 				return nil, err
 			}
 			ids = make([]string, 0, len(history))
-			layers = append(layers, l)
+			// only add non-empty layers
+			if l != nil {
+				layers = append(layers, l)
+			}
 		}
 	}
 
@@ -182,6 +185,15 @@ func (b *Builder) createLayer(ids []string) (*ct.ImageLayer, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// skip creating the layer if the diff is empty (e.g the result of an
+	// ENV step in a Dockerfile)
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	} else if len(files) == 0 {
+		return nil, nil
 	}
 
 	// create the squashfs layer, with the root dir having 755 permissions
