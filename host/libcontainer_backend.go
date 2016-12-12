@@ -251,7 +251,11 @@ func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) er
 
 	// enable IP forwarding
 	ipFwd := "/proc/sys/net/ipv4/ip_forward"
-	if data, err := ioutil.ReadFile(ipFwd); err != nil && !bytes.HasPrefix(data, []byte("1")) {
+	data, err := ioutil.ReadFile(ipFwd)
+	if err != nil {
+		return err
+	}
+	if !bytes.HasPrefix(data, []byte("1")) {
 		if err := ioutil.WriteFile(ipFwd, []byte("1\n"), 0644); err != nil {
 			return err
 		}
