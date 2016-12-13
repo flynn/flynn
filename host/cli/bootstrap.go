@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
@@ -838,6 +839,10 @@ WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 			"PGPASSWORD":     data.Controller.Release.Env["PGPASSWORD"],
 		}
 		cmd.Volumes = []*ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}}
+
+		// the job needs CAP_SYS_ADMIN so it can convert AUFS opaque
+		// directories using setxattr(2)
+		cmd.LinuxCapabilities = append(host.DefaultCapabilities, "CAP_SYS_ADMIN")
 		if err := runMigrator(cmd); err != nil {
 			ch <- &bootstrap.StepInfo{
 				StepMeta:  meta,
