@@ -451,17 +451,47 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 	}()
 
-	// ensure we have accurate in-memory states for all cluster jobs
+	// ensure we have accurate in-memory states for all active jobs
+	activeHostJobs := map[string]struct{}{}
 	for id, host := range s.hosts {
-		jobs, err := host.client.ListJobs()
+		jobs, err := host.client.ListActiveJobs()
 		if err != nil {
-			log.Error("error getting host jobs", "host.id", id, "err", err)
+			log.Error("error getting active host jobs", "host.id", id, "err", err)
 			return err
 		}
 
 		for _, job := range jobs {
+			activeHostJobs[job.Job.ID] = struct{}{}
 			s.handleActiveJob(&job)
 		}
+	}
+
+	// ensure any jobs we think are active are still active (in case we
+	// missed the event which marked the job as down)
+	for _, job := range s.jobs {
+		if job.State != JobStateStarting && job.State != JobStateRunning {
+			continue
+		}
+		if _, ok := activeHostJobs[job.JobID]; ok {
+			continue
+		}
+		log.Warn("job no longer active", "job.id", job.JobID, "job.state", job.State)
+		// get the job from the host to determine why it is no longer active
+		host, ok := s.hosts[job.HostID]
+		if !ok {
+			// assume the job doesn't exist, mark it as stopped
+			log.Error("error getting inactive job, unknown host", "job.id", job.JobID, "host.id", job.HostID)
+			s.markAsStopped(job)
+			continue
+		}
+		j, err := host.client.GetJob(job.JobID)
+		if err != nil {
+			// assume the job doesn't exist, mark it as stopped
+			log.Error("error getting inactive job, marking as stopped", "job.id", job.JobID, "err", err)
+			s.markAsStopped(job)
+			continue
+		}
+		s.handleActiveJob(j)
 	}
 
 	// ensure that all pending / starting / up jobs in the controller are

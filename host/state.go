@@ -333,6 +333,18 @@ func (s *State) Get() map[string]*host.ActiveJob {
 	return res
 }
 
+func (s *State) GetActive() map[string]*host.ActiveJob {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	res := make(map[string]*host.ActiveJob)
+	for id, job := range s.jobs {
+		if job.Status == host.StatusStarting || job.Status == host.StatusRunning {
+			res[id] = job.Dup()
+		}
+	}
+	return res
+}
+
 func (s *State) ClusterJobs() []*host.Job {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()

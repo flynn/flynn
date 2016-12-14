@@ -930,3 +930,61 @@ loop:
 		}
 	}
 }
+
+func (TestSuite) TestActiveJobSync(c *C) {
+	h := NewFakeHostClient("host1", false)
+	testCluster := newTestCluster(map[string]utils.HostClient{h.ID(): h})
+	s := newTestScheduler(c, testCluster, true, nil)
+	s.hosts[h.ID()] = NewHost(h, s.logger)
+
+	addJob := func(id string) *host.Job {
+		job := &host.Job{
+			ID: cluster.GenerateJobID(h.ID(), id),
+			Metadata: map[string]string{
+				"flynn-controller.app":     testAppID,
+				"flynn-controller.release": testReleaseID,
+			},
+		}
+		h.AddJob(job)
+		return job
+	}
+	assertJob := func(id string, state JobState) {
+		job, ok := s.jobs[id]
+		if !ok {
+			c.Fatalf("job not found: %q", id)
+		}
+		c.Assert(job.State, Equals, state, Commentf("checking %s = %s", id, state))
+	}
+	setStatus := func(id string, status host.JobStatus) {
+		job := h.Jobs[id]
+		job.Status = status
+		h.Jobs[id] = job
+	}
+
+	// sync a job
+	job1 := addJob("job1")
+	c.Assert(s.SyncJobs(), IsNil)
+	c.Assert(s.jobs, HasLen, 1)
+	assertJob("job1", JobStateStarting)
+
+	// sync another job
+	job2 := addJob("job2")
+	c.Assert(s.SyncJobs(), IsNil)
+	c.Assert(s.jobs, HasLen, 2)
+	assertJob("job1", JobStateStarting)
+	assertJob("job2", JobStateStarting)
+
+	// sync a running job
+	setStatus(job1.ID, host.StatusRunning)
+	c.Assert(s.SyncJobs(), IsNil)
+	c.Assert(s.jobs, HasLen, 2)
+	assertJob("job1", JobStateRunning)
+	assertJob("job2", JobStateStarting)
+
+	// sync a stopped job
+	setStatus(job2.ID, host.StatusDone)
+	c.Assert(s.SyncJobs(), IsNil)
+	c.Assert(s.jobs, HasLen, 2)
+	assertJob("job1", JobStateRunning)
+	assertJob("job2", JobStateStopped)
+}

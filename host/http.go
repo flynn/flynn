@@ -190,9 +190,13 @@ func (h *jobAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.
 		}
 		return
 	}
-	res := h.host.state.Get()
-
-	httphelper.JSON(w, 200, res)
+	var jobs map[string]*host.ActiveJob
+	if r.FormValue("active") == "true" {
+		jobs = h.host.state.GetActive()
+	} else {
+		jobs = h.host.state.Get()
+	}
+	httphelper.JSON(w, 200, jobs)
 }
 
 func (h *jobAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
