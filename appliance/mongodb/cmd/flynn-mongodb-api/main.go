@@ -155,7 +155,7 @@ func (a *API) ping(w http.ResponseWriter, req *http.Request, _ httprouter.Params
 	logger := a.logger().New("fn", "ping")
 
 	logger.Info("checking status", "host", serviceHost)
-	if status, err := sirenia.NewClient(serviceHost + ":3306").Status(); err == nil && status.Database != nil && status.Database.ReadWrite {
+	if status, err := sirenia.NewClient(serviceHost + ":27017").Status(); err == nil && status.Database != nil && status.Database.ReadWrite {
 		logger.Info("database is up, skipping scale check")
 	} else {
 		scaled, err := scale.CheckScale(app, controllerKey, "mongodb", a.logger())
