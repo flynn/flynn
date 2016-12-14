@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -179,9 +179,16 @@ func runGitCredentials(args *docopt.Args) error {
 		return nil
 	}
 
-	detailBytes, _ := ioutil.ReadAll(os.Stdin)
+	r := bufio.NewReader(os.Stdin)
 	details := make(map[string]string)
-	for _, l := range bytes.Split(detailBytes, []byte("\n")) {
+	for {
+		l, _, err := r.ReadLine()
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if len(l) == 0 {
+			break
+		}
 		kv := bytes.SplitN(l, []byte("="), 2)
 		if len(kv) == 2 {
 			details[string(kv[0])] = string(kv[1])
