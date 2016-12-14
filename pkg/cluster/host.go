@@ -88,10 +88,17 @@ func WaitForHostStatus(hostIP string, desired func(*host.HostStatus) bool) (*hos
 	}
 }
 
-// ListJobs lists the jobs running on the host.
+// ListJobs lists all jobs on the host.
 func (c *Host) ListJobs() (map[string]host.ActiveJob, error) {
 	var jobs map[string]host.ActiveJob
 	err := c.c.Get("/host/jobs", &jobs)
+	return jobs, err
+}
+
+// ListActiveJobs lists starting or running jobs on the host.
+func (c *Host) ListActiveJobs() (map[string]host.ActiveJob, error) {
+	var jobs map[string]host.ActiveJob
+	err := c.c.Get("/host/jobs?active=true", &jobs)
 	return jobs, err
 }
 

@@ -65,6 +65,18 @@ func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) {
 	return jobs, nil
 }
 
+func (c *FakeHostClient) ListActiveJobs() (map[string]host.ActiveJob, error) {
+	c.jobsMtx.RLock()
+	defer c.jobsMtx.RUnlock()
+	jobs := make(map[string]host.ActiveJob)
+	for id, j := range c.Jobs {
+		if j.Status == host.StatusStarting || j.Status == host.StatusRunning {
+			jobs[id] = j
+		}
+	}
+	return jobs, nil
+}
+
 func (c *FakeHostClient) AddJob(job *host.Job) error {
 	c.jobsMtx.Lock()
 	defer c.jobsMtx.Unlock()
