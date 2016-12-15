@@ -908,7 +908,7 @@ iptables -A FORWARD -i eth0 -p tcp --dport 443 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 22 -j ACCEPT
 iptables -A FORWARD -i eth0 -p icmp --icmp-type echo-request -j ACCEPT
 iptables -A FORWARD -i eth0 -j DROP
-/etc/init.d/iptables-persistent save
+netfilter-persistent save
 `[1:]))
 
 var startScript = template.Must(template.New("start.sh").Parse(`
@@ -933,8 +933,19 @@ if [[ ! -f "${FIRST_BOOT}" ]]; then
   {{end}}
 
   flynn-host init --discovery={{.DiscoveryToken}}
-  start flynn-host
-  sed -i 's/#start on/start on/' /etc/init/flynn-host.conf
+
+  source /etc/lsb-release
+  case "${DISTRIB_RELEASE}" in
+    14.04)
+      start flynn-host
+      sed -i 's/#start on/start on/' /etc/init/flynn-host.conf
+      ;;
+    16.04)
+      systemctl enable flynn-host
+      systemctl start flynn-host
+      ;;
+  esac
+
   touch "${FIRST_BOOT}"
 fi
 `[1:]))

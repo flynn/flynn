@@ -2,6 +2,7 @@
 
 set -xeo pipefail
 
+source /etc/lsb-release
 export DEBIAN_FRONTEND=noninteractive
 
 main() {
@@ -34,7 +35,6 @@ main() {
   add_apt_sources
   install_packages
   install_flynn
-  disable_docker_start
   apt_cleanup
   packer_cleanup
 
@@ -46,7 +46,14 @@ main() {
 
 stop_cron() {
   # cron can run apt/dpkg commands that will disrupt our tasks
-  service cron stop
+  case "${DISTRIB_RELEASE}" in
+    14.04)
+      service cron stop
+      ;;
+    16.04)
+      systemctl stop cron
+      ;;
+  esac
 }
 
 virtualbox_build() {
@@ -136,56 +143,33 @@ enable_cgroups() {
 }
 
 create_groups() {
-  groupadd docker
   groupadd fuse || true
-  usermod -a -G docker,fuse "${SUDO_USER}"
+  usermod -a -G fuse "${SUDO_USER}"
 }
 
 add_apt_sources() {
-  # docker
-  apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 \
-    --recv 58118E89F3A912897C070ADBF76221572C52609D
-  echo deb https://apt.dockerproject.org/repo ubuntu-trusty main \
-    > /etc/apt/sources.list.d/docker.list
-
   # tup
   apt-key adv --keyserver keyserver.ubuntu.com \
     --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
   echo deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main \
     > /etc/apt/sources.list.d/tup.list
 
-  # zfs
-  apt-key adv --keyserver keyserver.ubuntu.com \
-    --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
-  echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main \
-    > /etc/apt/sources.list.d/zfs.list
-
   apt-get update
 }
 
 install_packages() {
   local packages=(
-    "aufs-tools"
-    "btrfs-tools"
-    "bzr"
     "curl"
     "git"
     "iptables"
-    "linux-image-extra-$(uname -r)"
-    "docker-engine=1.9.1-0~trusty"
     "make"
-    "mercurial"
     "squashfs-tools"
     "tup"
-    "ubuntu-zfs"
     "vim-tiny"
     "libsasl2-dev"
   )
 
   apt-get install -y ${packages[@]}
-
-  # hold back docker upgrades to prevent breaking pinkerton see gh issue #2459
-  apt-mark hold docker-engine
 
   # make tup suid root so that we can build in chroots
   chmod ug+s /usr/bin/tup
@@ -203,11 +187,15 @@ install_flynn() {
   fi
 
   bash -es -- -r "${repo}" < <(curl -sL --fail "${repo}/${script}")
-  sed -i 's/start on/#start on/' /etc/init/flynn-host.conf
-}
 
-disable_docker_start() {
-  echo manual > /etc/init/docker.override
+  case "${DISTRIB_RELEASE}" in
+    14.04)
+      sed -i 's/start on/#start on/' /etc/init/flynn-host.conf
+      ;;
+    16.04)
+      systemctl disable flynn-host
+      ;;
+  esac
 }
 
 apt_cleanup() {

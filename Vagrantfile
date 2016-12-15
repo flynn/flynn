@@ -97,10 +97,15 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   end
 
   config.vm.provision "shell", privileged: false, inline: <<-SCRIPT
+    set -eo pipefail
+
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
     grep '^export DISCOVERD' ~/.bashrc || echo export DISCOVERD="192.0.2.200:1111" >> ~/.bashrc
     grep '^export GOROOT' ~/.bashrc || echo export GOROOT=~/go/src/github.com/flynn/flynn/util/_toolchain/go >> ~/.bashrc
     grep '^export PATH' ~/.bashrc || echo export PATH=~/go/bin:~/go/src/github.com/flynn/flynn/util/_toolchain/go/bin:~/go/src/github.com/flynn/flynn/discoverd/bin:~/go/src/github.com/flynn/flynn/cli/bin:~/go/src/github.com/flynn/flynn/host/bin:~/go/src/github.com/flynn/flynn/script:\\\$PATH: >> ~/.bashrc
+
+    # Install Docker 1.9.1 for building Flynn images
+    ~/go/src/github.com/flynn/flynn/util/docker/install.sh
 
     # For script unit tests
     tmpdir=$(mktemp --directory)
@@ -113,17 +118,17 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     # Database dependencies - postgres, mariadb + percona xtrabackup, mongodb, redis
     sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 \
       B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 \
-      199369E5404BD5FC7D2FE43BCBCB082A1BB943DB \
+      177F4010FE56CA3336300305F1656F24C74CD1D8 \
       4D1BB29D63D98E422B2113B19334A25F8507EFA5 \
       42F3E95A2C4F08279C4960ADD68FA50FEA312927 \
       136221EE520DDFAF0A905689B9316A7BC7917B12
-    sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" > /etc/apt/sources.list.d/postgresql.list'
-    sudo sh -c 'echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu trusty main" > /etc/apt/sources.list.d/mariadb.list'
-    sudo sh -c 'echo "deb http://repo.percona.com/apt trusty main" > /etc/apt/sources.list.d/percona.list'
-    sudo sh -c 'echo "deb http://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb.list'
-    sudo sh -c 'echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu trusty main" > /etc/apt/sources.list.d/redis.list'
+    sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main" > /etc/apt/sources.list.d/postgresql.list'
+    sudo sh -c 'echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu xenial main" > /etc/apt/sources.list.d/mariadb.list'
+    sudo sh -c 'echo "deb http://repo.percona.com/apt xenial main" > /etc/apt/sources.list.d/percona.list'
+    sudo sh -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb.list'
+    sudo sh -c 'echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu xenial main" > /etc/apt/sources.list.d/redis.list'
     sudo apt-get update
-    sudo sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-9.5 postgresql-contrib-9.5 mariadb-server percona-xtrabackup mongodb-org redis-server'
+    sudo sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-9.5 postgresql-contrib-9.5 mariadb-server-10.1 percona-xtrabackup mongodb-org redis-server'
 
     # Setup postgres for controller unit tests
     sudo -u postgres createuser --superuser vagrant || true
@@ -138,10 +143,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     grep ^cd ~/.bashrc || echo cd ~/go/src/github.com/flynn/flynn >> ~/.bashrc
     sudo chown -R vagrant:vagrant ~/go
-
-    # enable docker
-    sudo rm -f /etc/init/docker.override
-    sudo start docker || true
   SCRIPT
 
   if File.exists?("script/custom-vagrant")

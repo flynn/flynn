@@ -1,0 +1,8 @@
+{
+  "boot_command_prefix": "<esc><esc><enter><wait>",
+  "iso_checksum": "dde07d37647a1d2d9247e33f14e91acb10445a97578384896b4e1d985f754cc1",
+  "iso_checksum_type": "sha256",
+  "iso_url": "http://releases.ubuntu.com/trusty/ubuntu-14.04.5-server-amd64.iso",
+  "source_ami": "ami-5ac2cd4d",
+  "ubuntu_version": "trusty"
+}
