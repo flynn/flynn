@@ -33,9 +33,7 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_BOX_URL="https://cloud-images.ubuntu.com/vagrant/trusty/20160509/trusty-server-cloudimg-amd64-vagrant-disk1.box"
-UBUNTU_BOX_SHA="0f28ac4f6e281d0dfa5155be8d0ea5991a075a02a15ec23a7aad0bd729fa0ed7"
-UBUNTU_USEAST_AMI="ami-7c927e11" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20160509.1 | hvm
+UBUNTU_USEAST_AMI="ami-e6d5d2f1" # us-east-1 | xenial | 16.04 LTS | amd64 | hvm:ebs-ssd | 20161205 | hvm
 
 usage() {
   cat <<USAGE >&2
@@ -96,36 +94,18 @@ main() {
   local amis="$(cat "${dir}/amis.txt" 2>/dev/null)"
   local box=$(ls "${dir}"/*_virtualbox.box 2>/dev/null)
   if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
-    local ubuntu_box="/tmp/ubuntu-${UBUNTU_BOX_SHA}.box"
-    if [[ ! -f "${ubuntu_box}" ]]; then
-      info "fetching base Ubuntu box"
-      curl "${UBUNTU_BOX_URL}" > "${ubuntu_box}"
-    fi
-
-    info "validating base Ubuntu box"
-    if [[ "$(sha256 "${ubuntu_box}")" != "${UBUNTU_BOX_SHA}" ]]; then
-      rm -f "${ubuntu_box}"
-      fail "base Ubuntu box has incorrect checksum"
-    fi
-
-    local ova_path="/tmp/ubuntu-${UBUNTU_BOX_SHA}.ova"
-    if [[ ! -f "${ova_path}" ]]; then
-      info "converting base Ubuntu box to OVA archive"
-      tar --delete Vagrantfile < "${ubuntu_box}" > "${ova_path}"
-    fi
-
     info "building VirtualBox and EC2 images"
-    pushd "${ROOT}/util/packer/ubuntu-14.04" >/dev/null
+    pushd "${ROOT}/util/packer" >/dev/null
     local output=$(packer build \
       -machine-readable \
-      -only="amazon-ebs,virtualbox-ovf" \
+      -only="amazon-ebs,virtualbox-iso" \
       -var "headless=true" \
       -var "output_dir=${dir}" \
-      -var "ova_path=${ova_path}" \
       -var "flynn_repository=https://${domain}" \
       -var "source_ami=${UBUNTU_USEAST_AMI}" \
       -var "version=${version}" \
-      template.json | parse_packer)
+      -var-file "ubuntu-xenial.json" \
+      ubuntu.json | parse_packer)
     popd >/dev/null
 
     info "parsing build output"
@@ -133,7 +113,7 @@ main() {
       IFS="|" read builder artifacts <<< "${line}"
 
       case "${builder}" in
-        virtualbox-ovf)
+        virtualbox-iso)
           box="${artifacts}"
           ;;
         amazon-ebs)
@@ -214,7 +194,7 @@ main() {
 #
 # example artifact output:
 #
-#   virtualbox-ovf|/tmp/tmp.FhRkEcY9YJ/flynn-base_20141021.1_virtualbox.box
+#   virtualbox-iso|/tmp/tmp.FhRkEcY9YJ/flynn-base_20141021.1_virtualbox.box
 #   amazon-ebs|eu-west-1:ami-4c832d3b,us-east-1:ami-fea92d96
 #
 parse_packer() {
@@ -224,9 +204,9 @@ parse_packer() {
     case "${type}" in
       ui) echo -e "$(cut -d "," -f 2 <<< "${data}")" >&2 ;;
       artifact)
-        if [[ "${target}" == "virtualbox-ovf" ]] \
+        if [[ "${target}" == "virtualbox-iso" ]] \
           && [[ "${data:0:9}" == "0,file,0," ]]; then
-          echo "virtualbox-ovf|${data:9}"
+          echo "virtualbox-iso|${data:9}"
         elif [[ "${target}" == "amazon-ebs" ]] \
           && [[ "${data:0:5}" == "0,id," ]]; then
           echo "amazon-ebs|${data:5}"

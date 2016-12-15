@@ -240,7 +240,7 @@ var azureTemplate = template.Must(template.New("azure_template.json").Funcs(temp
           "imageReference": {
             "publisher": "Canonical",
             "offer": "UbuntuServer",
-            "sku": "14.04.2-LTS",
+            "sku": "16.04.0-LTS",
             "version": "latest"
           },
           "osDisk": {

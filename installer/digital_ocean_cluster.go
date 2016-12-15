@@ -237,7 +237,7 @@ func (c *DigitalOceanCluster) createDroplet(name string) (*int, error) {
 		Region: c.Region,
 		Size:   c.Size,
 		Image: godo.DropletCreateImage{
-			Slug: "ubuntu-14-04-x64",
+			Slug: "ubuntu-16-04-x64",
 		},
 		SSHKeys: []godo.DropletCreateSSHKey{{
 			Fingerprint: c.KeyFingerprint,

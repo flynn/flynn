@@ -1,14 +1,13 @@
 # Packer Templates
 
 This directory contains Packer templates for building machine images that
-represent an Ubuntu target system for Flynn. This is essentially a stock image
-of Ubuntu 14.04 with Docker installed and the Flynn container images downloaded.
+represent an Ubuntu target system for Flynn. These are essentially stock
+images of Ubuntu 14.04 / 16.04 with Flynn installed.
 
 ## Usage
 
 First, [install Packer](http://www.packer.io/intro/getting-started/setup.html).
-Then, clone this repository and `cd` into the `util/packer/ubuntu-14.04` target
-directory.
+Then, clone this repository and `cd` into the `util/packer` target directory.
 
 ## Vagrant Template
 
@@ -16,18 +15,10 @@ Currently supports:
  * VirtualBox
  * VMWare Fusion
 
-To build just a VirtualBox image for use with the Flynn Vagrantfile, first
-download an Ubuntu cloud image and convert it to an OVA archive:
+To build just a VirtualBox image for use with the Flynn Vagrantfile:
 
 ```
-$ BOX_URL=https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-amd64-vagrant-disk1.box
-$ curl $BOX_URL | tar --delete Vagrantfile > ubuntu.ova
-```
-
-Then run Packer:
-
-```
-$ packer build -only=virtualbox-ovf template.json
+$ packer build -only=virtualbox-iso -var-file ubuntu-xenial.json ubuntu.json
 ```
 
 ## Then What?

@@ -55,16 +55,15 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # Provisioners
   if $flag_update == "true"
     config.vm.provision "shell", inline: <<-SCRIPT
-      apt-get update -qq
-      apt-get install -y flynn-host
-      flynn-host download /etc/flynn/version.json
+      flynn-host download
     SCRIPT
   end
   if $flag_bootstrap == "true"
     config.vm.provision "shell", privileged: false, inline: <<-SCRIPT
-      sudo start flynn-host
-      CLUSTER_DOMAIN="#{$cluster_domain}" \
-        flynn-host bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
+      sudo systemctl enable flynn-host.service
+      sudo systemctl start flynn-host.service
+      export CLUSTER_DOMAIN="#{$cluster_domain}"
+      flynn-host bootstrap 2>&1
     SCRIPT
   end
 end
