@@ -169,15 +169,6 @@ main() {
     packages+=("ubuntu-zfs")
   fi
 
-  # Flynn no longer uses AUFS since version v20161106.0, but install
-  # it in case we end up installing an old version
-  if ! modprobe aufs &>/dev/null; then
-    packages+=(
-      "aufs-tools"
-      "linux-image-extra-$(uname -r)"
-    )
-  fi
-
   if $install_ntp; then
     packages+=(
       "ntp"
@@ -220,24 +211,6 @@ main() {
     --tuf-db     "/etc/flynn/tuf.db" \
     --config-dir "/etc/flynn" \
     --bin-dir    "/usr/local/bin"
-
-  # install libvirt dependencies for versions before v20160711.0.
-  #
-  # NOTE: Uses a negative assertion so we only skip installing if we know the
-  #       installed Flynn version is definitely greater than or equal to
-  #       v20160711.0.
-  local version="$(/usr/local/bin/flynn-host version)"
-  if ! [[ "${version:1:8}" -ge "20160711" ]]; then
-    info "installing extra runtime dependencies"
-    run apt-get install --yes "libvirt-bin"
-
-    info "setting libvirt defaults"
-    if grep -q "^libvirt_uris=" /etc/default/libvirt-bin; then
-      sed "s|^libvirt_uris=.*|libvirt_uris='qemu:///system'|" -i /etc/default/libvirt-bin
-    else
-      echo "libvirt_uris='qemu:///system'" >> /etc/default/libvirt-bin
-    fi
-  fi
 
   if is_ubuntu_xenial; then
     install_systemd_unit
