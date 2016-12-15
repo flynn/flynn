@@ -106,11 +106,6 @@ main() {
   local version=$2
   local flynn_release="${ROOT}/util/release/flynn-release"
 
-  info "checking status of commit ${commit}"
-  if ! "${flynn_release}" status ${commit}; then
-    fail "commit has not passed CI"
-  fi
-
   dir="${dir:-$(mktemp --directory)}"
   info "using base dir: ${dir}"
 
