@@ -34,6 +34,7 @@ import (
 	"github.com/flynn/flynn/host/volume/manager"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	logutils "github.com/flynn/flynn/logaggregator/utils"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
@@ -846,6 +847,11 @@ func (l *LibcontainerBackend) discoverdDial(network, addr string) (net.Conn, err
 	return dialer.Default.Dial(network, addr)
 }
 
+var containerDestroyAttempts = attempt.Strategy{
+	Total: 10 * time.Second,
+	Delay: 100 * time.Millisecond,
+}
+
 func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	log := c.l.Logger.New("fn", "watch", "job.id", c.job.ID)
 	log.Info("start watching container")
@@ -857,7 +863,13 @@ func (c *Container) watch(ready chan<- error, buffer host.LogBuffer) error {
 	}
 
 	defer func() {
-		c.container.Destroy()
+		// there is no guarantee the container has fully terminated by
+		// this point, so try to destroy it multiple times to prevent
+		// leaking the container's cgroup (and thus file descriptors
+		// for the oom notification)
+		if err := containerDestroyAttempts.Run(c.container.Destroy); err != nil {
+			log.Warn("error destroying container", "err", err)
+		}
 		c.l.containersMtx.Lock()
 		delete(c.l.containers, c.job.ID)
 		c.l.containersMtx.Unlock()
