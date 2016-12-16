@@ -190,8 +190,8 @@ UPDATE artifacts SET deleted_at = now() WHERE artifact_id = $1 AND deleted_at IS
 	artifactReleaseCountQuery = `
 SELECT COUNT(*) FROM release_artifacts WHERE artifact_id = $1 AND deleted_at IS NULL`
 	deploymentInsertQuery = `
-INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, deploy_timeout)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at`
+INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, tags, deploy_timeout)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING created_at`
 	deploymentUpdateFinishedAtQuery = `
 UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1`
 	deploymentUpdateFinishedAtNowQuery = `
@@ -202,7 +202,7 @@ DELETE FROM deployments WHERE deployment_id = $1`
 WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
 SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
   strategy, e1.data->>'status' AS status,
-  processes, deploy_timeout, d.created_at, d.finished_at
+  processes, tags, deploy_timeout, d.created_at, d.finished_at
 FROM deployments d
 LEFT JOIN deployment_events e1
   ON d.deployment_id = e1.object_id::uuid
@@ -213,7 +213,7 @@ WHERE e2.created_at IS NULL AND d.deployment_id = $1`
 WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
 SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
   strategy, e1.data->>'status' AS status,
-  processes, deploy_timeout, d.created_at, d.finished_at
+  processes, tags, deploy_timeout, d.created_at, d.finished_at
 FROM deployments d
 LEFT JOIN deployment_events e1
   ON d.deployment_id = e1.object_id::uuid

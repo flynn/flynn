@@ -31,6 +31,7 @@ func (d *DeployJob) deployAllAtOnce() error {
 			AppID:     d.AppID,
 			ReleaseID: d.NewReleaseID,
 			Processes: newProcs,
+			Tags:      d.Tags,
 		}); err != nil {
 			log.Error("error creating new formation", "err", err)
 			return err
@@ -55,6 +56,7 @@ func (d *DeployJob) deployAllAtOnce() error {
 	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.OldReleaseID,
+		Tags:      d.Tags,
 	}); err != nil {
 		// the new jobs have now started and they are up, so return
 		// ErrSkipRollback (rolling back doesn't make a ton of sense

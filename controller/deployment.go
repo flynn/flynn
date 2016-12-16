@@ -40,7 +40,7 @@ func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := tx.QueryRow("deployment_insert", d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, d.Processes, d.DeployTimeout).Scan(&d.CreatedAt); err != nil {
+	if err := tx.QueryRow("deployment_insert", d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, d.Processes, d.Tags, d.DeployTimeout).Scan(&d.CreatedAt); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	d := &ct.Deployment{}
 	var oldReleaseID *string
 	var status *string
-	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &d.Processes, &d.DeployTimeout, &d.CreatedAt, &d.FinishedAt)
+	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &d.Processes, &d.Tags, &d.DeployTimeout, &d.CreatedAt, &d.FinishedAt)
 	if err == pgx.ErrNoRows {
 		err = ErrNotFound
 	}
@@ -183,6 +183,7 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		Strategy:      app.Strategy,
 		OldReleaseID:  oldRelease.ID,
 		Processes:     oldFormation.Processes,
+		Tags:          oldFormation.Tags,
 		DeployTimeout: app.DeployTimeout,
 	}
 

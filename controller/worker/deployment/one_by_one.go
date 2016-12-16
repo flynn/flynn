@@ -60,6 +60,7 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 				AppID:     d.AppID,
 				ReleaseID: d.NewReleaseID,
 				Processes: newScale,
+				Tags:      d.Tags,
 			}); err != nil {
 				nlog.Error("error scaling new formation up by one", "type", typ, "err", err)
 				return err
@@ -76,6 +77,7 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 				AppID:     d.AppID,
 				ReleaseID: d.OldReleaseID,
 				Processes: oldScale,
+				Tags:      d.Tags,
 			}); err != nil {
 				olog.Error("error scaling old formation down by one", "type", typ, "err", err)
 				return err
@@ -104,6 +106,7 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.OldReleaseID,
+		Tags:      d.Tags,
 	}); err != nil {
 		log.Error("error scaling old formation down to zero", "err", err)
 		return ErrSkipRollback{err.Error()}
