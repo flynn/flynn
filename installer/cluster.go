@@ -920,15 +920,18 @@ mkdir -p /var/lib/flynn
 
 if [[ ! -f "${FIRST_BOOT}" ]]; then
   {{if .DataDisk}}
-  zpool create -f -m none flynn-default {{.DataDisk}}
 
-  # if the sparse file zpool exists, copy images to the new zpool
-  if [[ -f /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev ]]; then
-    zpool import -d /var/lib/flynn/volumes/zfs/vdev flynn-default flynn-tmp
-    zfs snapshot -r flynn-tmp/squashfs@snap
-    zfs send -R flynn-tmp/squashfs@snap | zfs recv flynn-default/squashfs
-    zpool destroy flynn-tmp
-    rm /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev
+  # if the sparse file zpool exists, replace it with the disk
+  vdev="/var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev"
+  if [[ -f "${vdev}" ]]; then
+    zpool set autoexpand=on flynn-default
+    zpool replace -f flynn-default "${vdev}" {{.DataDisk}}
+    while zpool status | grep -q "${vdev}"; do
+      sleep 1
+    done
+    rm "${vdev}"
+  else
+    zpool create -f -m none flynn-default {{.DataDisk}}
   fi
   {{end}}
 
