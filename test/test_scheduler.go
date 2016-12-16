@@ -183,6 +183,18 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 	// check all jobs on host 1
 	assertHostJobCounts(map[string]int{host1.ID(): 2})
 
+	// check a deployment maintains the tags
+	release.ID = ""
+	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
+	t.Assert(client.DeployAppRelease(app.ID, release.ID, nil), c.IsNil)
+	assertHostJobCounts(map[string]int{host1.ID(): 2})
+
+	// update the formation / watcher to reference the new release
+	formation.ReleaseID = release.ID
+	watcher, err = client.WatchJobEvents(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+
 	// add tag to host 2
 	host2 := hosts[1]
 	updateTags(host2, map[string]string{"active": "true"})
@@ -222,7 +234,7 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 
 	// check 4 pending jobs, rest are stopped
 	t.Assert(watcher.WaitFor(ct.JobEvents{"printer": ct.JobDownEvents(4)}, scaleTimeout, nil), c.IsNil)
-	assertStateCounts(map[ct.JobState]int{ct.JobStatePending: 4, ct.JobStateDown: 6})
+	assertStateCounts(map[ct.JobState]int{ct.JobStatePending: 4, ct.JobStateDown: 8})
 
 	// re-add tag to host 1
 	updateTags(host1, map[string]string{"active": "true"})
@@ -230,7 +242,7 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 	// check pending jobs are started on host 1
 	t.Assert(watcher.WaitFor(ct.JobEvents{"printer": ct.JobUpEvents(4)}, scaleTimeout, nil), c.IsNil)
 	assertHostJobCounts(map[string]int{host1.ID(): 4})
-	assertStateCounts(map[ct.JobState]int{ct.JobStateUp: 4, ct.JobStateDown: 6})
+	assertStateCounts(map[ct.JobState]int{ct.JobStateUp: 4, ct.JobStateDown: 8})
 
 	// add different tag to host 2
 	updateTags(host2, map[string]string{"disk": "ssd"})
@@ -245,14 +257,14 @@ func (s *SchedulerSuite) TestScaleTags(t *c.C) {
 	}}
 	t.Assert(watcher.WaitFor(jobEvents, scaleTimeout, nil), c.IsNil)
 	assertHostJobCounts(map[string]int{host2.ID(): 4})
-	assertStateCounts(map[ct.JobState]int{ct.JobStateUp: 4, ct.JobStateDown: 10})
+	assertStateCounts(map[ct.JobState]int{ct.JobStateUp: 4, ct.JobStateDown: 12})
 
 	// scale down stops the jobs
 	debug(t, "scaling printer=0")
 	formation.Processes = nil
 	t.Assert(client.PutFormation(formation), c.IsNil)
 	t.Assert(watcher.WaitFor(ct.JobEvents{"printer": ct.JobDownEvents(4)}, scaleTimeout, nil), c.IsNil)
-	assertStateCounts(map[ct.JobState]int{ct.JobStateDown: 14})
+	assertStateCounts(map[ct.JobState]int{ct.JobStateDown: 16})
 }
 
 func (s *SchedulerSuite) TestControllerRestart(t *c.C) {

@@ -475,6 +475,9 @@ $$ LANGUAGE plpgsql`,
 			deleted_at timestamptz
 		)`,
 	)
+	migrations.Add(29,
+		`ALTER TABLE deployments ADD COLUMN tags jsonb`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

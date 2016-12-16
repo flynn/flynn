@@ -127,6 +127,7 @@ func (d *DeployJob) deploySirenia() (err error) {
 			AppID:     d.AppID,
 			ReleaseID: d.NewReleaseID,
 			Processes: d.newReleaseState,
+			Tags:      d.Tags,
 		}); err != nil {
 			log.Error("error scaling formation up by one", "err", err)
 			return nil, err
@@ -247,6 +248,7 @@ func (d *DeployJob) deploySirenia() (err error) {
 		AppID:     d.AppID,
 		ReleaseID: d.OldReleaseID,
 		Processes: d.oldReleaseState,
+		Tags:      d.Tags,
 	}); err != nil {
 		log.Error("error scaling old formation", "err", err)
 		return err

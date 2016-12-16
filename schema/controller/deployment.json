@@ -38,6 +38,10 @@
         "type": "integer"
       }
     },
+    "tags": {
+      "description": "process tags",
+      "type": "object"
+    },
     "deploy_timeout": {
       "$ref": "/schema/controller/common#/definitions/deploy_timeout"
     },
