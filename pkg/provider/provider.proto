@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package provider;
+
+// The provider service definition.
+service Provider {
+  // Provision a resource
+  rpc Provision (ProvisionRequest) returns (ProvisionReply) {}
+  rpc Deprovision (DeprovisionRequest) returns (DeprovisionReply) {}
+}
+
+message ProvisionRequest {
+  bytes config = 1;
+}
+
+message ProvisionReply {
+  string id = 1;
+  map<string, string> env = 2;
+}
+
+message DeprovisionRequest {
+  string id = 1;
+}
+
+message DeprovisionReply {}

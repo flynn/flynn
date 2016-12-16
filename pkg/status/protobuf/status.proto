@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package status;
+
+// The provider service definition.
+service Status {
+  rpc Status (StatusRequest) returns (StatusReply) {}
+}
+
+message StatusRequest {}
+
+message StatusReply {
+  enum Code {
+    HEALTHY = 0;
+    UNHEALTHY = 1;
+  }
+  Code status = 1;
+  bytes detail = 2;
+  string version = 3;
+}

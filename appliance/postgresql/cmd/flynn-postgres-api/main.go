@@ -2,18 +2,19 @@ package main
 
 import (
 	"fmt"
-	"net/http"
+	"net"
 	"os"
 	"strings"
 
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/provider"
 	"github.com/flynn/flynn/pkg/random"
-	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
-	"github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/pkg/status/protobuf"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 const (
@@ -38,24 +39,28 @@ func init() {
 func main() {
 	defer shutdown.Exit()
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	addr := ":" + port
+
 	db := postgres.Wait(&postgres.Conf{
 		Service:  serviceName,
 		User:     "flynn",
 		Password: os.Getenv("PGPASSWORD"),
 		Database: "postgres",
 	}, nil)
-	api := &pgAPI{db}
+	s := grpc.NewServer()
+	rpcServer := &server{db}
+	provider.RegisterProviderServer(s, rpcServer)
+	status.RegisterStatusServer(s, rpcServer)
+	reflection.Register(s)
 
-	router := httprouter.New()
-	router.POST("/databases", httphelper.WrapHandler(api.createDatabase))
-	router.DELETE("/databases", httphelper.WrapHandler(api.dropDatabase))
-	router.GET("/ping", httphelper.WrapHandler(api.ping))
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3000"
+	l, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		shutdown.Fatal(err)
 	}
-	addr := ":" + port
 
 	hb, err := discoverd.AddServiceAndRegister(serviceName+"-api", addr)
 	if err != nil {
@@ -63,36 +68,33 @@ func main() {
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
-	handler := httphelper.ContextInjector(serviceName+"-api", httphelper.NewRequestLogger(router))
-	shutdown.Fatal(http.ListenAndServe(addr, handler))
+	shutdown.Fatal(s.Serve(l))
 }
 
-type pgAPI struct {
+// server implements the Provider service
+type server struct {
 	db *postgres.DB
 }
 
-func (p *pgAPI) createDatabase(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+func (p *server) Provision(ctx context.Context, _ *provider.ProvisionRequest) (*provider.ProvisionReply, error) {
 	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
 
 	if err := p.db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s'`, username, password)); err != nil {
-		httphelper.Error(w, err)
-		return
+		return nil, err
 	}
 	if err := p.db.Exec(fmt.Sprintf(`CREATE DATABASE "%s"`, database)); err != nil {
 		p.db.Exec(fmt.Sprintf(`DROP USER "%s"`, username))
-		httphelper.Error(w, err)
-		return
+		return nil, err
 	}
 	if err := p.db.Exec(fmt.Sprintf(`GRANT ALL ON DATABASE "%s" TO "%s"`, database, username)); err != nil {
 		p.db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, database))
 		p.db.Exec(fmt.Sprintf(`DROP USER "%s"`, username))
-		httphelper.Error(w, err)
-		return
+		return nil, err
 	}
 
 	url := fmt.Sprintf("postgres://%s:%s@%s:5432/%s", username, password, serviceHost, database)
-	httphelper.JSON(w, 200, resource.Resource{
-		ID: fmt.Sprintf("/databases/%s:%s", username, database),
+	return &provider.ProvisionReply{
+		Id: fmt.Sprintf("/databases/%s:%s", username, database),
 		Env: map[string]string{
 			"FLYNN_POSTGRES": serviceName,
 			"PGHOST":         serviceHost,
@@ -101,45 +103,41 @@ func (p *pgAPI) createDatabase(ctx context.Context, w http.ResponseWriter, req *
 			"PGDATABASE":     database,
 			"DATABASE_URL":   url,
 		},
-	})
+	}, nil
 }
 
-func (p *pgAPI) dropDatabase(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	id := strings.SplitN(strings.TrimPrefix(req.FormValue("id"), "/databases/"), ":", 2)
+func (p *server) Deprovision(ctx context.Context, req *provider.DeprovisionRequest) (*provider.DeprovisionReply, error) {
+	reply := &provider.DeprovisionReply{}
+	id := strings.SplitN(strings.TrimPrefix(req.Id, "/databases/"), ":", 2)
 	if len(id) != 2 || id[1] == "" {
-		httphelper.ValidationError(w, "id", "is invalid")
-		return
+		return reply, fmt.Errorf("id is invalid")
 	}
 
 	// disable new connections to the target database
 	if err := p.db.Exec(disallowConns, id[1]); err != nil {
-		httphelper.Error(w, err)
-		return
+		return reply, err
 	}
 
 	// terminate current connections
 	if err := p.db.Exec(disconnectConns, id[1]); err != nil {
-		httphelper.Error(w, err)
-		return
+		return reply, err
 	}
 
 	if err := p.db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, id[1])); err != nil {
-		httphelper.Error(w, err)
-		return
+		return reply, err
 	}
 
 	if err := p.db.Exec(fmt.Sprintf(`DROP USER "%s"`, id[0])); err != nil {
-		httphelper.Error(w, err)
-		return
+		return reply, err
 	}
-
-	w.WriteHeader(200)
+	return reply, nil
 }
 
-func (p *pgAPI) ping(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+func (p *server) Status(ctx context.Context, _ *status.StatusRequest) (*status.StatusReply, error) {
 	if err := p.db.Exec("SELECT 1"); err != nil {
-		httphelper.Error(w, err)
-		return
+		return &status.StatusReply{
+			Status: status.StatusReply_UNHEALTHY,
+		}, err
 	}
-	w.WriteHeader(200)
+	return &status.StatusReply{}, nil
 }

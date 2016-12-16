@@ -1,5 +1,5 @@
 include_rules
-: |> !go |> bin/flynn-controller
+: ../pkg/provider/* |> !go |> bin/flynn-controller
 : |> !go ./scheduler |> bin/flynn-scheduler
 : |> !go ./worker |> bin/flynn-worker
 : $(ROOT)/util/ca-certs/ca-certs.pem |> !cp |> bin/ca-certs.pem

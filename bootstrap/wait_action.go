@@ -8,6 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/flynn/flynn/pkg/status/protobuf"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 type WaitAction struct {
@@ -67,6 +71,25 @@ func (a *WaitAction) Run(s *State) error {
 			}
 			conn.Close()
 			return nil
+		case "protobuf":
+			conn, err := grpc.Dial(u.Host, grpc.WithInsecure())
+			if err != nil {
+				result = fmt.Sprintf("%q", err)
+				goto fail
+			}
+			defer conn.Close()
+			c := status.NewStatusClient(conn)
+
+			res, err := c.Status(context.Background(), &status.StatusRequest{})
+			if err != nil {
+				result = fmt.Sprintf("%q", err)
+				goto fail
+			}
+
+			if res.Status == status.StatusReply_HEALTHY {
+				return nil
+			}
+			result = res.Status.String()
 		default:
 			return fmt.Errorf("bootstrap: unknown protocol")
 		}

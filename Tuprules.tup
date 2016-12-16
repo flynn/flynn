@@ -19,3 +19,4 @@ BUILDIMAGE = sudo $(ROOT)/util/imagebuilder/build-image
 !image-cedarish = | $(ROOT)/util/imagebuilder/build-image |> ^ build-image %d^ cat $(ROOT)/image/cedarish.json > /dev/null && $(BUILDIMAGE) %d > %o |> $(ROOT)/image/bootstrapped/%d.json $(ROOT)/<bootstrapped>
 !cp = |> cp %f %o |>
 !manifest = | $(ROOT)/util/release/flynn-release |> $(ROOT)/util/release/flynn-release manifest --output=%o --image-repository=@(IMAGE_REPOSITORY) manifest_template.json |> bin/manifest.json
+!protoc = |> protoc --go_out=plugins=grpc:. %f |>

@@ -151,7 +151,7 @@
   {
     "id": "postgres-wait",
     "action": "wait",
-    "url": "http://postgres-api.discoverd/ping"
+    "url": "protobuf://postgres-api.discoverd"
   },
   {
     "id": "controller-cert",
@@ -203,7 +203,7 @@
     "processes": {
       "web": 1
     },
-    "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
+    "resources": [{"name":"postgres", "url":"protobuf://postgres-api.discoverd"}]
   },
   {
     "id": "controller-wait",
@@ -444,7 +444,7 @@
     "processes": {
       "web": 2
     },
-    "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
+    "resources": [{"name":"postgres", "url":"protobuf://postgres-api.discoverd"}]
   },
   {
     "id": "router",
@@ -473,7 +473,7 @@
     "processes": {
       "app": 1
     },
-    "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
+    "resources": [{"name":"postgres", "url":"protobuf://postgres-api.discoverd"}]
   },
   {
     "id": "gitreceive",

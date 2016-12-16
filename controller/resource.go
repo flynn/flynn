@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/flynn/flynn/controller/schema"
@@ -9,10 +12,12 @@ import (
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/provider"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/jackc/pgx"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 type ResourceRepo struct {
@@ -266,17 +271,56 @@ func (c *controllerAPI) ProvisionResource(ctx context.Context, w http.ResponseWr
 	} else {
 		config = []byte(`{}`)
 	}
-	data, err := resource.Provision(p.URL, config)
+
+	u, err := url.Parse(p.URL)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
 
-	res := &ct.Resource{
-		ProviderID: p.ID,
-		ExternalID: data.ID,
-		Env:        data.Env,
-		Apps:       rr.Apps,
+	var res *ct.Resource
+	switch u.Scheme {
+	case "http":
+		data, err := resource.Provision(p.URL, config)
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		res = &ct.Resource{
+			ProviderID: p.ID,
+			ExternalID: data.ID,
+			Env:        data.Env,
+			Apps:       rr.Apps,
+		}
+	case "protobuf":
+		host, port, _ := net.SplitHostPort(u.Host)
+		if port == "" {
+			port = "80"
+		}
+		if host == "" {
+			host = u.Host
+		}
+		conn, err := grpc.Dial(host+":"+port, grpc.WithInsecure())
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		defer conn.Close()
+		pc := provider.NewProviderClient(conn)
+		data, err := pc.Provision(context.Background(), &provider.ProvisionRequest{})
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		res = &ct.Resource{
+			ProviderID: p.ID,
+			ExternalID: data.Id,
+			Env:        data.Env,
+			Apps:       rr.Apps,
+		}
+	default:
+		respondWithError(w, fmt.Errorf("Unknown scheme: %s", u.Scheme))
+		return
 	}
 
 	if err := schema.Validate(res); err != nil {
@@ -385,10 +429,42 @@ func (c *controllerAPI) DeleteResource(ctx context.Context, w http.ResponseWrite
 	}
 
 	logger.Info("deprovisioning", "url", p.URL, "external.id", res.ExternalID)
-	if err := resource.Deprovision(p.URL, res.ExternalID); err != nil {
-		logger.Error("error deprovisioning", "err", err)
+	u, err := url.Parse(p.URL)
+	if err != nil {
+		logger.Error("error parsing provider url", "err", err)
 		respondWithError(w, err)
 		return
+	}
+	switch u.Scheme {
+	case "http":
+		if err := resource.Deprovision(p.URL, res.ExternalID); err != nil {
+			logger.Error("error deprovisioning", "err", err)
+			respondWithError(w, err)
+			return
+		}
+	case "protobuf":
+		host, port, _ := net.SplitHostPort(u.Host)
+		if port == "" {
+			port = "80"
+		}
+		if host == "" {
+			host = u.Host
+		}
+		conn, err := grpc.Dial(host+":"+port, grpc.WithInsecure())
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		defer conn.Close()
+		pc := provider.NewProviderClient(conn)
+		_, err = pc.Deprovision(context.Background(), &provider.DeprovisionRequest{Id: res.ExternalID})
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+	default:
+		logger.Error("unknown scheme", "scheme", u.Scheme)
+		respondWithError(w, fmt.Errorf("unknown scheme: %s", u.Scheme))
 	}
 
 	logger.Info("removing resource")

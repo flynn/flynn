@@ -11,3 +11,4 @@ util/_toolchain/go
 *.test
 /tmp
 /image
+*.pb.go

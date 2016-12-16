@@ -11,8 +11,11 @@ import (
 	hostresource "github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/provider"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 type RunAppAction struct {
@@ -89,9 +92,31 @@ func (a *RunAppAction) Run(s *State) error {
 			return err
 		}
 		lookupDiscoverdURLHost(s, u, time.Second)
-		res, err := resource.Provision(u.String(), nil)
-		if err != nil {
-			return err
+		var res *resource.Resource
+		switch u.Scheme {
+		case "http":
+			res, err = resource.Provision(u.String(), nil)
+			if err != nil {
+				return err
+			}
+		case "protobuf":
+			conn, err := grpc.Dial(u.Host, grpc.WithInsecure())
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			c := provider.NewProviderClient(conn)
+
+			data, err := c.Provision(context.Background(), &provider.ProvisionRequest{})
+			if err != nil {
+				return err
+			}
+			res = &resource.Resource{
+				ID:  data.Id,
+				Env: data.Env,
+			}
+		default:
+			return fmt.Errorf("Unknown scheme: %s", u.Scheme)
 		}
 		as.Providers = append(as.Providers, p)
 		as.Resources = append(as.Resources, res)
