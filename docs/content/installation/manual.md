@@ -5,7 +5,7 @@ layout: docs
 
 # Manual Installation
 
-Flynn can be installed using our install script on Ubuntu 14.04 amd64.
+Flynn can be installed using our install script on **Ubuntu 16.04** and **14.04** amd64.
 
 We recommend starting with a clean Ubuntu installation on machines with at least
 2GB of RAM, 40GB of storage, and two CPU cores each. It's possible to run Flynn
@@ -15,7 +15,7 @@ Before we get going with the installation, please note that if you plan on
 running a multi-node cluster, you should boot at least 3 nodes to provide high
 availability.
 
-*NOTE: If you are installing on a provider that uses a customized kernel by
+*Note: If you are installing on a provider that uses a customized kernel by
 default, you need to use the native Ubuntu kernel instead of a custom kernel
 for AUFS support. On Linode, [use this
 guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distributionsupplied-kernel-with-pvgrub)
@@ -51,11 +51,11 @@ Running the installer script will:
 Some of the filesystem images are quite large (several hundred megabytes) so step 3 could take a while depending on
 your Internet connection.
 
-## Rinse and repeat
+## Rinse and Repeat
 
 You should install Flynn as above on every host that you want to be in the Flynn cluster.
 
-## Start Flynn
+## Set Up Nodes
 
 First, ensure that all network traffic is allowed between all nodes in the cluster (specifically
 all UDP and TCP packets). The following ports should also be open externally on the firewalls
@@ -91,17 +91,22 @@ On the rest of the nodes, configure the generated discovery token:
 $ sudo flynn-host init --discovery https://discovery.flynn.io/clusters/53e8402e-030f-4861-95ba-d5b5a91b5902
 ```
 
-Then, start the daemon by running:
+## Start Flynn
+
+Now, start the daemon and check ensure it has started:
+
+**Ubuntu 14.04**
 
 ```
 $ sudo start flynn-host
-```
-
-You can check the status of the daemon by running:
-
-```
 $ sudo status flynn-host
-flynn-host start/running, process 4090
+```
+
+**Ubuntu 16.04**
+
+```
+$ systemctl start flynn-host
+$ systemctl status flynn-host
 ```
 
 If the status is `stop/waiting`, the daemon has failed to start for some reason. Check the
