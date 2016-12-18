@@ -447,6 +447,15 @@ $$ LANGUAGE plpgsql`,
 		BEGIN
 			FOR release IN SELECT release_id FROM releases LOOP
 				UPDATE releases
+				SET app_id = app.app_id
+				FROM (
+					SELECT app_id
+					FROM apps
+					WHERE release_id = release
+				) AS app
+				WHERE release_id = release;
+
+				UPDATE releases
 				SET app_id = formation.app_id
 				FROM (
 					SELECT app_id

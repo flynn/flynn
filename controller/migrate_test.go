@@ -468,11 +468,11 @@ func (MigrateSuite) TestMigrateReleaseAppID(c *C) {
 	m.migrateTo(26)
 
 	// create some apps, releases and formations
-	apps := []string{random.UUID(), random.UUID(), random.UUID()}
+	apps := []string{random.UUID(), random.UUID(), random.UUID(), random.UUID()}
 	for _, app := range apps {
 		c.Assert(db.Exec(`INSERT INTO apps (app_id, name) VALUES ($1, $2)`, app, app), IsNil)
 	}
-	releases := []string{random.UUID(), random.UUID(), random.UUID()}
+	releases := []string{random.UUID(), random.UUID(), random.UUID(), random.UUID()}
 	for _, release := range releases {
 		c.Assert(db.Exec(`INSERT INTO releases (release_id) VALUES ($1)`, release), IsNil)
 	}
@@ -488,12 +488,16 @@ func (MigrateSuite) TestMigrateReleaseAppID(c *C) {
 		c.Assert(db.Exec(`INSERT INTO formations (app_id, release_id) VALUES ($1, $2)`, app, release), IsNil)
 	}
 
+	// set app3 release to release3
+	c.Assert(db.Exec(`UPDATE apps SET release_id = $1 WHERE app_id = $2`, releases[3], apps[3]), IsNil)
+
 	// migrate to 27 and check the app_id column was set correctly
 	m.migrateTo(27)
 	for release, app := range map[string]*string{
 		releases[0]: &apps[0],
 		releases[1]: &apps[2],
 		releases[2]: nil,
+		releases[3]: &apps[3],
 	} {
 		var appID *string
 		var deletedAt *time.Time
