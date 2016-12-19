@@ -199,7 +199,7 @@ application from the slug.
 
 The logaggregator takes log lines from jobs running on each host and buffers
 recent log lines for each app. The lines are sent from flynn-host as
-FC6587-framed RFC5424 syslog messages over TCP.
+RFC6587-framed RFC5424 syslog messages over TCP.
 
 Clients can get live streams of aggregated logs, and retrieve previous log
 messages without sending requests to every host individually.
