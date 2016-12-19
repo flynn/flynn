@@ -155,6 +155,13 @@ network interfaces and then open a GitHub issue describing the problem.
 Now that you have Flynn installed and running, head over to the [Flynn
 Basics](/docs/basics) page for a tutorial on deploying an application to Flynn.
 
+## Troubleshooting
+Flynn sets few  virtual interfaces. If you have problems bootstrapping check that these are not blocked in your firewall:
+
+* veth
+* flannel.1
+* flynnbr0
+
 ## Release Mailing List
 
 If you'd like to receive email about each month's stable release and security
