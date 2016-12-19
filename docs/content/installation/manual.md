@@ -16,9 +16,9 @@ running a multi-node cluster, you should boot at least 3 nodes to provide high
 availability.
 
 *Note: If you are installing on a provider that uses a customized kernel by
-default, you need to use the native Ubuntu kernel instead of a custom kernel
-for AUFS support. On Linode, [use this
-guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distributionsupplied-kernel-with-pvgrub)
+default, you may need to use the Ubuntu-supplied distribution kernel instead of
+the custom kernel for ZFS filesystem support. On Linode, [use this
+guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distribution-supplied-kernel-with-kvm)
 for instructions on how to switch.*
 
 ## Installation
