@@ -85,8 +85,9 @@ blobs. This works well for light workloads and is the default configuration
 because it allows Flynn to be deployed anywhere without any external service
 dependencies.
 
-For anything other than light workloads, we recommend using Amazon
-S3 or Google Cloud Storage as the blobstore backend.
+We recommend using one of the external blobstore backends listed below for
+production, as they are more reliable than the Postgres backend and have
+predictable performance without consuming disk space on the Flynn hosts.
 
 ### Amazon S3
 
