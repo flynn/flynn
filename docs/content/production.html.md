@@ -36,11 +36,11 @@ dedicating whole disks to the ZFS pool.
 
 ### Custom ZFS pool
 
-Before starting the `flynn-host` daemon, you can create a ZFS pool named
-`flynn-default` and it will be used instead of a sparse file.
+The Flynn install script can be used to create the ZFS pool on the device of
+your choice instead of a sparse file, using the `--zpool-create-device` flag:
 
 ```text
-$ zpool create flynn-default /dev/sdb1
+$ ./install-flynn --zpool-create-device /dev/sdb --zpool-create-options "-f"
 ```
 
 If you already have a Flynn cluster running, you can move the existing ZFS pool
