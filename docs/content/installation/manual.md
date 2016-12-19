@@ -144,14 +144,15 @@ $ sudo \
 *Note: You only need to run this on a single node in the cluster. It will
 schedule jobs on nodes across the cluster as required.*
 
-The Layer 1 bootstrapper will get all necessary services running using the Layer
-0 API. The final log line will contain configuration that may be used with the
+The bootstrapper will get all of necessary services running within Flynn. The
+final log line will contain configuration that may be used with the
 [command-line interface](/docs/cli).
 
-If you try these instructions and run into issues, please open an issue or pull
-request.
+If run into a problem while following these instructions, ensure that network
+traffic is flowing unimpeded through the `flannel.1`, `flynnbr0`, and `veth*`
+network interfaces and then open a GitHub issue describing the problem.
 
-Now you have Flynn installed and running, head over to the [Flynn
+Now that you have Flynn installed and running, head over to the [Flynn
 Basics](/docs/basics) page for a tutorial on deploying an application to Flynn.
 
 ## Release Mailing List
