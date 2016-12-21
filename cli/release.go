@@ -59,6 +59,9 @@ Commands:
 		will override existing config with any values set thus. Omit the ID to
 		update the current release.
 
+		By default, the new release fields will be merged with the previous one,
+		specify --clean to not copy any fields from the previous release.
+
 	delete
 		Delete a release.
 
@@ -266,6 +269,7 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 	if args.Bool["--clean"] {
 		updates.ArtifactIDs = release.ArtifactIDs
 		release = updates
+		release.ID = ""
 	} else {
 		release.ID = ""
 		for key, value := range updates.Env {
