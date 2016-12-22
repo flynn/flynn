@@ -665,20 +665,32 @@
 			"Rev": "f6dd2ebbb31e9721c860cf1faf5c944aa73e3844"
 		},
 		{
+			"ImportPath": "github.com/flynn/go-tuf",
+			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+		},
+		{
 			"ImportPath": "github.com/flynn/go-tuf/client",
-			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
+			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/data",
-			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
+			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-tuf/encrypted",
+			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-tuf/sign",
+			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/util",
-			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
+			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/verify",
-			"Rev": "0d42b7c36a69aa39943423a287fbc9f195eb2f30"
+			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
 		},
 		{
 			"ImportPath": "github.com/flynn/que-go",
@@ -1068,11 +1080,19 @@
 			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
 		},
 		{
+			"ImportPath": "golang.org/x/crypto/pbkdf2",
+			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+		},
+		{
 			"ImportPath": "golang.org/x/crypto/poly1305",
 			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/salsa20/salsa",
+			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/scrypt",
 			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
 		},
 		{
