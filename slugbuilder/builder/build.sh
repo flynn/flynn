@@ -223,7 +223,8 @@ cp "/etc/group" "${build_root}/etc/group"
 /bin/create-artifact \
   --dir "${build_root}" \
   --uid "${USER_UID}" \
-  --gid "${USER_GID}"
+  --gid "${USER_GID}" \
+  | ensure_indent
 
 if [[ -n "${BUILD_CACHE_URL}" ]]; then
   tar \

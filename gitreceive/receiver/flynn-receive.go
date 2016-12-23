@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
@@ -28,8 +27,6 @@ import (
 func init() {
 	log.SetFlags(0)
 }
-
-var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 
 const blobstoreURL = "http://blobstore.discoverd"
 
@@ -178,9 +175,13 @@ Options:
 		return fmt.Errorf("Build failed: %s", err)
 	}
 
-	var types []string
-	if match := typesPattern.FindSubmatch(output.Bytes()); match != nil {
-		types = strings.Split(string(match[1]), ", ")
+	artifact, err := client.GetArtifact(slugImageID)
+	if err != nil {
+		return fmt.Errorf("Error getting slug image: %s", err)
+	}
+	var processTypes []string
+	if meta, ok := artifact.Meta["slugbuilder.process_types"]; ok {
+		processTypes = strings.Split(meta, ",")
 	}
 
 	fmt.Printf("-----> Creating release...\n")
@@ -197,7 +198,7 @@ Options:
 		release.Meta[k] = v
 	}
 	procs := make(map[string]ct.ProcessType)
-	for _, t := range types {
+	for _, t := range processTypes {
 		proc := prevRelease.Processes[t]
 		proc.Args = []string{"/runner/init", "start", t}
 		if (t == "web" || strings.HasSuffix(t, "-web")) && proc.Service == "" {
