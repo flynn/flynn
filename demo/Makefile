@@ -39,7 +39,7 @@ bootstrap: $(CLI_INSTALL_BIN)
 # Start the VM and flynn
 up:
 	${VAGRANT_ENV} vagrant up --provider ${PROVIDER}
-	@$(MAKE) CMD='sudo start flynn-host || echo flynn-host already running or unable to start' ssh-cmd
+	@$(MAKE) CMD='sudo systemctl start flynn-host || echo flynn-host already running or unable to start' ssh-cmd
 
 # Stop the VM
 down:
