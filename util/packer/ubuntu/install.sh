@@ -57,7 +57,7 @@ stop_cron() {
 }
 
 virtualbox_build() {
-  [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-ovf" ]]
+  [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-iso" ]]
 }
 
 vmware_build() {
