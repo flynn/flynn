@@ -24,7 +24,7 @@ var copyResourceEnvToApp = function (appID, resourceEnv) {
 		}
 		return Promise.reject(args);
 	}).then(function (args) {
-		var release = extend({}, args[0]);
+		var release = extend({app_id: appID}, args[0]);
 		release.env = release.env || {};
 		Object.keys(resourceEnv).forEach(function (k) {
 			if (release.env.hasOwnProperty(k) && release.env[k] !== resourceEnv[k]) {
