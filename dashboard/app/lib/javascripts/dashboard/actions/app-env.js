@@ -13,7 +13,7 @@ var updateAppEnv = function (appID, changedRelease, env, deployTimeout) {
 		}
 		return Promise.reject(args);
 	}).then(function (args) {
-		var release = extend({}, args[0]);
+		var release = extend({app_id: appID}, args[0]);
 		var envDiff = objectDiff(changedRelease.env || {}, env);
 		release.env = applyObjectDiff(envDiff, release.env || {});
 		delete release.id;
