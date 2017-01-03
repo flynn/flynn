@@ -35,6 +35,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.provider "virtualbox" do |v|
     v.memory = ENV["VAGRANT_MEMORY"] || 2048
     v.cpus = ENV["VAGRANT_CPUS"] || 2
+
+    # Workaround for https://www.virtualbox.org/ticket/15705
+    v.customize ["modifyvm", :id, "--cableconnected1", "on"]
   end
 
   config.vm.provider "vmware_fusion" do |v|

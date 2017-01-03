@@ -49,6 +49,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     # RFC 5737 TEST-NET-1 used to avoid DNS rebind protection
     override.vm.network "private_network", ip: "192.0.2.100"
+
+    # Workaround for https://www.virtualbox.org/ticket/15705
+    v.customize ["modifyvm", :id, "--cableconnected1", "on"]
   end
 
   config.vm.provider "vmware_fusion" do |v, override|
