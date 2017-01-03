@@ -175,6 +175,13 @@ main() {
     fi
   fi
 
+  git fetch --tags
+  local tag="$(git tag --points-at "${commit}")"
+  if [[ -n "${tag}" ]]; then
+    info "commit ${commit} already released as ${tag}, nothing to do"
+    exit
+  fi
+
   info "starting release of commit ${commit}"
 
   if [[ -z "${version}" ]]; then
