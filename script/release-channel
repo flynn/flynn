@@ -143,9 +143,9 @@ main() {
 }
 
 # generate_changelog gets the current channel version from the TUF repository
-# then creates a changelog using the commit message of each merge commit (which
-# are expected to all be pull request merges) from the current version to the
-# version being released.
+# then creates a changelog by listing all pull requests which have a merge
+# commit contained in the version being released but not in the current
+# version.
 #
 # Changelog entries are formatted like:
 #
@@ -173,16 +173,49 @@ generate_changelog() {
   git fetch --tags
 
   info "formatting changes between ${current} and ${version}"
-  git log \
-    --merges \
-    --reverse \
-    --date=short \
-    --pretty=format:'* %ad: %b %s%n' \
-    "${current}...${version}" \
-    | sed 's|Merge pull request #\([0-9]\+\) from \S\+|([#\1](https://github.com/flynn/flynn/pull/\1))|' \
-    > "${changelog_path}"
+  format_changes_between "${current}" "${version}" > "${changelog_path}"
 
   popd >/dev/null
+}
+
+format_changes_between() {
+  local current=$1
+  local version=$2
+
+  local page="1"
+  while true; do
+    local pulls="$(pull_requests "${page}")"
+
+    if [[ $(jq length <<< "${pulls}") = "0" ]]; then
+      return
+    fi
+
+    while read number sha merged_at url title; do
+      if tag_contains "${current}" "${sha}"; then
+        return
+      fi
+
+      if tag_contains "${version}" "${sha}"; then
+        echo "* $(date --date "${merged_at}" +%Y-%m-%d): ${title} ([#${number}](${url}))"
+      fi
+    done < <(jq --raw-output '.[] | (.number | tostring) + " " + .merge_commit_sha + " " + .merged_at + " " + .html_url + " " + .title' <<< "${pulls}")
+
+    page=$((page + 1))
+  done
+}
+
+pull_requests() {
+  local page=$1
+  local url="https://api.github.com/repos/flynn/flynn/pulls?state=closed&sort=updated&direction=desc&page=${page}"
+
+  curl -fsSL "${url}"
+}
+
+tag_contains() {
+  local tag=$1
+  local sha=$2
+
+  git tag --contains "${sha}" | grep -q "${tag}"
 }
 
 edit_changelog() {
