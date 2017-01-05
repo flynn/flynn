@@ -98,6 +98,7 @@ type ContainerConfig struct {
 	Uid               *uint32            `json:"uid,omitempty"`
 	Gid               *uint32            `json:"gid,omitempty"`
 	HostNetwork       bool               `json:"host_network,omitempty"`
+	HostPIDNamespace  bool               `json:"host_pid_namespace,omitempty"`
 	DisableLog        bool               `json:"disable_log,omitempty"`
 	LinuxCapabilities *[]string          `json:"linux_capabilities,omitempty"`
 	AllowedDevices    *[]*configs.Device `json:"allowed_devices,omitempty"`
@@ -142,6 +143,7 @@ func (x ContainerConfig) Merge(y ContainerConfig) ContainerConfig {
 		x.Gid = y.Gid
 	}
 	x.HostNetwork = x.HostNetwork || y.HostNetwork
+	x.HostPIDNamespace = x.HostPIDNamespace || y.HostPIDNamespace
 	return x
 }
 

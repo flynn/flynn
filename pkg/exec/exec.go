@@ -32,7 +32,8 @@ type Cmd struct {
 	Volumes []*ct.VolumeReq
 	Mounts  []host.Mount
 
-	HostNetwork bool
+	HostNetwork      bool
+	HostPIDNamespace bool
 
 	Stdin io.Reader
 
@@ -200,12 +201,13 @@ func (c *Cmd) Start() error {
 	if c.Job == nil {
 		c.Job = &host.Job{
 			Config: host.ContainerConfig{
-				Args:        c.Args,
-				TTY:         c.TTY,
-				Env:         c.Env,
-				Stdin:       c.Stdin != nil || c.stdinPipe != nil,
-				HostNetwork: c.HostNetwork,
-				Mounts:      c.Mounts,
+				Args:             c.Args,
+				TTY:              c.TTY,
+				Env:              c.Env,
+				Stdin:            c.Stdin != nil || c.stdinPipe != nil,
+				HostNetwork:      c.HostNetwork,
+				HostPIDNamespace: c.HostPIDNamespace,
+				Mounts:           c.Mounts,
 			},
 			Metadata: c.Meta,
 		}

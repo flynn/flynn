@@ -58,6 +58,7 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 			Uid:              entrypoint.Uid,
 			Gid:              entrypoint.Gid,
 			HostNetwork:      t.HostNetwork,
+			HostPIDNamespace: t.HostPIDNamespace,
 			Mounts:           t.Mounts,
 			WriteableCgroups: t.WriteableCgroups,
 		},

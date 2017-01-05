@@ -307,6 +307,9 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 			if procUpdate.HostNetwork {
 				procRelease.HostNetwork = true
 			}
+			if procUpdate.HostPIDNamespace {
+				procRelease.HostPIDNamespace = true
+			}
 			if len(procUpdate.Service) > 0 {
 				procRelease.Service = procUpdate.Service
 			}

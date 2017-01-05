@@ -424,7 +424,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 			{Type: configs.NEWNS},
 			{Type: configs.NEWUTS},
 			{Type: configs.NEWIPC},
-			{Type: configs.NEWPID},
 		}),
 		Cgroups: &configs.Cgroup{
 			Path: filepath.Join("/flynn", job.Partition, job.ID),
@@ -480,6 +479,10 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 				Flags:       cgroupMountFlags,
 			},
 		}...),
+	}
+
+	if !job.Config.HostPIDNamespace {
+		config.Namespaces = append(config.Namespaces, configs.Namespace{Type: configs.NEWPID})
 	}
 
 	if spec, ok := job.Resources[resource.TypeMaxFD]; ok && spec.Limit != nil && spec.Request != nil {
