@@ -101,6 +101,7 @@ type ProcessType struct {
 	Volumes           []VolumeReq        `json:"volumes,omitempty"`
 	Omni              bool               `json:"omni,omitempty"` // omnipresent - present on all hosts
 	HostNetwork       bool               `json:"host_network,omitempty"`
+	HostPIDNamespace  bool               `json:"host_pid_namespace,omitempty"`
 	Service           string             `json:"service,omitempty"`
 	Resurrect         bool               `json:"resurrect,omitempty"`
 	Resources         resource.Resources `json:"resources,omitempty"`
