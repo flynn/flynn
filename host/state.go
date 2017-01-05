@@ -363,6 +363,13 @@ func (s *State) SetContainerIP(jobID string, ip net.IP) {
 	s.persist(jobID)
 }
 
+func (s *State) SetContainerPID(jobID string, pid int) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	s.jobs[jobID].PID = &pid
+	s.persist(jobID)
+}
+
 func (s *State) SetForceStop(jobID string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -412,6 +419,7 @@ func (s *State) SetStatusDone(jobID string, exitStatus int) {
 	} else {
 		job.Status = host.StatusCrashed
 	}
+	job.PID = nil
 	s.sendEvent(job, host.JobEventStop)
 	if err := s.Acquire(); err == nil {
 		s.persist(job.Job.ID)
@@ -431,6 +439,7 @@ func (s *State) SetStatusFailed(jobID string, err error) {
 	job.EndedAt = time.Now().UTC()
 	errStr := err.Error()
 	job.Error = &errStr
+	job.PID = nil
 	s.sendEvent(job, host.JobEventError)
 	if err := s.Acquire(); err == nil {
 		s.persist(jobID)
