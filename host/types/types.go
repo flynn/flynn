@@ -216,6 +216,7 @@ type ActiveJob struct {
 	Job        *Job      `json:"job,omitempty"`
 	HostID     string    `json:"host_id,omitempty"`
 	InternalIP string    `json:"internal_ip,omitempty"`
+	PID        *int      `json:"pid,omitempty"`
 	ForceStop  bool      `json:"force_stop,omitempty"`
 	Status     JobStatus `json:"status,omitempty"`
 	CreatedAt  time.Time `json:"created_at,omitempty"`

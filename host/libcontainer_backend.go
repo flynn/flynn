@@ -664,6 +664,13 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	}
 	go process.Wait()
 
+	pid, err := process.Pid()
+	if err != nil {
+		c.Destroy()
+		return err
+	}
+	l.State.SetContainerPID(job.ID, pid)
+
 	container.container = c
 
 	go container.watch(nil, nil)
