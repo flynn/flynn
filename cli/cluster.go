@@ -75,7 +75,7 @@ Commands:
             --file=<backup-file>  file to write backup to (defaults to stdout)
 
     log-sink
-        With no arguments, prints a list of registerd log-sinks for this cluster
+        With no arguments, prints a list of registered log-sinks for this cluster
 
     log-sink add syslog
         Creates a new syslog log sink with specified <url> and optionally <prefix> template.
