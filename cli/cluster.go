@@ -31,7 +31,7 @@ usage: flynn cluster
        flynn cluster migrate-domain <domain>
        flynn cluster backup [--file <file>]
        flynn cluster log-sink
-       flynn cluster log-sink add syslog [--use-ids] <url> [<prefix>]
+       flynn cluster log-sink add syslog [--use-ids] [--insecure] <url> [<prefix>]
        flynn cluster log-sink remove <id>
 
 Manage Flynn clusters.
@@ -82,10 +82,11 @@ Commands:
         Supported schemes are syslog and syslog+tls
 
         options:
-            --use-ids  Use app IDs instead of app names in the syslog APP-NAME field
+            --use-ids   Use app IDs instead of app names in the syslog APP-NAME field
+            --insecure  Don't verify servers certificate chain or hostname. Should only be used for testing.
 
         examples:
-			$ flynn cluster log-sink add syslog syslog+tls://rsyslog.host:514/
+            $ flynn cluster log-sink add syslog syslog+tls://rsyslog.host:514/
 
     log-sink remove
         Removes a log sink with <id>
@@ -482,9 +483,10 @@ func runLogSinkAddSyslog(args *docopt.Args, client controller.Client) error {
 	}
 
 	config, _ := json.Marshal(ct.SyslogSinkConfig{
-		Prefix: args.String["<prefix>"],
-		URL:    u.String(),
-		UseIDs: args.Bool["--use-ids"],
+		Prefix:   args.String["<prefix>"],
+		URL:      u.String(),
+		UseIDs:   args.Bool["--use-ids"],
+		Insecure: args.Bool["--insecure"],
 	})
 
 	sink := &ct.Sink{

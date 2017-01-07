@@ -446,10 +446,11 @@ func (s *LogAggregatorSink) ShutdownCh() chan struct{} {
 type SyslogSink struct {
 	sm *SinkManager
 
-	id     string
-	url    string
-	prefix string
-	useIDs bool
+	id       string
+	url      string
+	prefix   string
+	useIDs   bool
+	insecure bool
 
 	mtx          sync.RWMutex
 	cache        *lru.Cache
@@ -478,6 +479,7 @@ func NewSyslogSink(sm *SinkManager, info *SinkInfo) (sink *SyslogSink, err error
 		url:        cfg.URL,
 		prefix:     cfg.Prefix,
 		useIDs:     cfg.UseIDs,
+		insecure:   cfg.Insecure,
 		cache:      lru.New(1000),
 		template:   t,
 		cursor:     info.Cursor,
@@ -513,6 +515,9 @@ func (s *SyslogSink) Connect() error {
 		conn, err = net.Dial("tcp", addr)
 	case "syslog+tls":
 		tlsConfig := tlsconfig.SecureCiphers(&tls.Config{})
+		if s.insecure {
+			tlsConfig.InsecureSkipVerify = true
+		}
 		conn, err = tls.Dial("tcp", addr, tlsConfig)
 	default:
 		return fmt.Errorf("unknown protocol %s", u.Scheme)
