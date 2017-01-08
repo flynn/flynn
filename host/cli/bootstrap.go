@@ -297,7 +297,7 @@ $function$;
 	telemetryClusterID := random.UUID()
 	sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE releases SET env = jsonb_set(env, '{TELEMETRY_CLUSTER_ID}', '%q')
-WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller');
+WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller' AND deleted_at IS NULL);
 `, telemetryClusterID))
 	data.Controller.Release.Env["TELEMETRY_CLUSTER_ID"] = telemetryClusterID
 
@@ -305,7 +305,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller');
 	if data.Controller.Release.Env["TELEMETRY_BOOTSTRAP_ID"] == "" {
 		sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE releases SET env = jsonb_set(env, '{TELEMETRY_BOOTSTRAP_ID}', '%q')
-WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller');
+WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller' AND deleted_at IS NULL);
 `, telemetryClusterID))
 		data.Controller.Release.Env["TELEMETRY_BOOTSTRAP_ID"] = telemetryClusterID
 	}
@@ -313,7 +313,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller');
 	// update logaggregator args
 	sqlBuf.WriteString(`
 UPDATE releases SET processes = jsonb_set(processes, '{app,args}', '["/bin/logaggregator"]')
-WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'logaggregator');
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'logaggregator' AND deleted_at IS NULL);
 `)
 
 	step := func(id, name string, action bootstrap.Action) bootstrap.Step {
@@ -331,16 +331,16 @@ WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'logaggregator');
 		data.Flannel.Release.Env["NETWORK"] = network
 		sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE releases SET env = pg_temp.json_object_update_key(env, 'NETWORK', '%s')
-WHERE release_id = (SELECT release_id FROM apps WHERE name = 'flannel');
+WHERE release_id = (SELECT release_id FROM apps WHERE name = 'flannel' AND deleted_at IS NULL);
 		`, network))
 	}
 
 	// ensure controller / gitreceive have tmp volumes
 	sqlBuf.WriteString(`
 UPDATE releases SET processes = jsonb_set(processes, '{web,volumes}', '[{"path": "/tmp", "delete_on_stop": true}]')
-WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'controller');
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'controller' AND deleted_at IS NULL);
 UPDATE releases SET processes = jsonb_set(processes, '{app,volumes}', '[{"path": "/tmp", "delete_on_stop": true}]')
-WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'gitreceive');
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL);
 `)
 
 	// update the SINGLETON environment variable for database appliances
@@ -358,7 +358,7 @@ WHERE release_id IN (SELECT release_id FROM apps WHERE name IN ('postgres', 'mar
 		delete(data.MariaDB.Release.Processes["mariadb"].Env, "SINGLETON")
 		sqlBuf.WriteString(`
 UPDATE releases SET processes = jsonb_set(processes, '{mariadb,env}', (processes #> '{mariadb,env}')::jsonb - 'SINGLETON')
-WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mariadb');
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mariadb' AND deleted_at IS NULL);
 `)
 	}
 
@@ -367,7 +367,7 @@ WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mariadb');
 		delete(data.MongoDB.Release.Processes["mongodb"].Env, "SINGLETON")
 		sqlBuf.WriteString(`
 UPDATE releases SET processes = jsonb_set(processes, '{mongodb,env}', (processes #> '{mongodb,env}')::jsonb - 'SINGLETON')
-WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mongodb');
+WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mongodb' AND deleted_at IS NULL);
 `)
 	}
 
@@ -427,7 +427,7 @@ WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mongodb');
 		for typ, count := range procs {
 			sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE formations SET processes = jsonb_set(processes, '{%s}', '%d')
-WHERE release_id = (SELECT release_id FROM apps WHERE name = '%s');
+WHERE release_id = (SELECT release_id FROM apps WHERE name = '%s' AND deleted_at IS NULL);
 `, typ, count, app))
 		}
 	}
@@ -457,16 +457,16 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = '%s');
 	// set DISCOVERD_PEERS in release
 	sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE releases SET env = pg_temp.json_object_update_key(env, 'DISCOVERD_PEERS', '%s')
-WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd');
+WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd' AND deleted_at IS NULL);
 `, state.StepData["discoverd"].(*bootstrap.RunAppState).Release.Env["DISCOVERD_PEERS"]))
 
 	// make sure STATUS_KEY has the correct value in the dashboard release
 	sqlBuf.WriteString(`
 UPDATE releases SET env = jsonb_set(env, '{STATUS_KEY}', (
 	SELECT env->'AUTH_KEY' FROM releases
-	WHERE release_id = (SELECT release_id FROM apps WHERE name = 'status')
+	WHERE release_id = (SELECT release_id FROM apps WHERE name = 'status' AND deleted_at IS NULL)
 ))
-WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
+WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard' AND deleted_at IS NULL);
 `)
 
 	// load data into postgres
@@ -650,7 +650,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard');
 		sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s', size = %d, layer_url_template = '%s', meta = '%s' WHERE artifact_id = (
   SELECT artifact_id FROM release_artifacts WHERE release_id = (
-    SELECT release_id FROM apps WHERE name = '%s'
+    SELECT release_id FROM apps WHERE name = '%s' AND deleted_at IS NULL
   )
 );`, artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, jsonb(artifact.Meta), step.ID))
 	}
@@ -661,7 +661,7 @@ UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s',
 	sqlBuf.WriteString(fmt.Sprintf(`
 DO $$
   BEGIN
-    IF (SELECT env->>'SLUGBUILDER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive')) IS NULL THEN
+    IF (SELECT env->>'SLUGBUILDER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL)) IS NULL THEN
       INSERT INTO artifacts (artifact_id, type, uri, manifest, hashes, size, layer_url_template, meta) VALUES ('%s', 'flynn', '%s', '%s', '%s', %d, '%s', '%s');
     END IF;
   END;
@@ -674,8 +674,8 @@ $$;`, random.UUID(), slugBuilder.URI, jsonb(&slugBuilder.RawManifest), jsonb(slu
 	sqlBuf.WriteString(fmt.Sprintf(`
 DO $$
   BEGIN
-    IF (SELECT env->>'SLUGRUNNER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive')) IS NULL THEN
-      IF NOT EXISTS (SELECT 1 FROM artifacts WHERE uri = (SELECT env->>'SLUGRUNNER_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'))) THEN
+    IF (SELECT env->>'SLUGRUNNER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL)) IS NULL THEN
+      IF NOT EXISTS (SELECT 1 FROM artifacts WHERE uri = (SELECT env->>'SLUGRUNNER_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL))) THEN
         INSERT INTO artifacts (artifact_id, type, uri, manifest, hashes, size, layer_url_template, meta) VALUES ('%s', 'flynn', '%s', '%s', '%s', %d, '%s', '%s');
       END IF;
     END IF;
@@ -689,8 +689,8 @@ $$;`, random.UUID(), slugRunner.URI, jsonb(&slugRunner.RawManifest), jsonb(slugR
 		artifact := artifacts[name+"-image"]
 		sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE artifacts SET uri = '%[1]s', type = 'flynn', manifest = '%[2]s', hashes = '%[3]s', size = %[4]d, layer_url_template = '%[5]s', meta = '%[6]s'
-WHERE artifact_id = (SELECT (env->>'%[7]s_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'))
-OR uri = (SELECT env->>'%[7]s_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'));`,
+WHERE artifact_id = (SELECT (env->>'%[7]s_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL))
+OR uri = (SELECT env->>'%[7]s_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL));`,
 			artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, jsonb(artifact.Meta), strings.ToUpper(name)))
 	}
 
@@ -700,8 +700,8 @@ OR uri = (SELECT env->>'%[7]s_IMAGE_URI' FROM releases WHERE release_id = (SELEC
 	redisImage := artifacts["redis-image"]
 	sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s', size = %d, layer_url_template = '%s', meta = '%s'
-WHERE artifact_id = (SELECT (env->>'REDIS_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis'))
-OR uri = (SELECT env->>'REDIS_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis'));`,
+WHERE artifact_id = (SELECT (env->>'REDIS_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis' AND deleted_at IS NULL))
+OR uri = (SELECT env->>'REDIS_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis' AND deleted_at IS NULL));`,
 		redisImage.URI, jsonb(&redisImage.RawManifest), jsonb(redisImage.Hashes), redisImage.Size, redisImage.LayerURLTemplate, jsonb(redisImage.Meta)))
 
 	// ensure the image ID environment variables are set for legacy apps
