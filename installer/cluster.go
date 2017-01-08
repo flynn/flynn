@@ -899,15 +899,16 @@ func (c *BaseCluster) genStartScript(nodes int64, dataDisk string) (string, stri
 var iptablesConfigScript = template.Must(template.New("iptables.sh").Parse(`
 export DEBIAN_FRONTEND=noninteractive
 apt-get install -y iptables-persistent
+iptables -F INPUT
 {{ range $i, $ip := .InstanceIPs }}
-iptables -A FORWARD -s {{$ip}} -j ACCEPT
+iptables -A INPUT -s {{$ip}} -j ACCEPT
 {{ end }}
-iptables -A FORWARD -i eth0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 80 -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 443 -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 22 -j ACCEPT
-iptables -A FORWARD -i eth0 -p icmp --icmp-type echo-request -j ACCEPT
-iptables -A FORWARD -i eth0 -j DROP
+iptables -A INPUT -i eth0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -i eth0 -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -i eth0 -p tcp --dport 443 -j ACCEPT
+iptables -A INPUT -i eth0 -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -i eth0 -p icmp --icmp-type echo-request -j ACCEPT
+iptables -A INPUT -i eth0 -j DROP
 netfilter-persistent save
 `[1:]))
 
