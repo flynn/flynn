@@ -60,6 +60,10 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool, redactEnv []stri
 	if job.ExitStatus != nil {
 		exitStatus = strconv.Itoa(*job.ExitStatus)
 	}
+	var pid string
+	if job.PID != nil {
+		pid = strconv.Itoa(*job.PID)
+	}
 	var jobError string
 	if job.Error != nil {
 		jobError = *job.Error
@@ -71,6 +75,7 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool, redactEnv []stri
 	listRec(w, "CreatedAt", job.CreatedAt)
 	listRec(w, "StartedAt", job.StartedAt)
 	listRec(w, "EndedAt", displayTime(job.EndedAt))
+	listRec(w, "PID", pid)
 	listRec(w, "ExitStatus", exitStatus)
 	listRec(w, "Error", jobError)
 	listRec(w, "IP Address", job.InternalIP)
