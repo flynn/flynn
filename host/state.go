@@ -78,7 +78,7 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 				return err
 			}
 			if job.CreatedAt.IsZero() {
-				job.CreatedAt = time.Now()
+				job.CreatedAt = time.Now().UTC()
 			}
 			s.jobs[string(k)] = job
 
@@ -298,7 +298,7 @@ func (s *State) AddJob(j *host.Job) error {
 	job := &host.ActiveJob{
 		Job:       j,
 		HostID:    s.id,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
 	}
 	s.jobs[j.ID] = job
 	s.sendEvent(job, host.JobEventCreate)
