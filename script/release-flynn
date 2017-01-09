@@ -28,6 +28,7 @@ OPTIONS:
   -b, --bucket BUCKET     The S3 bucket to upload packages to [default: flynn]
   -d, --domain DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -t, --tuf-dir DIR       Path to the local TUF repository [default: /etc/flynn/tuf]
+  --nightly               Force release to the nightly channel
   --resume DIR            Resume the release using DIR
 
 Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and GITHUB_TOKEN to be set.
