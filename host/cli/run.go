@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/docker/pkg/term"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cliutil"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -27,6 +28,8 @@ Options:
 	--host=<host>        run on a specific host
 	--bind=<mountspecs>  bind mount a directory into the job (ex: /foo:/data,/bar:/baz)
 	--volume=<path>      mount a temporary volume at <path>
+	--limits=<limits>    resource limits (ex: memory=2G,temp_disk=200MB)
+	--workdir=<dir>      working directory
 
 Example:
 	$ flynn-host run <(jq '.mongodb' images.json) mongo --version
@@ -47,6 +50,7 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 				TTY:        term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()),
 				Stdin:      true,
 				DisableLog: true,
+				WorkingDir: args.String["--workdir"],
 			},
 		},
 		Stdin:  os.Stdin,
@@ -90,6 +94,16 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 			Path:         path,
 			DeleteOnStop: true,
 		}}
+	}
+	if limits := args.String["--limits"]; limits != "" {
+		cmd.Job.Resources = resource.Defaults()
+		resources, err := resource.ParseCSV(limits)
+		if err != nil {
+			return err
+		}
+		for typ, limit := range resources {
+			cmd.Job.Resources[typ] = limit
+		}
 	}
 
 	var termState *term.State
