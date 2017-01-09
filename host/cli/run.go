@@ -30,6 +30,7 @@ Options:
 	--volume=<path>      mount a temporary volume at <path>
 	--limits=<limits>    resource limits (ex: memory=2G,temp_disk=200MB)
 	--workdir=<dir>      working directory
+	--hostnet            use the host network
 
 Example:
 	$ flynn-host run <(jq '.mongodb' images.json) mongo --version
@@ -46,11 +47,12 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 		ImageArtifact: artifact,
 		Job: &host.Job{
 			Config: host.ContainerConfig{
-				Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
-				TTY:        term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()),
-				Stdin:      true,
-				DisableLog: true,
-				WorkingDir: args.String["--workdir"],
+				Args:        append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
+				TTY:         term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()),
+				Stdin:       true,
+				DisableLog:  true,
+				WorkingDir:  args.String["--workdir"],
+				HostNetwork: args.Bool["--hostnet"],
 			},
 		},
 		Stdin:  os.Stdin,
