@@ -755,6 +755,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 					proc.Ports[i].Service.Name = strings.Replace(port.Service.Name, oldName, app.Name, 1)
 				}
 			}
+			proc.Service = strings.Replace(proc.Service, oldName, app.Name, 1)
 			release.Processes[t] = proc
 		}
 		if err := client.CreateRelease(app.ID, release); err != nil {
