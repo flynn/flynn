@@ -423,8 +423,16 @@ func (p *Provider) mountDataset(vol *zfsVolume) error {
 		return fmt.Errorf("could not mount: %s", err)
 	}
 	if vol.filesystem != nil {
+		zvol := p.zvolPath(vol.info)
+		// ensure the zvol exists before trying to mount it
+		if err := zvolOpenAttempts.Run(func() error {
+			_, err := os.Stat(zvol)
+			return err
+		}); err != nil {
+			return fmt.Errorf("could not open zfs device %q: %s", zvol, err)
+		}
 		return syscall.Mount(
-			p.zvolPath(vol.info),
+			zvol,
 			vol.basemount,
 			string(vol.filesystem.Type),
 			vol.filesystem.MountFlags,
