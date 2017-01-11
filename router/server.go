@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/keepalive"
@@ -91,8 +92,8 @@ func main() {
 
 	proxyProtocol := os.Getenv("PROXY_PROTOCOL") == "true"
 
-	httpPort := flag.String("http-port", "8080", "http listen port")
-	httpsPort := flag.String("https-port", "4433", "https listen port")
+	httpPort := flag.Int("http-port", 8080, "http listen port")
+	httpsPort := flag.Int("https-port", 4433, "https listen port")
 	tcpIP := flag.String("tcp-ip", os.Getenv("LISTEN_IP"), "tcp router listen ip")
 	tcpRangeStart := flag.Int("tcp-range-start", 3000, "tcp port range start")
 	tcpRangeEnd := flag.Int("tcp-range-end", 3500, "tcp port range end")
@@ -139,15 +140,16 @@ func main() {
 
 	shutdown.BeforeExit(func() { db.Close() })
 
-	httpAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), *httpPort)
-	httpsAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), *httpsPort)
+	httpAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), strconv.Itoa(*httpPort))
+	httpsAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), strconv.Itoa(*httpsPort))
 	r := Router{
 		TCP: &TCPListener{
-			IP:        *tcpIP,
-			startPort: *tcpRangeStart,
-			endPort:   *tcpRangeEnd,
-			ds:        NewPostgresDataStore("tcp", db.ConnPool),
-			discoverd: discoverd.DefaultClient,
+			IP:            *tcpIP,
+			startPort:     *tcpRangeStart,
+			endPort:       *tcpRangeEnd,
+			ds:            NewPostgresDataStore("tcp", db.ConnPool),
+			discoverd:     discoverd.DefaultClient,
+			reservedPorts: []int{*httpPort, *httpsPort},
 		},
 		HTTP: &HTTPListener{
 			Addr:          httpAddr,

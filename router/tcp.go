@@ -27,9 +27,10 @@ type TCPListener struct {
 	wm        *WatchManager
 	stopSync  func()
 
-	startPort int
-	endPort   int
-	listeners map[int]net.Listener
+	startPort     int
+	endPort       int
+	reservedPorts []int
+	listeners     map[int]net.Listener
 
 	mtx      sync.RWMutex
 	services map[string]*service
@@ -44,6 +45,11 @@ func (l *TCPListener) AddRoute(route *router.Route) error {
 	defer l.mtx.RUnlock()
 	if l.closed {
 		return ErrClosed
+	}
+	for _, port := range l.reservedPorts {
+		if r.Port == port {
+			return fmt.Errorf("cannot bind to reserved port %d", port)
+		}
 	}
 	if r.Port == 0 {
 		return l.addWithAllocatedPort(route)
