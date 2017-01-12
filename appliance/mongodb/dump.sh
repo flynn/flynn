@@ -9,4 +9,4 @@ trap "rm -rf ${TMPFILE}" EXIT
 
 # Archive dump directory, gzip, & write to STDOUT.
 cd $TMPFILE
-tar -cf - *
+tar -cf - -C "${TMPFILE}" .
