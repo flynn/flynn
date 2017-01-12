@@ -68,7 +68,7 @@ func (s *BackupSuite) testClusterBackup(t *c.C, name string) {
 	defer x.Destroy()
 
 	debug(t, "waiting for nodejs-web service")
-	_, err = x.discoverd.Instances("nodejs-web", 30*time.Second)
+	_, err = x.discoverd.Instances("nodejs-web", 5*time.Minute)
 	t.Assert(err, c.IsNil)
 
 	debug(t, "checking HTTP requests")
