@@ -42,6 +42,7 @@ main() {
   fi
 
   local dir=$1
+  mkdir -p "${dir}"
 
   local tmp="$(mktemp --directory)"
   trap "rm -rf ${tmp}" EXIT
@@ -138,7 +139,8 @@ bootstrap_cluster() {
   local out="${tmp}/bootstrap-${version}.txt"
 
   info "bootstrapping ${version} cluster"
-  export CLUSTER_DOMAIN="$(openssl rand -hex 16).1.localflynn.com"
+  export CLUSTER_DOMAIN="$(openssl rand -hex 16).local"
+  echo "192.0.2.200 ${CLUSTER_DOMAIN} controller.${CLUSTER_DOMAIN} git.${CLUSTER_DOMAIN} docker.${CLUSTER_DOMAIN}" | sudo tee -a /etc/hosts
   local cluster_add=$("${ROOT}/script/bootstrap-flynn" --version "${version}" &> >(tee "${out}") | tail -3 | head -1)
 
   if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
