@@ -60,10 +60,10 @@ type Cluster struct {
 	Key       string
 	Pin       string
 
-	config   *BootConfig
-	size     int
-	hostTags map[string]string
-	log      log15.Logger
+	config      *BootConfig
+	size        int
+	clusterHost *cluster.Host
+	log         log15.Logger
 }
 
 func Boot(c *BootConfig) (*Cluster, error) {
@@ -87,8 +87,8 @@ func Boot(c *BootConfig) (*Cluster, error) {
 	} else if len(hosts) == 0 {
 		return nil, errors.New("no hosts")
 	}
-	hostTag, ok := schedutil.PickHost(hosts).Tags()["host_id"]
-	if !ok {
+	clusterHost := schedutil.PickHost(hosts)
+	if _, ok := clusterHost.Tags()["host_id"]; !ok {
 		return nil, errors.New("missing host_id tag")
 	}
 
@@ -218,12 +218,12 @@ func Boot(c *BootConfig) (*Cluster, error) {
 	}
 
 	cluster := &Cluster{
-		App:       app,
-		Release:   release,
-		HostImage: hostImage,
-		config:    c,
-		hostTags:  map[string]string{"host_id": hostTag},
-		log:       log,
+		App:         app,
+		Release:     release,
+		HostImage:   hostImage,
+		config:      c,
+		clusterHost: clusterHost,
+		log:         log,
 	}
 
 	if _, err := cluster.AddHosts(c.Size); err != nil {
@@ -363,7 +363,7 @@ loop:
 		AppID:     c.App.ID,
 		ReleaseID: c.Release.ID,
 		Processes: map[string]int{"host": c.size},
-		Tags:      map[string]map[string]string{"host": c.hostTags},
+		Tags:      map[string]map[string]string{"host": c.clusterHost.Tags()},
 	}
 	if err := c.config.Client.PutFormation(formation); err != nil {
 		c.log.Error("error scaling hosts", "err", err)
@@ -440,7 +440,7 @@ func (c *Cluster) Destroy() error {
 	proc := c.Release.Processes["host"]
 	for _, host := range c.Hosts {
 		log.Info("running host cleanup", "job.id", host.JobID)
-		cmd := exec.Command(c.HostImage, "/usr/local/bin/cleanup-flynn-host.sh", host.JobID)
+		cmd := exec.CommandUsingHost(c.clusterHost, c.HostImage, "/usr/local/bin/cleanup-flynn-host.sh", host.JobID)
 		logR, logW := io.Pipe()
 		go func() {
 			buf := bufio.NewReader(logR)
