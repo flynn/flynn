@@ -254,17 +254,17 @@ func (c *Cluster) startVMs(typ ClusterType, rootFS string, count int, initial bo
 	instances := make([]*Instance, count)
 	for i := 0; i < count; i++ {
 		memory := "8192"
-		cores := 2
-		if typ == ClusterTypeDefault {
-			memory = "32768"
-			cores = 12
+		if initial && i == 0 {
+			// give the first instance more memory as that is where
+			// the test binary runs, and the tests use a lot of memory
+			memory = "16384"
 		}
 		inst, err := c.vm.NewInstance(&VMConfig{
 			Kernel: c.bc.Kernel,
 			User:   uid,
 			Group:  gid,
 			Memory: memory,
-			Cores:  cores,
+			Cores:  2,
 			Drives: map[string]*VMDrive{
 				"hda": {FS: rootFS, COW: true, Temp: true},
 			},
