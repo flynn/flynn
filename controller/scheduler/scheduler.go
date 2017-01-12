@@ -148,9 +148,14 @@ func main() {
 	logger.SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StdoutHandler))
 	log := logger.New("fn", "main")
 
+	// Use a low timeout for HTTP requests to avoid blocking the main loop.
+	//
+	// TODO: make all HTTP calls asynchronous
+	//       (see https://github.com/flynn/flynn/issues/1920)
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+
 	log.Info("creating cluster and controller clients")
-	hc := &http.Client{Timeout: 5 * time.Second}
-	clusterClient := utils.ClusterClientWrapper(cluster.NewClientWithHTTP(nil, hc))
+	clusterClient := utils.ClusterClientWrapper(cluster.NewClientWithHTTP(nil, httpClient))
 	controllerClient, err := controller.NewClient("", os.Getenv("AUTH_KEY"))
 	if err != nil {
 		log.Error("error creating controller client", "err", err)
