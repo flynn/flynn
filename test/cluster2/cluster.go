@@ -25,6 +25,7 @@ import (
 	"github.com/flynn/flynn/pkg/exec"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/schedutil"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -59,9 +60,10 @@ type Cluster struct {
 	Key       string
 	Pin       string
 
-	config *BootConfig
-	size   int
-	log    log15.Logger
+	config   *BootConfig
+	size     int
+	hostTags map[string]string
+	log      log15.Logger
 }
 
 func Boot(c *BootConfig) (*Cluster, error) {
@@ -75,6 +77,19 @@ func Boot(c *BootConfig) (*Cluster, error) {
 
 	if c.ManifestPath == "" {
 		return nil, errors.New("missing manifest path")
+	}
+
+	// run all jobs on a single host as the overlay network doesn't work
+	// when spread across multiple hosts
+	hosts, err := cluster.NewClient().Hosts()
+	if err != nil {
+		return nil, err
+	} else if len(hosts) == 0 {
+		return nil, errors.New("no hosts")
+	}
+	hostTag, ok := schedutil.PickHost(hosts).Tags()["host_id"]
+	if !ok {
+		return nil, errors.New("missing host_id tag")
 	}
 
 	log := c.Logger
@@ -207,6 +222,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		Release:   release,
 		HostImage: hostImage,
 		config:    c,
+		hostTags:  map[string]string{"host_id": hostTag},
 		log:       log,
 	}
 
@@ -347,6 +363,7 @@ loop:
 		AppID:     c.App.ID,
 		ReleaseID: c.Release.ID,
 		Processes: map[string]int{"host": c.size},
+		Tags:      map[string]map[string]string{"host": c.hostTags},
 	}
 	if err := c.config.Client.PutFormation(formation); err != nil {
 		c.log.Error("error scaling hosts", "err", err)

@@ -8,7 +8,7 @@ import (
 
 func main() {
 	_, err := cluster2.Boot(&cluster2.BootConfig{
-		Size:         1,
+		Size:         3,
 		ImagesPath:   "images.json",
 		ManifestPath: "bootstrap/bin/manifest.json",
 	})
