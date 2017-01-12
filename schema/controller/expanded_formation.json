@@ -31,6 +31,10 @@
         "type": "integer"
       }
     },
+    "tags": {
+      "description": "process tags",
+      "type": "object"
+    },
     "updated_at": {
       "$ref": "/schema/controller/common#/definitions/updated_at"
     }
