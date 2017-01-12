@@ -455,6 +455,10 @@ if [[ -f /usr/local/bin/debug-info.sh ]]; then
   /usr/local/bin/debug-info.sh &>/tmp/debug-info.log &
 fi
 
+# mount the backups dir
+sudo mkdir -p /mnt/backups
+sudo mount -t 9p -o trans=virtio backupsfs /mnt/backups
+
 sudo start-stop-daemon \
   --start \
   --background \
