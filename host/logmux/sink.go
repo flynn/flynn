@@ -208,7 +208,12 @@ func (sm *SinkManager) newSink(s *SinkInfo) (Sink, error) {
 	}
 }
 
+var ErrDBClosed = errors.New("sink DB closed")
+
 func (sm *SinkManager) persistSink(id string) error {
+	if sm.db == nil {
+		return ErrDBClosed
+	}
 	if err := sm.db.Update(func(tx *bolt.Tx) error {
 		sinkBucket := tx.Bucket([]byte("sinks"))
 		k := []byte(id)
