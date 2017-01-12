@@ -34,9 +34,12 @@ func (s *MongoDBSuite) TestDumpRestore(t *c.C) {
 	t.Assert(res, Succeeds)
 	id := strings.Split(res.Output, " ")[2]
 
+	// dumping an empty database should not fail
+	file := filepath.Join(t.MkDir(), "db.dump")
+	t.Assert(r.flynn("mongodb", "dump", "-f", file), Succeeds)
+
 	t.Assert(r.flynn("mongodb", "mongo", "--", "--eval", `db.foos.insert({data: "foobar"})`), Succeeds)
 
-	file := filepath.Join(t.MkDir(), "db.dump")
 	t.Assert(r.flynn("mongodb", "dump", "-f", file), Succeeds)
 	t.Assert(r.flynn("mongodb", "mongo", "--", "--eval", "db.foos.drop()"), Succeeds)
 
