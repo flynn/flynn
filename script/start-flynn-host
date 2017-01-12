@@ -148,6 +148,7 @@ main() {
     --log-dir "${log_dir}" \
     --flynn-init "${bin_dir}/flynn-init" \
     --init-log-level "debug" \
+    --tags "host_id=${id}" \
     ${peer_ips} \
     &>"${log}"
 
