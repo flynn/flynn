@@ -65,6 +65,7 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		},
 		Resurrect: t.Resurrect,
 		Resources: t.Resources,
+		Profiles:  t.Profiles,
 	}
 	if len(t.Args) > 0 {
 		job.Config.Args = t.Args
