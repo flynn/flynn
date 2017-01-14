@@ -112,9 +112,9 @@ main() {
     sudo "${flynn_host}" destroy-volumes ${args[@]}
   fi
 
-  # create IP on eth0 interface
+  # create IP on lo interface
   info "starting flynn-host using IP ${ip}"
-  sudo ifconfig "eth0:${index}" "$ip"
+  sudo ifconfig "lo:${index}" "$ip"
 
   # if the number of peers given is > 0 then join existing cluster
   if [[ ${#peers[@]} -gt 0 ]]; then

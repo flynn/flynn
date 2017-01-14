@@ -24,7 +24,13 @@ main() {
   local docker_cert_path="/etc/docker/certs.d/docker.${CLUSTER_DOMAIN}/ca.crt"
   sudo mkdir -p "$(dirname "${docker_cert_path}")"
   sudo curl --silent --output "${docker_cert_path}" "http://controller.${CLUSTER_DOMAIN}/ca-cert"
-  sudo restart docker
+
+  source "/etc/lsb-release"
+  if [[ "${DISTRIB_CODENAME}" = "xenial" ]]; then
+    sudo systemctl restart docker
+  else
+    sudo restart docker
+  fi
 }
 
 main $@
