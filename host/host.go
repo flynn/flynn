@@ -109,6 +109,7 @@ Commands:
   promote                    Promotes a Flynn node to a member of the consensus cluster
   demote                     Demotes a Flynn node, removing it from the consensus cluster
   log-sink                   Manage host log sinks
+  cli-add-command            Get the 'flynn cluster add' command to manage this cluster
 
 See 'flynn-host help <command>' for more information on a specific command.
 `
