@@ -923,6 +923,10 @@
 			"Rev": "3b1f6487b7fc649d5f146df04e623bd55ba1bf7f"
 		},
 		{
+			"ImportPath": "github.com/krolaw/dhcp4",
+			"Rev": "f61f734b73027e29f7fa2ed623f2ed85a7ef08fa"
+		},
+		{
 			"ImportPath": "github.com/kylelemons/godebug/diff",
 			"Rev": "808ac284003ce2b08ef590da08f95379e8a06936"
 		},
@@ -1161,6 +1165,10 @@
 			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
 		},
 		{
+			"ImportPath": "golang.org/x/net/bpf",
+			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+		},
+		{
 			"ImportPath": "golang.org/x/net/context",
 			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
 		},
@@ -1181,7 +1189,19 @@
 			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
 		},
 		{
+			"ImportPath": "golang.org/x/net/internal/iana",
+			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+		},
+		{
+			"ImportPath": "golang.org/x/net/internal/netreflect",
+			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+		},
+		{
 			"ImportPath": "golang.org/x/net/internal/timeseries",
+			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+		},
+		{
+			"ImportPath": "golang.org/x/net/ipv4",
 			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
 		},
 		{
