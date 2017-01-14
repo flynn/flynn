@@ -46,6 +46,7 @@ type Cmd struct {
 
 	LinuxCapabilities []string
 	AllowedDevices    []*configs.Device
+	Profiles          []host.JobProfile
 
 	// cluster is used to communicate with the layer 0 cluster
 	cluster ClusterClient
@@ -210,6 +211,7 @@ func (c *Cmd) Start() error {
 			},
 			Resources: c.Resources,
 			Metadata:  c.Meta,
+			Profiles:  c.Profiles,
 		}
 		// if attaching to stdout / stderr, avoid round tripping the
 		// streams via on-disk log files.

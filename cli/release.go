@@ -348,6 +348,9 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 			if len(procUpdate.AllowedDevices) > 0 {
 				procRelease.AllowedDevices = procUpdate.AllowedDevices
 			}
+			if len(procUpdate.Profiles) > 0 {
+				procRelease.Profiles = procUpdate.Profiles
+			}
 
 			release.Processes[procKey] = procRelease
 		}

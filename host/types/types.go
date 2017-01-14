@@ -28,6 +28,8 @@ type Job struct {
 	// If Resurrect is true, the host service will attempt to start the job when
 	// starting after stopping (via crash or shutdown) with the job running.
 	Resurrect bool `json:"resurrect,omitempty"`
+
+	Profiles []JobProfile `json:"profiles,omitempty"`
 }
 
 func (j *Job) Dup() *Job {
@@ -70,6 +72,12 @@ func (j *Job) Dup() *Job {
 	return &job
 }
 
+type JobProfile string
+
+const (
+	JobProfileZFS JobProfile = "zfs"
+)
+
 type MountspecType string
 
 const MountspecTypeSquashfs MountspecType = "squashfs"
@@ -88,23 +96,24 @@ type JobResources struct {
 }
 
 type ContainerConfig struct {
-	Args              []string           `json:"args,omitempty"`
-	TTY               bool               `json:"tty,omitempty"`
-	Stdin             bool               `json:"stdin,omitempty"`
-	Data              bool               `json:"data,omitempty"`
-	Env               map[string]string  `json:"env,omitempty"`
-	Mounts            []Mount            `json:"mounts,omitempty"`
-	Volumes           []VolumeBinding    `json:"volumes,omitempty"`
-	Ports             []Port             `json:"ports,omitempty"`
-	WorkingDir        string             `json:"working_dir,omitempty"`
-	Uid               *uint32            `json:"uid,omitempty"`
-	Gid               *uint32            `json:"gid,omitempty"`
-	HostNetwork       bool               `json:"host_network,omitempty"`
-	HostPIDNamespace  bool               `json:"host_pid_namespace,omitempty"`
-	DisableLog        bool               `json:"disable_log,omitempty"`
-	LinuxCapabilities *[]string          `json:"linux_capabilities,omitempty"`
-	AllowedDevices    *[]*configs.Device `json:"allowed_devices,omitempty"`
-	WriteableCgroups  bool               `json:"writeable_cgroups,omitempty"`
+	Args               []string           `json:"args,omitempty"`
+	TTY                bool               `json:"tty,omitempty"`
+	Stdin              bool               `json:"stdin,omitempty"`
+	Data               bool               `json:"data,omitempty"`
+	Env                map[string]string  `json:"env,omitempty"`
+	Mounts             []Mount            `json:"mounts,omitempty"`
+	Volumes            []VolumeBinding    `json:"volumes,omitempty"`
+	Ports              []Port             `json:"ports,omitempty"`
+	WorkingDir         string             `json:"working_dir,omitempty"`
+	Uid                *uint32            `json:"uid,omitempty"`
+	Gid                *uint32            `json:"gid,omitempty"`
+	HostNetwork        bool               `json:"host_network,omitempty"`
+	HostPIDNamespace   bool               `json:"host_pid_namespace,omitempty"`
+	DisableLog         bool               `json:"disable_log,omitempty"`
+	LinuxCapabilities  *[]string          `json:"linux_capabilities,omitempty"`
+	AllowedDevices     *[]*configs.Device `json:"allowed_devices,omitempty"`
+	AutoCreatedDevices *[]*configs.Device `json:"auto_created_devices,omitempty"`
+	WriteableCgroups   bool               `json:"writeable_cgroups,omitempty"`
 }
 
 // Apply 'y' to 'x', returning a new structure.  'y' trumps.

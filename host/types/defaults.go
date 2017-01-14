@@ -26,3 +26,7 @@ var DefaultCapabilities = []string{
 // DefaultAllowedDevices is the default list of devices containers are allowed
 // to access
 var DefaultAllowedDevices = configs.DefaultAllowedDevices
+
+// DefaultAutoCreatedDevices is the default list of devices created inside
+// containers
+var DefaultAutoCreatedDevices = configs.DefaultAllowedDevices
