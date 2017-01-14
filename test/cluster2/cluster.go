@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -27,7 +26,6 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/schedutil"
 	"github.com/flynn/flynn/pkg/tlscert"
-	"github.com/opencontainers/runc/libcontainer/configs"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -132,12 +130,6 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		return nil, err
 	}
 
-	zfsDev, err := zfsDev()
-	if err != nil {
-		log.Error("error loading zfs device details", "err", err)
-		return nil, err
-	}
-
 	var hostEnv map[string]string
 	if c.Size >= 3 {
 		hostEnv = map[string]string{"DISCOVERY_SERVICE": app.Name}
@@ -146,16 +138,13 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		ArtifactIDs: []string{hostImage.ID},
 		Processes: map[string]ct.ProcessType{
 			"host": {
-				Env: hostEnv,
+				Env:      hostEnv,
+				Profiles: []host.JobProfile{host.JobProfileZFS},
 				Mounts: []host.Mount{
 					{
 						Location:  "/var/lib/flynn",
 						Target:    "/var/lib/flynn",
 						Writeable: true,
-					},
-					{
-						Location: "/dev/zvol",
-						Target:   "/dev/zvol",
 					},
 				},
 				Ports: []ct.Port{{
@@ -170,21 +159,6 @@ func Boot(c *BootConfig) (*Cluster, error) {
 				LinuxCapabilities: append(host.DefaultCapabilities, []string{
 					"CAP_SYS_ADMIN",
 					"CAP_NET_ADMIN",
-				}...),
-				AllowedDevices: append(host.DefaultAllowedDevices, []*configs.Device{
-					{
-						Path:        "/dev/zfs",
-						Type:        'c',
-						Major:       zfsDev.Major,
-						Minor:       zfsDev.Minor,
-						Permissions: "rwm",
-					},
-					{
-						Type:        'b',
-						Major:       230,
-						Minor:       configs.Wildcard,
-						Permissions: "rwm",
-					},
 				}...),
 				WriteableCgroups: true,
 			},
@@ -455,8 +429,7 @@ func (c *Cluster) Destroy() error {
 		cmd.Stdout = logW
 		cmd.Stderr = logW
 		cmd.Mounts = proc.Mounts
-		cmd.LinuxCapabilities = proc.LinuxCapabilities
-		cmd.AllowedDevices = proc.AllowedDevices
+		cmd.Profiles = proc.Profiles
 		if err := cmd.Run(); err != nil {
 			log.Error("error running host cleanup", "job.id", host.JobID, "err", err)
 			continue
@@ -491,30 +464,4 @@ func loadHostImage(path string) (*ct.Artifact, error) {
 		return nil, errors.New("missing host image from images.json")
 	}
 	return artifact, nil
-}
-
-type ZFSDev struct {
-	Major int64
-	Minor int64
-}
-
-func zfsDev() (*ZFSDev, error) {
-	data, err := ioutil.ReadFile("/sys/class/misc/zfs/dev")
-	if err != nil {
-		return nil, err
-	}
-	s := strings.SplitN(strings.TrimSpace(string(data)), ":", 2)
-	if len(s) != 2 {
-		return nil, fmt.Errorf("unexpected data in /sys/class/misc/zfs/dev: %q", data)
-	}
-	dev := &ZFSDev{}
-	dev.Major, err = strconv.ParseInt(s[0], 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing zfs major from %q: %s", data, err)
-	}
-	dev.Minor, err = strconv.ParseInt(s[1], 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing zfs minor from %q: %s", data, err)
-	}
-	return dev, nil
 }

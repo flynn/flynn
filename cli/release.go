@@ -319,6 +319,9 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 			for resKey, resValue := range procUpdate.Resources {
 				procRelease.Resources[resKey] = resValue
 			}
+			if len(procUpdate.Profiles) > 0 {
+				procRelease.Profiles = procUpdate.Profiles
+			}
 
 			release.Processes[procKey] = procRelease
 		}

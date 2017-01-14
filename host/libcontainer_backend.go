@@ -336,9 +336,29 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		}
 	}()
 
+	// set defaults and apply job profiles
 	if job.Partition == "" {
 		job.Partition = defaultPartition
 	}
+	if job.Config.LinuxCapabilities == nil {
+		job.Config.LinuxCapabilities = &host.DefaultCapabilities
+	}
+	if job.Config.AllowedDevices == nil {
+		job.Config.AllowedDevices = &host.DefaultAllowedDevices
+	}
+	if job.Config.AutoCreatedDevices == nil {
+		job.Config.AutoCreatedDevices = &host.DefaultAutoCreatedDevices
+	}
+	for _, name := range job.Profiles {
+		profileFn, ok := jobProfiles[name]
+		if !ok {
+			return fmt.Errorf("unknown job profile: %s", name)
+		}
+		if err := profileFn(job); err != nil {
+			return fmt.Errorf("error applying %s profile: %s", name, err)
+		}
+	}
+
 	if _, ok := l.PartitionCGroups[job.Partition]; !ok {
 		return fmt.Errorf("host: invalid job partition %q", job.Partition)
 	}
@@ -411,12 +431,6 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		cgroupMountFlags |= syscall.MS_RDONLY
 	}
 
-	if job.Config.LinuxCapabilities == nil {
-		job.Config.LinuxCapabilities = &host.DefaultCapabilities
-	}
-	if job.Config.AllowedDevices == nil {
-		job.Config.AllowedDevices = &host.DefaultAllowedDevices
-	}
 	config := &configs.Config{
 		Rootfs:       rootPath,
 		Capabilities: *job.Config.LinuxCapabilities,
@@ -438,7 +452,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		ReadonlyPaths: []string{
 			"/proc/sys", "/proc/sysrq-trigger", "/proc/irq", "/proc/bus",
 		},
-		Devices: configs.DefaultAutoCreatedDevices,
+		Devices: *job.Config.AutoCreatedDevices,
 		Mounts: append([]*configs.Mount{rootMount}, []*configs.Mount{
 			{
 				Source:      "proc",

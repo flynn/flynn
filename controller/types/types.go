@@ -106,6 +106,7 @@ type ProcessType struct {
 	Resurrect         bool               `json:"resurrect,omitempty"`
 	Resources         resource.Resources `json:"resources,omitempty"`
 	Mounts            []host.Mount       `json:"mounts,omitempty"`
+	Profiles          []host.JobProfile  `json:"profiles,omitempty"`
 	LinuxCapabilities []string           `json:"linux_capabilities,omitempty"`
 	AllowedDevices    []*configs.Device  `json:"allowed_devices,omitempty"`
 	WriteableCgroups  bool               `json:"writeable_cgroups,omitempty"`

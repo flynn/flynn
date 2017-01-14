@@ -5,9 +5,6 @@
 # exit on error
 set -e
 
-# create /dev/zfs
-mknod -m 0600 /dev/zfs c $(sed 's|:| |' /sys/class/misc/zfs/dev)
-
 # create /etc/mtab to keep ZFS happy
 ln -nfs /proc/mounts /etc/mtab
 
