@@ -230,7 +230,7 @@ tmpdir=$(mktemp --directory)
 trap "rm -rf ${tmpdir}" EXIT
 git clone https://github.com/sstephenson/bats.git "${tmpdir}/bats"
 "${tmpdir}/bats/install.sh" "/usr/local"
-curl -fsLo "/usr/local/bin/jq" "http://stedolan.github.io/jq/download/linux64/jq"
+curl -fsLo "/usr/local/bin/jq" "https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"
 chmod +x "/usr/local/bin/jq"
 
 # cleanup
