@@ -5,7 +5,7 @@
 # PREREQUISITES:
 #
 # - A recent version of jq (which has the --exit-status flag)
-#   sudo curl -sLo /usr/local/bin/jq http://stedolan.github.io/jq/download/linux64/jq
+#   sudo curl -sLo /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64
 #   sudo chmod +x /usr/local/bin/jq
 
 set -eo pipefail

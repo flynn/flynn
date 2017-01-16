@@ -58,7 +58,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     trap "rm -rf ${tmpdir}" EXIT
     git clone https://github.com/sstephenson/bats.git "${tmpdir}/bats"
     sudo "${tmpdir}/bats/install.sh" /usr/local
-    sudo curl -sLo "/usr/local/bin/jq" "http://stedolan.github.io/jq/download/linux64/jq"
+    sudo curl -sLo "/usr/local/bin/jq" "https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"
     sudo chmod +x "/usr/local/bin/jq"
 
     # Database dependencies - postgres, mariadb + percona xtrabackup, mongodb, redis
