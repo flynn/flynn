@@ -14,6 +14,7 @@ type jobProfileFn func(*host.Job) error
 
 var jobProfiles = map[host.JobProfile]jobProfileFn{
 	host.JobProfileZFS: jobProfileZFS,
+	host.JobProfileKVM: jobProfileKVM,
 }
 
 func jobProfileZFS(job *host.Job) error {
@@ -55,6 +56,67 @@ func jobProfileZFS(job *host.Job) error {
 		Location: "/dev/zvol",
 		Target:   "/dev/zvol",
 	})
+
+	return nil
+}
+
+func jobProfileKVM(job *host.Job) error {
+	kvmDev, err := loadDevice("/sys/class/misc/kvm/dev")
+	if err != nil {
+		return fmt.Errorf("error loading KVM device: %s", err)
+	}
+	tunDev, err := loadDevice("/sys/class/misc/tun/dev")
+	if err != nil {
+		return fmt.Errorf("error loading TUN device: %s", err)
+	}
+
+	// allow the /dev/kvm and /dev/net/tun devices
+	allowedDevices := append(*job.Config.AllowedDevices, []*configs.Device{
+		{
+			Path:        "/dev/kvm",
+			Type:        'c',
+			Major:       kvmDev.major,
+			Minor:       kvmDev.minor,
+			Permissions: "rwm",
+		},
+		{
+			Path:        "/dev/net/tun",
+			Type:        'c',
+			Major:       tunDev.major,
+			Minor:       tunDev.minor,
+			Permissions: "rwm",
+		},
+	}...)
+	job.Config.AllowedDevices = &allowedDevices
+
+	// auto create /dev/kvm and /dev/net/tun
+	autoCreatedDevices := append(*job.Config.AutoCreatedDevices, []*configs.Device{
+		{
+			Path:        "/dev/kvm",
+			Type:        'c',
+			Major:       kvmDev.major,
+			Minor:       kvmDev.minor,
+			Permissions: "rwm",
+		},
+		{
+			Path:        "/dev/net/tun",
+			Type:        'c',
+			Major:       tunDev.major,
+			Minor:       tunDev.minor,
+			Permissions: "rwm",
+		},
+	}...)
+	job.Config.AutoCreatedDevices = &autoCreatedDevices
+
+	// allow the job to create a network TAP interface
+	linuxCapabilities := append(*job.Config.LinuxCapabilities, "CAP_NET_ADMIN")
+	job.Config.LinuxCapabilities = &linuxCapabilities
+
+	// put the job in the host network namespace so the TAP interface can
+	// be added to host bridge but also assign an IP address so it can be
+	// fetched via DHCP
+	job.Config.HostNetwork = true
+	job.Config.AssignIP = true
 
 	return nil
 }
