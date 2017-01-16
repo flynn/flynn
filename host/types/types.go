@@ -76,6 +76,7 @@ type JobProfile string
 
 const (
 	JobProfileZFS JobProfile = "zfs"
+	JobProfileKVM JobProfile = "kvm"
 )
 
 type MountspecType string
