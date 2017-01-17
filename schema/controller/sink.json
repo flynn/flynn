@@ -5,12 +5,6 @@
   "description": "",
   "sortIndex": 20,
   "type": "object",
-  "examples": [
-    "schema/examples/controller/sink_create#",
-    "schema/examples/controller/sink_get#",
-    "schema/examples/controller/sink_list#",
-    "schema/examples/controller/sink_delete#"
-  ],
   "definitions": {
     "sink_kind": {
       "type": "string",
