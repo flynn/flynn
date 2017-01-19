@@ -30,7 +30,7 @@ over HTTP. Since most developers are already familiar with HTTP and almost every
 language already has great HTTP support, taking advantage of Flynn's APIs is
 easier than yet another RPC protocol.
 
-We target the Ubuntu 14.04 LTS amd64 as our base operating system. Flynn has no
+We target the Ubuntu 16.04 LTS amd64 as our base operating system. Flynn has no
 hard dependencies on a specific Linux distribution, but experience shows that
 the differences between distros are time-consuming to support and irrelevant to
 our goals, so we have chosen a single common configuration to support.
