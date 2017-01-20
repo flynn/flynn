@@ -99,7 +99,16 @@ main() {
     mkdir -p "${dir}"
 
     info "downloading ${version} into ${dir}"
-    sudo FLYNN_VERSION="${version}" "${flynn_host}" download --config-dir "${dir}" --bin-dir "${dir}"
+    local args=(
+      --config-dir "${dir}"
+      --bin-dir    "${dir}"
+    )
+    if [[ "${version:1:8}" -ge "20161106" ]]; then
+      args+=(
+        --volpath "/var/lib/flynn/volumes-0"
+      )
+    fi
+    sudo FLYNN_VERSION="${version}" "${flynn_host}" download ${args[@]}
     flynn_host="${dir}/flynn-host"
     bin_dir="${dir}"
     manifest="${dir}/bootstrap-manifest.json"

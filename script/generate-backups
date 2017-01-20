@@ -53,7 +53,15 @@ main() {
   export FLYNNRC="${tmp}/flynnrc"
   local app="nodejs"
 
-  for version in "v20160309.0" "v20160423.0" "v20160624.1" "v20160721.2" "v20160814.0"; do
+  local versions=(
+    "v20160309.0"
+    "v20160423.0"
+    "v20160624.1"
+    "v20160721.2"
+    "v20160814.0"
+    "v20161114.0p1"
+  )
+  for version in ${versions[@]}; do
     local name="${version}-nodejs-redis.tar"
     local out="${dir}/${name}"
 
@@ -141,6 +149,7 @@ bootstrap_cluster() {
   info "bootstrapping ${version} cluster"
   export CLUSTER_DOMAIN="$(openssl rand -hex 16).local"
   echo "192.0.2.200 ${CLUSTER_DOMAIN} controller.${CLUSTER_DOMAIN} git.${CLUSTER_DOMAIN} docker.${CLUSTER_DOMAIN}" | sudo tee -a /etc/hosts
+  "${ROOT}/script/kill-flynn"
   local cluster_add=$("${ROOT}/script/bootstrap-flynn" --version "${version}" &> >(tee "${out}") | tail -3 | head -1)
 
   if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
