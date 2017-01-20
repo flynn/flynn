@@ -357,18 +357,28 @@ WHERE release_id IN (SELECT release_id FROM apps WHERE name IN ('postgres', 'mar
 		data.MariaDB.Release.Env["SINGLETON"] = singleton
 		delete(data.MariaDB.Release.Processes["mariadb"].Env, "SINGLETON")
 		sqlBuf.WriteString(`
-UPDATE releases SET processes = jsonb_set(processes, '{mariadb,env}', (processes #> '{mariadb,env}')::jsonb - 'SINGLETON')
-WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mariadb' AND deleted_at IS NULL);
-`)
+DO $$
+  BEGIN
+    IF (SELECT processes->'mariadb' ? 'env' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'mariadb' AND deleted_at IS NULL)) THEN
+      UPDATE releases SET processes = jsonb_set(processes, '{mariadb,env}', (processes #> '{mariadb,env}')::jsonb - 'SINGLETON')
+      WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mariadb' AND deleted_at IS NULL);
+    END IF;
+  END;
+$$;`)
 	}
 
 	if data.MongoDB != nil {
 		data.MongoDB.Release.Env["SINGLETON"] = singleton
 		delete(data.MongoDB.Release.Processes["mongodb"].Env, "SINGLETON")
 		sqlBuf.WriteString(`
-UPDATE releases SET processes = jsonb_set(processes, '{mongodb,env}', (processes #> '{mongodb,env}')::jsonb - 'SINGLETON')
-WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mongodb' AND deleted_at IS NULL);
-`)
+DO $$
+  BEGIN
+    IF (SELECT processes->'mongodb' ? 'env' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'mongodb' AND deleted_at IS NULL)) THEN
+      UPDATE releases SET processes = jsonb_set(processes, '{mongodb,env}', (processes #> '{mongodb,env}')::jsonb - 'SINGLETON')
+      WHERE release_id IN (SELECT release_id FROM apps WHERE name = 'mongodb' AND deleted_at IS NULL);
+    END IF;
+  END;
+$$;`)
 	}
 
 	// modify app scale based on whether we are booting
