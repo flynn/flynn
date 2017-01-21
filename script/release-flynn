@@ -118,7 +118,7 @@ main() {
     exit 1
   fi
 
-  if [[ "${branch}" = "master" ]]; then
+  if [[ -z "${commit}" ]] && [[ "${branch}" = "master" ]]; then
     nightly=true
   fi
 
