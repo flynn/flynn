@@ -89,6 +89,11 @@ We recommend using one of the external blobstore backends listed below for
 production, as they are more reliable than the Postgres backend and have
 predictable performance without consuming disk space on the Flynn hosts.
 
+Even if Flynn is not hosted within Amazon or Google services, making use of
+an external blobstore service is still advantageous. Using an external blobstore
+will free up local filesystem and other resources allowing for better general
+performance and stability.
+
 ### Amazon S3
 
 To migrate to the S3 backend, you first need to provision a new bucket and
