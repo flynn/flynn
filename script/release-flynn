@@ -28,6 +28,7 @@ OPTIONS:
   -b, --bucket BUCKET     The S3 bucket to upload packages to [default: flynn]
   -d, --domain DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -t, --tuf-dir DIR       Path to the local TUF repository [default: /etc/flynn/tuf]
+  --force                 Force the release even if the commit has already been released
   --nightly               Force release to the nightly channel
   --resume DIR            Resume the release using DIR
 
@@ -43,6 +44,7 @@ main() {
   local domain="dl.flynn.io"
   local tuf_dir="/etc/flynn/tuf"
   local nightly=false
+  local force=false
   local dir=""
 
   while true; do
@@ -108,6 +110,10 @@ main() {
         nightly=true
         shift 1
         ;;
+      --force)
+        force=true
+        shift 1
+        ;;
       *)
         break
         ;;
@@ -166,6 +172,9 @@ main() {
     if $nightly; then
       args+=("--nightly")
     fi
+    if $force; then
+      args+=("--force")
+    fi
     exec "${src}/script/release-flynn" ${args[@]}
   fi
 
@@ -178,7 +187,7 @@ main() {
 
   git fetch --tags
   local tag="$(git tag --points-at "${commit}")"
-  if [[ -n "${tag}" ]]; then
+  if [[ -n "${tag}" ]] && ! $force; then
     info "commit ${commit} already released as ${tag}, nothing to do"
     exit
   fi
