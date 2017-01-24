@@ -107,7 +107,12 @@ func (d *DeployJob) scaleOldRelease(wait bool) error {
 	return err
 }
 
+// failedJobThreshold is the number of times new jobs can fail when scaling up
+// a new release before aborting the deploy
+const newJobFailureThreshold = 5
+
 func (d *DeployJob) scaleNewRelease() error {
+	failures := 0
 	opts := ct.ScaleOptions{
 		Processes: d.newFormation.Processes,
 		Tags:      d.newFormation.Tags,
@@ -115,9 +120,14 @@ func (d *DeployJob) scaleNewRelease() error {
 		Stop:      d.stop,
 		JobEventCallback: func(job *ct.Job) error {
 			d.logJobEvent(job)
-			// return an error if we get a down job event when
-			// scaling the new formation up
+			// return an error if we get more than newJobFailureThreshold
+			// down events when scaling the new formation up
 			if job.State == ct.JobStateDown {
+				failures++
+				if failures <= newJobFailureThreshold {
+					d.logger.Warn("ignoring down job event for new release", "count", failures, "err", job.HostError)
+					return nil
+				}
 				msg := "got down job event"
 				if job.HostError != nil {
 					msg = *job.HostError
