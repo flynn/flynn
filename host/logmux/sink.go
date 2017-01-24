@@ -458,6 +458,7 @@ type SyslogSink struct {
 	useIDs         bool
 	insecure       bool
 	structuredData bool
+	format         ct.SyslogFormat
 
 	mtx          sync.RWMutex
 	cache        *lru.Cache
@@ -480,6 +481,11 @@ func NewSyslogSink(sm *SinkManager, info *SinkInfo) (sink *SyslogSink, err error
 			return nil, err
 		}
 	}
+	format := cfg.Format
+	if format == "" {
+		format = ct.SyslogFormatRFC6587
+	}
+
 	return &SyslogSink{
 		sm:             sm,
 		id:             info.ID,
@@ -488,6 +494,7 @@ func NewSyslogSink(sm *SinkManager, info *SinkInfo) (sink *SyslogSink, err error
 		useIDs:         cfg.UseIDs,
 		insecure:       cfg.Insecure,
 		structuredData: cfg.StructuredData,
+		format:         format,
 		cache:          lru.New(1000),
 		template:       t,
 		cursor:         info.Cursor,
@@ -621,7 +628,14 @@ func (s *SyslogSink) Write(m message) error {
 	}
 
 	// Write to the remote syslog
-	_, err := s.conn.Write(rfc6587.Bytes(msg))
+	var data []byte
+	switch s.format {
+	case ct.SyslogFormatRFC6587:
+		data = rfc6587.Bytes(msg)
+	case ct.SyslogFormatNewline:
+		data = append(msg.Bytes(), '\n')
+	}
+	_, err := s.conn.Write(data)
 	if err != nil {
 		return err
 	}
