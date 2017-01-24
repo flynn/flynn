@@ -31,7 +31,7 @@ usage: flynn cluster
        flynn cluster migrate-domain <domain>
        flynn cluster backup [--file <file>]
        flynn cluster log-sink
-       flynn cluster log-sink add syslog [--use-ids] [--insecure] <url> [<prefix>]
+       flynn cluster log-sink add syslog [--use-ids] [--insecure] [--format <format>] <url> [<prefix>]
        flynn cluster log-sink remove <id>
 
 Manage Flynn clusters.
@@ -82,8 +82,9 @@ Commands:
         Supported schemes are syslog and syslog+tls
 
         options:
-            --use-ids   Use app IDs instead of app names in the syslog APP-NAME field
-            --insecure  Don't verify servers certificate chain or hostname. Should only be used for testing.
+            --use-ids          Use app IDs instead of app names in the syslog APP-NAME field.
+            --insecure         Don't verify servers certificate chain or hostname. Should only be used for testing.
+            --format=<format>  One of rfc6587 or newline, defaults to rfc6587.
 
         examples:
             $ flynn cluster log-sink add syslog syslog+tls://rsyslog.host:514/
@@ -482,11 +483,22 @@ func runLogSinkAddSyslog(args *docopt.Args, client controller.Client) error {
 		return fmt.Errorf("Invalid syslog protocol: %s", u.Scheme)
 	}
 
+	var format ct.SyslogFormat
+	switch args.String["--format"] {
+	case "newline":
+		format = ct.SyslogFormatNewline
+	case "rfc6587", "":
+		format = ct.SyslogFormatRFC6587
+	default:
+		return fmt.Errorf("Invalid syslog format: %s", args.String["--format"])
+	}
+
 	config, _ := json.Marshal(ct.SyslogSinkConfig{
 		Prefix:   args.String["<prefix>"],
 		URL:      u.String(),
 		UseIDs:   args.Bool["--use-ids"],
 		Insecure: args.Bool["--insecure"],
+		Format:   format,
 	})
 
 	sink := &ct.Sink{
