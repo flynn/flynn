@@ -1773,7 +1773,10 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 	previousState := job.State
 	switch status {
 	case host.StatusStarting:
-		if job.State != JobStateStopping {
+		// only transition from pending -> starting (avoids
+		// out of order events marking jobs as starting which
+		// are actually running / stopped)
+		if job.State == "" || job.State == JobStatePending {
 			job.State = JobStateStarting
 		}
 	case host.StatusRunning:
