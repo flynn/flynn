@@ -33,6 +33,7 @@ ARGS=(
   --sink-state "${DIR}/sink-state.bolt"
   --volpath    "${DIR}/volumes"
   --log-dir    "${DIR}/logs"
+  --log-file   "/dev/stdout"
   --zpool-name "${ZPOOL}"
   --no-resurrect
 )

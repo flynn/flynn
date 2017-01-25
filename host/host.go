@@ -53,6 +53,7 @@ options:
   --backend=BACKEND          runner backend [default: libcontainer]
   --flynn-init=PATH          path to flynn-init binary [default: /usr/local/bin/flynn-init]
   --log-dir=DIR              directory to store job logs [default: /var/log/flynn]
+  --log-file=FILE            custom log file path
   --discovery=TOKEN          join cluster with discovery token
   --discovery-service=NAME   join cluster using service discovery
   --peer-ips=IPLIST          join existing cluster using IPs
@@ -180,11 +181,12 @@ func runDaemon(args *docopt.Args) {
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
 	logDir := args.String["--log-dir"]
+	logFile := args.String["--log-file"]
 	discoveryToken := args.String["--discovery"]
 	discoveryService := args.String["--discovery-service"]
 	bridgeName := args.String["--bridge-name"]
 
-	logger, err := setupLogger(logDir)
+	logger, err := setupLogger(logDir, logFile)
 	if err != nil {
 		shutdown.Fatalf("error setting up logger: %s", err)
 	}
@@ -553,12 +555,14 @@ func parseTagArgs(args string) map[string]string {
 	return tags
 }
 
-func setupLogger(logDir string) (log15.Logger, error) {
+func setupLogger(logDir, logFile string) (log15.Logger, error) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(logDir, "flynn-host.log")
-	handler, err := log15.FileHandler(path, log15.LogfmtFormat())
+	if logFile == "" {
+		logFile = filepath.Join(logDir, "flynn-host.log")
+	}
+	handler, err := log15.FileHandler(logFile, log15.LogfmtFormat())
 	if err != nil {
 		return nil, err
 	}
