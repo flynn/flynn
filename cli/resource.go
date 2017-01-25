@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/flynn/flynn/controller/client"
@@ -12,7 +13,7 @@ func init() {
 	register("resource", runResource, `
 usage: flynn resource
        flynn resource add <provider>
-       flynn resource remove <provider> <resource>
+       flynn resource remove <provider> [<resource>]
 
 Manage resources for the app.
 
@@ -20,7 +21,7 @@ Commands:
        With no arguments, shows a list of resources.
 
        add     provisions a new resource for the app using <provider>.
-       remove  removes the existing <resource> provided by <provider>.
+       remove  removes the existing <resource> provided by <provider>, resolves <resource> automatically if unambigious.
 `)
 }
 
@@ -82,6 +83,14 @@ func runResourceRemove(args *docopt.Args, client controller.Client) error {
 	provider := args.String["<provider>"]
 	resource := args.String["<resource>"]
 
+	var err error
+	if resource == "" {
+		resource, err = resolveResource(provider, client)
+		if err != nil {
+			return err
+		}
+	}
+
 	res, err := client.DeleteResource(provider, resource)
 	if err != nil {
 		return err
@@ -109,4 +118,25 @@ func runResourceRemove(args *docopt.Args, client controller.Client) error {
 	log.Printf("Deleted resource %s, created release %s.", res.ID, releaseID)
 
 	return nil
+}
+
+func resolveResource(provider string, client controller.Client) (string, error) {
+	resources, err := client.AppResourceList(mustApp())
+	if err != nil {
+		return "", err
+	}
+	var matched []*ct.Resource
+	for _, r := range resources {
+		p, err := client.GetProvider(r.ProviderID)
+		if err != nil {
+			return "", err
+		}
+		if r.ProviderID == provider || p.Name == provider {
+			matched = append(matched, r)
+		}
+	}
+	if len(matched) != 1 {
+		return "", fmt.Errorf("App has more than one resource for %s, specify resource ID", provider)
+	}
+	return matched[0].ID, nil
 }
