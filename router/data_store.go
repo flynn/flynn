@@ -164,10 +164,8 @@ func (d *pgDataStore) addCertWithTx(tx *pgx.Tx, c *router.Certificate) error {
 	}
 
 	tlsCertSHA256 := sha256.Sum256([]byte(c.Cert))
-	if err := tx.QueryRow("select_certificate_by_sha", tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
-		if err := tx.QueryRow("insert_certificate", c.Cert, c.Key, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			return err
-		}
+	if err := tx.QueryRow("insert_certificate", c.Cert, c.Key, tlsCertSHA256[:]).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		return err
 	}
 	for _, rid := range c.Routes {
 		if _, err := tx.Exec("delete_route_certificate_by_route_id", rid); err != nil {
