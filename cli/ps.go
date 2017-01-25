@@ -59,11 +59,13 @@ func runPs(args *docopt.Args, client controller.Client) error {
 	sort.Sort(sortJobs(jobs))
 	w := tabWriter()
 	defer w.Flush()
-	headers := []interface{}{"ID", "TYPE", "STATE", "CREATED", "RELEASE"}
-	if args.Bool["--command"] {
-		headers = append(headers, "COMMAND")
+	if !args.Bool["--quiet"] {
+		headers := []interface{}{"ID", "TYPE", "STATE", "CREATED", "RELEASE"}
+		if args.Bool["--command"] {
+			headers = append(headers, "COMMAND")
+		}
+		listRec(w, headers...)
 	}
-	listRec(w, headers...)
 	for _, j := range jobs {
 		if !args.Bool["--all"] && j.State != ct.JobStateUp && j.State != ct.JobStatePending {
 			continue
