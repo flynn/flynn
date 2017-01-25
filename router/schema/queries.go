@@ -121,6 +121,7 @@ const (
 	insertCertificate = `
 	INSERT INTO certificates (cert, key, cert_sha256)
 	VALUES ($1, $2, $3)
+	ON CONFLICT (cert_sha256) WHERE deleted_at IS NULL DO UPDATE SET cert_sha256 = $3
 	RETURNING id, created_at, updated_at`
 
 	deleteCertificate = `UPDATE certificates SET deleted_at = now() WHERE id = $1`
