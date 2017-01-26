@@ -25,6 +25,7 @@ import (
 	"github.com/flynn/flynn/pkg/dialer"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/lru"
+	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/julienschmidt/httprouter"
@@ -451,11 +452,12 @@ func (s *LogAggregatorSink) ShutdownCh() chan struct{} {
 type SyslogSink struct {
 	sm *SinkManager
 
-	id       string
-	url      string
-	prefix   string
-	useIDs   bool
-	insecure bool
+	id             string
+	url            string
+	prefix         string
+	useIDs         bool
+	insecure       bool
+	structuredData bool
 
 	mtx          sync.RWMutex
 	cache        *lru.Cache
@@ -479,16 +481,17 @@ func NewSyslogSink(sm *SinkManager, info *SinkInfo) (sink *SyslogSink, err error
 		}
 	}
 	return &SyslogSink{
-		sm:         sm,
-		id:         info.ID,
-		url:        cfg.URL,
-		prefix:     cfg.Prefix,
-		useIDs:     cfg.UseIDs,
-		insecure:   cfg.Insecure,
-		cache:      lru.New(1000),
-		template:   t,
-		cursor:     info.Cursor,
-		shutdownCh: make(chan struct{}),
+		sm:             sm,
+		id:             info.ID,
+		url:            cfg.URL,
+		prefix:         cfg.Prefix,
+		useIDs:         cfg.UseIDs,
+		insecure:       cfg.Insecure,
+		structuredData: cfg.StructuredData,
+		cache:          lru.New(1000),
+		template:       t,
+		cursor:         info.Cursor,
+		shutdownCh:     make(chan struct{}),
 	}, nil
 }
 
@@ -600,18 +603,25 @@ func (s *SyslogSink) Write(m message) error {
 		})
 	}
 
+	// Copy the message as we need to mutate it, this also drops structured data
+	msg := rfc5424.NewMessage(&m.Message.Header, m.Message.Msg)
+	if s.structuredData {
+		msg.StructuredData = make([]byte, len(m.Message.StructuredData))
+		copy(msg.StructuredData, m.Message.StructuredData)
+	}
+
 	// If the generated/cached prefix isn't 0 length then modify the message body
 	if len(prefix) != 0 {
-		m.Message.Msg = bytes.Join([][]byte{prefix, m.Message.Msg}, msgSep)
+		msg.Msg = bytes.Join([][]byte{prefix, m.Message.Msg}, msgSep)
 	}
 
 	// Overwrite syslog APP_NAME with controller app name unless IDs are to be used
 	if !s.useIDs {
-		m.Message.AppName = []byte(appName)
+		msg.AppName = []byte(appName)
 	}
 
 	// Write to the remote syslog
-	_, err := s.conn.Write(rfc6587.Bytes(m.Message))
+	_, err := s.conn.Write(rfc6587.Bytes(msg))
 	if err != nil {
 		return err
 	}

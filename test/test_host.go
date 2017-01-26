@@ -790,8 +790,9 @@ func (s *HostSuite) TestLogSinks(t *c.C) {
 
 	// add sink to controller
 	config, err := json.Marshal(&ct.SyslogSinkConfig{
-		URL:    fmt.Sprintf("syslog://%s", instances[0].Addr),
-		UseIDs: true,
+		URL:            fmt.Sprintf("syslog://%s", instances[0].Addr),
+		UseIDs:         true,
+		StructuredData: true,
 	})
 	t.Assert(err, c.IsNil)
 	sink := &ct.Sink{
