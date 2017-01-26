@@ -63,11 +63,44 @@ type Cluster struct {
 }
 
 func (x *Cluster) Destroy() error {
-	Hostnames.Remove(x.t, x.IP)
 	if x.t.Failed() {
-		x.collectDebugInfo()
+		if args.Interactive {
+			x.runDebugShell()
+		} else {
+			x.collectDebugInfo()
+		}
 	}
+	Hostnames.Remove(x.t, x.IP)
 	return x.Cluster.Destroy()
+}
+
+func (x *Cluster) runDebugShell() {
+	debugf(x.t, `
+
+*****
+starting bash shell with both 'flynn-host' and 'flynn' configured
+to debug test failure in cluster %q
+
+run 'exit' when you're done
+*****
+
+`, x.App.Name)
+	cmd := exec.Command("bash", "--norc")
+	cmd.Env = []string{
+		fmt.Sprintf("DISCOVERD=http://%s:1111", x.IP),
+		fmt.Sprintf("FLYNNRC=%s", x.flynnrc),
+		fmt.Sprintf(`PS1=\033[0;36mtest-debug@%s\$\033[0m `, x.App.Name),
+	}
+	for _, env := range os.Environ() {
+		if strings.HasPrefix(env, "DISCOVERD=") || strings.HasPrefix(env, "FLYNNRC=") || strings.HasPrefix(env, "PS1=") {
+			continue
+		}
+		cmd.Env = append(cmd.Env, env)
+	}
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
 }
 
 func (x *Cluster) flynn(dir string, cmdArgs ...string) *CmdResult {

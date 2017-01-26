@@ -28,6 +28,7 @@ type Args struct {
 	ClusterAPI       string
 	Concurrency      int
 	ConcurrentBuilds int
+	Interactive      bool
 }
 
 func Parse() *Args {
@@ -56,6 +57,7 @@ func Parse() *Args {
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")
 	flag.BoolVar(&args.BuildRootFS, "build-rootfs", false, "just build the rootfs (leaving it behind for future use) without running tests")
 	flag.BoolVar(&args.Gist, "gist", false, "upload debug info to a gist")
+	flag.BoolVar(&args.Interactive, "interactive", false, "start an interactive bash shell when cluster tests fail")
 	flag.IntVar(&args.Concurrency, "concurrency", 5, "max number of concurrent tests")
 	flag.IntVar(&args.ConcurrentBuilds, "concurrent-builds", 5, "max number of concurrent builds")
 	flag.Parse()

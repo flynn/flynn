@@ -102,6 +102,9 @@ main() {
   if $stream; then
     args+=("--stream")
   fi
+  if [[ -t 0 ]]; then
+    args+=("--interactive")
+  fi
   args+=("--router-ip=192.0.2.200")
 
   local mounts=(
