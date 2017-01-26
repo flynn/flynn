@@ -34,6 +34,9 @@ type Manager struct {
 	// `map[volume.Id]volume`
 	volumes map[string]volume.Volume
 
+	subscribers  map[chan *volume.Event]struct{}
+	subscribeMtx sync.RWMutex
+
 	dbPath string
 	db     *bolt.DB
 	dbMtx  sync.RWMutex
@@ -54,6 +57,7 @@ func New(dbPath string, logger log15.Logger, defaultProvider func() (volume.Prov
 		providers:       make(map[string]volume.Provider),
 		providerIDs:     make(map[volume.Provider]string),
 		volumes:         make(map[string]volume.Volume),
+		subscribers:     make(map[chan *volume.Event]struct{}),
 		dbPath:          dbPath,
 		logger:          logger,
 		defaultProvider: defaultProvider,
@@ -134,6 +138,36 @@ func (m *Manager) UnlockDB() {
 	m.dbMtx.RUnlock()
 }
 
+func (m *Manager) Subscribe() chan *volume.Event {
+	m.subscribeMtx.Lock()
+	defer m.subscribeMtx.Unlock()
+	ch := make(chan *volume.Event, 100)
+	m.subscribers[ch] = struct{}{}
+	return ch
+}
+
+func (m *Manager) Unsubscribe(ch chan *volume.Event) {
+	go func() {
+		// drain channel to prevent deadlock
+		for range ch {
+		}
+	}()
+	m.subscribeMtx.Lock()
+	defer m.subscribeMtx.Unlock()
+	delete(m.subscribers, ch)
+}
+
+func (m *Manager) sendEvent(vol volume.Volume, typ volume.EventType) {
+	m.subscribeMtx.RLock()
+	defer m.subscribeMtx.RUnlock()
+	for ch := range m.subscribers {
+		ch <- &volume.Event{
+			Volume: vol.Info(),
+			Type:   typ,
+		}
+	}
+}
+
 func (m *Manager) AddProvider(id string, p volume.Provider) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -169,9 +203,7 @@ func (m *Manager) Volumes() map[string]volume.Volume {
 	delegating NewVolume requests to the default Provider.
 */
 func (m *Manager) NewVolume() (volume.Volume, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	return m.newVolumeFromProviderLocked("")
+	return m.NewVolumeFromProvider("default")
 }
 
 /*
@@ -181,18 +213,10 @@ func (m *Manager) NewVolume() (volume.Volume, error) {
 func (m *Manager) NewVolumeFromProvider(providerID string) (volume.Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	return m.newVolumeFromProviderLocked(providerID)
-}
-
-func (m *Manager) newVolumeFromProviderLocked(providerID string) (volume.Volume, error) {
-	if providerID == "" {
-		providerID = "default"
-	}
 	if p, ok := m.providers[providerID]; ok {
 		return managerProviderProxy{p, m}.NewVolume()
-	} else {
-		return nil, ErrNoSuchProvider
 	}
+	return nil, ErrNoSuchProvider
 }
 
 func (m *Manager) GetVolume(id string) volume.Volume {
@@ -231,6 +255,7 @@ func (m *Manager) ImportFilesystem(providerID string, fs *volume.Filesystem) (vo
 	m.persist(func(tx *bolt.Tx) error {
 		return m.persistVolume(tx, vol)
 	})
+	m.sendEvent(vol, volume.EventTypeCreate)
 
 	return vol, nil
 }
@@ -254,6 +279,7 @@ func (m *Manager) DestroyVolume(id string) error {
 	m.persist(func(tx *bolt.Tx) error {
 		return m.persistVolume(tx, vol)
 	})
+	m.sendEvent(vol, volume.EventTypeDestroy)
 	return nil
 }
 
@@ -274,6 +300,7 @@ func (m *Manager) CreateSnapshot(id string) (volume.Volume, error) {
 	}
 	m.volumes[snap.Info().ID] = snap
 	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, snap) })
+	m.sendEvent(snap, volume.EventTypeCreate)
 	return snap, nil
 }
 
@@ -294,6 +321,7 @@ func (m *Manager) ForkVolume(id string) (volume.Volume, error) {
 	}
 	m.volumes[vol2.Info().ID] = vol2
 	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, vol2) })
+	m.sendEvent(vol2, volume.EventTypeCreate)
 	return vol2, nil
 }
 
@@ -340,6 +368,7 @@ func (m *Manager) ReceiveSnapshot(id string, stream io.Reader) (volume.Volume, e
 	defer m.mutex.Unlock()
 	m.volumes[snap.Info().ID] = snap
 	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, snap) })
+	m.sendEvent(snap, volume.EventTypeCreate)
 	return snap, nil
 }
 
@@ -394,6 +423,7 @@ func (m *Manager) restore() error {
 					return err
 				}
 				m.volumes[vol.Info().ID] = vol
+				m.sendEvent(vol, volume.EventTypeCreate)
 				return nil
 			}); err != nil {
 				return err
@@ -542,5 +572,6 @@ func (p managerProviderProxy) NewVolume() (volume.Volume, error) {
 	}
 	p.m.volumes[v.Info().ID] = v
 	p.m.persist(func(tx *bolt.Tx) error { return p.m.persistVolume(tx, v) })
+	p.m.sendEvent(v, volume.EventTypeCreate)
 	return v, err
 }

@@ -59,6 +59,18 @@ var VolumeTypes = []VolumeType{
 	VolumeTypeExt2,
 }
 
+type Event struct {
+	Type   EventType `json:"type"`
+	Volume *Info     `json:"volume"`
+}
+
+type EventType string
+
+const (
+	EventTypeCreate  EventType = "create"
+	EventTypeDestroy EventType = "destroy"
+)
+
 type Filesystem struct {
 	ID         string            `json:"id"`
 	Data       io.Reader         `json:"-"`
