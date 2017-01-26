@@ -13,7 +13,9 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/sse"
 	"github.com/julienschmidt/httprouter"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const snapshotContentType = "application/vnd.zfs.snapshot-stream"
@@ -99,6 +101,13 @@ func (api *HTTPAPI) Create(w http.ResponseWriter, r *http.Request, ps httprouter
 }
 
 func (api *HTTPAPI) List(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		ch := api.vman.Subscribe()
+		defer api.vman.Unsubscribe(ch)
+		sse.ServeStream(w, ch, log15.New("fn", "streamVolumes"))
+		return
+	}
+
 	vols := api.vman.Volumes()
 	volList := make([]*volume.Info, 0, len(vols))
 	for _, v := range vols {
