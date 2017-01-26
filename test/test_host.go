@@ -860,12 +860,13 @@ func (s *HostSuite) TestLogSinks(t *c.C) {
 
 	// wait for syslog message from each host
 	received := make(map[string]struct{})
+loop:
 	for {
 		select {
 		case msg := <-msgs:
 			received[msg.HostID] = struct{}{}
 			if len(received) == len(hosts) {
-				return
+				break loop
 			}
 		case <-time.After(30 * time.Second):
 			t.Fatal("timed out waiting for log messages")
