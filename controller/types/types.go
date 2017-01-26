@@ -628,10 +628,11 @@ type Sink struct {
 }
 
 type SyslogSinkConfig struct {
-	URL      string `json:"url"`
-	Prefix   string `json:"template"`
-	UseIDs   bool   `json:"use_ids"`
-	Insecure bool   `json:"insecure"`
+	URL            string `json:"url"`
+	Prefix         string `json:"template,omitempty"`
+	UseIDs         bool   `json:"use_ids,omitempty"`
+	Insecure       bool   `json:"insecure,omitempty"`
+	StructuredData bool   `json:"structured_data,omitempty"`
 }
 
 type LogAggregatorSinkConfig struct {
