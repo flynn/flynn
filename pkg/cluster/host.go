@@ -160,6 +160,11 @@ func (c *Host) ListVolumes() ([]*volume.Info, error) {
 	return volumes, c.c.Get("/storage/volumes", &volumes)
 }
 
+// StreamVolumes streams volume events to the given channel
+func (c *Host) StreamVolumes(ch chan *volume.Event) (stream.Stream, error) {
+	return c.c.ResumingStream("GET", "/storage/volumes", ch)
+}
+
 // DestroyVolume deletes a volume by ID
 func (c *Host) DestroyVolume(volumeID string) error {
 	return c.c.Delete(fmt.Sprintf("/storage/volumes/%s", volumeID))

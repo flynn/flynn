@@ -258,6 +258,8 @@ type HostClient interface {
 	ListJobs() (map[string]host.ActiveJob, error)
 	ListActiveJobs() (map[string]host.ActiveJob, error)
 	StreamEvents(id string, ch chan *host.Event) (stream.Stream, error)
+	ListVolumes() ([]*volume.Info, error)
+	StreamVolumes(ch chan *volume.Event) (stream.Stream, error)
 	GetStatus() (*host.HostStatus, error)
 	GetSinks() ([]*ct.Sink, error)
 	AddSink(*ct.Sink) error

@@ -9,6 +9,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/stream"
 	"gopkg.in/inconshreveable/log15.v2"
 )
@@ -23,19 +24,21 @@ type Host struct {
 	client   utils.HostClient
 	stop     chan struct{}
 	stopOnce sync.Once
-	done     chan struct{}
+	jobsDone chan struct{}
+	volsDone chan struct{}
 	logger   log15.Logger
 }
 
 func NewHost(h utils.HostClient, l log15.Logger) *Host {
 	return &Host{
-		ID:      h.ID(),
-		Tags:    h.Tags(),
-		Healthy: true,
-		client:  h,
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
-		logger:  l,
+		ID:       h.ID(),
+		Tags:     h.Tags(),
+		Healthy:  true,
+		client:   h,
+		stop:     make(chan struct{}),
+		jobsDone: make(chan struct{}),
+		volsDone: make(chan struct{}),
+		logger:   l,
 	}
 }
 
@@ -51,10 +54,79 @@ func (h *Host) TagsEqual(tags map[string]string) bool {
 	return true
 }
 
-// StreamEventsTo streams all job events from the host to the given channel in
-// a goroutine, returning the current list of active jobs.
-func (h *Host) StreamEventsTo(ch chan *host.Event) (map[string]host.ActiveJob, error) {
-	log := h.logger.New("fn", "StreamEventsTo", "host.id", h.ID)
+func (h *Host) StreamVolumeEventsTo(ch chan *VolumeEvent) (map[string]*Volume, error) {
+	log := h.logger.New("fn", "StreamVolumeEventsTo", "host.id", h.ID)
+	var events chan *volume.Event
+	var stream stream.Stream
+	connect := func() (err error) {
+		log.Info("connecting volume event stream")
+		events = make(chan *volume.Event)
+		stream, err = h.client.StreamVolumes(events)
+		if err != nil {
+			log.Error("error connecting volume event stream", "err", err)
+		}
+		return
+	}
+	if err := connect(); err != nil {
+		return nil, err
+	}
+
+	log.Info("getting volumes")
+	volumes, err := h.client.ListVolumes()
+	if err != nil {
+		log.Error("error getting volumes", "err", err)
+		return nil, err
+	}
+	log.Info(fmt.Sprintf("got %d volumes for host %s", len(volumes), h.ID))
+	vols := make(map[string]*Volume)
+	for _, vol := range volumes {
+		vols[vol.ID] = &Volume{Info: vol, HostID: h.ID}
+	}
+
+	go func() {
+		defer stream.Close()
+		defer close(h.volsDone)
+		for {
+		eventLoop:
+			for {
+				select {
+				case event, ok := <-events:
+					if !ok {
+						break eventLoop
+					}
+					ch <- &VolumeEvent{
+						Type:   event.Type,
+						Volume: &Volume{Info: event.Volume, HostID: h.ID},
+					}
+				case <-h.stop:
+					return
+				}
+			}
+
+			log.Warn("volume event stream disconnected", "err", stream.Err())
+			// keep trying to reconnect, unless we are told to stop
+		retryLoop:
+			for {
+				select {
+				case <-h.stop:
+					return
+				default:
+				}
+
+				if err := connect(); err == nil {
+					break retryLoop
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+	return vols, nil
+}
+
+// StreamJobEventsTo streams all job events from the host to the given channel
+// in a goroutine, returning the current list of active jobs.
+func (h *Host) StreamJobEventsTo(ch chan *host.Event) (map[string]host.ActiveJob, error) {
+	log := h.logger.New("fn", "StreamJobEventsTo", "host.id", h.ID)
 	var events chan *host.Event
 	var stream stream.Stream
 	connect := func() (err error) {
@@ -80,7 +152,7 @@ func (h *Host) StreamEventsTo(ch chan *host.Event) (map[string]host.ActiveJob, e
 
 	go func() {
 		defer stream.Close()
-		defer close(h.done)
+		defer close(h.jobsDone)
 		for {
 		eventLoop:
 			for {
@@ -136,6 +208,7 @@ func (h *Host) RemoveSink(id string) error {
 func (h *Host) Close() {
 	h.stopOnce.Do(func() {
 		close(h.stop)
-		<-h.done
+		<-h.jobsDone
+		<-h.volsDone
 	})
 }

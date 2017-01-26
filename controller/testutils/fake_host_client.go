@@ -217,6 +217,14 @@ func (c *FakeHostClient) StreamEvents(id string, ch chan *host.Event) (stream.St
 	return &HostStream{host: c, ch: ch}, nil
 }
 
+func (c *FakeHostClient) ListVolumes() ([]*volume.Info, error) {
+	return nil, nil
+}
+
+func (c *FakeHostClient) StreamVolumes(ch chan *volume.Event) (stream.Stream, error) {
+	return stream.New(), nil
+}
+
 func (c *FakeHostClient) GetStatus() (*host.HostStatus, error) {
 	if !c.Healthy {
 		return nil, errors.New("unhealthy")
