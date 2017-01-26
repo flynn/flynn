@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	host "github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -58,10 +59,12 @@ type Scheduler struct {
 	hosts      map[string]*Host
 	routers    map[string]*Router
 	jobs       Jobs
+	volumes    map[string]*Volume
 	routes     map[string]map[string]struct{}
 	services   map[string]*Service
 
-	jobEvents chan *host.Event
+	jobEvents    chan *host.Event
+	volumeEvents chan *VolumeEvent
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -118,11 +121,13 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		hosts:                 make(map[string]*Host),
 		routers:               make(map[string]*Router),
 		jobs:                  make(map[string]*Job),
+		volumes:               make(map[string]*Volume),
 		services:              make(map[string]*Service),
 		routes:                make(map[string]map[string]struct{}),
 		formations:            make(Formations),
 		sinks:                 make(map[string]*ct.Sink),
 		jobEvents:             make(chan *host.Event, eventBufferSize),
+		volumeEvents:          make(chan *VolumeEvent, eventBufferSize),
 		stop:                  make(chan struct{}),
 		syncJobs:              make(chan struct{}, 1),
 		syncFormations:        make(chan struct{}, 1),
@@ -432,6 +437,9 @@ func (s *Scheduler) Run() {
 		case e := <-s.jobEvents:
 			s.HandleJobEvent(e)
 			continue
+		case e := <-s.volumeEvents:
+			s.HandleVolumeEvent(e)
+			continue
 		case f := <-s.formationEvents:
 			s.HandleFormationChange(f)
 			continue
@@ -481,6 +489,8 @@ func (s *Scheduler) Run() {
 			s.PerformHostChecks()
 		case e := <-s.jobEvents:
 			s.HandleJobEvent(e)
+		case e := <-s.volumeEvents:
+			s.HandleVolumeEvent(e)
 		case f := <-s.formationEvents:
 			s.HandleFormationChange(f)
 		case e := <-s.sinkEvents:
@@ -1341,7 +1351,14 @@ func (s *Scheduler) followHost(h utils.HostClient) (*Host, error) {
 	}
 
 	host := NewHost(h, s.logger)
-	jobs, err := host.StreamEventsTo(s.jobEvents)
+	volumes, err := host.StreamVolumeEventsTo(s.volumeEvents)
+	if err != nil {
+		return nil, err
+	}
+	for id, vol := range volumes {
+		s.volumes[id] = vol
+	}
+	jobs, err := host.StreamJobEventsTo(s.jobEvents)
 	if err != nil {
 		return nil, err
 	}
@@ -1611,7 +1628,7 @@ func (s *Scheduler) markRouterBackendUp(b *RouterBackend) {
 
 func (s *Scheduler) handleNewHost(id string) {
 	log := s.logger.New("fn", "handleNewHost", "host.id", id)
-	log.Info("host is up, starting job event stream")
+	log.Info("host is up, starting job and volume event streams")
 	h, err := s.Host(id)
 	if err != nil {
 		log.Error("error creating host client", "err", err)
@@ -1676,6 +1693,18 @@ func (s *Scheduler) PerformHostChecks() {
 
 	if !allHealthy {
 		time.AfterFunc(time.Second, s.triggerHostChecks)
+	}
+}
+
+func (s *Scheduler) HandleVolumeEvent(e *VolumeEvent) {
+	log := s.logger.New("fn", "HandleVolumeEvent", "event.type", e.Type, "vol.type", e.Volume.Type, "vol.id", e.Volume.ID)
+
+	log.Info("handling volume event")
+	switch e.Type {
+	case volume.EventTypeCreate:
+		s.volumes[e.Volume.ID] = e.Volume
+	case volume.EventTypeDestroy:
+		delete(s.volumes, e.Volume.ID)
 	}
 }
 
