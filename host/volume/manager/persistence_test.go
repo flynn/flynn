@@ -81,9 +81,9 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 	c.Assert(vman.OpenDB(), IsNil)
 
 	// make two volumes
-	vol1, err := vman.NewVolume()
+	vol1, err := vman.NewVolume(nil)
 	c.Assert(err, IsNil)
-	vol2, err := vman.NewVolume()
+	vol2, err := vman.NewVolume(nil)
 	c.Assert(err, IsNil)
 
 	// assert existence of filesystems; emplace some data
@@ -174,7 +174,7 @@ func (s *PersistenceTests) TestVolumeDeletion(c *C) {
 	c.Assert(vman.OpenDB(), IsNil)
 
 	// make a named volume
-	vol, err := vman.NewVolume()
+	vol, err := vman.NewVolume(nil)
 	c.Assert(err, IsNil)
 
 	// assert existence of filesystems; emplace some data
@@ -258,7 +258,7 @@ func (s *PersistenceTests) TestSnapshotPersistence(c *C) {
 	c.Assert(vman.OpenDB(), IsNil)
 
 	// make a volume
-	vol1, err := vman.NewVolume()
+	vol1, err := vman.NewVolume(nil)
 	c.Assert(err, IsNil)
 
 	// assert existence of filesystems; emplace some data
@@ -353,7 +353,7 @@ func (s *PersistenceTests) TestTransmittedSnapshotPersistence(c *C) {
 	c.Assert(vman.OpenDB(), IsNil)
 
 	// make a volume
-	vol1, err := vman.NewVolume()
+	vol1, err := vman.NewVolume(nil)
 	c.Assert(err, IsNil)
 
 	// assert existence of filesystems; emplace some data
@@ -363,7 +363,7 @@ func (s *PersistenceTests) TestTransmittedSnapshotPersistence(c *C) {
 
 	// make a snapshot, make a new volume to receive it, and do the transmit
 	snap, err := vman.CreateSnapshot(vol1.Info().ID)
-	vol2, err := vman.NewVolume()
+	vol2, err := vman.NewVolume(nil)
 	c.Assert(err, IsNil)
 	var buf bytes.Buffer
 	haves, err := vman.ListHaves(vol2.Info().ID)

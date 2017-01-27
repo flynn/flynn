@@ -140,12 +140,10 @@ func (c *Host) StreamEvents(id string, ch chan *host.Event) (stream.Stream, erro
 	return c.c.ResumingStream("GET", r, ch)
 }
 
-// CreateVolume a new volume, returning its ID.
+// CreateVolume a new volume with the given configuration.
 // When in doubt, use a providerId of "default".
-func (c *Host) CreateVolume(providerId string) (*volume.Info, error) {
-	var res volume.Info
-	err := c.c.Post(fmt.Sprintf("/storage/providers/%s/volumes", providerId), nil, &res)
-	return &res, err
+func (c *Host) CreateVolume(providerId string, info *volume.Info) error {
+	return c.c.Post(fmt.Sprintf("/storage/providers/%s/volumes", providerId), info, info)
 }
 
 // GetVolume gets a volume by ID

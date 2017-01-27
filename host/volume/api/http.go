@@ -3,6 +3,7 @@ package volumeapi
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -85,7 +86,15 @@ func (api *HTTPAPI) CreateProvider(w http.ResponseWriter, r *http.Request, ps ht
 func (api *HTTPAPI) Create(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	providerID := ps.ByName("provider_id")
 
-	vol, err := api.vman.NewVolumeFromProvider(providerID)
+	// decode the volume config from the request, accepting old clients
+	// which may not send any data
+	var info volume.Info
+	defer r.Body.Close()
+	if err := json.NewDecoder(r.Body).Decode(&info); err != nil && err != io.EOF {
+		httphelper.Error(w, err)
+		return
+	}
+	vol, err := api.vman.NewVolumeFromProvider(providerID, &info)
 	if err != nil {
 		switch err {
 		case volumemanager.ErrNoSuchProvider:

@@ -190,11 +190,10 @@ func (c *FakeHostClient) SetAttachFunc(id string, f attachFunc) {
 	c.attach[id] = f
 }
 
-func (c *FakeHostClient) CreateVolume(providerID string) (*volume.Info, error) {
-	id := random.UUID()
-	volume := &volume.Info{ID: id}
-	c.volumes[id] = volume
-	return volume, nil
+func (c *FakeHostClient) CreateVolume(providerID string, info *volume.Info) error {
+	info.ID = random.UUID()
+	c.volumes[info.ID] = info
+	return nil
 }
 
 func (c *FakeHostClient) StreamEvents(id string, ch chan *host.Event) (stream.Stream, error) {

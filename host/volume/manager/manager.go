@@ -202,19 +202,19 @@ func (m *Manager) Volumes() map[string]volume.Volume {
 	volume.Manager implements the volume.Provider interface by
 	delegating NewVolume requests to the default Provider.
 */
-func (m *Manager) NewVolume() (volume.Volume, error) {
-	return m.NewVolumeFromProvider("default")
+func (m *Manager) NewVolume(info *volume.Info) (volume.Volume, error) {
+	return m.NewVolumeFromProvider("default", info)
 }
 
 /*
 	volume.Manager implements the volume.Provider interface by
 	delegating NewVolume requests to the named Provider.
 */
-func (m *Manager) NewVolumeFromProvider(providerID string) (volume.Volume, error) {
+func (m *Manager) NewVolumeFromProvider(providerID string, info *volume.Info) (volume.Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if p, ok := m.providers[providerID]; ok {
-		return managerProviderProxy{p, m}.NewVolume()
+		return managerProviderProxy{p, m}.NewVolume(info)
 	}
 	return nil, ErrNoSuchProvider
 }
@@ -561,17 +561,17 @@ type managerProviderProxy struct {
 	m *Manager
 }
 
-func (p managerProviderProxy) NewVolume() (volume.Volume, error) {
+func (p managerProviderProxy) NewVolume(info *volume.Info) (volume.Volume, error) {
 	if err := p.m.LockDB(); err != nil {
 		return nil, err
 	}
 	defer p.m.UnlockDB()
-	v, err := p.Provider.NewVolume()
+	v, err := p.Provider.NewVolume(info)
 	if err != nil {
-		return v, err
+		return nil, err
 	}
 	p.m.volumes[v.Info().ID] = v
 	p.m.persist(func(tx *bolt.Tx) error { return p.m.persistVolume(tx, v) })
 	p.m.sendEvent(v, volume.EventTypeCreate)
-	return v, err
+	return v, nil
 }

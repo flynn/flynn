@@ -22,7 +22,7 @@ func (ZfsSnapshotTests) SetUpSuite(c *C) {
 }
 
 func (s *ZfsSnapshotTests) TestSnapshotShouldCarryFiles(c *C) {
-	v, err := s.VolProv.NewVolume()
+	v, err := s.VolProv.NewVolume(nil)
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
@@ -48,7 +48,7 @@ func (s *ZfsSnapshotTests) TestSnapshotShouldCarryFiles(c *C) {
 }
 
 func (s *ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
-	v, err := s.VolProv.NewVolume()
+	v, err := s.VolProv.NewVolume(nil)
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
@@ -76,7 +76,7 @@ func (s *ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 }
 
 func (s *ZfsSnapshotTests) TestSnapshotShouldBeReadOnly(c *C) {
-	v, err := s.VolProv.NewVolume()
+	v, err := s.VolProv.NewVolume(nil)
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
@@ -101,7 +101,7 @@ func (s *ZfsSnapshotTests) TestSnapshotShouldBeReadOnly(c *C) {
 }
 
 func (s *ZfsSnapshotTests) TestForkedSnapshotShouldIsolateNewChangesToFork(c *C) {
-	v, err := s.VolProv.NewVolume()
+	v, err := s.VolProv.NewVolume(nil)
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:

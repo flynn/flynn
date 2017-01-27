@@ -9,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/go-docopt"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -181,8 +182,8 @@ func (f *ClusterFixer) StartAppJob(app, typ, service string) ([]*discoverd.Insta
 	for i, v := range job.Config.Volumes {
 		if v.DeleteOnStop {
 			f.l.Info(fmt.Sprintf("provisioning volume for %s %s job", app, typ), "job.id", job.ID, "release", job.Metadata["flynn-controller.release"])
-			vol, err := host.CreateVolume("default")
-			if err != nil {
+			vol := &volume.Info{}
+			if err := host.CreateVolume("default", vol); err != nil {
 				return nil, fmt.Errorf("error provisioning volume for %s %s job: %s", app, typ, err)
 			}
 			job.Config.Volumes[i].VolumeID = vol.ID

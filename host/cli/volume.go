@@ -171,12 +171,12 @@ func runVolumeCreate(args *docopt.Args, client *cluster.Client) error {
 	if args.String["--provider"] != "" {
 		provider = args.String["--provider"]
 	}
-	v, err := hostClient.CreateVolume(provider)
-	if err != nil {
+	vol := &volume.Info{}
+	if err := hostClient.CreateVolume(provider, vol); err != nil {
 		fmt.Printf("could not create volume: %s\n", err)
 		return err
 	}
-	fmt.Printf("created volume %s on %s\n", v.ID, hostId)
+	fmt.Printf("created volume %s on %s\n", vol.ID, hostId)
 	return nil
 }
 

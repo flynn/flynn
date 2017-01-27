@@ -171,13 +171,15 @@ func (p *Provider) Kind() string {
 	return "zfs"
 }
 
-func (p *Provider) NewVolume() (volume.Volume, error) {
-	id := random.UUID()
-	info := &volume.Info{
-		ID:        id,
-		Type:      volume.VolumeTypeData,
-		CreatedAt: time.Now(),
+func (p *Provider) NewVolume(info *volume.Info) (volume.Volume, error) {
+	if info == nil {
+		info = &volume.Info{}
 	}
+	if info.ID == "" {
+		info.ID = random.UUID()
+	}
+	info.Type = volume.VolumeTypeData
+	info.CreatedAt = time.Now()
 	v := &zfsVolume{
 		info:      info,
 		provider:  p,
@@ -190,7 +192,7 @@ func (p *Provider) NewVolume() (volume.Volume, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.volumes[id] = v
+	p.volumes[info.ID] = v
 	return v, nil
 }
 

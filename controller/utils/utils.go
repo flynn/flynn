@@ -161,12 +161,11 @@ var provisionVolumeAttempts = attempt.Strategy{
 }
 
 func ProvisionVolume(req *ct.VolumeReq, h VolumeCreator, job *host.Job) (*volume.Info, error) {
-	var vol *volume.Info
+	vol := &volume.Info{}
 	// this potentially leaks volumes on the host, but we'll leave it up
 	// to the volume garbage collector to clean up
-	err := provisionVolumeAttempts.Run(func() (err error) {
-		vol, err = h.CreateVolume("default")
-		return
+	err := provisionVolumeAttempts.Run(func() error {
+		return h.CreateVolume("default", vol)
 	})
 	if err != nil {
 		return nil, err
@@ -243,7 +242,7 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 }
 
 type VolumeCreator interface {
-	CreateVolume(string) (*volume.Info, error)
+	CreateVolume(string, *volume.Info) error
 }
 
 type HostClient interface {

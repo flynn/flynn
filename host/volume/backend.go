@@ -16,7 +16,7 @@ import (
 type Provider interface {
 	Kind() string
 
-	NewVolume() (Volume, error)
+	NewVolume(info *Info) (Volume, error)
 	ImportFilesystem(*Filesystem) (Volume, error)
 	DestroyVolume(Volume) error
 	CreateSnapshot(Volume) (Volume, error)
