@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
 	c "github.com/flynn/go-check"
 )
@@ -37,8 +38,8 @@ func (s *VolumeSuite) TestInterhostVolumeTransmitAPI(t *c.C) {
 
 func (s *VolumeSuite) doVolumeTransmitAPI(t *c.C, x *Cluster, h0, h1 *cluster.Host) {
 	// create a volume!
-	vol, err := h0.CreateVolume("default")
-	t.Assert(err, c.IsNil)
+	vol := &volume.Info{}
+	t.Assert(h0.CreateVolume("default", vol), c.IsNil)
 	defer func() {
 		t.Assert(h0.DestroyVolume(vol.ID), c.IsNil)
 	}()
@@ -63,8 +64,8 @@ func (s *VolumeSuite) doVolumeTransmitAPI(t *c.C, x *Cluster, h0, h1 *cluster.Ho
 		t.Assert(h0.DestroyVolume(snapInfo.ID), c.IsNil)
 	}()
 	// make a volume on another host to yank the snapshot content into
-	vol2, err := h1.CreateVolume("default")
-	t.Assert(err, c.IsNil)
+	vol2 := &volume.Info{}
+	t.Assert(h1.CreateVolume("default", vol2), c.IsNil)
 	defer func() {
 		t.Assert(h1.DestroyVolume(vol2.ID), c.IsNil)
 	}()

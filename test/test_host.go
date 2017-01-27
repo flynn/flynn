@@ -19,6 +19,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/attempt"
@@ -289,8 +290,8 @@ func (s *HostSuite) TestNetworkedPersistentJob(t *c.C) {
 func (s *HostSuite) TestVolumeCreation(t *c.C) {
 	h := s.anyHostClient(t)
 
-	vol, err := h.CreateVolume("default")
-	t.Assert(err, c.IsNil)
+	vol := &volume.Info{}
+	t.Assert(h.CreateVolume("default", vol), c.IsNil)
 	t.Assert(vol.ID, c.Not(c.Equals), "")
 	t.Assert(h.DestroyVolume(vol.ID), c.IsNil)
 }
@@ -298,8 +299,7 @@ func (s *HostSuite) TestVolumeCreation(t *c.C) {
 func (s *HostSuite) TestVolumeCreationFailsForNonexistentProvider(t *c.C) {
 	h := s.anyHostClient(t)
 
-	_, err := h.CreateVolume("non-existent")
-	t.Assert(err, c.NotNil)
+	t.Assert(h.CreateVolume("non-existent", &volume.Info{}), c.NotNil)
 }
 
 func (s *HostSuite) TestVolumePersistence(t *c.C) {
@@ -309,8 +309,8 @@ func (s *HostSuite) TestVolumePersistence(t *c.C) {
 	h := s.anyHostClient(t)
 
 	// create a volume!
-	vol, err := h.CreateVolume("default")
-	t.Assert(err, c.IsNil)
+	vol := &volume.Info{}
+	t.Assert(h.CreateVolume("default", vol), c.IsNil)
 	defer func() {
 		t.Assert(h.DestroyVolume(vol.ID), c.IsNil)
 	}()

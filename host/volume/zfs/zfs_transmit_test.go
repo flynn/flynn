@@ -41,7 +41,7 @@ func (s *ZfsTransmitTests) TearDownTest(c *C) {
 func (s *ZfsTransmitTests) TestZfsSendRecvFull(c *C) {
 	// create volume; add content; snapshot it.
 	// note that 'zfs send' refuses anything but snapshots.
-	v, err := s.pool1.VolProv.NewVolume()
+	v, err := s.pool1.VolProv.NewVolume(nil)
 	c.Assert(err, IsNil)
 	f, err := os.Create(filepath.Join(v.Location(), "alpha"))
 	c.Assert(err, IsNil)
@@ -53,7 +53,7 @@ func (s *ZfsTransmitTests) TestZfsSendRecvFull(c *C) {
 	s.pool1.VolProv.SendSnapshot(snap, nil, &buf)
 
 	// send stream to this pool; should get a new snapshot volume
-	v2, err := s.pool1.VolProv.NewVolume()
+	v2, err := s.pool1.VolProv.NewVolume(nil)
 	c.Assert(err, IsNil)
 	snapRestored, err := s.pool1.VolProv.ReceiveSnapshot(v2, bytes.NewBuffer(buf.Bytes()))
 	c.Assert(err, IsNil)
@@ -64,7 +64,7 @@ func (s *ZfsTransmitTests) TestZfsSendRecvFull(c *C) {
 	c.Assert(v2.Location(), testutils.DirContains, []string{"alpha"})
 
 	// send stream to another pool; should get a new volume
-	v2, err = s.pool2.VolProv.NewVolume()
+	v2, err = s.pool2.VolProv.NewVolume(nil)
 	snapRestored, err = s.pool2.VolProv.ReceiveSnapshot(v2, bytes.NewBuffer(buf.Bytes()))
 	c.Assert(err, IsNil)
 	c.Assert(snapRestored.IsSnapshot(), Equals, true)
@@ -79,7 +79,7 @@ func (s *ZfsTransmitTests) TestZfsSendRecvFull(c *C) {
 */
 func (s *ZfsTransmitTests) TestZfsSendRecvIncremental(c *C) {
 	// create volume; add content; snapshot it.
-	v, err := s.pool1.VolProv.NewVolume()
+	v, err := s.pool1.VolProv.NewVolume(nil)
 	c.Assert(err, IsNil)
 	f, err := os.Create(filepath.Join(v.Location(), "alpha"))
 	c.Assert(err, IsNil)
@@ -92,7 +92,7 @@ func (s *ZfsTransmitTests) TestZfsSendRecvIncremental(c *C) {
 	fmt.Printf("note: size of snapshot stream is %d bytes\n", buf.Len()) // 41680
 
 	// send stream to another pool; should get a new snapshot volume
-	v2, err := s.pool2.VolProv.NewVolume()
+	v2, err := s.pool2.VolProv.NewVolume(nil)
 	c.Assert(err, IsNil)
 	snapRestored1, err := s.pool2.VolProv.ReceiveSnapshot(v2, bytes.NewBuffer(buf.Bytes()))
 	c.Assert(err, IsNil)
