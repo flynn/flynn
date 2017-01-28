@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -41,6 +42,7 @@ var (
 	ErrNoHosts          = errors.New("no hosts found")
 	ErrJobNotPending    = errors.New("job is no longer pending")
 	ErrNoHostsMatchTags = errors.New("no hosts found matching job tags")
+	ErrHostIsDown       = errors.New("host is down")
 )
 
 type Scheduler struct {
@@ -72,6 +74,7 @@ type Scheduler struct {
 	syncJobs              chan struct{}
 	syncFormations        chan struct{}
 	syncSinks             chan struct{}
+	syncVolumes           chan struct{}
 	syncHosts             chan struct{}
 	hostChecks            chan struct{}
 	rectify               chan struct{}
@@ -94,11 +97,6 @@ type Scheduler struct {
 	// used to update the jobs once we get the formation during a sync
 	// so that we can determine if the job should actually be running
 	formationlessJobs map[utils.FormationKey]map[string]*Job
-
-	// pendingTagJobs is a map of jobs which are currently pending due to
-	// their tags not matching any hosts, and is used to try and place the
-	// jobs when host tags change
-	pendingTagJobs map[string]*Job
 
 	// pause and resume are used by tests to control the main loop
 	pause  chan struct{}
@@ -132,6 +130,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		syncJobs:              make(chan struct{}, 1),
 		syncFormations:        make(chan struct{}, 1),
 		syncSinks:             make(chan struct{}, 1),
+		syncVolumes:           make(chan struct{}, 1),
 		syncHosts:             make(chan struct{}, 1),
 		hostChecks:            make(chan struct{}, 1),
 		rectifyBatch:          make(map[utils.FormationKey]struct{}),
@@ -147,7 +146,6 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		placementRequests:     make(chan *PlacementRequest, eventBufferSize),
 		internalStateRequests: make(chan *InternalStateRequest, eventBufferSize),
 		formationlessJobs:     make(map[utils.FormationKey]map[string]*Job),
-		pendingTagJobs:        make(map[string]*Job),
 		pause:                 make(chan struct{}),
 		resume:                make(chan struct{}),
 		generateJobUUID:       random.UUID,
@@ -314,6 +312,74 @@ func (s *Scheduler) streamHostEvents() {
 	}
 }
 
+func (s *Scheduler) streamVolumeEvents() {
+	log := s.logger.New("fn", "streamVolumeEvents")
+
+	var events chan *ct.Volume
+	var stream stream.Stream
+	var since *time.Time
+	connect := func() (err error) {
+		log.Info("connecting volume event stream")
+		events = make(chan *ct.Volume, eventBufferSize)
+		stream, err = s.StreamVolumes(since, events)
+		if err != nil {
+			log.Error("error connecting volume event stream", "err", err)
+		}
+		return
+	}
+
+	current := make(chan struct{})
+	go func() {
+		var isCurrent bool
+		for {
+			for {
+				if err := connect(); err == nil {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			for volume := range events {
+				// a volume without an ID indicates we now have
+				// the current list of volumes.
+				if volume.ID == "" {
+					if !isCurrent {
+						isCurrent = true
+						close(current)
+					}
+					continue
+				}
+				event := &VolumeEvent{
+					Type:   VolumeEventTypeController,
+					Volume: &Volume{Volume: *volume},
+				}
+				since = volume.UpdatedAt
+				// if we are not current, explicitly handle the event
+				// so that the scheduler has the current list of
+				// volumes before starting the main loop.
+				if !isCurrent {
+					s.HandleVolumeEvent(event)
+					continue
+				}
+				s.volumeEvents <- event
+			}
+			log.Warn("volume event stream disconnected", "err", stream.Err())
+		}
+	}()
+
+	// wait until we have the current list of volumes before
+	// starting the main scheduler loop
+	start := time.Now()
+	tick := time.Tick(30 * time.Second)
+	for {
+		select {
+		case <-current:
+			return
+		case <-tick:
+			log.Warn("still waiting for current volume list", "duration", time.Since(start))
+		}
+	}
+}
+
 func (s *Scheduler) streamRouterEvents() {
 	log := s.logger.New("fn", "streamRouterEvents")
 
@@ -390,6 +456,10 @@ func (s *Scheduler) Run() {
 
 	s.streamFormationEvents()
 
+	// ensure we have the current list of volumes before starting the main
+	// loop so we don't schedule any jobs using decommissioned volumes
+	s.streamVolumeEvents()
+
 	isLeader := s.discoverd.Register()
 	s.HandleLeaderChange(isLeader)
 	leaderCh := s.discoverd.LeaderCh()
@@ -400,6 +470,7 @@ func (s *Scheduler) Run() {
 	s.tickSyncJobs(30 * time.Second)
 	s.tickSyncFormations(time.Minute)
 	s.tickSyncSinks(time.Minute)
+	s.tickSyncVolumes(time.Minute)
 	s.tickSyncHosts(10 * time.Second)
 	s.tickSendTelemetry()
 
@@ -460,6 +531,9 @@ func (s *Scheduler) Run() {
 		case <-s.syncHosts:
 			s.SyncHosts()
 			continue
+		case <-s.syncVolumes:
+			s.SyncVolumes()
+			continue
 		default:
 		}
 
@@ -501,6 +575,8 @@ func (s *Scheduler) Run() {
 			s.SyncJobs()
 		case <-s.syncHosts:
 			s.SyncHosts()
+		case <-s.syncVolumes:
+			s.SyncVolumes()
 		case <-s.sendTelemetry:
 			s.SendTelemetry()
 		case <-s.syncSinks:
@@ -712,6 +788,40 @@ func (s *Scheduler) SyncSinks() {
 	}
 }
 
+func (s *Scheduler) SyncVolumes() {
+	log := s.logger.New("fn", "SyncVolumes")
+	log.Info("syncing volumes")
+
+	// ensure we know about all existing app volumes
+	for _, host := range s.hosts {
+		volumes, err := host.client.ListVolumes()
+		if err != nil {
+			log.Error("error getting host volumes", "host.id", host.ID, "err", err)
+			return
+		}
+		for _, info := range volumes {
+			if !isAppVolume(info) {
+				continue
+			}
+			if _, ok := s.volumes[info.ID]; !ok {
+				vol := NewVolume(info, ct.VolumeStateCreated, host.ID)
+				s.volumes[info.ID] = vol
+				s.persistVolume(vol)
+			}
+		}
+	}
+
+	// ensure we know about all decommissioned volumes
+	volumes, err := s.VolumeList()
+	if err != nil {
+		log.Error("error getting controller volumes", "err", err)
+		return
+	}
+	for _, volume := range volumes {
+		s.handleControllerVolume(volume)
+	}
+}
+
 func (s *Scheduler) SyncHosts() (err error) {
 	log := s.logger.New("fn", "SyncHosts")
 	log.Info("syncing hosts")
@@ -736,8 +846,8 @@ func (s *Scheduler) SyncHosts() (err error) {
 
 		h, err := s.followHost(host)
 		if err == nil {
-			// make sure no jobs are pending which needn't be
-			s.maybeStartPendingTagJobs(h)
+			// make sure no jobs are blocked which needn't be
+			s.maybeStartBlockedJobs(h)
 		} else {
 			log.Error("error following host", "host.id", host.ID(), "err", err)
 			// finish the sync before returning the error
@@ -887,13 +997,13 @@ func (s *Scheduler) stopJobsWithMismatchedTags(formation *Formation) {
 	}
 }
 
-// maybeStartPendingTagJobs starts any jobs which are pending due to not
+// maybeStartBlockedJobs starts any jobs which are blocked due to not
 // matching tags of any hosts on the given host, which is expected to be
 // either a new host or a host whose tags have just changed
-func (s *Scheduler) maybeStartPendingTagJobs(host *Host) {
-	for id, job := range s.pendingTagJobs {
-		if job.TagsMatchHost(host) {
-			delete(s.pendingTagJobs, id)
+func (s *Scheduler) maybeStartBlockedJobs(host *Host) {
+	for _, job := range s.jobs {
+		if job.State == JobStateBlocked && job.TagsMatchHost(host) {
+			job.State = JobStatePending
 			go s.StartJob(job)
 		}
 	}
@@ -925,6 +1035,46 @@ func (s *Scheduler) HandleSinkChange(sink *ct.Sink) {
 	s.handleSink(sink)
 }
 
+// findVolume looks for an existing, unassigned volume which matches the given
+// job's app, release and type, and the volume request's path
+func (s *Scheduler) findVolume(job *Job, req *ct.VolumeReq) *Volume {
+	for _, vol := range s.volumes {
+		// skip destroyed or decommissioned volumes
+		if vol.GetState() == ct.VolumeStateDestroyed || vol.DecommissionedAt != nil {
+			continue
+		}
+
+		// skip if the app, release, type or path do not match
+		if vol.AppID != job.AppID {
+			continue
+		}
+		if vol.ReleaseID != job.ReleaseID {
+			continue
+		}
+		if vol.JobType != job.Type {
+			continue
+		}
+		if vol.Path != req.Path {
+			continue
+		}
+
+		// skip if the volume is assigned to another job
+		if vol.JobID != nil && *vol.JobID != job.ID {
+			continue
+		}
+
+		// skip if we have already assigned the job to a host
+		// and this volume doesn't exist on that host
+		if job.HostID != "" && vol.HostID != job.HostID {
+			continue
+		}
+
+		// return the matching volume
+		return vol
+	}
+	return nil
+}
+
 func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	if !s.IsLeader() {
 		req.Error(ErrNotLeader)
@@ -951,45 +1101,122 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	// start
 	req.Job.HostID = ""
 
-	formation := req.Job.Formation
-	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
-	var minCount int = math.MaxInt32
-	for _, h := range s.ShuffledHosts() {
-		if h.Shutdown {
-			continue
+	// if the job has volume requests, assign existing volumes if
+	// possible (which will lead to the job being scheduled on the
+	// same host as the volumes) or initialize new ones
+	if reqs := req.Job.VolumeRequests(); len(reqs) > 0 {
+		req.Job.Volumes = make([]*Volume, len(reqs))
+
+		for i, volReq := range reqs {
+			// look for an existing, unassigned volume
+			vol := s.findVolume(req.Job, &volReq)
+
+			if vol == nil {
+				// did not assign an existing volume so initialize a new one
+				// (the StartJob goroutine will actually create the volume
+				// on the selected host)
+				vol = &Volume{
+					Volume: ct.Volume{
+						VolumeReq: volReq,
+						ID:        random.UUID(),
+						Type:      volume.VolumeTypeData,
+						State:     ct.VolumeStatePending,
+						AppID:     req.Job.AppID,
+						ReleaseID: req.Job.ReleaseID,
+						JobID:     &req.Job.ID,
+						JobType:   req.Job.Type,
+						Meta: map[string]string{
+							"flynn-controller.app":            req.Job.AppID,
+							"flynn-controller.release":        req.Job.ReleaseID,
+							"flynn-controller.type":           req.Job.Type,
+							"flynn-controller.path":           volReq.Path,
+							"flynn-controller.delete_on_stop": strconv.FormatBool(volReq.DeleteOnStop),
+						},
+					},
+				}
+				s.volumes[vol.ID] = vol
+			}
+
+			// if we picked a volume that exists on a host which
+			// either doesn't match the job's tags or is down,
+			// abort the placement and leave the job blocked until
+			// either an operator decommissions the volume or the
+			// host comes back up
+			if vol.HostID != "" {
+				host, ok := s.hosts[vol.HostID]
+				if !ok {
+					req.Job.State = JobStateBlocked
+					s.persistJob(req.Job)
+					req.Error(ErrHostIsDown)
+					return
+				} else if !req.Job.TagsMatchHost(host) {
+					req.Job.State = JobStateBlocked
+					s.persistJob(req.Job)
+					req.Error(ErrNoHostsMatchTags)
+					return
+				}
+				req.Host = host
+			}
+
+			log.Info("assigning volume", "vol.id", vol.ID, "vol.path", vol.Path)
+			vol.JobID = &req.Job.ID
+			req.Job.Volumes[i] = vol
 		}
-		if !req.Job.TagsMatchHost(h) {
-			continue
-		}
-		count, ok := counts[h.ID]
-		if !ok || count == 0 {
-			req.Host = h
-			break
-		}
-		if count < minCount {
-			minCount = count
-			req.Host = h
+
+		if req.Host != nil {
+			log.Info(fmt.Sprintf("placed job on host with existing %s volumes", req.Job.Type), "host.id", req.Host.ID)
 		}
 	}
 
-	// if we didn't pick a host, the job's tags don't match any hosts so
-	// add it to s.pendingTagJobs and return an error to cause the
-	// StartJob goroutine to stop trying to place the job
+	// if we didn't pick a host for the job's volumes, pick a host with
+	// the least amount of jobs running of the given type
 	if req.Host == nil {
-		s.pendingTagJobs[req.Job.ID] = req.Job
-		req.Error(ErrNoHostsMatchTags)
-		return
-	}
+		formation := req.Job.Formation
+		counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
+		var minCount int = math.MaxInt32
+		for _, h := range s.ShuffledHosts() {
+			if h.Shutdown {
+				continue
+			}
+			if !req.Job.TagsMatchHost(h) {
+				continue
+			}
+			count, ok := counts[h.ID]
+			if !ok || count == 0 {
+				req.Host = h
+				break
+			}
+			if count < minCount {
+				minCount = count
+				req.Host = h
+			}
+		}
 
-	if len(req.Job.Tags()) == 0 {
-		log.Info(fmt.Sprintf("placed job on host with least %s jobs", req.Job.Type), "host.id", req.Host.ID)
-	} else {
-		log.Info(fmt.Sprintf("placed job on host with matching tags and least %s jobs", req.Job.Type), "host.id", req.Host.ID, "host.tags", req.Host.Tags)
+		// if we still didn't pick a host, the job's tags don't match
+		// any hosts so mark it as blocked and return an error to
+		// cause the StartJob goroutine to stop trying to place the job
+		if req.Host == nil {
+			req.Job.State = JobStateBlocked
+			s.persistJob(req.Job)
+			req.Error(ErrNoHostsMatchTags)
+			return
+		}
+
+		if len(req.Job.Tags()) == 0 {
+			log.Info(fmt.Sprintf("placed job on host with least %s jobs", req.Job.Type), "host.id", req.Host.ID)
+		} else {
+			log.Info(fmt.Sprintf("placed job on host with matching tags and least %s jobs", req.Job.Type), "host.id", req.Host.ID, "host.tags", req.Host.Tags)
+		}
 	}
 
 	req.Config = jobConfig(req.Job, req.Host.ID)
 	req.Job.JobID = req.Config.ID
 	req.Job.HostID = req.Host.ID
+	for _, vol := range req.Job.Volumes {
+		if vol.HostID == "" {
+			vol.HostID = req.Host.ID
+		}
+	}
 	req.Error(nil)
 }
 
@@ -998,6 +1225,7 @@ type InternalState struct {
 	Hosts      map[string]*Host      `json:"hosts"`
 	Jobs       Jobs                  `json:"jobs"`
 	Formations map[string]*Formation `json:"formations"`
+	Volumes    map[string]*Volume    `json:"volumes"`
 	IsLeader   *bool                 `json:"is_leader,omitempty"`
 }
 
@@ -1021,6 +1249,7 @@ func (s *Scheduler) HandleInternalStateRequest(req *InternalStateRequest) {
 		Hosts:      make(map[string]*Host, len(s.hosts)),
 		Jobs:       make(map[string]*Job, len(s.jobs)),
 		Formations: make(map[string]*Formation, len(s.formations)),
+		Volumes:    make(map[string]*Volume, len(s.volumes)),
 		IsLeader:   s.isLeader,
 	}
 
@@ -1075,6 +1304,10 @@ func (s *Scheduler) HandleInternalStateRequest(req *InternalStateRequest) {
 			}
 		}
 		req.State.Formations[key.String()] = &f
+	}
+
+	for id, vol := range s.volumes {
+		req.State.Volumes[id] = &(*vol)
 	}
 
 	close(req.Done)
@@ -1290,7 +1523,7 @@ outer:
 		}
 
 		log.Info("placing job in the cluster")
-		config, host, err := s.PlaceJob(job)
+		req, err := s.PlaceJob(job)
 		if err == ErrNotLeader {
 			log.Warn("not starting job as not leader")
 			return
@@ -1300,21 +1533,28 @@ outer:
 		} else if err == ErrJobNotPending {
 			log.Warn("unable to place job as it is no longer pending")
 			return
+		} else if err == ErrHostIsDown {
+			log.Warn("unable to place job as the host is down")
+			return
 		} else if err != nil {
 			log.Error("error placing job in the cluster", "err", err)
 			continue
 		}
 
-		for _, vol := range job.Volumes() {
-			log.Info("provisioning volume", "host.id", host.ID, "vol.path", vol.Path)
-			if _, err := utils.ProvisionVolume(&vol, host.client, config); err != nil {
-				log.Error("error provisioning volume", "err", err)
-				continue outer
+		for _, vol := range job.Volumes {
+			if vol.GetState() == ct.VolumeStatePending {
+				log.Info("creating new volume", "host.id", req.Host.ID, "vol.id", vol.ID, "vol.path", vol.Path)
+				if err := req.Host.client.CreateVolume("default", vol.Info()); err != nil {
+					log.Error("error creating new volume", "vol.id", vol.ID, "err", err)
+					continue outer
+				}
+				vol.SetState(ct.VolumeStateCreated)
+				s.persistVolume(vol)
 			}
 		}
 
-		log.Info("adding job to the cluster", "host.id", host.ID)
-		err = host.client.AddJob(config)
+		log.Info("adding job to the cluster", "host.id", req.Host.ID)
+		err = req.Host.client.AddJob(req.Config)
 		if err == nil {
 			return
 		}
@@ -1336,13 +1576,13 @@ func (r *PlacementRequest) Error(err error) {
 	r.Err <- err
 }
 
-func (s *Scheduler) PlaceJob(job *Job) (*host.Job, *Host, error) {
+func (s *Scheduler) PlaceJob(job *Job) (*PlacementRequest, error) {
 	req := &PlacementRequest{
 		Job: job,
 		Err: make(chan error),
 	}
 	s.placementRequests <- req
-	return req.Config, req.Host, <-req.Err
+	return req, <-req.Err
 }
 
 func (s *Scheduler) followHost(h utils.HostClient) (*Host, error) {
@@ -1357,6 +1597,7 @@ func (s *Scheduler) followHost(h utils.HostClient) (*Host, error) {
 	}
 	for id, vol := range volumes {
 		s.volumes[id] = vol
+		s.persistVolume(vol)
 	}
 	jobs, err := host.StreamJobEventsTo(s.jobEvents)
 	if err != nil {
@@ -1450,7 +1691,7 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 			log.Info("host tags changed", "host.id", id, "from", host.Tags, "to", tags)
 			host.Tags = tags
 			s.rectifyAll()
-			s.maybeStartPendingTagJobs(host)
+			s.maybeStartBlockedJobs(host)
 		}
 	case discoverd.EventKindDown:
 		id := e.Instance.Meta["id"]
@@ -1642,9 +1883,9 @@ func (s *Scheduler) handleNewHost(id string) {
 		return
 	}
 
-	// we have a new host which may now match the tags of some pending jobs
-	// so try to start them
-	s.maybeStartPendingTagJobs(host)
+	// we have a new host which may now match the tags of some blocked jobs
+	// and have their volumes so try to start them
+	s.maybeStartBlockedJobs(host)
 }
 
 // activeHostCount returns the number of active hosts (i.e. all hosts which
@@ -1701,10 +1942,41 @@ func (s *Scheduler) HandleVolumeEvent(e *VolumeEvent) {
 
 	log.Info("handling volume event")
 	switch e.Type {
-	case volume.EventTypeCreate:
-		s.volumes[e.Volume.ID] = e.Volume
-	case volume.EventTypeDestroy:
-		delete(s.volumes, e.Volume.ID)
+	case VolumeEventTypeCreate:
+		if _, ok := s.volumes[e.Volume.ID]; !ok {
+			s.volumes[e.Volume.ID] = e.Volume
+			s.persistVolume(e.Volume)
+		}
+	case VolumeEventTypeDestroy:
+		if vol, ok := s.volumes[e.Volume.ID]; ok && vol.GetState() != ct.VolumeStateDestroyed {
+			vol.SetState(ct.VolumeStateDestroyed)
+			s.persistVolume(vol)
+		}
+	case VolumeEventTypeController:
+		s.handleControllerVolume(&e.Volume.Volume)
+	}
+}
+
+func (s *Scheduler) handleControllerVolume(volume *ct.Volume) {
+	vol, ok := s.volumes[volume.ID]
+	if !ok {
+		vol = &Volume{Volume: *volume}
+		s.volumes[volume.ID] = vol
+	}
+	// if this is the first time we are hearing about a
+	// decommissioned volume, mark it as decommissioned
+	// and try starting any jobs which were waiting on
+	// this volume (they will now either use a different
+	// volume or get a new one)
+	if volume.DecommissionedAt != nil && vol.DecommissionedAt == nil {
+		vol.DecommissionedAt = volume.DecommissionedAt
+		if vol.JobID == nil {
+			return
+		}
+		if job, ok := s.jobs[*vol.JobID]; ok && job.State == JobStateBlocked {
+			job.State = JobStatePending
+			go s.StartJob(job)
+		}
 	}
 }
 
@@ -1754,6 +2026,41 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 			Args:      hostJob.Config.Args,
 		}
 		s.jobs.Add(job)
+	}
+
+	if len(hostJob.Config.Volumes) > 0 {
+		// ensure job.Volumes is accurate
+		job.Volumes = make([]*Volume, 0, len(hostJob.Config.Volumes))
+
+		for _, v := range hostJob.Config.Volumes {
+			vol, ok := s.volumes[v.VolumeID]
+			if !ok {
+				// ignore volumes we don't know about as we simply
+				// won't take them into account when placing jobs
+				// (this is unlikely as we sync volumes before jobs)
+				s.logger.Warn("ignoring unknown volume", "job.id", job.ID, "vol.id", v.VolumeID)
+				continue
+			}
+
+			// either assign or unassign the job from the volume based on
+			// the job's status
+			previousJobID := vol.JobID
+			if activeJob.Status == host.StatusStarting || activeJob.Status == host.StatusRunning {
+				vol.JobID = &job.ID
+			} else if !vol.DeleteOnStop {
+				// only unassign if DeleteOnStop isn't set
+				// (we don't want to try assigning it to other
+				// jobs if it's about to be destroyed)
+				vol.JobID = nil
+			}
+
+			// persist the volume if the job ID changed
+			if previousJobID != vol.JobID {
+				s.persistVolume(vol)
+			}
+
+			job.Volumes = append(job.Volumes, vol)
+		}
 	}
 
 	// If the host ID of the active job is different to the host ID of the
@@ -1888,6 +2195,22 @@ func (s *Scheduler) persistControllerJob(job *ct.Job) {
 	if s.isLeader == nil || *s.isLeader {
 		s.controllerPersist <- job
 	}
+}
+
+var putVolumeAttempts = attempt.Strategy{
+	Delay: 100 * time.Millisecond,
+	Total: time.Minute,
+}
+
+func (s *Scheduler) persistVolume(vol *Volume) {
+	go func() {
+		err := putVolumeAttempts.RunWithValidator(func() error {
+			return s.PutVolume(&vol.Volume)
+		}, httphelper.IsRetryableError)
+		if err != nil {
+			s.logger.Error("error persisting volume", "vol.id", vol.ID, "err", err)
+		}
+	}()
 }
 
 func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Formation) {
@@ -2156,7 +2479,17 @@ func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 }
 
 func jobConfig(job *Job, hostID string) *host.Job {
-	return utils.JobConfig(job.Formation.ExpandedFormation, job.Type, hostID, job.ID)
+	j := utils.JobConfig(job.Formation.ExpandedFormation, job.Type, hostID, job.ID)
+	j.Config.Volumes = make([]host.VolumeBinding, len(job.Volumes))
+	for i, vol := range job.Volumes {
+		j.Config.Volumes[i] = host.VolumeBinding{
+			Target:       vol.Path,
+			VolumeID:     vol.ID,
+			Writeable:    true,
+			DeleteOnStop: vol.DeleteOnStop,
+		}
+	}
+	return j
 }
 
 func (s *Scheduler) Pause() {
@@ -2277,6 +2610,15 @@ func (s *Scheduler) tickSyncSinks(d time.Duration) {
 	}()
 }
 
+func (s *Scheduler) tickSyncVolumes(d time.Duration) {
+	s.logger.Info("starting sync volumes ticker", "duration", d)
+	go func() {
+		for range time.Tick(d) {
+			s.triggerSyncVolumes()
+		}
+	}()
+}
+
 func (s *Scheduler) tickSyncHosts(d time.Duration) {
 	s.logger.Info("starting sync hosts ticker", "duration", d)
 	go func() {
@@ -2309,6 +2651,13 @@ func (s *Scheduler) triggerSyncFormations() {
 func (s *Scheduler) triggerSyncSinks() {
 	select {
 	case s.syncSinks <- struct{}{}:
+	default:
+	}
+}
+
+func (s *Scheduler) triggerSyncVolumes() {
+	select {
+	case s.syncVolumes <- struct{}{}:
 	default:
 	}
 }

@@ -35,6 +35,11 @@ const (
 	// formation change, or is scheduled to replace a crashed job after a
 	// backoff period
 	JobStatePending JobState = "pending"
+
+	// JobStateBlocked is a job's state when it cannot be scheduled due to
+	// either having tags which don't match any hosts or having volumes on
+	// hosts which are currently down
+	JobStateBlocked JobState = "blocked"
 )
 
 // Job is an in-memory representation of a cluster job
@@ -66,6 +71,9 @@ type Job struct {
 
 	// Formation is the formation this job belongs to
 	Formation *Formation `json:"-"`
+
+	// Volumes is a list of the job's assigned volumes
+	Volumes []*Volume `json:"volumes,omitempty"`
 
 	// Restarts is the number of times this job has been restarted and is
 	// used to calculate the amount of time to wait before restarting the
@@ -105,6 +113,9 @@ type Job struct {
 
 // Tags returns the tags for the job's process type from the formation
 func (j *Job) Tags() map[string]string {
+	if j.Formation == nil {
+		return nil
+	}
 	return j.Formation.Tags[j.Type]
 }
 
@@ -119,7 +130,7 @@ func (j *Job) TagsMatchHost(host *Host) bool {
 	return true
 }
 
-func (j *Job) Volumes() []ct.VolumeReq {
+func (j *Job) VolumeRequests() []ct.VolumeReq {
 	proc := j.Formation.Release.Processes[j.Type]
 	if len(proc.Volumes) > 0 {
 		return proc.Volumes
@@ -165,6 +176,8 @@ func (j *Job) ControllerJob() *ct.Job {
 	switch j.State {
 	case JobStatePending:
 		job.State = ct.JobStatePending
+	case JobStateBlocked:
+		job.State = ct.JobStateBlocked
 	case JobStateStarting:
 		job.State = ct.JobStateStarting
 	case JobStateRunning:
@@ -173,6 +186,11 @@ func (j *Job) ControllerJob() *ct.Job {
 		job.State = ct.JobStateStopping
 	case JobStateStopped:
 		job.State = ct.JobStateDown
+	}
+
+	job.VolumeIDs = make([]string, len(j.Volumes))
+	for i, vol := range j.Volumes {
+		job.VolumeIDs[i] = vol.ID
 	}
 
 	if j.exitStatus != nil {

@@ -895,3 +895,62 @@ func (s *SchedulerSuite) TestGracefulShutdown(t *c.C) {
 	debug(t, "waiting for the job to exit")
 	t.Assert(watcher.WaitFor(ct.JobEvents{"blocker": ct.JobDownEvents(1)}, scaleTimeout, nil), c.IsNil)
 }
+
+func (s *SchedulerSuite) TestPersistentVolumes(t *c.C) {
+	x := s.bootCluster(t, 3)
+	defer x.Destroy()
+
+	// create an app with a Redis resource
+	app, _ := s.createAppWithClient(t, x.controller)
+	t.Assert(x.flynn("/", "-a", app.Name, "resource", "add", "redis"), Succeeds)
+
+	// check the Redis volume exists
+	release, err := x.controller.GetAppRelease(app.ID)
+	t.Assert(err, c.IsNil)
+	redisApp, ok := release.Env["FLYNN_REDIS"]
+	if !ok {
+		t.Fatal("missing FLYNN_REDIS")
+	}
+	redisRelease, err := x.controller.GetAppRelease(redisApp)
+	t.Assert(err, c.IsNil)
+	redisJobs, err := x.controller.JobList(redisApp)
+	t.Assert(err, c.IsNil)
+	t.Assert(redisJobs, c.HasLen, 1)
+	redisJob := redisJobs[0]
+	t.Assert(redisJob.VolumeIDs, c.HasLen, 1)
+	redisVol, err := x.controller.GetVolume(redisApp, redisJob.VolumeIDs[0])
+	t.Assert(err, c.IsNil)
+
+	// write some Redis data to disk
+	data := random.String(32)
+	redis := func(args ...string) *CmdResult {
+		return x.flynn("/", append([]string{"-a", app.Name, "redis", "redis-cli", "--"}, args...)...)
+	}
+	t.Assert(redis("SET", "data", data), Succeeds)
+	t.Assert(redis("SAVE"), Succeeds)
+
+	// kill the Redis job and wait for it to restart
+	watcher, err := x.controller.WatchJobEvents(redisApp, redisRelease.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(x.controller.DeleteJob(redisApp, redisJob.ID), c.IsNil)
+	events := ct.JobEvents{"redis": map[ct.JobState]int{ct.JobStateDown: 1, ct.JobStateUp: 1}}
+	t.Assert(watcher.WaitFor(events, scaleTimeout, nil), c.IsNil)
+
+	// check there is a new Redis job with the same volume
+	redisJobs, err = x.controller.JobList(redisApp)
+	t.Assert(err, c.IsNil)
+	t.Assert(redisJobs, c.HasLen, 2)
+	t.Assert(redisJobs[0].VolumeIDs, c.DeepEquals, redisJob.VolumeIDs)
+	t.Assert(redis("--raw", "GET", "data"), SuccessfulOutputContains, data)
+
+	// decommission the volume, restart Redis and check it gets a new volume
+	t.Assert(x.controller.DecommissionVolume(redisApp, redisVol), c.IsNil)
+	t.Assert(x.controller.DeleteJob(redisApp, redisJobs[0].ID), c.IsNil)
+	t.Assert(watcher.WaitFor(events, scaleTimeout, nil), c.IsNil)
+	redisJobs, err = x.controller.JobList(redisApp)
+	t.Assert(err, c.IsNil)
+	t.Assert(redisJobs, c.HasLen, 3)
+	t.Assert(redisJobs[0].VolumeIDs, c.HasLen, 1)
+	t.Assert(redisJobs[0].VolumeIDs[0], c.Not(c.Equals), redisVol.ID)
+	t.Assert(redis("--raw", "GET", "data"), SuccessfulOutputContains, "")
+}

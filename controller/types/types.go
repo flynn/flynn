@@ -256,6 +256,7 @@ type JobState string
 
 const (
 	JobStatePending  JobState = "pending"
+	JobStateBlocked  JobState = "blocked"
 	JobStateStarting JobState = "starting"
 	JobStateUp       JobState = "up"
 	JobStateStopping JobState = "stopping"
