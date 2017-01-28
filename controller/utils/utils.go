@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -161,7 +162,15 @@ var provisionVolumeAttempts = attempt.Strategy{
 }
 
 func ProvisionVolume(req *ct.VolumeReq, h VolumeCreator, job *host.Job) (*volume.Info, error) {
-	vol := &volume.Info{}
+	vol := &volume.Info{
+		Meta: map[string]string{
+			"flynn-controller.app":            job.Metadata["flynn-controller.app"],
+			"flynn-controller.release":        job.Metadata["flynn-controller.release"],
+			"flynn-controller.type":           job.Metadata["flynn-controller.type"],
+			"flynn-controller.path":           req.Path,
+			"flynn-controller.delete_on_stop": strconv.FormatBool(req.DeleteOnStop),
+		},
+	}
 	// this potentially leaks volumes on the host, but we'll leave it up
 	// to the volume garbage collector to clean up
 	err := provisionVolumeAttempts.Run(func() error {
