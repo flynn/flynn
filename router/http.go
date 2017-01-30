@@ -460,6 +460,10 @@ func (s *HTTPListener) findRoute(host string, path string) *httpRoute {
 			return tree.Lookup(path)
 		}
 	}
+	// use catch-all if available
+	if tree, ok := s.domains["*"]; ok {
+		return tree.Lookup(path)
+	}
 	return nil
 }
 

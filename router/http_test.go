@@ -545,6 +545,33 @@ func (s *S) TestWildcardRouting(c *C) {
 	assertGet(c, "http://"+l.Addr, "dev.foo.bar", "3")
 }
 
+func (s *S) TestWildcardCatchAllRouting(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
+	defer srv2.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, router.HTTPRoute{
+		Domain:  "*",
+		Service: "1",
+	}.ToRoute())
+	addRoute(c, l, router.HTTPRoute{
+		Domain:  "*.bar",
+		Service: "2",
+	}.ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "1", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "2", srv2.Listener.Addr().String())
+
+	assertGet(c, "http://"+l.Addr, "foo", "1")
+	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	// Make sure other wildcards have priority
+	assertGet(c, "http://"+l.Addr, "foo.bar", "2")
+}
+
 func (s *S) TestLeaderRouting(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	srv2 := httptest.NewServer(httpTestHandler("2"))
