@@ -85,6 +85,12 @@ type Client interface {
 	ReleaseList() ([]*ct.Release, error)
 	AppReleaseList(appID string) ([]*ct.Release, error)
 	ProviderList() ([]*ct.Provider, error)
+	VolumeList() ([]*ct.Volume, error)
+	AppVolumeList(appID string) ([]*ct.Volume, error)
+	GetVolume(appID, volID string) (*ct.Volume, error)
+	PutVolume(vol *ct.Volume) error
+	DecommissionVolume(appID string, vol *ct.Volume) error
+	StreamVolumes(since *time.Time, output chan *ct.Volume) (stream.Stream, error)
 	Backup() (io.ReadCloser, error)
 	GetBackupMeta() (*ct.ClusterBackup, error)
 	DeleteRelease(appID, releaseID string) (*ct.ReleaseDeletion, error)

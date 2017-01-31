@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/volume#",
+  "title": "Volume",
+  "description": "A volume is a durable filesystem that can be attached to jobs.",
+  "sortIndex": 20,
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "host_id": {
+      "type": "string",
+      "description": "the ID of the host the volume is running on"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["data", "squashfs", "ext2"]
+    },
+    "state": {
+      "type": "string",
+      "enum": ["pending", "created", "destroyed"]
+    },
+    "app": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "release": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "job": {
+      "type": "string",
+      "description": "ID of the job the volume is currently attached to"
+    },
+    "job_type": {
+      "type": "string",
+      "description": "job process type"
+    },
+    "path": {
+      "type": "string",
+      "description": "mount path"
+    },
+    "delete_on_stop": {
+      "type": "boolean",
+      "description": "delete the volume when the job stops"
+    },
+    "meta": {
+      "$ref": "/schema/controller/common#/definitions/meta"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    },
+    "decommissioned_at": {
+      "description": "volume decommission time",
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

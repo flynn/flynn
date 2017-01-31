@@ -504,6 +504,36 @@ $$ LANGUAGE plpgsql`,
 			updated_at       timestamptz NOT NULL DEFAULT now()
 		)`,
 	)
+	migrations.Add(31,
+		`CREATE TABLE volume_types (name text PRIMARY KEY)`,
+		`INSERT INTO volume_types (name) VALUES ('data'), ('squashfs'), ('ext2')`,
+		`CREATE TABLE volume_states (name text PRIMARY KEY)`,
+		`INSERT INTO volume_states (name) VALUES ('pending'), ('created'), ('destroyed')`,
+		`INSERT INTO event_types (name) VALUES ('volume')`,
+		`CREATE TABLE volumes (
+			volume_id         uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+			host_id           text NOT NULL,
+			type              text NOT NULL REFERENCES volume_types,
+			state             text NOT NULL REFERENCES volume_states,
+			app_id            uuid,
+			release_id        uuid,
+			job_id            uuid,
+			job_type          text,
+			path              text,
+			delete_on_stop    boolean NOT NULL DEFAULT FALSE,
+			meta              jsonb,
+			created_at        timestamptz NOT NULL DEFAULT now(),
+			updated_at        timestamptz NOT NULL DEFAULT now(),
+			decommissioned_at timestamptz
+		)`,
+		`CREATE TABLE job_volumes (
+			job_id     uuid        NOT NULL REFERENCES job_cache (job_id),
+			volume_id  uuid        NOT NULL REFERENCES volumes (volume_id),
+			index      integer     NOT NULL DEFAULT 0,
+			PRIMARY KEY (job_id, volume_id)
+		)`,
+		`INSERT INTO job_states (name) VALUES ('blocked')`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

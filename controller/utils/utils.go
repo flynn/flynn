@@ -288,6 +288,9 @@ type ControllerClient interface {
 	JobListActive() ([]*ct.Job, error)
 	StreamSinks(since *time.Time, ch chan *ct.Sink) (stream.Stream, error)
 	ListSinks() ([]*ct.Sink, error)
+	VolumeList() ([]*ct.Volume, error)
+	PutVolume(*ct.Volume) error
+	StreamVolumes(since *time.Time, ch chan *ct.Volume) (stream.Stream, error)
 }
 
 func ClusterClientWrapper(c *cluster.Client) clusterClientWrapper {

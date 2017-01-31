@@ -36,7 +36,8 @@
         "sink",
         "sink_deletion",
         "scale",
-        "scale_request"
+        "scale_request",
+        "volume"
       ]
     }
   },
