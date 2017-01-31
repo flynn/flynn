@@ -60,6 +60,7 @@ var preparedStatements = map[string]string{
 	"job_list_active":                       jobListActiveQuery,
 	"job_select":                            jobSelectQuery,
 	"job_insert":                            jobInsertQuery,
+	"job_volume_insert":                     jobVolumeInsertQuery,
 	"provider_list":                         providerListQuery,
 	"provider_select_by_name":               providerSelectByNameQuery,
 	"provider_select_by_name_or_id":         providerSelectByNameOrIDQuery,
@@ -83,6 +84,12 @@ var preparedStatements = map[string]string{
 	"sink_select":                           sinkSelectQuery,
 	"sink_insert":                           sinkInsertQuery,
 	"sink_delete":                           sinkDeleteQuery,
+	"volume_list":                           volumeListQuery,
+	"volume_app_list":                       volumeAppListQuery,
+	"volume_list_since":                     volumeListSinceQuery,
+	"volume_select":                         volumeSelectQuery,
+	"volume_insert":                         volumeInsertQuery,
+	"volume_decommission":                   volumeDecommissionQuery,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
@@ -347,19 +354,47 @@ UPDATE scale_requests SET state = 'cancelled' WHERE app_id = $1 AND release_id =
 	scaleRequestUpdateQuery = `
 UPDATE scale_requests SET state = $2 WHERE scale_request_id = $1`
 	jobListQuery = `
-SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at, args
+SELECT
+  cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta,
+  exit_status, host_error, run_at, restarts, created_at, updated_at, args,
+  ARRAY(
+    SELECT job_volumes.volume_id
+    FROM job_volumes
+    WHERE job_volumes.job_id = job_cache.job_id
+    ORDER BY job_volumes.index
+  )
 FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC`
 	jobListActiveQuery = `
-SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at, args
+SELECT
+  cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta,
+  exit_status, host_error, run_at, restarts, created_at, updated_at, args,
+  ARRAY(
+    SELECT job_volumes.volume_id
+    FROM job_volumes
+    WHERE job_volumes.job_id = job_cache.job_id
+    ORDER BY job_volumes.index
+  )
 FROM job_cache WHERE state = 'pending' OR state = 'starting' OR state = 'up' OR state = 'stopping' ORDER BY updated_at DESC`
 	jobSelectQuery = `
-SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at, args
+SELECT
+  cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta,
+  exit_status, host_error, run_at, restarts, created_at, updated_at, args,
+  ARRAY(
+    SELECT job_volumes.volume_id
+    FROM job_volumes
+    WHERE job_volumes.job_id = job_cache.job_id
+    ORDER BY job_volumes.index
+  )
 FROM job_cache WHERE job_id = $1`
 	jobInsertQuery = `
 INSERT INTO job_cache (cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, args)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (job_id) DO UPDATE
 SET cluster_id = $1, host_id = $3, state = $7, exit_status = $9, host_error = $10, run_at = $11, restarts = $12, args = $13, updated_at = now()
 RETURNING created_at, updated_at`
+	jobVolumeInsertQuery = `
+INSERT INTO job_volumes (job_id, volume_id, index) VALUES ($1, $2, $3)
+ON CONFLICT ON CONSTRAINT job_volumes_pkey DO UPDATE SET index = $3
+	`
 	providerListQuery = `
 SELECT provider_id, name, url, created_at, updated_at
 FROM providers WHERE deleted_at IS NULL ORDER BY created_at DESC`
@@ -451,4 +486,18 @@ SELECT sink_id, kind, config, created_at, updated_at FROM sinks WHERE sink_id = 
 INSERT INTO sinks (sink_id, kind, config) VALUES ($1, $2, $3) RETURNING created_at, updated_at`
 	sinkDeleteQuery = `
 UPDATE sinks SET deleted_at = now() WHERE sink_id = $1 AND deleted_at IS NULL`
+	volumeListQuery = `
+SELECT volume_id, host_id, type, state, app_id, release_id, job_id, job_type, path, delete_on_stop, meta, created_at, updated_at, decommissioned_at FROM volumes ORDER BY updated_at DESC`
+	volumeAppListQuery = `
+SELECT volume_id, host_id, type, state, app_id, release_id, job_id, job_type, path, delete_on_stop, meta, created_at, updated_at, decommissioned_at FROM volumes WHERE app_id = $1 ORDER BY updated_at DESC`
+	volumeListSinceQuery = `
+SELECT volume_id, host_id, type, state, app_id, release_id, job_id, job_type, path, delete_on_stop, meta, created_at, updated_at, decommissioned_at FROM volumes WHERE updated_at >= $1 ORDER BY updated_at DESC`
+	volumeSelectQuery = `
+SELECT volume_id, host_id, type, state, app_id, release_id, job_id, job_type, path, delete_on_stop, meta, created_at, updated_at, decommissioned_at FROM volumes WHERE app_id = $1 AND volume_id = $2`
+	volumeInsertQuery = `
+INSERT INTO volumes (volume_id, host_id, type, state, app_id, release_id, job_id, job_type, path, delete_on_stop, meta) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (volume_id) DO UPDATE SET job_id = $7, updated_at = now()
+RETURNING created_at, updated_at`
+	volumeDecommissionQuery = `
+UPDATE volumes SET updated_at = now(), decommissioned_at = now() WHERE app_id = $1 AND volume_id = $2 RETURNING updated_at, decommissioned_at`
 )

@@ -217,6 +217,7 @@ func appHandler(c handlerConfig) http.Handler {
 	eventRepo := NewEventRepo(c.db)
 	backupRepo := NewBackupRepo(c.db)
 	sinkRepo := NewSinkRepo(c.db)
+	volumeRepo := NewVolumeRepo(c.db)
 
 	api := controllerAPI{
 		domainMigrationRepo: domainMigrationRepo,
@@ -231,6 +232,7 @@ func appHandler(c handlerConfig) http.Handler {
 		eventRepo:           eventRepo,
 		backupRepo:          backupRepo,
 		sinkRepo:            sinkRepo,
+		volumeRepo:          volumeRepo,
 		clusterClient:       c.cc,
 		logaggc:             c.lc,
 		routerc:             c.rc,
@@ -311,6 +313,12 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/events", httphelper.WrapHandler(api.Events))
 	httpRouter.GET("/events/:id", httphelper.WrapHandler(api.GetEvent))
 
+	httpRouter.GET("/volumes", httphelper.WrapHandler(api.GetVolumes))
+	httpRouter.PUT("/volumes/:volume_id", httphelper.WrapHandler(api.PutVolume))
+	httpRouter.GET("/apps/:apps_id/volumes", httphelper.WrapHandler(api.appLookup(api.GetAppVolumes)))
+	httpRouter.GET("/apps/:apps_id/volumes/:volume_id", httphelper.WrapHandler(api.appLookup(api.GetVolume)))
+	httpRouter.PUT("/apps/:apps_id/volumes/:volume_id/decommission", httphelper.WrapHandler(api.appLookup(api.DecommissionVolume)))
+
 	httpRouter.POST("/sinks", httphelper.WrapHandler(api.CreateSink))
 	httpRouter.GET("/sinks", httphelper.WrapHandler(api.GetSinks))
 	httpRouter.GET("/sinks/:sink_id", httphelper.WrapHandler(api.GetSink))
@@ -367,6 +375,7 @@ type controllerAPI struct {
 	eventRepo           *EventRepo
 	backupRepo          *BackupRepo
 	sinkRepo            *SinkRepo
+	volumeRepo          *VolumeRepo
 	clusterClient       utils.ClusterClient
 	logaggc             logClient
 	routerc             routerc.Client

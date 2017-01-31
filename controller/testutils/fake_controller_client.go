@@ -271,6 +271,19 @@ func (c *FakeControllerClient) StreamSinks(*time.Time, chan *ct.Sink) (stream.St
 	return nil, nil
 }
 
+func (c *FakeControllerClient) VolumeList() ([]*ct.Volume, error) {
+	return nil, nil
+}
+
+func (c *FakeControllerClient) PutVolume(*ct.Volume) error {
+	return nil
+}
+
+func (c *FakeControllerClient) StreamVolumes(since *time.Time, ch chan *ct.Volume) (stream.Stream, error) {
+	ch <- &ct.Volume{}
+	return nil, nil
+}
+
 func NewRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
 	return NewReleaseOmni(id, artifact, processes, false)
 }

@@ -45,8 +45,13 @@ func (r *JobRepo) Get(id string) (*ct.Job, error) {
 }
 
 func (r *JobRepo) Add(job *ct.Job) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
 	// TODO: actually validate
-	err := r.db.QueryRow(
+	err = tx.QueryRow(
 		"job_insert",
 		job.ID,
 		job.UUID,
@@ -63,21 +68,35 @@ func (r *JobRepo) Add(job *ct.Job) error {
 		job.Args,
 	).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if postgres.IsPostgresCode(err, postgres.CheckViolation) {
+		tx.Rollback()
 		return ct.ValidationError{Field: "state", Message: err.Error()}
 	}
 	if err != nil {
+		tx.Rollback()
 		return err
+	}
+
+	for i, volID := range job.VolumeIDs {
+		if err := tx.Exec("job_volume_insert", job.UUID, volID, i); err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
 
 	// create a job event, ignoring possible duplications
 	uniqueID := strings.Join([]string{job.UUID, string(job.State)}, "|")
-	err = r.db.Exec("event_insert_unique", job.AppID, job.UUID, uniqueID, string(ct.EventTypeJob), job)
-	return err
+	if err := tx.Exec("event_insert_unique", job.AppID, job.UUID, uniqueID, string(ct.EventTypeJob), job); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func scanJob(s postgres.Scanner) (*ct.Job, error) {
 	job := &ct.Job{}
 	var state string
+	var volumeIDs string
 	err := s.Scan(
 		&job.ID,
 		&job.UUID,
@@ -94,6 +113,7 @@ func scanJob(s postgres.Scanner) (*ct.Job, error) {
 		&job.CreatedAt,
 		&job.UpdatedAt,
 		&job.Args,
+		&volumeIDs,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -102,6 +122,9 @@ func scanJob(s postgres.Scanner) (*ct.Job, error) {
 		return nil, err
 	}
 	job.State = ct.JobState(state)
+	if volumeIDs != "" {
+		job.VolumeIDs = split(volumeIDs[1:len(volumeIDs)-1], ",")
+	}
 	return job, nil
 }
 

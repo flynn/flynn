@@ -44,6 +44,12 @@
     "args": {
       "$ref": "/schema/controller/common#/definitions/args"
     },
+    "volumes": {
+      "type": "array",
+      "items": {
+        "$ref": "/schema/controller/common#/definitions/id"
+      }
+    },
     "meta": {
       "$ref": "/schema/controller/common#/definitions/meta"
     },
