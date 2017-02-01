@@ -241,7 +241,14 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	host := fmt.Sprintf("leader.%s.discoverd", app.Name)
+	h.Logger.Info("waiting for Redis to start", "service", serviceName)
+	if _, err := discoverd.GetInstances(serviceName, 5*time.Minute); err != nil {
+		h.Logger.Error("error waiting for Redis to start", "err", err)
+		httphelper.Error(w, err)
+		return
+	}
+
+	host := "leader." + serviceName
 	u := url.URL{
 		Scheme: "redis",
 		Host:   host + ":6379",
