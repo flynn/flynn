@@ -419,7 +419,9 @@ func (s *LogAggregatorSink) Connect() error {
 }
 
 func (s *LogAggregatorSink) Close() {
-	s.conn.Close()
+	if s.conn != nil {
+		s.conn.Close()
+	}
 }
 
 func (s *LogAggregatorSink) GetCursor(hostID string) (*utils.HostCursor, error) {
