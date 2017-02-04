@@ -492,7 +492,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard' AND del
 	meta := bootstrap.StepMeta{ID: "restore", Action: "restore-postgres"}
 	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
 	out, err := cmd.CombinedOutput()
-	if os.Getenv("DEBUG") != "" {
+	if os.Getenv("DEBUG") == "true" {
 		fmt.Println(string(out))
 	}
 	if err != nil {
