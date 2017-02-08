@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -394,7 +395,7 @@ var errMissingTLS = errors.New("router: route not found or TLS not configured")
 
 func (s *HTTPListener) listenAndServeTLS() error {
 	certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		r := s.findRoute(hello.ServerName, "/")
+		r := s.findRoute(hello.ServerName, true, "/")
 		if r == nil {
 			return nil, errMissingTLS
 		}
@@ -442,10 +443,17 @@ func (s *HTTPListener) listenAndServeTLS() error {
 	return nil
 }
 
-func (s *HTTPListener) findRoute(host string, path string) *httpRoute {
+func (s *HTTPListener) normalizeHost(host string) string {
 	host = strings.ToLower(host)
 	if strings.Contains(host, ":") {
 		host, _, _ = net.SplitHostPort(host)
+	}
+	return host
+}
+
+func (s *HTTPListener) findRoute(host string, normalize_host bool, path string) *httpRoute {
+	if normalize_host {
+		host = s.normalizeHost(host)
 	}
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -477,7 +485,19 @@ func fail(w http.ResponseWriter, code int) {
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
 	ctx = ctxhelper.NewContextStartTime(ctx, time.Now())
-	r := s.findRoute(req.Host, req.URL.Path)
+
+	host := s.normalizeHost(req.Host)
+
+	// A SNI/Host header mismatch is never sent by browsers and indicates an improperly configured or implemented non-browser client.
+	if req.TLS != nil && req.TLS.ServerName != "" && host != "" {
+		expected := s.normalizeHost(req.TLS.ServerName)
+		if host != expected {
+			http.Error(w, fmt.Sprintf("mismatch between TLS ServerName and request Host. expected %s, got %s", expected, host), http.StatusBadRequest)
+			return
+		}
+	}
+
+	r := s.findRoute(host, false, req.URL.Path)
 	if r == nil {
 		fail(w, 404)
 		return
