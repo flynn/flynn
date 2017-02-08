@@ -39,6 +39,7 @@ func Load(schemaRoot string) error {
 		schema := &jsonschema.Schema{Cache: schemaCache}
 		err = schema.ParseWithoutRefs(file)
 		if err != nil {
+			file.Close()
 			return fmt.Errorf("schema: Error loading schema %s: %s", path, err)
 		}
 		cacheKey := "https://flynn.io/schema" + strings.TrimSuffix(filepath.Base(path), ".json")
