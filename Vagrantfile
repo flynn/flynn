@@ -3,9 +3,9 @@
 
 # Fail if Vagrant version is too old
 begin
-  Vagrant.require_version ">= 1.6.0"
+  Vagrant.require_version ">= 1.9.0"
 rescue NoMethodError
-  $stderr.puts "This Vagrantfile requires Vagrant version >= 1.6.0"
+  $stderr.puts "This Vagrantfile requires Vagrant version >= 1.9.0"
   exit 1
 end
 
