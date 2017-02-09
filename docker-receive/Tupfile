@@ -3,4 +3,7 @@ include_rules
 : |> !go ./artifact |> bin/docker-artifact
 : |> !go ./migrator |> bin/docker-migrator
 : $(ROOT)/util/ca-certs/ca-certs.pem |> !cp |> bin/ca-certs.pem
-: bin/docker-receive bin/docker-artifact bin/docker-migrator bin/ca-certs.pem |> !image-bootstrapped |>
+
+: img/packages.sh |> !build-layer |> layer/packages.json
+: img/files.sh bin/* |> !build-layer |> layer/files.json
+: layer/packages.json layer/files.json |> !build-artifact |>

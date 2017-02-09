@@ -55,9 +55,9 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   gzip -9 --keep --force host/bin/flynn-host
   sed "s/{{FLYNN-HOST-CHECKSUM}}/$(sha512sum host/bin/flynn-host.gz | cut -d " " -f 1)/g" script/install-flynn.tmpl > script/install-flynn
 
-  # create new image manifests by adding some metadata
+  # create new image artifacts by adding some metadata to the manifests
   for name in $(jq -r 'keys | .[]' images.json); do
-    jq ".[\"${name}\"].manifest + {meta: {foo: \"bar\"}}" images.json > "image/bootstrapped/${name}.json"
+    jq ".[\"${name}\"] + { manifest: (.[\"${name}\"].manifest + { meta: { foo: \"bar\" } }) }" images.json > "image/bootstrapped/${name}.json"
   done
   go build -o util/release/flynn-release -ldflags="${ldflags}" ./util/release
   util/release/flynn-release manifest --image-dir "${src}/image/bootstrapped" util/release/images_template.json > images.json
@@ -71,7 +71,8 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   ln -s "${src}/script/install-flynn" "${dir}/install-flynn"
 
   # create a slug for testing slug based app updates
-  tar c -C "${src}/test/apps/http" . | docker run -i -a stdin -a stdout -a stderr --dns "$(ip addr show flynnbr0 | grep -oP '100\.100\.\d+\.\d+')" -e CONTROLLER_KEY="[[ .ControllerKey ]]" -e SLUG_IMAGE_ID="[[ .SlugImageID ]]" flynn/slugbuilder
+  export DISCOVERD="[[ .Discoverd ]]"
+  tar c -C "${src}/test/apps/http" . | "${src}/host/bin/flynn-host" run --volume /tmp "${src}/image/bootstrapped/slugbuilder.json" /usr/bin/env CONTROLLER_KEY="[[ .ControllerKey ]]" SLUG_IMAGE_ID="[[ .SlugImageID ]]" /builder/build.sh
 
   # start a file server to serve the exported components
   sudo start-stop-daemon \
@@ -115,7 +116,9 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	var imagesJSON bytes.Buffer
 	var script bytes.Buffer
 	slugImageID := random.UUID()
-	releaseScript.Execute(&script, struct{ ControllerKey, SlugImageID string }{releaseCluster.ControllerKey, slugImageID})
+	releaseScript.Execute(&script, struct {
+		Discoverd, ControllerKey, SlugImageID string
+	}{fmt.Sprintf("http://%s:1111", buildHost.IP), releaseCluster.ControllerKey, slugImageID})
 	t.Assert(buildHost.Run("bash -ex", &tc.Streams{Stdin: &script, Stdout: &imagesJSON, Stderr: logWriter}), c.IsNil)
 	var images map[string]*ct.Artifact
 	t.Assert(json.Unmarshal(imagesJSON.Bytes(), &images), c.IsNil)

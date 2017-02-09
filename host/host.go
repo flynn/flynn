@@ -43,6 +43,7 @@ options:
   --http-port=PORT           HTTP port [default: 1113]
   --external-ip=IP           external IP of host
   --listen-ip=IP             bind host network services to this IP
+  --network-config=<config>  network configuration
   --state=PATH               path to state file [default: /var/lib/flynn/host-state.bolt]
   --sink-state=PATH          path to the sink state file [default: /var/lib/flynn/sink-state.bolt]
   --id=ID                    host id
@@ -62,6 +63,7 @@ options:
   --partitions=PARTITIONS    specify resource partitions for host [default: system=cpu_shares:4096 background=cpu_shares:4096 user=cpu_shares:8192]
   --init-log-level=LEVEL     containerinit log level [default: info]
   --zpool-name=NAME          zpool name
+  --no-discoverd             don't wait for discoverd before starting jobs
 	`)
 }
 
@@ -217,6 +219,14 @@ func runDaemon(args *docopt.Args) {
 		flynnInit = path
 	}
 
+	var networkConfig *host.NetworkConfig
+	if config := args.String["--network-config"]; config != "" {
+		networkConfig = &host.NetworkConfig{}
+		if err := json.Unmarshal([]byte(config), networkConfig); err != nil {
+			shutdown.Fatalf("error parsing --network-config: %s", err)
+		}
+	}
+
 	var partitionCGroups = make(map[string]int64) // name -> cpu shares
 	for _, p := range strings.Split(args.String["--partitions"], " ") {
 		nameShares := strings.Split(p, "=cpu_shares:")
@@ -312,6 +322,7 @@ func runDaemon(args *docopt.Args) {
 			LogMux:           mux,
 			PartitionCGroups: partitionCGroups,
 			Logger:           logger.New("host.id", hostID, "component", "backend", "backend", "libcontainer"),
+			DiscoverdEnabled: !args.Bool["--no-discoverd"],
 		})
 	case "mock":
 		backend = MockBackend{}
@@ -409,6 +420,10 @@ func runDaemon(args *docopt.Args) {
 	if err := host.OpenDBs(); err != nil {
 		log.Error("error opening state databases", "err", err)
 		shutdown.Fatal(err)
+	}
+
+	if networkConfig != nil {
+		host.ConfigureNetworking(networkConfig)
 	}
 
 	// stopJobs stops all jobs, leaving discoverd until the end so other

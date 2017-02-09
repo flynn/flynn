@@ -1,3 +1,5 @@
 include_rules
 : |> !go |> flynn-router-examples
-: flynn-router-examples |> docker build -t flynn/router-examples . |>
+
+: img/files.sh flynn-router-examples |> !build-layer |> layer/files.json
+: layer/files.json | $(ROOT)/<builder> |> ^ build-artifact router-examples^ $(ROOT)/builder/bin/flynn-build artifact ubuntu-trusty %f > %o |> $(ROOT)/image/router-examples.json

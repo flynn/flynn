@@ -213,23 +213,32 @@ func (b *Builder) mksquashfs(dir string) (string, *ct.ImageLayer, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	defer tmp.Close()
+	tmp.Close()
+	layer, err := Mksquashfs(dir, tmp.Name())
+	return tmp.Name(), layer, err
+}
 
-	if out, err := exec.Command("mksquashfs", dir, tmp.Name(), "-noappend").CombinedOutput(); err != nil {
-		os.Remove(tmp.Name())
-		return "", nil, fmt.Errorf("mksquashfs error: %s: %s", err, out)
+func Mksquashfs(dir string, dst string) (*ct.ImageLayer, error) {
+	cmd := exec.Command("mksquashfs", dir, dst, "-noappend")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("mksquashfs error: %s: %s", err, out)
 	}
 
-	h := sha512.New512_256()
-	length, err := io.Copy(h, tmp)
+	f, err := os.Open(dst)
 	if err != nil {
-		os.Remove(tmp.Name())
-		return "", nil, err
+		return nil, err
+	}
+	defer f.Close()
+
+	h := sha512.New512_256()
+	length, err := io.Copy(h, f)
+	if err != nil {
+		return nil, err
 	}
 
 	sha := hex.EncodeToString(h.Sum(nil))
 
-	return tmp.Name(), &ct.ImageLayer{
+	return &ct.ImageLayer{
 		ID:     sha,
 		Type:   ct.ImageLayerTypeSquashfs,
 		Length: length,

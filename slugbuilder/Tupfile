@@ -1,4 +1,7 @@
 include_rules
 : |> !go ./artifact |> bin/create-artifact
 : |> !go ./migrator |> bin/migrator
-: bin/create-artifact bin/migrator $(ROOT)/util/cedarish/<image> |> !image-cedarish |>
+
+: img/buildpacks.sh builder/buildpacks.txt builder/install-buildpack |> !build-layer-cedarish |> layer/buildpacks.json
+: img/files.sh bin/* convert-legacy-slug.sh builder/build.sh builder/create-user.sh |> !build-layer |> layer/files.json
+: layer/buildpacks.json layer/files.json |> !build-artifact-cedarish |>

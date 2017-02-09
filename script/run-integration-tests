@@ -113,11 +113,10 @@ main() {
     "/var/lib/flynn:/var/lib/flynn"
   )
 
-  local image="$(${ROOT}/util/release/flynn-release manifest --image-dir "${ROOT}/image" - <<< '$image_artifact[test]')"
   "${flynn_host}" run \
     --bind "$(join "," ${mounts[@]})" \
     --volume "/tmp" \
-    <(echo "${image}") \
+    "${ROOT}/image/test.json" \
     /usr/bin/env \
     ROOT="${ROOT}" \
     CLUSTER_ADD_ARGS="${cluster_add:18}" \

@@ -1,3 +1,5 @@
 include_rules
 : |> !go |> bin/discoverd
-: bin/* |> !image-bootstrapped |>
+
+: img/files.sh bin/* start.sh |> !build-layer |> layer/files.json
+: layer/files.json |> !build-artifact |>

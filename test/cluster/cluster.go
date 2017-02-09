@@ -406,6 +406,9 @@ test/scripts/wait-for-docker
 # "could not find image: no such id: flynn/busybox"
 docker pull flynn/busybox
 
+# force tup to start the build daemon
+touch host/start-build-daemon.sh
+
 make
 
 if [[ -f test/scripts/debug-info.sh ]]; then

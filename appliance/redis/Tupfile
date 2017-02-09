@@ -1,4 +1,7 @@
 include_rules
 : |> !go ./cmd/flynn-redis |> bin/flynn-redis
 : |> !go ./cmd/flynn-redis-api |> bin/flynn-redis-api
-: bin/* |> !image-bootstrapped |>
+
+: img/packages.sh |> !build-layer |> layer/packages.json
+: img/files.sh bin/* start.sh dump.sh restore.sh |> !build-layer |> layer/files.json
+: layer/packages.json layer/files.json |> !build-artifact |>

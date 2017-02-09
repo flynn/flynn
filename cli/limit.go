@@ -10,7 +10,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/flynn/go-docopt"
 )
 
@@ -116,21 +115,12 @@ func runLimitSet(args *docopt.Args, client controller.Client) error {
 		t.Resources = resource.Defaults()
 	}
 
-	limits := args.All["<var>=<val>"].([]string)
-	for _, limit := range limits {
-		typVal := strings.SplitN(limit, "=", 2)
-		if len(typVal) != 2 {
-			return fmt.Errorf("invalid resource limit: %q", limit)
-		}
-		typ, ok := resource.ToType(typVal[0])
-		if !ok {
-			return fmt.Errorf("invalid resource limit type: %q", typVal)
-		}
-		val, err := resource.ParseLimit(typ, typVal[1])
-		if err != nil {
-			return fmt.Errorf("invalid resource limit value: %q", typVal[1])
-		}
-		t.Resources[typ] = resource.Spec{Limit: typeconv.Int64Ptr(val)}
+	resources, err := resource.Parse(args.All["<var>=<val>"].([]string))
+	if err != nil {
+		return err
+	}
+	for typ, limit := range resources {
+		t.Resources[typ] = limit
 	}
 	release.Processes[proc] = t
 

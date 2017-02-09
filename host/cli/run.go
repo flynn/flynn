@@ -40,7 +40,7 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 		return err
 	}
 	cmd := exec.Cmd{
-		ImageArtifact: artifact,
+		Artifacts: []*ct.Artifact{artifact},
 		Job: &host.Job{
 			Config: host.ContainerConfig{
 				Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
@@ -49,10 +49,18 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 				DisableLog: true,
 			},
 		},
-		HostID: args.String["--host"],
 		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
+	}
+	if hostID := args.String["--host"]; hostID != "" {
+		host, err := cluster.NewClient().Host(hostID)
+		if err != nil {
+			return err
+		}
+		cmd.Host = host
+	} else if hostAddr := os.Getenv("FLYNN_HOST_ADDR"); hostAddr != "" {
+		cmd.Host = cluster.NewHost("", hostAddr, nil, nil)
 	}
 	if cmd.Job.Config.TTY {
 		ws, err := term.GetWinsize(os.Stdin.Fd())

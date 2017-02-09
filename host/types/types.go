@@ -11,6 +11,8 @@ import (
 // TagPrefix is the prefix added to tags in discoverd instance metadata
 const TagPrefix = "tag:"
 
+const DiffPath = "/.container-diff"
+
 type Job struct {
 	ID string `json:"id,omitempty"`
 
@@ -188,6 +190,9 @@ type Mount struct {
 	Location  string `json:"location,omitempty"`
 	Target    string `json:"target,omitempty"`
 	Writeable bool   `json:"writeable,omitempty"`
+	Device    string `json:"device,omitempty"`
+	Data      string `json:"data,omitempty"`
+	Flags     int    `json:"flags,omitempty"`
 }
 
 type VolumeBinding struct {

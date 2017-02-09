@@ -3,6 +3,7 @@ package resource
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/docker/go-units"
 	"github.com/flynn/flynn/pkg/typeconv"
@@ -67,6 +68,12 @@ func Defaults() Resources {
 	return r
 }
 
+func WithLimit(typ Type, limit int64) Resources {
+	r := Defaults()
+	r.SetLimit(typ, limit)
+	return r
+}
+
 func SetDefaults(r *Resources) {
 	if *r == nil {
 		*r = make(Resources, len(defaults))
@@ -90,6 +97,30 @@ func ToType(s string) (Type, bool) {
 		}
 	}
 	return Type(""), false
+}
+
+func ParseCSV(limits string) (Resources, error) {
+	return Parse(strings.Split(limits, ","))
+}
+
+func Parse(limits []string) (Resources, error) {
+	resources := make(Resources, len(limits))
+	for _, limit := range limits {
+		typVal := strings.SplitN(limit, "=", 2)
+		if len(typVal) != 2 {
+			return nil, fmt.Errorf("invalid resource limit: %q", limit)
+		}
+		typ, ok := ToType(typVal[0])
+		if !ok {
+			return nil, fmt.Errorf("invalid resource limit type: %q", typVal)
+		}
+		val, err := ParseLimit(typ, typVal[1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid resource limit value: %q", typVal[1])
+		}
+		resources[typ] = Spec{Limit: typeconv.Int64Ptr(val)}
+	}
+	return resources, nil
 }
 
 func ParseLimit(typ Type, s string) (int64, error) {
