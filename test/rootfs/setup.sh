@@ -205,9 +205,13 @@ curl https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz | tar xz
 ./godeb install 1.7.5
 rm godeb
 
+# setup tmpdir
+tmpdir=$(mktemp --directory)
+trap "rm -rf ${tmpdir}" EXIT
+
 # install go-tuf
-export GOPATH="$(mktemp --directory)"
-trap "rm -rf ${GOPATH}" EXIT
+export GOPATH="${tmpdir}/gopath"
+mkdir ${GOPATH}
 go get github.com/flynn/go-tuf/cmd/tuf
 mv "${GOPATH}/bin/tuf" /usr/bin/tuf
 go get github.com/flynn/go-tuf/cmd/tuf-client
@@ -220,12 +224,16 @@ go get golang.org/x/tools/cmd/cover
 echo AcceptEnv TEST_RUNNER_AUTH_KEY BLOBSTORE_S3_CONFIG BLOBSTORE_GCS_CONFIG BLOBSTORE_AZURE_CONFIG >> /etc/ssh/sshd_config
 
 # install Bats and jq for running script unit tests
-tmpdir=$(mktemp --directory)
-trap "rm -rf ${tmpdir}" EXIT
 git clone https://github.com/sstephenson/bats.git "${tmpdir}/bats"
 "${tmpdir}/bats/install.sh" "/usr/local"
 curl -fsLo "/usr/local/bin/jq" "http://stedolan.github.io/jq/download/linux64/jq"
 chmod +x "/usr/local/bin/jq"
+
+# install protobuf compiler
+curl -sL https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip > "${tmpdir}/protoc.zip"
+unzip -d "${tmpdir}/protoc" "${tmpdir}/protoc.zip"
+mv "${tmpdir}/protoc" /opt
+ln -s /opt/protoc/bin/protoc /usr/local/bin/protoc
 
 # cleanup
 apt-get autoremove -y

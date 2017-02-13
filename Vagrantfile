@@ -133,6 +133,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo apt-get update
     sudo sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-9.5 postgresql-contrib-9.5 mariadb-server-10.1 percona-xtrabackup mongodb-org redis-server'
 
+    # Install protobuf compiler
+    sudo apt-get install --yes unzip
+    curl -sL https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip > "${tmpdir}/protoc.zip"
+    unzip -d "${tmpdir}/protoc" "${tmpdir}/protoc.zip"
+    sudo mv "${tmpdir}/protoc" /opt
+    sudo ln -s /opt/protoc/bin/protoc /usr/local/bin/protoc
+
     # Setup postgres for controller unit tests
     sudo -u postgres createuser --superuser vagrant || true
     grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
