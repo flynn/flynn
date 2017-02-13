@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package provider;
+
+// The provider service definition.
+service Provider {
+  // Provision a resource
+  rpc Provision (ProvisionRequest) returns (ProvisionReply) {}
+  rpc Deprovision (DeprovisionRequest) returns (DeprovisionReply) {}
+  rpc GetTunables (GetTunablesRequest) returns (GetTunablesReply) {}
+  rpc UpdateTunables (UpdateTunablesRequest) returns (UpdateTunablesReply) {}
+}
+
+message ProvisionRequest {
+  bytes config = 1;
+}
+
+message ProvisionReply {
+  string              id  = 1;
+  map<string, string> env = 2;
+}
+
+message DeprovisionRequest {
+  string id = 1;
+}
+
+message DeprovisionReply {}
+
+message GetTunablesRequest {
+  string id = 1;
+}
+
+message GetTunablesReply {
+  uint64              version  = 1;
+  map<string, string> tunables = 2;
+}
+
+message UpdateTunablesRequest {
+  string              id          = 1;
+  uint64              version     = 2;
+  map<string, string> tunables    = 3;
+}
+
+message UpdateTunablesReply {}
