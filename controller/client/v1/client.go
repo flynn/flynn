@@ -18,6 +18,7 @@ import (
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
@@ -925,6 +926,17 @@ func (c *Client) DeleteSink(sinkID string) (*ct.Sink, error) {
 func (c *Client) ListSinks() ([]*ct.Sink, error) {
 	var sinks []*ct.Sink
 	return sinks, c.Get("/sinks", &sinks)
+}
+
+// GetResourceTunables gets tunables for specified resource
+func (c *Client) GetResourceTunables(providerID, resourceID string) (*state.Tunables, error) {
+	tunables := &state.Tunables{}
+	return tunables, c.Get(fmt.Sprintf("/providers/%s/resources/%s/tunables", providerID, resourceID), tunables)
+}
+
+// UpdateResourceTunables updates tunables for specified resource
+func (c *Client) UpdateResourceTunables(providerID, resourceID string, tunables *state.Tunables) error {
+	return c.Post(fmt.Sprintf("/providers/%s/resources/%s/tunables", providerID, resourceID), tunables, tunables)
 }
 
 // StreamSinks yields a series of Sink into the provided channel.

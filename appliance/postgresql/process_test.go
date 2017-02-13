@@ -21,6 +21,7 @@ func Test(t *testing.T) { TestingT(t) }
 type PostgresSuite struct{}
 
 var _ = Suite(&PostgresSuite{})
+var tunables = (&Process{}).DefaultTunables()
 
 func (PostgresSuite) TestSingletonPrimary(c *C) {
 	cfg := Config{
@@ -32,7 +33,7 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 	}
 
 	p := NewProcess(cfg)
-	err := p.Reconfigure(&state.Config{Role: state.RolePrimary})
+	err := p.Reconfigure(&state.Config{Role: state.RolePrimary, Tunables: tunables})
 	c.Assert(err, IsNil)
 
 	err = p.Start()
@@ -49,7 +50,7 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 
 	// ensure that we can start a new instance from the same directory
 	p = NewProcess(cfg)
-	err = p.Reconfigure(&state.Config{Role: state.RolePrimary})
+	err = p.Reconfigure(&state.Config{Role: state.RolePrimary, Tunables: tunables})
 	c.Assert(err, IsNil)
 	c.Assert(p.Start(), IsNil)
 	defer p.Stop()
@@ -96,7 +97,7 @@ func connect(c *C, p *Process, db string) *pgx.Conn {
 }
 
 func pgConfig(role state.Role, upstream, downstream *Process) *state.Config {
-	c := &state.Config{Role: role}
+	c := &state.Config{Role: role, Tunables: tunables}
 	if upstream != nil {
 		c.Upstream = instance(upstream)
 	}

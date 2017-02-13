@@ -6,3 +6,4 @@ demo/*.log
 *.test
 /tmp
 /build
+*.pb.go

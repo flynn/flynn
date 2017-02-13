@@ -55,7 +55,7 @@ var sireniaMongoDB = sireniaDatabase{
 	appName:    "mongodb",
 	serviceKey: "FLYNN_MONGO",
 	hostKey:    "MONGO_HOST",
-	assertWriteable: func(t *c.C, r *ct.Release, d *sireniaDeploy) {
+	assertWriteable: func(t *c.C, r *ct.Release, d *sireniaFormation) {
 		mgo.SetLogger(mgoLogger{t})
 		mgo.SetDebug(true)
 		session, err := mgo.DialWithInfo(&mgo.DialInfo{
@@ -73,21 +73,30 @@ var sireniaMongoDB = sireniaDatabase{
 }
 
 func (s *MongoDBSuite) TestDeploySingleAsync(t *c.C) {
-	testSireniaDeploy(s.controllerClient(t), s.discoverdClient(t), t, &sireniaDeploy{
+	testSireniaDeploy(s.controllerClient(t), s.discoverdClient(t), t, &sireniaFormation{
 		name:        "mongodb-single-async",
 		db:          sireniaMongoDB,
 		sireniaJobs: 3,
 		webJobs:     2,
-		expected:    testDeploySingleAsync,
-	})
+	}, testDeploySingleAsync)
 }
 
 func (s *MongoDBSuite) TestDeployMultipleAsync(t *c.C) {
-	testSireniaDeploy(s.controllerClient(t), s.discoverdClient(t), t, &sireniaDeploy{
+	testSireniaDeploy(s.controllerClient(t), s.discoverdClient(t), t, &sireniaFormation{
 		name:        "mongodb-multiple-async",
 		db:          sireniaMongoDB,
 		sireniaJobs: 5,
 		webJobs:     2,
-		expected:    testDeployMultipleAsync,
+	}, testDeployMultipleAsync)
+}
+
+func (s *MongoDBSuite) TestTunables(t *c.C) {
+	testSireniaTunables(s.controllerClient(t), s.discoverdClient(t), t, &sireniaFormation{
+		name:        "mongodb-tunables",
+		db:          sireniaMongoDB,
+		sireniaJobs: 3,
+		webJobs:     2,
+	}, []tunableTest{
+		{"requires restart", sireniaTunable{"storage.wiredTiger.engineConfig.cacheSizeGB", "1", "2"}},
 	})
 }

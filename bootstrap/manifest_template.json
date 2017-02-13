@@ -151,7 +151,7 @@
   {
     "id": "postgres-wait",
     "action": "wait",
-    "url": "http://postgres-api.discoverd/ping"
+    "url": "protobuf://postgres-api.discoverd"
   },
   {
     "id": "controller-cert",
@@ -203,7 +203,7 @@
     "processes": {
       "web": 1
     },
-    "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
+    "resources": [{"name":"postgres", "url":"protobuf://postgres-api.discoverd"}]
   },
   {
     "id": "controller-wait",
@@ -344,7 +344,8 @@
         "MYSQL_USER": "flynn",
         "MYSQL_PWD": "{{ (index .StepData \"mariadb-password\").Data }}",
         "SIRENIA_PROCESS": "mariadb",
-        "SINGLETON": "{{ .Singleton }}"
+        "SINGLETON": "{{ .Singleton }}",
+        "ENABLE_SCALING": "true"
       },
       "processes": {
         "mariadb": {
@@ -372,7 +373,7 @@
     "id": "add-mysql-provider",
     "action": "add-provider",
     "name": "mysql",
-    "url": "http://mariadb-api.discoverd/databases"
+    "url": "protobuf://mariadb-api.discoverd/databases"
   },
   {
     "id": "mongodb-password",
@@ -395,7 +396,8 @@
         "MONGO_USER": "flynn",
         "MONGO_PWD": "{{ (index .StepData \"mongodb-password\").Data }}",
         "SIRENIA_PROCESS": "mongodb",
-        "SINGLETON": "{{ .Singleton }}"
+        "SINGLETON": "{{ .Singleton }}",
+        "ENABLE_SCALING": "true"
       },
       "processes": {
         "mongodb": {
@@ -423,7 +425,7 @@
     "id": "add-mongodb-provider",
     "action": "add-provider",
     "name": "mongodb",
-    "url": "http://mongodb-api.discoverd/databases"
+    "url": "protobuf://mongodb-api.discoverd/databases"
   },
   {
     "id": "blobstore",
@@ -444,7 +446,7 @@
     "processes": {
       "web": 2
     },
-    "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
+    "resources": [{"name":"postgres", "url":"protobuf://postgres-api.discoverd"}]
   },
   {
     "id": "router",
@@ -473,7 +475,7 @@
     "processes": {
       "app": 1
     },
-    "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
+    "resources": [{"name":"postgres", "url":"protobuf://postgres-api.discoverd"}]
   },
   {
     "id": "gitreceive",
@@ -730,14 +732,12 @@
   {
     "id": "mariadb-wait",
     "action": "wait",
-    "url": "http://mariadb-api.discoverd",
-    "status": 404
+    "url": "protobuf://mariadb-api.discoverd"
   },
   {
     "id": "mongodb-wait",
     "action": "wait",
-    "url": "http://mongodb-api.discoverd",
-    "status": 404
+    "url": "protobuf://mongodb-api.discoverd"
   },
   {
     "id": "blobstore-wait",

@@ -182,6 +182,114 @@ func (p *Process) Ready() <-chan state.DatabaseEvent {
 	return p.events
 }
 
+func (p *Process) DefaultTunables() state.Tunables {
+	return state.Tunables{
+		Version: 1,
+		Data: map[string]string{
+			// Disable the InnoDB double write buffer by default on ZFS as ZFS doesn't allow partial writes
+			// and as such the doublewrite buffer serves no purpose.
+			"innodb_doublewrite": "0",
+			"skip_name_resolve":  "1",
+			"query_cache_limit":  "1048576",
+		},
+	}
+}
+
+func (p *Process) ValidateTunables(tunables state.Tunables) error {
+	for k := range tunables.Data {
+		if _, ok := allowedTunables[k]; !ok {
+			return fmt.Errorf("unknown tunable: %s", k)
+		}
+	}
+	return nil
+}
+
+func (p *Process) tunablesRequireRestart(config *state.Config) (bool, map[string]struct{}, map[string]struct{}) {
+	curTunables := p.config().Tunables.Data
+	newTunables := config.Tunables.Data
+	changed := make(map[string]struct{})
+	removed := make(map[string]struct{})
+
+	// iterate over current to find any changed or removed variables
+	for k, v := range curTunables {
+		nv, ok := newTunables[k]
+		if !ok {
+			removed[k] = struct{}{}
+		}
+		if nv != v {
+			changed[k] = struct{}{}
+		}
+	}
+
+	// then iterate over the new set to find any added variables
+	for k := range newTunables {
+		if _, ok := curTunables[k]; !ok {
+			changed[k] = struct{}{}
+		}
+	}
+
+	restartRequired := false
+	for k := range changed {
+		if t := allowedTunables[k]; t.Static {
+			restartRequired = true
+		}
+	}
+	for k := range removed {
+		if t := allowedTunables[k]; t.Static {
+			restartRequired = true
+		}
+	}
+
+	return restartRequired, changed, removed
+}
+
+func (p *Process) applyTunables(config *state.Config) error {
+	logger := p.Logger.New("fn", "applyTunables")
+	p.writeConfig(configData{
+		ReadOnly: config.Role != state.RolePrimary,
+		Tunables: config.Tunables.Data,
+	})
+
+	// If postgres is running and the tunables require a restart then
+	// restart the postgres process. If not running we do nothing.
+	restartRequired, changed, removed := p.tunablesRequireRestart(config)
+	if restartRequired {
+		logger.Info("restarting database to apply tunables")
+		if err := p.stop(); err != nil {
+			return err
+		}
+		if err := p.start(); err != nil {
+			return err
+		}
+	} else {
+		logger.Info("applying tunables online")
+		// Connect to dynamically reconfigure variables
+		db, err := p.connectLocal()
+		if err != nil {
+			logger.Error("error acquiring connection", "err", err)
+			return err
+		}
+		defer db.Close()
+		// Update changed variables
+		for k := range changed {
+			v := config.Tunables.Data[k]
+			if _, err := db.Exec(fmt.Sprintf(`SET GLOBAL %s = %s`, k, v)); err != nil {
+				logger.Error("error setting system variable", "var", k, "val", v, "err", err)
+				return err
+			}
+		}
+		// Set removed variables back to defaults
+		for k := range removed {
+			v := allowedTunables[k].Default
+			if _, err := db.Exec(fmt.Sprintf(`SET GLOBAL %s = %s`, k, v)); err != nil {
+				logger.Error("error resetting system variable", "var", k, "default", v, "err", err)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (p *Process) XLog() xlog.XLog {
 	return mdbxlog.MDBXLog{}
 }
@@ -201,9 +309,20 @@ func (p *Process) reconfigure(config *state.Config) error {
 			return nil
 		}
 
+		// If only tunables have been updated apply them and return.
+		if p.running() && p.config().IsTunablesUpdate(config) {
+			logger.Info("tunables only update")
+			return p.applyTunables(config)
+		}
+
 		// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
 		if p.configApplied && p.running() && p.config() != nil && config != nil &&
 			p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.Meta["MYSQL_ID"] == p.config().Upstream.Meta["MYSQL_ID"] {
+			// If the tunables haven't been modified there is nothing to do here
+			if config.Tunables.Version > p.config().Tunables.Version {
+				logger.Info("becoming sync with same upstream and updating tunables")
+				return p.applyTunables(config)
+			}
 			logger.Info("nothing to do", "reason", "becoming sync with same upstream")
 			return nil
 		}
@@ -215,8 +334,13 @@ func (p *Process) reconfigure(config *state.Config) error {
 		// If we're already running and this is only a downstream change, just wait for the new downstream to catch up
 		if p.running() && p.config().IsNewDownstream(config) {
 			logger.Info("downstream changed", "to", config.Downstream.Addr)
+			var err error
+			if config.Tunables.Version > p.config().Tunables.Version {
+				logger.Info("updating tunables")
+				err = p.applyTunables(config)
+			}
 			p.waitForSync(config.Downstream, config.Role == state.RolePrimary)
-			return nil
+			return err
 		}
 
 		if config == nil {
@@ -224,10 +348,10 @@ func (p *Process) reconfigure(config *state.Config) error {
 		}
 
 		if config.Role == state.RolePrimary {
-			return p.assumePrimary(config.Downstream)
+			return p.assumePrimary(config)
 		}
 
-		return p.assumeStandby(config.Upstream, config.Downstream)
+		return p.assumeStandby(config)
 	}(); err != nil {
 		return err
 	}
@@ -239,8 +363,9 @@ func (p *Process) reconfigure(config *state.Config) error {
 	return nil
 }
 
-func (p *Process) assumePrimary(downstream *discoverd.Instance) (err error) {
+func (p *Process) assumePrimary(config *state.Config) (err error) {
 	logger := p.Logger.New("fn", "assumePrimary")
+	downstream := config.Downstream
 	if downstream != nil {
 		logger = logger.New("downstream", downstream.Addr)
 	}
@@ -258,7 +383,7 @@ func (p *Process) assumePrimary(downstream *discoverd.Instance) (err error) {
 		panic(fmt.Sprintf("unexpected state running role=%s", p.config().Role))
 	}
 
-	if err := p.writeConfig(configData{ReadOnly: downstream != nil}); err != nil {
+	if err := p.writeConfig(configData{ReadOnly: downstream != nil, Tunables: config.Tunables.Data}); err != nil {
 		logger.Error("error writing config", "path", p.ConfigPath(), "err", err)
 		return err
 	}
@@ -381,11 +506,13 @@ func (p *Process) restoreApplyLog() error {
 	return nil
 }
 
-func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error {
+func (p *Process) assumeStandby(config *state.Config) error {
+	upstream := config.Upstream
+	downstream := config.Downstream
 	logger := p.Logger.New("fn", "assumeStandby", "upstream", upstream.Addr)
 	logger.Info("starting up as standby")
 
-	if err := p.writeConfig(configData{ReadOnly: true}); err != nil {
+	if err := p.writeConfig(configData{ReadOnly: true, Tunables: config.Tunables.Data}); err != nil {
 		logger.Error("error writing config", "path", p.ConfigPath(), "err", err)
 		return err
 	}
@@ -957,6 +1084,7 @@ type configData struct {
 	DataDir  string
 	ServerID uint32
 	ReadOnly bool
+	Tunables map[string]string
 }
 
 var configTemplate = template.Must(template.New("my.cnf").Parse(`
@@ -980,6 +1108,10 @@ log_slave_updates   = 1
 {{if .ReadOnly}}
 read_only = 1
 {{end}}
+
+{{ range $key, $value := .Tunables }}
+{{ $key }} = {{ $value }}
+{{ end }}
 `[1:]))
 
 // MySQLErrorNumber returns the Number field from err if it is a *mysql.Error.

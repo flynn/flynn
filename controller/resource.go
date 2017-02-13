@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/flynn/flynn/controller/schema"
@@ -9,10 +12,13 @@ import (
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/provider"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/jackc/pgx"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 type ResourceRepo struct {
@@ -266,17 +272,56 @@ func (c *controllerAPI) ProvisionResource(ctx context.Context, w http.ResponseWr
 	} else {
 		config = []byte(`{}`)
 	}
-	data, err := resource.Provision(p.URL, config)
+
+	u, err := url.Parse(p.URL)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
 
-	res := &ct.Resource{
-		ProviderID: p.ID,
-		ExternalID: data.ID,
-		Env:        data.Env,
-		Apps:       rr.Apps,
+	var res *ct.Resource
+	switch u.Scheme {
+	case "http":
+		data, err := resource.Provision(p.URL, config)
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		res = &ct.Resource{
+			ProviderID: p.ID,
+			ExternalID: data.ID,
+			Env:        data.Env,
+			Apps:       rr.Apps,
+		}
+	case "protobuf":
+		host, port, _ := net.SplitHostPort(u.Host)
+		if port == "" {
+			port = "80"
+		}
+		if host == "" {
+			host = u.Host
+		}
+		conn, err := grpc.Dial(host+":"+port, grpc.WithInsecure())
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		defer conn.Close()
+		pc := provider.NewProviderClient(conn)
+		data, err := pc.Provision(context.Background(), &provider.ProvisionRequest{})
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		res = &ct.Resource{
+			ProviderID: p.ID,
+			ExternalID: data.Id,
+			Env:        data.Env,
+			Apps:       rr.Apps,
+		}
+	default:
+		respondWithError(w, fmt.Errorf("Unknown scheme: %s", u.Scheme))
+		return
 	}
 
 	if err := schema.Validate(res); err != nil {
@@ -385,10 +430,42 @@ func (c *controllerAPI) DeleteResource(ctx context.Context, w http.ResponseWrite
 	}
 
 	logger.Info("deprovisioning", "url", p.URL, "external.id", res.ExternalID)
-	if err := resource.Deprovision(p.URL, res.ExternalID); err != nil {
-		logger.Error("error deprovisioning", "err", err)
+	u, err := url.Parse(p.URL)
+	if err != nil {
+		logger.Error("error parsing provider url", "err", err)
 		respondWithError(w, err)
 		return
+	}
+	switch u.Scheme {
+	case "http":
+		if err := resource.Deprovision(p.URL, res.ExternalID); err != nil {
+			logger.Error("error deprovisioning", "err", err)
+			respondWithError(w, err)
+			return
+		}
+	case "protobuf":
+		host, port, _ := net.SplitHostPort(u.Host)
+		if port == "" {
+			port = "80"
+		}
+		if host == "" {
+			host = u.Host
+		}
+		conn, err := grpc.Dial(host+":"+port, grpc.WithInsecure())
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		defer conn.Close()
+		pc := provider.NewProviderClient(conn)
+		_, err = pc.Deprovision(context.Background(), &provider.DeprovisionRequest{Id: res.ExternalID})
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+	default:
+		logger.Error("unknown scheme", "scheme", u.Scheme)
+		respondWithError(w, fmt.Errorf("unknown scheme: %s", u.Scheme))
 	}
 
 	logger.Info("removing resource")
@@ -445,4 +522,117 @@ func (c *controllerAPI) GetAppResources(ctx context.Context, w http.ResponseWrit
 		return
 	}
 	httphelper.JSON(w, 200, res)
+}
+
+func (c *controllerAPI) GetResourceTunables(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	p, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	res, err := c.resourceRepo.Get(params.ByName("resources_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	u, err := url.Parse(p.URL)
+	if err != nil {
+		logger.Error("error parsing provider url", "err", err)
+		respondWithError(w, err)
+		return
+	}
+	switch u.Scheme {
+	case "http":
+		respondWithError(w, fmt.Errorf("http providers don't support tunables interface"))
+		return
+	case "protobuf":
+		host, port, _ := net.SplitHostPort(u.Host)
+		if port == "" {
+			port = "80"
+		}
+		if host == "" {
+			host = u.Host
+		}
+		conn, err := grpc.Dial(host+":"+port, grpc.WithInsecure())
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		defer conn.Close()
+		pc := provider.NewProviderClient(conn)
+		reply, err := pc.GetTunables(context.Background(), &provider.GetTunablesRequest{Id: res.ExternalID})
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		tunables := &state.Tunables{
+			Version: reply.Version,
+			Data:    reply.Tunables,
+		}
+		httphelper.JSON(w, 200, tunables)
+		return
+	default:
+		logger.Error("unknown scheme", "scheme", u.Scheme)
+		respondWithError(w, fmt.Errorf("unknown scheme: %s", u.Scheme))
+	}
+	return
+}
+
+func (c *controllerAPI) PostResourceTunables(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	p, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	res, err := c.resourceRepo.Get(params.ByName("resources_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	u, err := url.Parse(p.URL)
+	if err != nil {
+		logger.Error("error parsing provider url", "err", err)
+		respondWithError(w, err)
+		return
+	}
+	switch u.Scheme {
+	case "http":
+		respondWithError(w, fmt.Errorf("http providers don't support tunables interface"))
+		return
+	case "protobuf":
+		host, port, _ := net.SplitHostPort(u.Host)
+		if port == "" {
+			port = "80"
+		}
+		if host == "" {
+			host = u.Host
+		}
+		conn, err := grpc.Dial(host+":"+port, grpc.WithInsecure())
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		defer conn.Close()
+		pc := provider.NewProviderClient(conn)
+
+		var tunables state.Tunables
+		if err = httphelper.DecodeJSON(req, &tunables); err != nil {
+			respondWithError(w, err)
+			return
+		}
+
+		_, err = pc.UpdateTunables(context.Background(), &provider.UpdateTunablesRequest{Id: res.ExternalID, Version: tunables.Version, Tunables: tunables.Data})
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		w.WriteHeader(200)
+		return
+	default:
+		logger.Error("unknown scheme", "scheme", u.Scheme)
+		respondWithError(w, fmt.Errorf("unknown scheme: %s", u.Scheme))
+	}
+	return
 }

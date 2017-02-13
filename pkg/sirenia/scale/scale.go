@@ -12,7 +12,7 @@ import (
 )
 
 // ScaleUp scales up a dormant Sirenia cluster
-func ScaleUp(app, controllerKey, serviceAddr, procName, singleton string, logger log15.Logger) error {
+func ScaleUp(app, controllerKey, serviceAddr, procName string, singleton bool, logger log15.Logger) error {
 	logger = logger.New("fn", "ScaleUp")
 
 	// use an explicit HTTP client which doesn't use a retry dialer so we
@@ -73,7 +73,7 @@ func ScaleUp(app, controllerKey, serviceAddr, procName, singleton string, logger
 		processes[k] = v
 	}
 
-	if singleton == "true" {
+	if singleton {
 		processes[procName] = 1
 	} else {
 		processes[procName] = 3

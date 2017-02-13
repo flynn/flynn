@@ -40,7 +40,6 @@ type Config struct {
 	ReplTimeout  time.Duration
 	Logger       log15.Logger
 	ExtWhitelist bool
-	SHMType      string
 	WaitUpstream bool
 }
 
@@ -67,7 +66,6 @@ type Process struct {
 	opTimeout    time.Duration
 	replTimeout  time.Duration
 	extWhitelist bool
-	shmType      string
 	waitUpstream bool
 
 	// daemon is the postgres daemon command when running
@@ -99,7 +97,6 @@ func NewProcess(c Config) *Process {
 		opTimeout:      c.OpTimeout,
 		replTimeout:    c.ReplTimeout,
 		extWhitelist:   c.ExtWhitelist,
-		shmType:        c.SHMType,
 		waitUpstream:   c.WaitUpstream,
 		events:         make(chan state.DatabaseEvent, 1),
 		cancelSyncWait: func() {},
@@ -281,6 +278,101 @@ func (p *Process) Ready() <-chan state.DatabaseEvent {
 	return p.events
 }
 
+func (p *Process) DefaultTunables() state.Tunables {
+	return state.Tunables{
+		Data: map[string]string{
+			"dynamic_shared_memory_type":   "posix",
+			"shared_buffers":               "32MB",
+			"max_wal_senders":              "15",
+			"wal_keep_segments":            "128",
+			"max_standby_archive_delay":    "30s",
+			"max_standby_streaming_delay":  "30s",
+			"wal_receiver_status_interval": "10s",
+			"datestyle":                    "'iso, mdy'",
+			"timezone":                     "'UTC'",
+			"client_encoding":              "'UTF8'",
+			"log_timezone":                 "'UTC'",
+			"log_min_messages":             "'LOG'",
+			"log_connections":              "on",
+			"log_disconnections":           "on",
+			"default_text_search_config":   "'pg_catalog.english'",
+		},
+		Version: 1,
+	}
+}
+
+func (p *Process) ValidateTunables(tunables state.Tunables) error {
+	for k := range tunables.Data {
+		if _, ok := allowedTunables[k]; !ok {
+			return fmt.Errorf("unknown tunable: %s", k)
+		}
+	}
+	return nil
+}
+
+func (p *Process) tunablesRequireRestart(config *state.Config) bool {
+	curTunables := p.config().Tunables.Data
+	newTunables := config.Tunables.Data
+	changed := make(map[string]struct{})
+
+	// iterate over current to find any changed or removed variables
+	for k, v := range curTunables {
+		if newTunables[k] != v {
+			changed[k] = struct{}{}
+		}
+	}
+
+	// then iterate over the new set to find any added variables
+	for k := range newTunables {
+		if _, ok := curTunables[k]; !ok {
+			changed[k] = struct{}{}
+		}
+	}
+
+	restartRequired := false
+	for k := range changed {
+		if allowedTunables[k] {
+			restartRequired = true
+		}
+	}
+
+	return restartRequired
+}
+
+func (p *Process) applyTunables(config *state.Config) error {
+	log := p.log.New("fn", "applyTunables")
+	var readOnly bool
+	var sync string
+	if config.Role == state.RolePrimary {
+		if config.Downstream != nil {
+			sync = config.Downstream.Meta[IDKey]
+		}
+	} else {
+		readOnly = true
+	}
+	p.writeConfig(configData{
+		ReadOnly: readOnly,
+		Sync:     sync,
+		Tunables: config.Tunables.Data,
+	})
+
+	// If postgres is running and the tunables require a restart then
+	// restart the postgres process. If not running we do nothing.
+	if p.tunablesRequireRestart(config) {
+		log.Info("restarting database to apply tunables")
+		if err := p.stop(); err != nil {
+			return err
+		}
+		if err := p.start(); err != nil {
+			return err
+		}
+	} else {
+		log.Info("applying tunables online")
+		p.sighup()
+	}
+	return nil
+}
+
 func (p *Process) reconfigure(config *state.Config) (err error) {
 	log := p.log.New("fn", "reconfigure")
 
@@ -302,9 +394,21 @@ func (p *Process) reconfigure(config *state.Config) (err error) {
 		return nil
 	}
 
+	// If only tunables have been updated then apply them and return.
+	if p.running() && p.config().IsTunablesUpdate(config) {
+		log.Info("tunables only update")
+		return p.applyTunables(config)
+	}
+
 	// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
 	if p.configApplied && p.running() && p.config() != nil && config != nil &&
 		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.Meta[IDKey] == p.config().Upstream.Meta[IDKey] {
+		// Check to see if we should update tunables
+		if config.Tunables.Version > p.config().Tunables.Version {
+			log.Info("becoming sync with same upstream and updating tunables")
+			return p.applyTunables(config)
+		}
+		// If the tunables haven't been modified there is nothing to do here
 		log.Info("nothing to do", "reason", "becoming sync with same upstream")
 		return nil
 	}
@@ -315,14 +419,19 @@ func (p *Process) reconfigure(config *state.Config) (err error) {
 
 	// If we're already running and this is only a sync change, we just need to update the config.
 	if p.running() && p.config() != nil && config != nil && p.config().Role == state.RolePrimary && config.Role == state.RolePrimary {
-		return p.updateSync(config.Downstream)
+		return p.updateSync(config)
 	}
 
 	// If we're already running and this is only a downstream change, just wait for the new downstream to catch up
 	if p.running() && p.config().IsNewDownstream(config) {
 		log.Info("downstream changed", "to", config.Downstream.Addr)
-		p.waitForSync(config.Downstream, false)
-		return
+		// Check to see if we should update tunables before we wait on the new downstream
+		if config.Tunables.Version > p.config().Tunables.Version {
+			log.Info("updating tunables")
+			err = p.applyTunables(config)
+		}
+		p.waitForSync(config.Downstream, config, false)
+		return err
 	}
 
 	if config == nil {
@@ -330,14 +439,15 @@ func (p *Process) reconfigure(config *state.Config) (err error) {
 	}
 
 	if config.Role == state.RolePrimary {
-		return p.assumePrimary(config.Downstream)
+		return p.assumePrimary(config)
 	}
 
-	return p.assumeStandby(config.Upstream, config.Downstream)
+	return p.assumeStandby(config)
 }
 
-func (p *Process) assumePrimary(downstream *discoverd.Instance) (err error) {
+func (p *Process) assumePrimary(config *state.Config) (err error) {
 	log := p.log.New("fn", "assumePrimary")
+	downstream := config.Downstream
 	if downstream != nil {
 		log = log.New("downstream", downstream.Addr)
 	}
@@ -350,7 +460,7 @@ func (p *Process) assumePrimary(downstream *discoverd.Instance) (err error) {
 			return err
 		}
 
-		p.waitForSync(downstream, true)
+		p.waitForSync(downstream, config, true)
 
 		return nil
 	}
@@ -370,7 +480,7 @@ func (p *Process) assumePrimary(downstream *discoverd.Instance) (err error) {
 		return err
 	}
 
-	if err := p.writeConfig(configData{ReadOnly: downstream != nil}); err != nil {
+	if err := p.writeConfig(configData{ReadOnly: downstream != nil, Tunables: config.Tunables.Data}); err != nil {
 		log.Error("error writing postgres.conf", "path", p.configPath(), "err", err)
 		return err
 	}
@@ -423,13 +533,15 @@ func (p *Process) assumePrimary(downstream *discoverd.Instance) (err error) {
 	}
 
 	if downstream != nil {
-		p.waitForSync(downstream, true)
+		p.waitForSync(downstream, config, true)
 	}
 
 	return nil
 }
 
-func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error {
+func (p *Process) assumeStandby(config *state.Config) error {
+	upstream := config.Upstream
+	downstream := config.Downstream
 	log := p.log.New("fn", "assumeStandby", "upstream", upstream.Addr)
 	log.Info("starting up as standby")
 
@@ -479,7 +591,7 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 		os.Remove(p.triggerPath())
 	}
 
-	if err := p.writeConfig(configData{ReadOnly: true}); err != nil {
+	if err := p.writeConfig(configData{ReadOnly: true, Tunables: config.Tunables.Data}); err != nil {
 		log.Error("error writing postgres.conf", "path", p.configPath(), "err", err)
 		return err
 	}
@@ -493,7 +605,7 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 	}
 
 	if downstream != nil {
-		p.waitForSync(downstream, false)
+		p.waitForSync(downstream, config, false)
 	}
 
 	return nil
@@ -526,16 +638,12 @@ func (p *Process) waitForUpstream(upstream *discoverd.Instance) error {
 	}
 }
 
-func (p *Process) updateSync(downstream *discoverd.Instance) error {
+func (p *Process) updateSync(config *state.Config) error {
+	downstream := config.Downstream
 	log := p.log.New("fn", "updateSync", "downstream", downstream.Addr)
 	log.Info("changing sync")
 
-	config := configData{
-		ReadOnly: true,
-		Sync:     downstream.Meta[IDKey],
-	}
-
-	if err := p.writeConfig(config); err != nil {
+	if err := p.writeConfig(configData{ReadOnly: true, Sync: downstream.Meta[IDKey], Tunables: config.Tunables.Data}); err != nil {
 		log.Error("error writing postgres.conf", "path", p.configPath(), "err", err)
 		return err
 	}
@@ -545,7 +653,7 @@ func (p *Process) updateSync(downstream *discoverd.Instance) error {
 		return err
 	}
 
-	p.waitForSync(downstream, true)
+	p.waitForSync(downstream, config, true)
 
 	return nil
 }
@@ -660,7 +768,7 @@ func (p *Process) sighup() error {
 	return p.daemon.Process.Signal(syscall.SIGHUP)
 }
 
-func (p *Process) waitForSync(inst *discoverd.Instance, enableWrites bool) {
+func (p *Process) waitForSync(inst *discoverd.Instance, config *state.Config, enableWrites bool) {
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 
@@ -760,7 +868,7 @@ func (p *Process) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 
 		if enableWrites {
 			// sync caught up, enable write transactions
-			if err := p.writeConfig(configData{Sync: inst.Meta[IDKey]}); err != nil {
+			if err := p.writeConfig(configData{Sync: inst.Meta[IDKey], Tunables: config.Tunables.Data}); err != nil {
 				log.Error("error writing postgres.conf", "err", err)
 				return
 			}
@@ -830,7 +938,6 @@ func (p *Process) writeConfig(d configData) error {
 	d.ID = p.id
 	d.Port = p.port
 	d.ExtWhitelist = p.extWhitelist
-	d.SHMType = p.shmType
 	f, err := os.Create(p.configPath())
 	if err != nil {
 		return err
@@ -885,13 +992,12 @@ func (p *Process) dataPath(file string) string {
 }
 
 type configData struct {
-	ID       string
-	Port     string
-	Sync     string
-	ReadOnly bool
-
+	ID           string
+	Port         string
+	Sync         string
+	ReadOnly     bool
 	ExtWhitelist bool
-	SHMType      string
+	Tunables     map[string]string
 }
 
 var configTemplate = template.Must(template.New("postgresql.conf").Parse(`
@@ -900,41 +1006,27 @@ listen_addresses = '0.0.0.0'
 port = {{.Port}}
 ssl = off
 max_connections = 400
-shared_buffers = 32MB
 wal_level = hot_standby
 fsync = on
-max_wal_senders = 15
-wal_keep_segments = 128
 synchronous_commit = remote_write
 synchronous_standby_names = '{{.Sync}}'
 {{if .ReadOnly}}
 default_transaction_read_only = on
 {{end}}
 hot_standby = on
-max_standby_archive_delay = 30s
-max_standby_streaming_delay = 30s
-wal_receiver_status_interval = 10s
 hot_standby_feedback = on
 log_destination = 'stderr'
 logging_collector = false
 log_line_prefix = '{{.ID}} %m '
-log_timezone = 'UTC'
-log_min_messages = 'LOG'
-log_connections = on
-log_disconnections = on
-datestyle = 'iso, mdy'
-timezone = 'UTC'
-client_encoding = 'UTF8'
-default_text_search_config = 'pg_catalog.english'
-
-{{if .SHMType}}
-dynamic_shared_memory_type = '{{.SHMType}}'
-{{end}}
 
 {{if .ExtWhitelist}}
 local_preload_libraries = 'pgextwlist'
 extwlist.extensions = 'btree_gin,btree_gist,chkpass,citext,cube,dblink,dict_int,earthdistance,fuzzystrmatch,hstore,intarray,isn,ltree,pg_prewarm,pg_stat_statements,pg_trgm,pgcrypto,pgrouting,pgrowlocks,pgstattuple,plpgsql,plv8,postgis,postgis_topology,postgres_fdw,tablefunc,unaccent,uuid-ossp'
 {{end}}
+
+{{ range $key, $value := .Tunables }}
+{{ $key }} = {{ $value }}
+{{ end }}
 `[1:]))
 
 type recoveryData struct {

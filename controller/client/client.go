@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/pinned"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
@@ -101,6 +102,8 @@ type Client interface {
 	DeleteSink(sinkID string) (*ct.Sink, error)
 	ListSinks() ([]*ct.Sink, error)
 	StreamSinks(since *time.Time, output chan *ct.Sink) (stream.Stream, error)
+	GetResourceTunables(providerID, resourceID string) (*state.Tunables, error)
+	UpdateResourceTunables(providerID, resourceID string, tunables *state.Tunables) error
 }
 
 type Config struct {

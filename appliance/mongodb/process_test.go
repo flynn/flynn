@@ -26,6 +26,7 @@ func Test(t *testing.T) { TestingT(t) }
 type MongoDBSuite struct{}
 
 var _ = Suite(&MongoDBSuite{})
+var tunables = (&Process{}).DefaultTunables()
 
 func (MongoDBSuite) TestSingletonPrimary(c *C) {
 	p := NewProcess()
@@ -39,7 +40,7 @@ func (MongoDBSuite) TestSingletonPrimary(c *C) {
 	err := ioutil.WriteFile(keyFile, []byte("password"), 0600)
 	c.Assert(err, IsNil)
 	topology := &state.State{Singleton: true, Primary: instance(p)}
-	err = p.Reconfigure(&state.Config{Role: state.RolePrimary, State: topology})
+	err = p.Reconfigure(&state.Config{Role: state.RolePrimary, State: topology, Tunables: tunables})
 	c.Assert(err, IsNil)
 
 	err = p.Start()
@@ -64,7 +65,7 @@ func (MongoDBSuite) TestSingletonPrimary(c *C) {
 	keyFile = filepath.Join(p.DataDir, "Keyfile")
 	err = ioutil.WriteFile(keyFile, []byte("password"), 0600)
 	c.Assert(err, IsNil)
-	err = p.Reconfigure(&state.Config{Role: state.RolePrimary, State: topology})
+	err = p.Reconfigure(&state.Config{Role: state.RolePrimary, State: topology, Tunables: tunables})
 	c.Assert(err, IsNil)
 	c.Assert(p.Start(), IsNil)
 	defer p.Stop()
@@ -100,7 +101,7 @@ func connect(c *C, p *Process) *mgo.Session {
 }
 
 func Config(role state.Role, upstream, downstream *Process, topology *state.State) *state.Config {
-	c := &state.Config{Role: role, State: topology}
+	c := &state.Config{Role: role, State: topology, Tunables: tunables}
 	if upstream != nil {
 		c.Upstream = instance(upstream)
 	}

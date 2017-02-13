@@ -178,6 +178,39 @@ func (p *Process) Ready() <-chan state.DatabaseEvent {
 	return p.events
 }
 
+func (p *Process) DefaultTunables() state.Tunables {
+	return state.Tunables{
+		Version: 1,
+		Data: map[string]string{
+			"storage.wiredTiger.engineConfig.cacheSizeGB": "1",
+		},
+	}
+}
+
+func (p *Process) ValidateTunables(tunables state.Tunables) error {
+	for k := range tunables.Data {
+		if _, ok := allowedTunables[k]; !ok {
+			return fmt.Errorf("unknown tunable: %s", k)
+		}
+	}
+	return nil
+}
+
+func (p *Process) applyTunables(config *state.Config) error {
+	logger := p.Logger.New("fn", "applyTunables")
+
+	p.writeConfig(configData{ReplicationEnabled: true})
+
+	logger.Info("restarting database to apply tunables")
+	if err := p.stop(); err != nil {
+		return err
+	}
+	if err := p.start(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (p *Process) XLog() xlog.XLog {
 	return mongodbxlog.XLog{}
 }
@@ -300,6 +333,12 @@ func (p *Process) reconfigure(config *state.Config) error {
 		if p.configApplied() && config != nil && p.config() != nil && config.Equal(p.config()) && config.State.Equal(p.config().State) {
 			logger.Info("nothing to do", "reason", "config already applied")
 			return nil
+		}
+
+		// If only tunables have been updated apply them and return.
+		if p.running() && p.config().IsTunablesUpdate(config) {
+			logger.Info("tunables only update")
+			return p.applyTunables(config)
 		}
 
 		// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
@@ -904,7 +943,7 @@ func (p *Process) writeConfig(d configData) error {
 	d.Port = p.Port
 	d.DataDir = p.DataDir
 	d.SecurityEnabled = p.securityEnabled()
-
+	d.CacheSize = p.config().Tunables.Data["storage.wiredTiger.engineConfig.cacheSizeGB"]
 	f, err := os.Create(p.ConfigPath())
 	if err != nil {
 		return err
@@ -918,10 +957,12 @@ type configData struct {
 	ID                 string
 	Port               string
 	DataDir            string
+	CacheSize          string
 	SecurityEnabled    bool
 	ReplicationEnabled bool
 }
 
+// TODO(jpg): Render config from datastructure rather than template
 var configTemplate = template.Must(template.New("mongod.conf").Parse(`
 storage:
   dbPath: {{.DataDir}}
@@ -930,13 +971,7 @@ storage:
   engine: wiredTiger
   wiredTiger:
     engineConfig:
-      cacheSizeGB: 1
-
-# systemLog:
-#  destination: file
-#  path: {{.DataDir}}/mongod.log
-#  logAppend: true
-
+      cacheSizeGB: {{.CacheSize}}
 net:
   port: {{.Port}}
 

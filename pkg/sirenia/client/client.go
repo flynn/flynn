@@ -65,6 +65,15 @@ func (c *Client) Stop() error {
 	return c.c.Post("/stop", nil, nil)
 }
 
+func (c *Client) GetTunables() (*state.Tunables, error) {
+	res := &state.Tunables{}
+	return res, c.c.Get("/tunables", res)
+}
+
+func (c *Client) UpdateTunables(tunables *state.Tunables) error {
+	return c.c.Post("/tunables", tunables, tunables)
+}
+
 func (c *Client) WaitForReplSync(downstream *discoverd.Instance, timeout time.Duration) error {
 	return c.waitFor(func(status *Status) bool {
 		return status.Database.SyncedDownstream != nil && status.Database.SyncedDownstream.ID == downstream.ID

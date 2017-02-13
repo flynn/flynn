@@ -3,6 +3,8 @@ package mariadb
 import (
 	"crypto/sha512"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -33,6 +35,8 @@ func NewHandler() *Handler {
 	}
 	h.router.Handler("GET", status.Path, status.Handler(h.healthStatus))
 	h.router.GET("/status", h.handleGetStatus)
+	h.router.GET("/tunables", h.handleGetTunables)
+	h.router.POST("/tunables", h.handleUpdateTunables)
 	h.router.GET("/backup", h.handleGetBackup)
 	h.router.POST("/stop", h.handlePostStop)
 	return h
@@ -82,6 +86,33 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter, req *http.Request, _ ht
 	status.Database = info
 
 	httphelper.JSON(w, 200, &status)
+}
+
+func (h *Handler) handleGetTunables(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	info := h.Peer.Info()
+	if info.State != nil {
+		httphelper.JSON(w, 200, info.State.Tunables)
+		return
+	}
+	httphelper.Error(w, fmt.Errorf("peer has no state"))
+}
+
+func (h *Handler) handleUpdateTunables(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	var newTunables state.Tunables
+	if err := json.NewDecoder(req.Body).Decode(&newTunables); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	if err := h.Process.ValidateTunables(newTunables); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	if err := h.Peer.UpdateTunables(newTunables); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, newTunables)
+	return
 }
 
 // handleGetBackup handles request to GET /backup.

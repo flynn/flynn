@@ -50,10 +50,10 @@ var sireniaPostgres = sireniaDatabase{
 	appName:    "postgres",
 	serviceKey: "FLYNN_POSTGRES",
 	hostKey:    "PGHOST",
-	initDb: func(t *c.C, r *ct.Release, d *sireniaDeploy) {
+	initDb: func(t *c.C, r *ct.Release, f *sireniaFormation) {
 		db := postgres.Wait(&postgres.Conf{
 			Discoverd: discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", routerIP)),
-			Service:   d.name,
+			Service:   f.name,
 			User:      "flynn",
 			Password:  r.Env["PGPASSWORD"],
 			Database:  "postgres",
@@ -63,7 +63,7 @@ var sireniaPostgres = sireniaDatabase{
 		db.Close()
 		db = postgres.Wait(&postgres.Conf{
 			Discoverd: discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", routerIP)),
-			Service:   d.name,
+			Service:   f.name,
 			User:      "flynn",
 			Password:  r.Env["PGPASSWORD"],
 			Database:  dbname,
@@ -71,11 +71,11 @@ var sireniaPostgres = sireniaDatabase{
 		defer db.Close()
 		t.Assert(db.Exec(`CREATE TABLE deploy_test ( data text)`), c.IsNil)
 	},
-	assertWriteable: func(t *c.C, r *ct.Release, d *sireniaDeploy) {
+	assertWriteable: func(t *c.C, r *ct.Release, f *sireniaFormation) {
 		dbname := "deploy-test"
 		db := postgres.Wait(&postgres.Conf{
 			Discoverd: discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", routerIP)),
-			Service:   d.name,
+			Service:   f.name,
 			User:      "flynn",
 			Password:  r.Env["PGPASSWORD"],
 			Database:  dbname,
@@ -88,21 +88,31 @@ var sireniaPostgres = sireniaDatabase{
 
 // Sirenia integration tests
 func (s *PostgresSuite) TestDeploySingleAsync(t *c.C) {
-	testSireniaDeploy(s.controllerClient(t), s.discoverdClient(t), t, &sireniaDeploy{
+	testSireniaDeploy(s.controllerClient(t), s.discoverdClient(t), t, &sireniaFormation{
 		name:        "postgres-single-async",
 		db:          sireniaPostgres,
 		sireniaJobs: 3,
 		webJobs:     2,
-		expected:    testDeploySingleAsync,
-	})
+	}, testDeploySingleAsync)
 }
 
 func (s *PostgresSuite) TestDeployMultipleAsync(t *c.C) {
-	testSireniaDeploy(s.controllerClient(t), s.discoverdClient(t), t, &sireniaDeploy{
+	testSireniaDeploy(s.controllerClient(t), s.discoverdClient(t), t, &sireniaFormation{
 		name:        "postgres-multiple-async",
 		db:          sireniaPostgres,
 		sireniaJobs: 5,
 		webJobs:     2,
-		expected:    testDeployMultipleAsync,
+	}, testDeployMultipleAsync)
+}
+
+func (s *PostgresSuite) TestTunables(t *c.C) {
+	testSireniaTunables(s.controllerClient(t), s.discoverdClient(t), t, &sireniaFormation{
+		name:        "postgres-tunables",
+		db:          sireniaPostgres,
+		sireniaJobs: 3,
+		webJobs:     2,
+	}, []tunableTest{
+		{"online update", sireniaTunable{"log_min_messages", "'LOG'", "'WARNING'"}},
+		{"requires restart", sireniaTunable{"shared_buffers", "32MB", "64MB"}},
 	})
 }

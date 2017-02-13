@@ -34,6 +34,7 @@ type State struct {
 	Sync       *discoverd.Instance   `json:"sync"`
 	Async      []*discoverd.Instance `json:"async"`
 	Deposed    []*discoverd.Instance `json:"deposed,omitempty"`
+	Tunables   Tunables              `json:"tunables,omitempty"`
 }
 
 func (s *State) Clone() *State {
@@ -73,6 +74,9 @@ func (x *State) Equal(y *State) bool {
 			return false
 		}
 	}
+	if x.Tunables.Version != y.Tunables.Version {
+		return false
+	}
 	return peersEqual(x.Primary, y.Primary) && peersEqual(x.Sync, y.Sync)
 }
 
@@ -90,6 +94,11 @@ func NewFreezeDetails(reason string) *FreezeDetails {
 		FrozenAt: TimeNow(),
 		Reason:   reason,
 	}
+}
+
+type Tunables struct {
+	Data    map[string]string `json:"data"`
+	Version uint64            `json:"version"`
 }
 
 type Role int
@@ -139,6 +148,7 @@ type Config struct {
 	Role       Role                `json:"role"`
 	Upstream   *discoverd.Instance `json:"upstream"`
 	Downstream *discoverd.Instance `json:"downstream"`
+	Tunables   Tunables            `json:"tunables"`
 	State      *State              `json:"state"`
 }
 
@@ -155,7 +165,7 @@ func (x *Config) Equal(y *Config) bool {
 		return x == y
 	}
 
-	return x.Role == y.Role && peersEqual(x.Upstream, y.Upstream) && peersEqual(x.Downstream, y.Downstream)
+	return x.Role == y.Role && peersEqual(x.Upstream, y.Upstream) && peersEqual(x.Downstream, y.Downstream) && x.Tunables.Version == y.Tunables.Version
 }
 
 func (x *Config) IsNewDownstream(y *Config) bool {
@@ -168,6 +178,19 @@ func (x *Config) IsNewDownstream(y *Config) bool {
 	return y.Downstream != nil && !peersEqual(x.Downstream, y.Downstream)
 }
 
+func (x *Config) IsTunablesUpdate(y *Config) bool {
+	if x == nil || y == nil {
+		return false
+	}
+	if !peersEqual(x.Upstream, y.Upstream) {
+		return false
+	}
+	if !peersEqual(x.Downstream, y.Downstream) {
+		return false
+	}
+	return x.Tunables.Version != y.Tunables.Version
+}
+
 type Database interface {
 	XLogPosition() (xlog.Position, error)
 	XLog() xlog.XLog
@@ -178,6 +201,11 @@ type Database interface {
 	// Ready returns a channel that returns a single event when the interface
 	// is ready.
 	Ready() <-chan DatabaseEvent
+
+	// DefaultTunables returns the default set of Tunables for this database
+	DefaultTunables() Tunables
+	// ValdiateTunables checks that a new set of Tunables is valid for this database
+	ValidateTunables(Tunables) error
 }
 
 type Discoverd interface {
@@ -243,6 +271,7 @@ type Peer struct {
 
 	evalStateCh chan struct{}
 	applyConfCh chan struct{}
+	tunablesCh  chan Tunables
 	restCh      chan struct{}
 	workDoneCh  chan struct{}
 	retryCh     chan struct{}
@@ -260,6 +289,7 @@ func NewPeer(self *discoverd.Instance, id string, idKey string, singleton bool, 
 		db:          db,
 		discoverd:   d,
 		log:         log,
+		tunablesCh:  make(chan Tunables, 1),
 		evalStateCh: make(chan struct{}, 1),
 		applyConfCh: make(chan struct{}, 1),
 		stopCh:      make(chan struct{}),
@@ -332,6 +362,24 @@ func (p *Peer) Close() error {
 	p.closeOnce.Do(func() {
 		close(p.stopCh)
 	})
+	return nil
+}
+
+func (p *Peer) UpdateTunables(tunables Tunables) error {
+	if p.Info().Role != RolePrimary {
+		return fmt.Errorf("peer is not primary, can't update tunables")
+	}
+	curVersion := p.Info().State.Tunables.Version
+	if !(tunables.Version > curVersion) {
+		return fmt.Errorf("new tunables version must be greater than current version: %d", curVersion)
+	}
+	select {
+	case p.tunablesCh <- tunables:
+	default:
+		// Can't queue than 1 update at a time
+		return fmt.Errorf("concurrent tunable updates not allowed")
+	}
+	p.triggerEval()
 	return nil
 }
 
@@ -571,6 +619,8 @@ func (p *Peer) evalClusterState() {
 			if upstream.Meta[p.idKey] != p.upstream.Meta[p.idKey] ||
 				downstream != nil && (p.downstream == nil || downstream.Meta[p.idKey] != p.downstream.Meta[p.idKey]) {
 				p.assumeAsync(whichAsync)
+			} else if p.applied != nil && p.Info().State.Tunables.Version > p.applied.Tunables.Version {
+				p.triggerApplyConfig()
 			}
 		}
 		return
@@ -584,6 +634,8 @@ func (p *Peer) evalClusterState() {
 			p.startTakeover("primary gone", p.Info().State.InitWAL)
 		} else if len(p.Info().State.Async) > 0 && (p.downstream == nil || p.downstream.Meta[p.idKey] != p.Info().State.Async[0].Meta[p.idKey]) {
 			p.assumeSync()
+		} else if p.applied != nil && p.Info().State.Tunables.Version > p.applied.Tunables.Version {
+			p.triggerApplyConfig()
 		}
 		return
 	}
@@ -625,6 +677,12 @@ func (p *Peer) evalClusterState() {
 	// peer, but also for other new or removed peers. We only do this in normal
 	// mode, not one-node-write mode.
 	if p.singleton {
+		// check for and apply new tunables
+		select {
+		case newTunables := <-p.tunablesCh:
+			p.startUpdateTunables(newTunables)
+		default:
+		}
 		return
 	}
 
@@ -672,11 +730,18 @@ func (p *Peer) evalClusterState() {
 		changes = true
 	}
 
-	if !changes {
+	if changes {
+		p.startUpdateAsyncs(newAsync)
 		return
 	}
 
-	p.startUpdateAsyncs(newAsync)
+	// check for and apply new tunables
+	select {
+	case newTunables := <-p.tunablesCh:
+		p.startUpdateTunables(newTunables)
+	default:
+	}
+	return
 }
 
 func (p *Peer) startInitialSetup() {
@@ -688,6 +753,7 @@ func (p *Peer) startInitialSetup() {
 		Generation: 1,
 		Primary:    p.self,
 		InitWAL:    p.db.XLog().Zero(),
+		Tunables:   p.db.DefaultTunables(),
 	}
 	if p.singleton {
 		p.updatingState.Singleton = true
@@ -845,9 +911,10 @@ func (p *Peer) startTakeover(reason string, minWAL xlog.Position) bool {
 	}
 
 	p.startTakeoverWithPeer(reason, minWAL, &State{
-		Sync:    newSync,
-		Async:   newAsync,
-		Deposed: newDeposed,
+		Sync:     newSync,
+		Async:    newAsync,
+		Deposed:  newDeposed,
+		Tunables: p.Info().State.Tunables,
 	})
 	return true
 }
@@ -970,8 +1037,9 @@ func (p *Peer) startTransitionToNormalMode() {
 
 	log.Debug("transitioning to normal mode")
 	p.startTakeoverWithPeer("transitioning to normal mode", p.db.XLog().Zero(), &State{
-		Sync:  newSync,
-		Async: newAsync,
+		Sync:     newSync,
+		Async:    newAsync,
+		Tunables: p.Info().State.Tunables,
 	})
 }
 
@@ -989,8 +1057,36 @@ func (p *Peer) startUpdateAsyncs(newAsync []*discoverd.Instance) {
 		Async:      newAsync,
 		Deposed:    state.Deposed,
 		InitWAL:    state.InitWAL,
+		Tunables:   state.Tunables,
 	}
 	log.Info("updating list of asyncs")
+	if err := p.putClusterState(); err != nil {
+		log.Error("failed to update cluster state", "err", err)
+	} else {
+		p.setState(p.updatingState)
+	}
+	p.updatingState = nil
+	p.triggerApplyConfig()
+	p.triggerEval()
+}
+
+func (p *Peer) startUpdateTunables(newTunables Tunables) {
+	if p.updatingState != nil {
+		panic("startUpdateTunables with existing update state")
+	}
+	log := p.log.New("fn", "startUpdateTunables")
+
+	state := p.Info().State
+	p.updatingState = &State{
+		Generation: state.Generation,
+		Primary:    state.Primary,
+		Sync:       state.Sync,
+		Async:      state.Async,
+		Deposed:    state.Deposed,
+		InitWAL:    state.InitWAL,
+		Tunables:   newTunables,
+	}
+	log.Info("updating tunables")
 	if err := p.putClusterState(); err != nil {
 		log.Error("failed to update cluster state", "err", err)
 	} else {
@@ -1078,7 +1174,7 @@ func (p *Peer) Config() *Config {
 	role := p.Info().Role
 	switch role {
 	case RolePrimary, RoleSync, RoleAsync:
-		return &Config{Role: role, Upstream: p.upstream, Downstream: p.downstream, State: p.Info().State}
+		return &Config{Role: role, Upstream: p.upstream, Downstream: p.downstream, State: p.Info().State, Tunables: p.Info().State.Tunables}
 	case RoleUnassigned, RoleDeposed:
 		return &Config{Role: RoleNone}
 	default:

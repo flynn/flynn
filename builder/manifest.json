@@ -88,6 +88,20 @@
       }
     },
     {
+      "id": "protobuf",
+      "base": "go",
+      "layers": [{
+        "inputs": [
+          "pkg/provider/provider.proto",
+          "pkg/status/protobuf/status.proto"
+        ],
+        "run": [
+          "protoc --go_out=plugins=grpc:/ pkg/provider/provider.proto",
+          "protoc --go_out=plugins=grpc:/ pkg/status/protobuf/status.proto"
+        ]
+      }]
+    },
+    {
       "id": "host",
       "base": "ubuntu-xenial",
       "layers": [
@@ -98,10 +112,15 @@
         },
         {
           "name": "host-binaries",
+          "build_with": "protobuf",
           "env": {
             "FLYNN_VERSION": "{{ .Version }}",
             "TUF_ROOT_KEYS": "{{ .TUFRootKeys }}"
           },
+          "run": [
+            "cp /pkg/provider/*.pb.go        pkg/provider",
+            "cp /pkg/status/protobuf/*.pb.go pkg/status/protobuf"
+          ],
           "cgobuild": {
             "host": "/usr/local/bin/flynn-host"
           },
@@ -127,6 +146,7 @@
       "id": "controller",
       "base": "busybox",
       "layers": [{
+        "build_with": "protobuf",
         "gobuild": {
           "controller":           "/bin/flynn-controller",
           "controller/scheduler": "/bin/flynn-scheduler",
@@ -143,7 +163,8 @@
         ],
         "run": [
           "mkdir -p /etc/flynn-controller",
-          "cp -r schema /etc/flynn-controller/jsonschema"
+          "cp -r schema /etc/flynn-controller/jsonschema",
+          "cp /pkg/provider/*.pb.go pkg/provider"
         ]
       }],
       "entrypoint": {
@@ -178,6 +199,11 @@
         },
         {
           "name": "postgres-binaries",
+          "build_with": "protobuf",
+          "run": [
+            "cp /pkg/provider/*.pb.go        pkg/provider",
+            "cp /pkg/status/protobuf/*.pb.go pkg/status/protobuf"
+          ],
           "gobuild": {
             "appliance/postgresql/cmd/flynn-postgres":     "/bin/flynn-postgres",
             "appliance/postgresql/cmd/flynn-postgres-api": "/bin/flynn-postgres-api"
@@ -205,6 +231,11 @@
         },
         {
           "name": "mariadb-binaries",
+          "build_with": "protobuf",
+          "run": [
+            "cp /pkg/provider/*.pb.go        pkg/provider",
+            "cp /pkg/status/protobuf/*.pb.go pkg/status/protobuf"
+          ],
           "gobuild": {
             "appliance/mariadb/cmd/flynn-mariadb":     "/bin/flynn-mariadb",
             "appliance/mariadb/cmd/flynn-mariadb-api": "/bin/flynn-mariadb-api"
@@ -232,6 +263,11 @@
         },
         {
           "name": "mongodb-binaries",
+          "build_with": "protobuf",
+          "run": [
+            "cp /pkg/provider/*.pb.go        pkg/provider",
+            "cp /pkg/status/protobuf/*.pb.go pkg/status/protobuf"
+          ],
           "gobuild": {
             "appliance/mongodb/cmd/flynn-mongodb":     "/bin/flynn-mongodb",
             "appliance/mongodb/cmd/flynn-mongodb-api": "/bin/flynn-mongodb-api"

@@ -20,11 +20,10 @@ export GOPATH="/go"
 export PATH="${GOROOT}/bin:${PATH}"
 
 # install protobuf compiler
-tmpdir=$(mktemp --directory)
-trap "rm -rf ${tmpdir}" EXIT
-curl -sL https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip > "${tmpdir}/protoc.zip"
-unzip -d "${tmpdir}/protoc" "${tmpdir}/protoc.zip"
-mv "${tmpdir}/protoc" /opt
+protoc_sha="0efa8b7ca6913cf8fb0dfc22d98b0a04eb194d7f"
+curl -fsSLo /tmp/protoc.zip https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip
+echo "${protoc_sha}  /tmp/protoc.zip" | shasum -c -
+unzip -d /opt/protoc /tmp/protoc.zip
 ln -s /opt/protoc/bin/protoc /usr/local/bin/protoc
 
 goinstall() {
@@ -57,6 +56,12 @@ goinstall \
   "." \
   "796a3227145680d8be9aede03e98d9ee9c9c93fc" \
   "/bin/godep"
+
+goinstall \
+  "github.com/golang/protobuf" \
+  "./protoc-gen-go" \
+  "6a1fa9404c0aebf36c879bc50152edcc953910d2" \
+  "/bin/protoc-gen-go"
 
 mkdir -p "${GOPATH}/src/github.com/flynn"
 ln -nfs "$(pwd)" "${GOPATH}/src/github.com/flynn/flynn"

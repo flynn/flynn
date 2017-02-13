@@ -773,6 +773,16 @@ func (p *databaseSimulatorClient) Ready() <-chan state.DatabaseEvent {
 	return p.events
 }
 
+func (p *databaseSimulatorClient) DefaultTunables() state.Tunables {
+	return state.Tunables{
+		Version: 0,
+	}
+}
+
+func (p *databaseSimulatorClient) ValidateTunables(_ state.Tunables) error {
+	return nil
+}
+
 // Given the current state, figure out our current role and update our xlog
 // position accordingly. This is used when we assume a new role or when database
 // comes online in order to simulate client writes to the primary, synchronous
