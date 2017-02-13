@@ -171,6 +171,11 @@ func (p *Provider) Kind() string {
 	return "zfs"
 }
 
+var zfsCreateAttempts = attempt.Strategy{
+	Total: 10 * time.Second,
+	Delay: 10 * time.Millisecond,
+}
+
 func (p *Provider) NewVolume(info *volume.Info) (volume.Volume, error) {
 	if info == nil {
 		info = &volume.Info{}
@@ -185,13 +190,30 @@ func (p *Provider) NewVolume(info *volume.Info) (volume.Volume, error) {
 		provider:  p,
 		basemount: p.mountPath(info),
 	}
-	var err error
-	v.dataset, err = zfs.CreateFilesystem(p.datasetPath(info), map[string]string{
-		"mountpoint": v.basemount,
+
+	// try creating the filesystem multiple times as sometimes it gets
+	// created but fails to mount, returning an error like:
+	//
+	//   filesystem 'flynn-default/data/xxx' is already mounted
+	//   cannot mount 'flynn-default/data/xxx': mountpoint or dataset is busy
+	//   filesystem successfully created, but not mounted
+	err := zfsCreateAttempts.Run(func() (err error) {
+		v.dataset, err = zfs.CreateFilesystem(p.datasetPath(info), map[string]string{
+			"mountpoint": v.basemount,
+		})
+		if err != nil {
+			// destroy the volume before trying again so we don't
+			// get "dataset already exists" on the next try
+			if d, err := zfs.GetDataset(p.datasetPath(info)); err == nil {
+				d.Destroy(zfs.DestroyForceUmount)
+			}
+		}
+		return
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	p.volumes[info.ID] = v
 	return v, nil
 }
