@@ -51,7 +51,11 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	// update flynn-host using the same flags
 	status, err := hosts[0].GetStatus()
 	t.Assert(err, c.IsNil)
-	_, err = hosts[0].Update("/usr/local/bin/flynn-host", append([]string{"daemon"}, status.Flags...)...)
+	_, err = hosts[0].UpdateWithShutdownDelay(
+		"/usr/local/bin/flynn-host",
+		10*time.Second,
+		append([]string{"daemon"}, status.Flags...)...,
+	)
 	t.Assert(err, c.IsNil)
 
 	// stream the log

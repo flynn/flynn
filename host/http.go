@@ -535,11 +535,15 @@ func (h *jobAPI) Update(w http.ResponseWriter, req *http.Request, _ httprouter.P
 		return
 	}
 
-	// send an ok response and then shutdown after 1s to give the response
-	// chance to reach the client.
+	// send an ok response and then shutdown after a short delay to give
+	// the response chance to reach the client.
 	httphelper.JSON(w, http.StatusOK, cmd)
-	log.Info("shutting down in 1s")
-	time.AfterFunc(time.Second, func() {
+	delay := time.Second
+	if cmd.ShutdownDelay != nil {
+		delay = *cmd.ShutdownDelay
+	}
+	log.Info(fmt.Sprintf("shutting down in %s", delay))
+	time.AfterFunc(delay, func() {
 		log.Info("exiting")
 		os.Exit(0)
 	})

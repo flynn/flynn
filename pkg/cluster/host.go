@@ -225,7 +225,21 @@ func (c *Host) ResourceCheck(request host.ResourceCheck) error {
 }
 
 func (c *Host) Update(name string, args ...string) (pid int, err error) {
-	cmd := &host.Command{Path: name, Args: args}
+	return c.update(&host.Command{
+		Path: name,
+		Args: args,
+	})
+}
+
+func (c *Host) UpdateWithShutdownDelay(name string, delay time.Duration, args ...string) (pid int, err error) {
+	return c.update(&host.Command{
+		Path:          name,
+		Args:          args,
+		ShutdownDelay: &delay,
+	})
+}
+
+func (c *Host) update(cmd *host.Command) (pid int, err error) {
 	return cmd.PID, c.c.Post("/host/update", cmd, cmd)
 }
 
