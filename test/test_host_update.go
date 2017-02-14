@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 	"syscall"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/flynn/flynn/host/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	logagg "github.com/flynn/flynn/logaggregator/types"
+	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/exec"
 	c "github.com/flynn/go-check"
 )
@@ -26,13 +29,14 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	hosts, err := x.cluster.Hosts()
 	t.Assert(err, c.IsNil)
 	t.Assert(hosts, c.HasLen, 1)
+	hostClient := hosts[0]
 
 	app := &ct.App{Name: "partial-logger"}
 	t.Assert(x.controller.CreateApp(app), c.IsNil)
 
 	// start partial logger job
 	cmd := exec.JobUsingHost(
-		hosts[0],
+		hostClient,
 		s.createArtifactWithClient(t, "test-apps", x.controller),
 		&host.Job{
 			Config: host.ContainerConfig{Args: []string{"/bin/partial-logger"}},
@@ -49,9 +53,9 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	// update flynn-host using the same flags
-	status, err := hosts[0].GetStatus()
+	status, err := hostClient.GetStatus()
 	t.Assert(err, c.IsNil)
-	_, err = hosts[0].UpdateWithShutdownDelay(
+	_, err = hostClient.UpdateWithShutdownDelay(
 		"/usr/local/bin/flynn-host",
 		10*time.Second,
 		append([]string{"daemon"}, status.Flags...)...,
@@ -77,8 +81,15 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 		}
 	}()
 
-	// finish logging
-	t.Assert(hosts[0].SignalJob(cmd.Job.ID, int(syscall.SIGUSR1)), c.IsNil)
+	// finish logging using a new cluster client to avoid reusing the TCP
+	// connection to the host which has shut down
+	hostClient = cluster.NewHost(
+		hostClient.ID(),
+		hostClient.Addr(),
+		&http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}},
+		hostClient.Tags(),
+	)
+	t.Assert(hostClient.SignalJob(cmd.Job.ID, int(syscall.SIGUSR1)), c.IsNil)
 
 	// check we get a single log line
 	for {
