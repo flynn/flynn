@@ -330,9 +330,10 @@ type ResourceCheck struct {
 }
 
 type Command struct {
-	Path string   `json:"path"`
-	Args []string `json:"args"`
-	PID  int      `json:"pid"`
+	Path          string         `json:"path"`
+	Args          []string       `json:"args"`
+	PID           int            `json:"pid"`
+	ShutdownDelay *time.Duration `json:"shutdown_delay,omitempty"`
 }
 
 type LogBuffers map[string]LogBuffer
