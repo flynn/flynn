@@ -126,7 +126,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       42F3E95A2C4F08279C4960ADD68FA50FEA312927 \
       136221EE520DDFAF0A905689B9316A7BC7917B12
     sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main" > /etc/apt/sources.list.d/postgresql.list'
-    sudo sh -c 'echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu xenial main" > /etc/apt/sources.list.d/mariadb.list'
+    sudo sh -c 'echo "deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.1/ubuntu xenial main" > /etc/apt/sources.list.d/mariadb.list'
     sudo sh -c 'echo "deb http://repo.percona.com/apt xenial main" > /etc/apt/sources.list.d/percona.list'
     sudo sh -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb.list'
     sudo sh -c 'echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu xenial main" > /etc/apt/sources.list.d/redis.list'

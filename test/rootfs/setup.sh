@@ -170,7 +170,7 @@ apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 \
 
 # add repos
 echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list
-echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu trusty main" >> /etc/apt/sources.list.d/mariadb.list
+echo "deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.1/ubuntu trusty main" >> /etc/apt/sources.list.d/mariadb.list
 echo "deb http://repo.percona.com/apt trusty main" >> /etc/apt/sources.list.d/percona.list
 echo "deb http://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.2 multiverse" >> /etc/apt/sources.list.d/mongo-org-3.2.list
 
