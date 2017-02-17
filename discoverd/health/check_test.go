@@ -151,5 +151,5 @@ func (CheckSuite) TestHTTPConnectRefused(c *C) {
 func (CheckSuite) TestHTTPInvalidURL(c *C) {
 	err := (&HTTPCheck{URL: "http%:"}).Check()
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "invalid URL escape"), Equals, true, Commentf("err = %s", err))
+	c.Assert(strings.Contains(err.Error(), "URL"), Equals, true, Commentf("err = %s", err))
 }
