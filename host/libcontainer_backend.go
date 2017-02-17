@@ -742,19 +742,21 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 			return "", err
 		}
 
-		var layer io.ReadCloser
+		var layer io.Reader
 		switch u.Scheme {
 		case "file":
 			f, err := os.Open(u.Path)
 			if err != nil {
 				return "", fmt.Errorf("error getting squashfs layer %s: %s", m.URL, err)
 			}
+			defer f.Close()
 			layer = f
 		case "http", "https":
 			res, err := l.httpClient.Get(m.URL)
 			if err != nil {
 				return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
 			}
+			defer res.Body.Close()
 			if res.StatusCode != http.StatusOK {
 				return "", fmt.Errorf("error getting squashfs layer from %s: unexpected HTTP status %s", m.URL, res.Status)
 			}
@@ -762,7 +764,6 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 		default:
 			return "", fmt.Errorf("unknown layer URI scheme: %s", u.Scheme)
 		}
-		defer layer.Close()
 
 		// write the layer to a temp file and verify it has the
 		// expected hashes
