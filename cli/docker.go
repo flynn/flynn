@@ -242,6 +242,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	}
 	proc.Args = append(config.Entrypoint, config.Cmd...)
 	if len(proc.Ports) == 0 {
+		proc.Service = app.Name + "-web"
 		proc.Ports = []ct.Port{{
 			Port:  8080,
 			Proto: "tcp",
