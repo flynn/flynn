@@ -73,7 +73,7 @@ func handler(r *data.FileRepo) http.Handler {
 			}
 			w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 			w.Header().Set("Content-Type", file.Type)
-			w.Header().Set("Etag", file.ETag)
+			w.Header().Set("Etag", fmt.Sprintf(`"%s"`, file.ETag))
 			http.ServeContent(w, req, path, file.ModTime, file)
 		case "PUT":
 			var err error

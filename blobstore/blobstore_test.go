@@ -5,6 +5,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -334,9 +335,9 @@ func testOffset(r *data.FileRepo, t *testing.T, checkEtags bool) {
 		}
 		if checkEtags {
 			hash := sha512.Sum512([]byte(expected))
-			h := base64.StdEncoding.EncodeToString(hash[:])
-			if res.Header.Get("Etag") != h {
-				t.Fatalf("unexpected etag %q, want %q", res.Header.Get("Etag"), h)
+			expected := fmt.Sprintf(`"%s"`, base64.StdEncoding.EncodeToString(hash[:]))
+			if res.Header.Get("Etag") != expected {
+				t.Fatalf("unexpected etag %q, want %q", res.Header.Get("Etag"), expected)
 			}
 		}
 	}

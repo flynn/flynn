@@ -77,7 +77,7 @@ func TestMultiBackendMigration(t *testing.T) {
 	if res.StatusCode != 200 {
 		t.Fatalf("expected status 200, got %d", res.StatusCode)
 	}
-	const etag = "9/u6bgY2+JDlb7vzKD5STG+jIErimDgtYkdB0NxmODJuKCxBvl5CVNiCB3LFUYosWowMf37aGVlKfrU5RT4e1w=="
+	const etag = `"9/u6bgY2+JDlb7vzKD5STG+jIErimDgtYkdB0NxmODJuKCxBvl5CVNiCB3LFUYosWowMf37aGVlKfrU5RT4e1w=="`
 	if e := res.Header.Get("Etag"); e != etag {
 		t.Fatalf("expected etag %q, got %q", etag, e)
 	}
