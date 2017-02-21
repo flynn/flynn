@@ -180,7 +180,7 @@ type SinkInfo struct {
 	ID          string            `json:"id"`
 	Kind        ct.SinkKind       `json:"kind"`
 	Cursor      *utils.HostCursor `json:"cursor,omitempty"`
-	Config      []byte            `json:"config"`
+	Config      json.RawMessage   `json:"config"`
 	HostManaged bool              `json:"host_managed"`
 }
 
