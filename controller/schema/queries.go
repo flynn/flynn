@@ -34,6 +34,7 @@ var preparedStatements = map[string]string{
 	"artifact_insert":                       artifactInsertQuery,
 	"artifact_delete":                       artifactDeleteQuery,
 	"artifact_release_count":                artifactReleaseCountQuery,
+	"artifact_layer_count":                  artifactLayerCountQuery,
 	"deployment_list":                       deploymentListQuery,
 	"deployment_select":                     deploymentSelectQuery,
 	"deployment_insert":                     deploymentInsertQuery,
@@ -189,6 +190,12 @@ INSERT INTO artifacts (artifact_id, type, uri, meta, manifest, hashes, size, lay
 UPDATE artifacts SET deleted_at = now() WHERE artifact_id = $1 AND deleted_at IS NULL`
 	artifactReleaseCountQuery = `
 SELECT COUNT(*) FROM release_artifacts WHERE artifact_id = $1 AND deleted_at IS NULL`
+	artifactLayerCountQuery = `
+SELECT COUNT(*) FROM (
+  SELECT jsonb_array_elements(jsonb_array_elements(manifest->'rootfs')->'layers')->'id' AS layer_id
+  FROM artifacts
+  WHERE deleted_at IS NULL
+) AS l WHERE l.layer_id = $1`
 	deploymentInsertQuery = `
 INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, tags, deploy_timeout)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING created_at`
