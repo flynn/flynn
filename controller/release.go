@@ -244,6 +244,17 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 			if len(artifact.Manifest().Rootfs) > 0 {
 				for _, rootfs := range artifact.Manifest().Rootfs {
 					for _, layer := range rootfs.Layers {
+						// ensure the layer is only referenced by this artifact
+						// before we delete it
+						var count int64
+						id, _ := json.Marshal(layer.ID)
+						if err := tx.QueryRow("artifact_layer_count", id).Scan(&count); err != nil {
+							tx.Rollback()
+							return err
+						}
+						if count > 1 {
+							continue
+						}
 						fileURIs = append(fileURIs, artifact.LayerURL(layer))
 					}
 				}
