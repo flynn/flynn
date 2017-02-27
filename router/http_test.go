@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -460,7 +461,10 @@ func (s *S) TestListCertRoutes(c *C) {
 }
 
 func newReq(url, host string) *http.Request {
-	req, _ := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic(err)
+	}
 	req.Host = host
 	return req
 }
@@ -870,6 +874,48 @@ func (s *S) TestHTTPHeadersFromClient(c *C) {
 	c.Assert(err, IsNil)
 	defer res.Body.Close()
 	c.Assert(res.StatusCode, Equals, 200)
+}
+
+func (s *S) TestClientProvidedRequestID(c *C) {
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/false" {
+			if !regexp.MustCompile(UUIDRegex).MatchString(req.Header.Get("X-Request-Id")) {
+				w.WriteHeader(400)
+			}
+		} else {
+			if req.Header.Get("X-Request-Id") != req.URL.Query().Get("id") {
+				w.WriteHeader(400)
+			}
+		}
+	}))
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	for _, t := range []struct {
+		id string
+		ok bool
+	}{
+		{"", false},
+		{"a", false},
+		{strings.Repeat("a", 19), false},
+		{strings.Repeat("a", 20), true},
+		{strings.Repeat("a", 200), true},
+		{strings.Repeat("a", 201), false},
+		{"/-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+=", true},
+		{"/-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+=*", false},
+	} {
+		req := newReq(fmt.Sprintf("http://%s/%t?id=%s", l.Addr, t.ok, url.QueryEscape(t.id)), "example.com")
+		req.Header.Set("X-Request-Id", t.id)
+		res, err := httpClient.Do(req)
+		c.Assert(err, IsNil)
+		res.Body.Close()
+		c.Assert(res.StatusCode, Equals, 200, Commentf("id = %q", t.id))
+	}
 }
 
 func (s *S) TestHTTPProxyHeadersFromClient(c *C) {

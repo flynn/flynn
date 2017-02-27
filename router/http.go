@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -595,7 +596,7 @@ func (s *service) handleBackendEvent(event *discoverd.Event) {
 func (r *httpRoute) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	start, _ := ctxhelper.StartTimeFromContext(ctx)
 	req.Header.Set("X-Request-Start", strconv.FormatInt(start.UnixNano()/int64(time.Millisecond), 10))
-	req.Header.Set("X-Request-Id", random.UUID())
+	setRequestID(req)
 
 	r.rp.ServeHTTP(ctx, w, req)
 }
@@ -606,4 +607,13 @@ func mustPortFromAddr(addr string) string {
 		panic(err)
 	}
 	return port
+}
+
+var validRequestIDPattern = regexp.MustCompile("^[a-zA-Z0-9+/=-]+$")
+
+func setRequestID(req *http.Request) {
+	clientHeader := req.Header.Get("X-Request-Id")
+	if clientHeader == "" || len(clientHeader) < 20 || len(clientHeader) > 200 || !validRequestIDPattern.MatchString(clientHeader) {
+		req.Header.Set("X-Request-Id", random.UUID())
+	}
 }
