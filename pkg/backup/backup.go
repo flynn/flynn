@@ -7,6 +7,9 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
+	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
@@ -38,6 +41,14 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 		return fmt.Errorf("error dumping postgres database: %s", err)
 	}
 
+	pgTunables, err := getTunables("postgres")
+	if err != nil {
+		return fmt.Errorf("error getting postgres tunables: %s", err)
+	}
+	if err := tw.WriteJSON("postgres_tunables.json", pgTunables); err != nil {
+		return err
+	}
+
 	// If mariadb is not present skip attempting to store the backup in the archive
 	if mariadb, ok := data["mariadb"]; ok && mariadb.Processes["mariadb"] > 0 {
 		mysqlRelease := mariadb.Release
@@ -56,6 +67,14 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 		}
 		if err := tw.WriteCommandOutput(client, "mysql.sql.gz", "mariadb", mysqlJob); err != nil {
 			return fmt.Errorf("error dumping mariadb database: %s", err)
+		}
+
+		mysqlTunables, err := getTunables("mariadb")
+		if err != nil {
+			return fmt.Errorf("error getting mariadb tunables: %s", err)
+		}
+		if err := tw.WriteJSON("mariadb_tunables.json", mysqlTunables); err != nil {
+			return err
 		}
 	}
 
@@ -78,7 +97,15 @@ func Run(client controller.Client, out io.Writer, progress ProgressBar) error {
 		if err := tw.WriteCommandOutput(client, "mongodb.archive.gz", "mongodb", mongodbJob); err != nil {
 			return fmt.Errorf("error dumping mongodb database: %s", err)
 		}
+		mongodbTunables, err := getTunables("mongodb")
+		if err != nil {
+			return fmt.Errorf("error getting mongodb tunables: %s", err)
+		}
+		if err := tw.WriteJSON("mongodb_tunables.json", mongodbTunables); err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -123,4 +150,14 @@ func getApps(client controller.Client) (map[string]*ct.ExpandedFormation, error)
 		}
 	}
 	return data, nil
+}
+
+func getTunables(service string) (*state.Tunables, error) {
+	svc := discoverd.NewService(service)
+	leader, err := svc.Leader()
+	if err != nil {
+		return nil, err
+	}
+	client := sirenia.NewClient(leader.Addr)
+	return client.GetTunables()
 }

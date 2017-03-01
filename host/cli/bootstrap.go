@@ -24,6 +24,8 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
+	sirenia "github.com/flynn/flynn/pkg/sirenia/client"
+	ss "github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/go-docopt"
 )
@@ -480,6 +482,56 @@ UPDATE releases SET env = jsonb_set(env, '{STATUS_KEY}', (
 WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard' AND deleted_at IS NULL);
 `)
 
+	restoreTunables := func(service string) error {
+		tunables := &ss.Tunables{}
+		fname := service + "_tunables.json"
+		jsonTunables, err := getFile(fname)
+		if err != nil {
+			return err
+		}
+		if jsonTunables == nil {
+			return fmt.Errorf("did not file " + fname + " in backup file")
+		}
+		if err := json.NewDecoder(jsonData).Decode(&tunables); err != nil {
+			return fmt.Errorf("error decoding tunables file: %s", err)
+		}
+		// Override version to be 2, as this will be the second version applied after defaults are loaded
+		tunables.Version = 2
+		svc := discoverd.NewService(service)
+		leader, err := svc.Leader()
+		if err != nil {
+			return err
+		}
+		sc := sirenia.NewClient(leader.Addr)
+		err = sc.UpdateTunables(tunables)
+		if err != nil {
+			return fmt.Errorf("error restoring tunables: %s", err)
+		}
+		return nil
+	}
+
+	stepRestoreTunables := func(service string) error {
+		meta := bootstrap.StepMeta{ID: "tunables", Action: service + "-tunables"}
+		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
+		if err := restoreTunables(service); err != nil {
+			ch <- &bootstrap.StepInfo{
+				StepMeta:  meta,
+				State:     "error",
+				Error:     fmt.Sprintf("error restoring tunables for appliance %s: %s", service, err),
+				Err:       err,
+				Timestamp: time.Now().UTC(),
+			}
+			return err
+		}
+		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
+		return nil
+	}
+
+	// restore postgres tunables
+	if err := stepRestoreTunables("postgres"); err != nil {
+		return nil
+	}
+
 	// load data into postgres
 	cmd := exec.JobUsingHost(state.Hosts[0], artifacts["postgres"], nil)
 	cmd.Args = []string{"psql"}
@@ -549,6 +601,11 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard' AND del
 			return fmt.Errorf("error updating mariadb formation: %s", err)
 		}
 
+		// restore mariadb tunables
+		if err := stepRestoreTunables("mariadb"); err != nil {
+			return nil
+		}
+
 		cmd = exec.JobUsingHost(state.Hosts[0], artifacts["mariadb"], nil)
 		cmd.Args = []string{"mysql", "-u", "flynn", "-h", "leader.mariadb.discoverd"}
 		cmd.Env = map[string]string{
@@ -592,6 +649,11 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard' AND del
 		// ensure the formation is correct in the database
 		if err := client.PutFormation(data.MongoDB.Formation()); err != nil {
 			return fmt.Errorf("error updating mongodb formation: %s", err)
+		}
+
+		// restore mongodb tunables
+		if err := stepRestoreTunables("mongodb"); err != nil {
+			return nil
 		}
 
 		cmd = exec.JobUsingHost(state.Hosts[0], artifacts["mongodb"], nil)
