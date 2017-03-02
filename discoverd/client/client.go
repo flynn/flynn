@@ -68,6 +68,10 @@ func NewClientWithConfig(config Config) *Client {
 	}
 	client.hc = &http.Client{
 		CheckRedirect: checkRedirect,
+		// use a low timeout so the client doesn't hang if any of the
+		// discoverd servers become unreachable (requests will be
+		// retried on fallback servers if they timeout, see client.Do)
+		Timeout: heartbeatInterval,
 	}
 	for _, e := range config.Endpoints {
 		client.servers[e] = client.httpClient(e)
