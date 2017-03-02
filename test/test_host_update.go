@@ -60,7 +60,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	t.Assert(err, c.IsNil)
 	_, err = hostClient.UpdateWithShutdownDelay(
 		"/usr/local/bin/flynn-host",
-		10*time.Second,
+		30*time.Second,
 		append([]string{"daemon"}, status.Flags...)...,
 	)
 	t.Assert(err, c.IsNil)
