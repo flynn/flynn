@@ -331,6 +331,7 @@ func (s *HostSuite) TestVolumePersistence(t *c.C) {
 	t.Assert(resp, c.Equals, "0\n")
 
 	// start another one that mounts the same volume
+	ish.Cleanup()
 	ish, err = s.makeIshApp(t, &IshApp{host: h, extraConfig: host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
 			Target:    "/vol",
