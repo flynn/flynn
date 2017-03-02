@@ -24,7 +24,6 @@ type Watch struct {
 	instances   map[string]*Instance
 	leader      *Instance
 	serviceMeta *ServiceMeta
-	stream      stream.Stream
 	err         error
 	done        chan struct{}
 	doneOnce    sync.Once
@@ -56,7 +55,7 @@ func (w *Watch) Err() error {
 
 func (w *Watch) Close() error {
 	w.doneOnce.Do(func() { close(w.done) })
-	return w.stream.Close()
+	return nil
 }
 
 // addInst adds the given instance to the local state and returns whether the
@@ -100,14 +99,14 @@ var connectAttempts = attempt.Strategy{
 //     it differs.
 func (s *service) Watch(ch chan *Event) (stream.Stream, error) {
 	var events chan *Event
+	var stream stream.Stream
 	watch := NewWatch()
-	connect := func() error {
+	connect := func() (err error) {
 		events = make(chan *Event)
-		stream, err := s.client.Stream("GET", fmt.Sprintf("/services/%s", s.name), nil, events)
+		stream, err = s.client.Stream("GET", fmt.Sprintf("/services/%s", s.name), nil, events)
 		if err != nil {
 			return err
 		}
-		watch.stream = stream
 		watch.maybeSendState(WatchStateConnected)
 		return nil
 	}
@@ -116,6 +115,7 @@ func (s *service) Watch(ch chan *Event) (stream.Stream, error) {
 		return nil, err
 	}
 	go func() {
+		defer stream.Close()
 		defer close(ch)
 		isCurrent := false
 
@@ -189,7 +189,11 @@ func (s *service) Watch(ch chan *Event) (stream.Stream, error) {
 					}
 					watch.serviceMeta = event.ServiceMeta
 				}
-				ch <- event
+				select {
+				case ch <- event:
+				case <-watch.done:
+					return
+				}
 			}
 		}
 	}()
