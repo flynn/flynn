@@ -35,6 +35,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	t.Assert(x.controller.CreateApp(app), c.IsNil)
 
 	// start partial logger job
+	debug(t, "starting partial logger job")
 	cmd := exec.JobUsingHost(
 		hostClient,
 		s.createArtifactWithClient(t, "test-apps", x.controller),
@@ -49,10 +50,12 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	defer cmd.Kill()
 
 	// wait for partial line
+	debug(t, "waiting for partial line")
 	_, err = x.discoverd.Instances("partial-logger", 10*time.Second)
 	t.Assert(err, c.IsNil)
 
 	// update flynn-host using the same flags
+	debug(t, "updating flynn-host")
 	status, err := hostClient.GetStatus()
 	t.Assert(err, c.IsNil)
 	_, err = hostClient.UpdateWithShutdownDelay(
@@ -63,6 +66,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	// stream the log
+	debug(t, "getting the app log")
 	log, err := x.controller.GetAppLog(app.ID, &logagg.LogOpts{Follow: true})
 	t.Assert(err, c.IsNil)
 	defer log.Close()
@@ -77,12 +81,14 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 				debugf(t, "error decoding message: %s", err)
 				return
 			}
+			debugf(t, "got message: %+v", msg)
 			msgs <- &msg
 		}
 	}()
 
 	// finish logging using a new cluster client to avoid reusing the TCP
 	// connection to the host which has shut down
+	debug(t, "signalling job to finish logging")
 	hostClient = cluster.NewHost(
 		hostClient.ID(),
 		hostClient.Addr(),
