@@ -59,3 +59,41 @@ func (S) TestStateDuplicateID(c *C) {
 	c.Assert(state.AddJob(&host.Job{ID: "a"}), IsNil)
 	c.Assert(state.AddJob(&host.Job{ID: "a"}), Equals, ErrJobExists)
 }
+
+func (S) TestStateExclusiveVolumes(c *C) {
+	workdir := c.MkDir()
+	hostID := "abc123"
+	state := NewState(hostID, filepath.Join(workdir, "host-state-db"))
+	c.Assert(state.OpenDB(), IsNil)
+	defer state.CloseDB()
+
+	addJob := func(jobID string, volIDs ...string) error {
+		vols := make([]host.VolumeBinding, len(volIDs))
+		for i, id := range volIDs {
+			vols[i] = host.VolumeBinding{
+				VolumeID: id,
+				Target:   "/data",
+			}
+		}
+		return state.AddJob(&host.Job{ID: jobID, Config: host.ContainerConfig{Volumes: vols}})
+	}
+
+	// add jobs with distinct volumes
+	c.Assert(addJob("job1", "vol1"), IsNil)
+	c.Assert(addJob("job2", "vol2", "vol3"), IsNil)
+
+	// adding a job with any volume which is in use should fail
+	c.Assert(addJob("job3", "vol1"), ErrorMatches, "volumes in use: vol1")
+	c.Assert(addJob("job3", "vol2"), ErrorMatches, "volumes in use: vol2")
+	c.Assert(addJob("job3", "vol3"), ErrorMatches, "volumes in use: vol3")
+	c.Assert(addJob("job3", "vol1", "vol3"), ErrorMatches, "volumes in use: vol1, vol3")
+	c.Assert(addJob("job3", "vol2", "vol3"), ErrorMatches, "volumes in use: vol2, vol3")
+	c.Assert(addJob("job3", "vol1", "vol4"), ErrorMatches, "volumes in use: vol1")
+
+	// adding a job with a volume which is no longer in use should succeed
+	state.SetStatusDone("job1", 0)
+	c.Assert(addJob("job3", "vol1"), IsNil)
+	state.SetStatusDone("job2", 0)
+	c.Assert(addJob("job4", "vol1", "vol2"), ErrorMatches, "volumes in use: vol1")
+	c.Assert(addJob("job4", "vol2", "vol3"), IsNil)
+}

@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,14 @@ import (
 // ErrJobExists is returned when attempting to add a job to the state with an
 // ID which already exists
 var ErrJobExists = errors.New("job already exists")
+
+type ErrVolumesInUse struct {
+	volIDs []string
+}
+
+func (e ErrVolumesInUse) Error() string {
+	return fmt.Sprintf("volumes in use: %s", strings.Join(e.volIDs, ", "))
+}
 
 type State struct {
 	id string
@@ -295,6 +304,25 @@ func (s *State) AddJob(j *host.Job) error {
 	if _, ok := s.jobs[j.ID]; ok {
 		return ErrJobExists
 	}
+
+	// ensure none of the volumes are in use by running jobs
+	var volsInUse []string
+	for _, vol := range j.Config.Volumes {
+		for _, job := range s.jobs {
+			if job.Status != host.StatusStarting && job.Status != host.StatusRunning {
+				continue
+			}
+			for _, v := range job.Job.Config.Volumes {
+				if v.VolumeID == vol.VolumeID {
+					volsInUse = append(volsInUse, vol.VolumeID)
+				}
+			}
+		}
+	}
+	if len(volsInUse) > 0 {
+		return ErrVolumesInUse{volsInUse}
+	}
+
 	job := &host.ActiveJob{
 		Job:       j,
 		HostID:    s.id,
