@@ -86,6 +86,10 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 		}
 	}()
 
+	// give the new flynn-host daemon time to connect to the job before
+	// signalling it to finish logging
+	time.Sleep(5 * time.Second)
+
 	// finish logging using a new cluster client to avoid reusing the TCP
 	// connection to the host which has shut down
 	debug(t, "signalling job to finish logging")
