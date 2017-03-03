@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 # Extract dump into a temporary directory.
-TMPFILE=`mktemp -d /tmp/dump.XXXXXXXXXX`
+TMPFILE=`mktemp -d /data/dump.XXXXXXXXXX`
 mkdir -p $TMPFILE
 trap "rm -rf ${TMPFILE}" EXIT
 
