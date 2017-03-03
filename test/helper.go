@@ -613,7 +613,7 @@ func (r *gitRepo) git(args ...string) *CmdResult {
 		cmd.Env = flynnEnv(r.cluster.flynnrc)
 	}
 	if r.trace {
-		cmd.Env = append(cmd.Env, "GIT_TRACE=1", "GIT_TRACE_PACKET=1")
+		cmd.Env = append(cmd.Env, "GIT_TRACE=1", "GIT_TRACE_PACKET=1", "GIT_CURL_VERBOSE=1")
 	}
 	cmd.Dir = r.dir
 	return run(r.t, cmd)
