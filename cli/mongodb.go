@@ -184,6 +184,7 @@ func mongodbRestore(client controller.Client, config *runConfig) error {
 		"-p", config.Env["MONGO_PWD"],
 		"--db", config.Env["MONGO_DATABASE"],
 	}
+	config.Data = true
 	err := runJob(client, *config)
 	if exit, ok := err.(RunExitError); ok && exit == 1 {
 		return nil
