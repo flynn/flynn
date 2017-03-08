@@ -62,7 +62,7 @@ Example:
 
 // minScaleRequestVersion is the minimum API version which supports scaling
 // using scale requests
-const minScaleRequestVersion = "v20170121.0"
+const minScaleRequestVersion = "v20170309.0"
 
 // takes args of the form "web=1[,key=val...]", "worker=3[,key=val...]", etc
 func runScale(args *docopt.Args, client controller.Client) error {
