@@ -76,8 +76,14 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 			log.Error("error marking the deployment as done", "err", err)
 		}
 
-		// rollback failed deploy
-		if e != nil {
+		if e == nil {
+			// signal success
+			events <- ct.DeploymentEvent{
+				ReleaseID: deployment.NewReleaseID,
+				Status:    "complete",
+			}
+		} else {
+			// rollback failed deploy
 			errMsg := e.Error()
 			if IsSkipRollback(e) {
 				// ErrSkipRollback indicates the deploy failed in some way
@@ -113,11 +119,6 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 	if err := c.client.SetAppRelease(deployment.AppID, deployment.NewReleaseID); err != nil {
 		log.Error("error setting the app release", "err", err)
 		return err
-	}
-	// signal success
-	events <- ct.DeploymentEvent{
-		ReleaseID: deployment.NewReleaseID,
-		Status:    "complete",
 	}
 	log.Info("deployment complete")
 
