@@ -319,6 +319,12 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 			for resKey, resValue := range procUpdate.Resources {
 				procRelease.Resources[resKey] = resValue
 			}
+			if len(procUpdate.LinuxCapabilities) > 0 {
+				procRelease.LinuxCapabilities = procRelease.LinuxCapabilities
+			}
+			if len(procUpdate.AllowedDevices) > 0 {
+				procRelease.AllowedDevices = procRelease.AllowedDevices
+			}
 
 			release.Processes[procKey] = procRelease
 		}
