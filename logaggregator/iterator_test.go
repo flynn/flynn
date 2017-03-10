@@ -259,7 +259,7 @@ func (s *LogAggregatorTestSuite) TestReadLastNAndSubscribe(c *C) {
 	}
 }
 
-var timeNow = time.Now()
+var timeNow = time.Now().UTC().Truncate(time.Millisecond)
 var msgIdx int
 
 func buildTestData(n int, hdr *rfc5424.Header) []*rfc5424.Message {

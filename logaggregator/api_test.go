@@ -187,7 +187,7 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
 }
 
 func (s *LogAggregatorTestSuite) TestNewMessageFromSyslog(c *C) {
-	timestamp, err := time.Parse(time.RFC3339Nano, "2009-11-10T23:00:00.123450789Z")
+	timestamp, err := time.Parse(time.RFC3339Nano, "2009-11-10T23:00:00.123456Z")
 	c.Assert(err, IsNil)
 	m := NewMessageFromSyslog(rfc5424.NewMessage(
 		&rfc5424.Header{
@@ -208,7 +208,7 @@ func (s *LogAggregatorTestSuite) TestNewMessageFromSyslog(c *C) {
 }
 
 func (s *LogAggregatorTestSuite) TestMessageMarshalJSON(c *C) {
-	timestamp, err := time.Parse(time.RFC3339Nano, "2009-11-10T23:00:00.123450789Z")
+	timestamp, err := time.Parse(time.RFC3339Nano, "2009-11-10T23:00:00.123456Z")
 	c.Assert(err, IsNil)
 
 	m := client.Message{
@@ -220,7 +220,7 @@ func (s *LogAggregatorTestSuite) TestMessageMarshalJSON(c *C) {
 		Stream:      "stderr",
 		Timestamp:   timestamp,
 	}
-	expected := `{"host_id":"my.flynn.local","job_id":"deadbeef1234","msg":"a log message","process_type":"web","source":"app","stream":"stderr","timestamp":"2009-11-10T23:00:00.123450789Z"}`
+	expected := `{"host_id":"my.flynn.local","job_id":"deadbeef1234","msg":"a log message","process_type":"web","source":"app","stream":"stderr","timestamp":"2009-11-10T23:00:00.123456Z"}`
 
 	b, err := json.Marshal(m)
 	c.Assert(err, IsNil)

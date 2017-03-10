@@ -17,8 +17,8 @@ type S struct {
 var _ = Suite(&S{})
 
 func (s *S) TestNewMessage(c *C) {
-	ts := time.Now().UTC()
-	tss := ts.Format(time.RFC3339Nano)
+	ts := time.Now().UTC().Truncate(time.Millisecond)
+	tss := ts.Format(syslogTimestamp)
 
 	table := []struct {
 		hdr Header

@@ -8,8 +8,8 @@ import (
 )
 
 func (s *S) TestParse(c *C) {
-	ts := time.Now().UTC()
-	tss := ts.Format(time.RFC3339Nano)
+	ts := time.Now().UTC().Truncate(time.Millisecond)
+	tss := ts.Format(syslogTimestamp)
 
 	table := []struct {
 		msg  string
