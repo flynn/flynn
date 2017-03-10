@@ -71,6 +71,8 @@ type Header struct {
 	MsgID     []byte
 }
 
+const syslogTimestamp = "2006-01-02T15:04:05.999999Z07:00"
+
 func (h Header) Bytes() []byte {
 	hostname := h.Hostname
 	if len(hostname) == 0 {
@@ -96,7 +98,7 @@ func (h Header) Bytes() []byte {
 	fmt.Fprintf(buf, "<%d>%d %s %s %s %s %s",
 		h.PriVal(),
 		1,
-		h.Timestamp.Format(time.RFC3339Nano),
+		h.Timestamp.Format(syslogTimestamp),
 		hostname,
 		appName,
 		procID,
