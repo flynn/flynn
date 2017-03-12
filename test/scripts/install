@@ -3,7 +3,7 @@
 set -e
 
 RAMDISK_SIZE="448G"
-GO_VERSION="1.7.3"
+GO_VERSION="1.8"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
@@ -40,9 +40,8 @@ main() {
   info "fixing permissions"
   chown -R "${user}:${user}" "${dir}"
 
-  info "installing Upstart job"
-  cp "${src_dir}/test/scripts/upstart.conf" "/etc/init/flynn-test.conf"
-  initctl reload-configuration
+  info "installing systemd unit"
+  install_systemd_unit
 
   info "installing Go ${GO_VERSION}"
   install_go
@@ -52,7 +51,7 @@ main() {
 
   info
   info "install finished!"
-  info "you should add credentials to ${dir}/.credentials then start flynn-test (sudo start flynn-test)"
+  info "you should add credentials to ${dir}/.credentials then start flynn-test (sudo systemctl start flynn-test)"
 }
 
 install_go() {
@@ -85,4 +84,24 @@ install_jchroot() {
   popd &>/dev/null
 }
 
+install_systemd_unit() {
+  cp "${src_dir}/test/scripts/start.sh" "${dir}/start.sh"
+
+  cat > /lib/systemd/system/flynn-test.service <<EOF
+[Unit]
+Description=Flynn CI Runner
+Documentation=https://flynn.io/docs
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/flynn-test/start.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl enable flynn-test.service
+}
 main $@
