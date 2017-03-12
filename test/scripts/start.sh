@@ -1,15 +1,10 @@
-description "flynn-test daemon"
+#!/bin/bash
 
-start on filesystem
-stop on runlevel [!2345]
+set -e
 
-respawn
-
-script
-  set -e
-
-  dir="/opt/flynn-test"
-  src_dir="${dir}/src/github.com/flynn/flynn"
+main() {
+  local dir="/opt/flynn-test"
+  local src_dir="${dir}/src/github.com/flynn/flynn"
 
   if test -s "${dir}/.credentials"; then
     . "${dir}/.credentials"
@@ -47,4 +42,6 @@ script
     --domain   "ci.flynn.io" \
     --backups-dir "${dir}/backups" \
     --gist
-end script
+}
+
+main $@
