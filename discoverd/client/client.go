@@ -223,7 +223,11 @@ func (c *Client) Do(method string, path string, in, out interface{}, streamReq b
 			var rsp *http.Response
 			if streamReq {
 				h := http.Header{"Accept": []string{"text/event-stream"}}
-				rsp, err = hc.RawReq(method, path, h, in, nil)
+				// use a copy of the client with a zero timeout (it doesn't really
+				// make sense to have a stream with a timeout)
+				httpClient := *hc.HTTP
+				httpClient.Timeout = 0
+				rsp, err = hc.RawReqWithHTTP(method, path, h, in, nil, &httpClient)
 				if err == nil {
 					res = httpclient.Stream(rsp, out)
 				}
