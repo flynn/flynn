@@ -359,7 +359,7 @@ func (c *Cluster) CLIConfig() (*config.Config, error) {
 func (c *Cluster) Shutdown() {
 	for i, inst := range c.Instances {
 		c.logf("killing instance %d [id: %s]\n", i, inst.ID)
-		if err := inst.Kill(); err != nil {
+		if err := inst.Shutdown(); err != nil {
 			c.logf("error killing instance %d: %s\n", i, err)
 		}
 	}

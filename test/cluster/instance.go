@@ -210,7 +210,7 @@ func (i *Instance) Shutdown() error {
 	if err := i.Run("sudo poweroff", nil); err != nil {
 		return i.Kill()
 	}
-	if err := i.Wait(5 * time.Second); err != nil {
+	if err := i.Wait(30 * time.Second); err != nil {
 		return i.Kill()
 	}
 	i.cleanup()
