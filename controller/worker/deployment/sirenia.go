@@ -6,11 +6,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flynn/flynn/appliance/mariadb/mdbxlog"
+	mongoxlog "github.com/flynn/flynn/appliance/mongodb/xlog"
+	"github.com/flynn/flynn/appliance/postgresql/pgxlog"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/worker/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/sirenia/client"
 	"github.com/flynn/flynn/pkg/sirenia/state"
+	"github.com/flynn/flynn/pkg/sirenia/xlog"
 )
 
 func (d *DeployJob) deploySirenia() (err error) {
@@ -141,8 +147,10 @@ loop:
 		}
 	}
 
-	// newPrimary is the first new instance started, newSync the second
+	// newPrimary is the first new instance started, newSync the second and
+	// tailAsync the tail async instance
 	var newPrimary, newSync *discoverd.Instance
+	tailAsync := state.Async[len(state.Async)-1]
 	startInstance := func() (*discoverd.Instance, error) {
 		log.Info("starting new instance")
 		d.deployEvents <- ct.DeploymentEvent{
@@ -183,6 +191,7 @@ loop:
 		} else if newSync == nil {
 			newSync = inst
 		}
+		tailAsync = inst
 		d.deployEvents <- ct.DeploymentEvent{
 			ReleaseID: d.NewReleaseID,
 			JobState:  ct.JobStateUp,
@@ -208,6 +217,108 @@ loop:
 		}
 		return nil
 	}
+	waitForTailXLog := func(expected xlog.Position) error {
+		log.Info("waiting for tail xlog", "tail.addr", tailAsync.Addr, "xlog", expected)
+		c := client.NewClient(tailAsync.Addr)
+		err := c.WaitForStatus(func(status *client.Status) bool {
+			if status.Database.XLog == "" {
+				return false
+			}
+			var xlogCmp xlog.XLog
+			switch processType {
+			case "postgres":
+				xlogCmp = pgxlog.PgXLog{}
+			case "mariadb":
+				xlogCmp = mdbxlog.MDBXLog{}
+			case "mongodb":
+				xlogCmp = mongoxlog.XLog{}
+			default:
+				panic(fmt.Sprintf("unknown sirenia process type: %s", processType))
+			}
+			cmp, err := xlogCmp.Compare(xlog.Position(status.Database.XLog), expected)
+			if err != nil {
+				log.Error("error comparing xlog positions", "err", err)
+				return false
+			}
+			return cmp >= 0
+		}, 3*time.Minute)
+		if err != nil {
+			log.Error("error waiting for tail xlog", "err", err)
+			return err
+		}
+		return nil
+	}
+
+	// subscribe to volume events so we can wait for snapshots to be
+	// created before scaling up the new release
+	volEvents := make(chan *ct.Event)
+	volStream, err := d.client.StreamEvents(ct.StreamEventsOptions{
+		AppID:       d.AppID,
+		ObjectTypes: []ct.EventType{ct.EventTypeVolume},
+	}, volEvents)
+	if err != nil {
+		log.Error("error connecting volume event stream: %s", err)
+		return err
+	}
+
+	cloneVolume := func(inst *discoverd.Instance) error {
+		log := log.New("inst.addr", inst.Addr)
+
+		log.Info("creating snapshot")
+		res, err := client.NewClient(inst.Addr).CreateSnapshot()
+		if err != nil {
+			log.Error("error creating snapshot", "err", err)
+			return err
+		}
+
+		log.Info("creating new volume", "snapshot.id", res.Snap.ID, "xlog", res.XLog)
+		hostID, _ := cluster.ExtractHostID(inst.Meta["FLYNN_JOB_ID"])
+		host, err := cluster.NewClient().Host(hostID)
+		if err != nil {
+			log.Error("error creating new volume", "err", err)
+			return err
+		}
+		vol := &volume.Info{
+			SnapshotID: res.Snap.ID,
+			Meta: map[string]string{
+				"flynn-controller.app":            d.AppID,
+				"flynn-controller.release":        d.NewReleaseID,
+				"flynn-controller.type":           processType,
+				"flynn-controller.path":           "/data",
+				"flynn-controller.delete_on_stop": "false",
+			},
+		}
+		if err := host.CreateVolume("default", vol); err != nil {
+			log.Error("error creating new volume", "err", err)
+			return err
+		}
+
+		log.Info("waiting for volume event", "vol.id", vol.ID)
+		timeout := time.After(time.Minute)
+	loop:
+		for {
+			select {
+			case event, ok := <-volEvents:
+				if !ok {
+					return fmt.Errorf("volume event stream closed unexpectedly: %s", volStream.Err)
+				}
+				var v ct.Volume
+				if err := json.Unmarshal(event.Data, &v); err != nil {
+					return err
+				}
+				if v.ID == vol.ID {
+					break loop
+				}
+			case <-timeout:
+				return errors.New("timed out waiting for volume event")
+			}
+		}
+
+		// wait for the tail async to catch up with the XLog position
+		// contained in the snapshot so that new instances will not be
+		// ahead of the tail XLog position
+		return waitForTailXLog(res.XLog)
+	}
 
 	// asyncUpstream is the instance we will query for replication status
 	// of the new async, which will be the sync if there is only one
@@ -218,6 +329,9 @@ loop:
 	}
 	for i := 0; i < len(state.Async); i++ {
 		log.Info("replacing an Async node")
+		if err := cloneVolume(state.Async[i]); err != nil {
+			return err
+		}
 		newInst, err := startInstance()
 		if err != nil {
 			return err
@@ -233,6 +347,9 @@ loop:
 	}
 
 	log.Info("replacing the Sync node")
+	if err := cloneVolume(state.Sync); err != nil {
+		return err
+	}
 	_, err = startInstance()
 	if err != nil {
 		return err
@@ -251,6 +368,9 @@ loop:
 	}
 
 	log.Info("replacing the Primary node")
+	if err := cloneVolume(state.Primary); err != nil {
+		return err
+	}
 	_, err = startInstance()
 	if err != nil {
 		return err

@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sirenia/state"
+	"github.com/flynn/flynn/pkg/sirenia/xlog"
 )
 
 type DatabaseInfo struct {
@@ -66,20 +68,30 @@ func (c *Client) Stop() error {
 }
 
 func (c *Client) WaitForReplSync(downstream *discoverd.Instance, timeout time.Duration) error {
-	return c.waitFor(func(status *Status) bool {
+	return c.WaitForStatus(func(status *Status) bool {
 		return status.Database.SyncedDownstream != nil && status.Database.SyncedDownstream.ID == downstream.ID
 	}, timeout)
 }
 
 func (c *Client) WaitForReadWrite(timeout time.Duration) error {
-	return c.waitFor(func(status *Status) bool {
+	return c.WaitForStatus(func(status *Status) bool {
 		return status.Database.ReadWrite
 	}, timeout)
 }
 
+type SnapshotResponse struct {
+	Snap *volume.Info  `json:"snap,omitempty"`
+	XLog xlog.Position `json:"xlog,omitempty"`
+}
+
+func (c *Client) CreateSnapshot() (*SnapshotResponse, error) {
+	var res SnapshotResponse
+	return &res, c.c.Post("/snapshot", nil, &res)
+}
+
 var ErrTimeout = errors.New("timeout waiting for expected status")
 
-func (c *Client) waitFor(expected func(*Status) bool, timeout time.Duration) error {
+func (c *Client) WaitForStatus(expected func(*Status) bool, timeout time.Duration) error {
 	start := time.Now()
 	for {
 		status, err := c.Status()

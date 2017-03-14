@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sirenia/client"
 	"github.com/flynn/flynn/pkg/sirenia/state"
@@ -23,6 +24,7 @@ type Handler struct {
 	Peer        *state.Peer
 	Heartbeater discoverd.Heartbeater
 	Logger      log15.Logger
+	Snapshot    func() (*volume.Info, error)
 }
 
 // NewHandler returns a new instance of Handler.
@@ -35,6 +37,7 @@ func NewHandler() *Handler {
 	h.router.GET("/status", h.handleGetStatus)
 	h.router.GET("/backup", h.handleGetBackup)
 	h.router.POST("/stop", h.handlePostStop)
+	h.router.POST("/snapshot", h.handleSnapshot)
 	return h
 }
 
@@ -133,3 +136,24 @@ func (h *Handler) handlePostStop(w http.ResponseWriter, req *http.Request, _ htt
 }
 
 const backupChecksumTrailer = "Flynn-Backup-Checksum"
+
+func (h *Handler) handleSnapshot(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if h.Snapshot == nil {
+		httphelper.ServiceUnavailableError(w, "snapshot unavailable")
+		return
+	}
+	snap, err := h.Snapshot()
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	xlog, err := h.Process.XLogPosition()
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, &client.SnapshotResponse{
+		Snap: snap,
+		XLog: xlog,
+	})
+}

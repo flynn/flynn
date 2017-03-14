@@ -2,16 +2,15 @@ package main
 
 import (
 	"encoding/binary"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/flynn/flynn/appliance/mariadb"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
-	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
 	sd "github.com/flynn/flynn/pkg/sirenia/discoverd"
 	"github.com/flynn/flynn/pkg/sirenia/state"
@@ -37,17 +36,15 @@ func main() {
 	serverId := ip2id(net.ParseIP(ip))
 
 	const dataDir = "/data"
-	idFile := filepath.Join(dataDir, "instance_id")
-	idBytes, err := ioutil.ReadFile(idFile)
-	if err != nil && !os.IsNotExist(err) {
-		shutdown.Fatalf("error reading instance ID: %s", err)
+	volID := os.Getenv("VOLUME_0")
+	if volID == "" {
+		shutdown.Fatalf("error getting primary volume ID, VOLUME_0 not set")
 	}
-	id := string(idBytes)
-	if len(id) == 0 {
-		id = random.UUID()
-		if err := ioutil.WriteFile(idFile, []byte(id), 0644); err != nil {
-			shutdown.Fatalf("error writing instance ID: %s", err)
-		}
+
+	hostID, _ := cluster.ExtractHostID(os.Getenv("FLYNN_JOB_ID"))
+	host, err := cluster.NewClient().Host(hostID)
+	if err != nil {
+		shutdown.Fatal(err)
 	}
 
 	err = discoverd.DefaultClient.AddService(serviceName, &discoverd.ServiceConfig{
@@ -58,7 +55,7 @@ func main() {
 	}
 	inst := &discoverd.Instance{
 		Addr: ":" + mariadb.DefaultPort,
-		Meta: map[string]string{mariaIdKey: id},
+		Meta: map[string]string{mariaIdKey: volID},
 	}
 	hb, err := discoverd.DefaultClient.RegisterInstance(serviceName, inst)
 	if err != nil {
@@ -75,7 +72,7 @@ func main() {
 
 	dd := sd.NewDiscoverd(discoverd.DefaultClient.Service(serviceName), log.New("component", "discoverd"))
 
-	peer := state.NewPeer(inst, id, mariaIdKey, singleton, dd, process, log.New("component", "peer"))
+	peer := state.NewPeer(inst, volID, mariaIdKey, singleton, dd, process, log.New("component", "peer"))
 	shutdown.BeforeExit(func() { peer.Close() })
 
 	go peer.Run()
@@ -85,6 +82,7 @@ func main() {
 	handler.Peer = peer
 	handler.Heartbeater = hb
 	handler.Logger = log.New("component", "http")
+	handler.Snapshot = func() (*volume.Info, error) { return host.CreateSnapshot(volID) }
 
 	shutdown.Fatal(http.ListenAndServe(":"+httpPort, handler))
 }

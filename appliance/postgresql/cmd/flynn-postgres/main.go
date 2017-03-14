@@ -1,15 +1,15 @@
 package main
 
 import (
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/flynn/flynn/appliance/postgresql"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
-	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
 	sd "github.com/flynn/flynn/pkg/sirenia/discoverd"
 	"github.com/flynn/flynn/pkg/sirenia/state"
@@ -29,17 +29,15 @@ func main() {
 	}
 
 	const dataDir = "/data"
-	idFile := filepath.Join(dataDir, "instance_id")
-	idBytes, err := ioutil.ReadFile(idFile)
-	if err != nil && !os.IsNotExist(err) {
-		shutdown.Fatalf("error reading instance ID: %s", err)
+	volID := os.Getenv("VOLUME_0")
+	if volID == "" {
+		shutdown.Fatalf("error getting primary volume ID, VOLUME_0 not set")
 	}
-	id := string(idBytes)
-	if len(id) == 0 {
-		id = random.UUID()
-		if err := ioutil.WriteFile(idFile, []byte(id), 0644); err != nil {
-			shutdown.Fatalf("error writing instance ID: %s", err)
-		}
+
+	hostID, _ := cluster.ExtractHostID(os.Getenv("FLYNN_JOB_ID"))
+	host, err := cluster.NewClient().Host(hostID)
+	if err != nil {
+		shutdown.Fatal(err)
 	}
 
 	err = discoverd.DefaultClient.AddService(serviceName, &discoverd.ServiceConfig{
@@ -50,7 +48,7 @@ func main() {
 	}
 	inst := &discoverd.Instance{
 		Addr: ":5432",
-		Meta: map[string]string{postgresql.IDKey: id},
+		Meta: map[string]string{postgresql.IDKey: volID},
 	}
 	hb, err := discoverd.DefaultClient.RegisterInstance(serviceName, inst)
 	if err != nil {
@@ -61,7 +59,7 @@ func main() {
 	log := log15.New("app", "postgres")
 
 	process := postgresql.NewProcess(postgresql.Config{
-		ID:           id,
+		ID:           volID,
 		Singleton:    singleton,
 		DataDir:      filepath.Join(dataDir, "db"),
 		BinDir:       "/usr/lib/postgresql/9.5/bin/",
@@ -73,7 +71,7 @@ func main() {
 	})
 	dd := sd.NewDiscoverd(discoverd.DefaultClient.Service(serviceName), log.New("component", "discoverd"))
 
-	peer := state.NewPeer(inst, id, postgresql.IDKey, singleton, dd, process, log.New("component", "peer"))
+	peer := state.NewPeer(inst, volID, postgresql.IDKey, singleton, dd, process, log.New("component", "peer"))
 	shutdown.BeforeExit(func() { peer.Close() })
 
 	go peer.Run()
@@ -83,6 +81,7 @@ func main() {
 	handler.Peer = peer
 	handler.Heartbeater = hb
 	handler.Logger = log.New("component", "http")
+	handler.Snapshot = func() (*volume.Info, error) { return host.CreateSnapshot(volID) }
 
 	shutdown.Fatal(http.ListenAndServe(":"+httpPort, handler))
 	// TODO(titanous): clean shutdown of postgres
