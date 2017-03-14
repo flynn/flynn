@@ -6,7 +6,11 @@ import (
 	"time"
 )
 
-var ErrNoSuchVolume = errors.New("no such volume")
+var (
+	ErrNoSuchVolume   = errors.New("no such volume")
+	ErrNoSuchSnapshot = errors.New("no such snapshot")
+	ErrNotASnapshot   = errors.New("not a snapshot")
+)
 
 /*
 	A Volume is a persistent and sharable filesystem.  Unlike most of the filesystem in a job's
@@ -39,10 +43,11 @@ type Volume interface {
 	It is a serializable structure intended for API use.
 */
 type Info struct {
-	ID        string            `json:"id"`
-	Type      VolumeType        `json:"type"`
-	Meta      map[string]string `json:"meta,omitempty"`
-	CreatedAt time.Time         `json:"created_at"`
+	ID         string            `json:"id"`
+	Type       VolumeType        `json:"type"`
+	SnapshotID string            `json:"snapshot_id,omitempty"`
+	Meta       map[string]string `json:"meta,omitempty"`
+	CreatedAt  time.Time         `json:"created_at"`
 }
 
 type VolumeType string

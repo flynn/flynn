@@ -453,7 +453,7 @@ func (p *Provider) mountDataset(vol *zfsVolume) error {
 	return nil
 }
 
-func (p *Provider) ForkVolume(vol volume.Volume) (volume.Volume, error) {
+func (p *Provider) ForkVolume(vol volume.Volume, info *volume.Info) (volume.Volume, error) {
 	zvol, err := p.owns(vol)
 	if err != nil {
 		return nil, err
@@ -461,21 +461,27 @@ func (p *Provider) ForkVolume(vol volume.Volume) (volume.Volume, error) {
 	if !vol.IsSnapshot() {
 		return nil, fmt.Errorf("can only fork a snapshot")
 	}
-	id := random.UUID()
-	info := &volume.Info{ID: id, Type: vol.Info().Type}
+	if info == nil {
+		info = &volume.Info{}
+	}
+	if info.ID == "" {
+		info.ID = random.UUID()
+	}
+	info.Type = vol.Info().Type
+	info.CreatedAt = time.Now()
 	v2 := &zfsVolume{
 		info:      info,
 		provider:  zvol.provider,
 		basemount: p.mountPath(info),
 	}
-	cloneID := fmt.Sprintf("%s/%s", zvol.provider.dataset.Name, id)
+	cloneID := fmt.Sprintf("%s/%s", zvol.provider.dataset.Name, info.ID)
 	v2.dataset, err = zvol.dataset.Clone(cloneID, map[string]string{
 		"mountpoint": v2.basemount,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not fork volume: %s", err)
 	}
-	p.volumes[id] = v2
+	p.volumes[info.ID] = v2
 	return v2, nil
 }
 

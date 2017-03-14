@@ -213,10 +213,38 @@ func (m *Manager) NewVolume(info *volume.Info) (volume.Volume, error) {
 func (m *Manager) NewVolumeFromProvider(providerID string, info *volume.Info) (volume.Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	if p, ok := m.providers[providerID]; ok {
-		return managerProviderProxy{p, m}.NewVolume(info)
+
+	p, ok := m.providers[providerID]
+	if !ok {
+		return nil, ErrNoSuchProvider
 	}
-	return nil, ErrNoSuchProvider
+
+	if err := m.LockDB(); err != nil {
+		return nil, err
+	}
+	defer m.UnlockDB()
+
+	var vol volume.Volume
+	var err error
+	if info != nil && info.SnapshotID != "" {
+		snap := m.volumes[info.SnapshotID]
+		if snap == nil {
+			return nil, volume.ErrNoSuchSnapshot
+		} else if !snap.IsSnapshot() {
+			return nil, volume.ErrNotASnapshot
+		}
+		vol, err = p.ForkVolume(snap, info)
+	} else {
+		vol, err = p.NewVolume(info)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	m.volumes[vol.Info().ID] = vol
+	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, vol) })
+	m.sendEvent(vol, volume.EventTypeCreate)
+	return vol, nil
 }
 
 func (m *Manager) GetVolume(id string) volume.Volume {
@@ -302,27 +330,6 @@ func (m *Manager) CreateSnapshot(id string) (volume.Volume, error) {
 	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, snap) })
 	m.sendEvent(snap, volume.EventTypeCreate)
 	return snap, nil
-}
-
-func (m *Manager) ForkVolume(id string) (volume.Volume, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	vol := m.volumes[id]
-	if vol == nil {
-		return nil, volume.ErrNoSuchVolume
-	}
-	if err := m.LockDB(); err != nil {
-		return nil, err
-	}
-	defer m.UnlockDB()
-	vol2, err := vol.Provider().ForkVolume(vol)
-	if err != nil {
-		return nil, err
-	}
-	m.volumes[vol2.Info().ID] = vol2
-	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, vol2) })
-	m.sendEvent(vol2, volume.EventTypeCreate)
-	return vol2, nil
 }
 
 func (m *Manager) ListHaves(id string) ([]json.RawMessage, error) {
@@ -553,28 +560,4 @@ func (m *Manager) persistProvider(tx *bolt.Tx, id string) error {
 		return fmt.Errorf("could not persist provider info to boltdb: %s", err)
 	}
 	return nil
-}
-
-/*
-	Proxies `volume.Provider` while making sure the manager remains
-	apprised of all volume lifecycle events.
-*/
-type managerProviderProxy struct {
-	volume.Provider
-	m *Manager
-}
-
-func (p managerProviderProxy) NewVolume(info *volume.Info) (volume.Volume, error) {
-	if err := p.m.LockDB(); err != nil {
-		return nil, err
-	}
-	defer p.m.UnlockDB()
-	v, err := p.Provider.NewVolume(info)
-	if err != nil {
-		return nil, err
-	}
-	p.m.volumes[v.Info().ID] = v
-	p.m.persist(func(tx *bolt.Tx) error { return p.m.persistVolume(tx, v) })
-	p.m.sendEvent(v, volume.EventTypeCreate)
-	return v, nil
 }

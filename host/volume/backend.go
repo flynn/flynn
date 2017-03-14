@@ -20,7 +20,7 @@ type Provider interface {
 	ImportFilesystem(*Filesystem) (Volume, error)
 	DestroyVolume(Volume) error
 	CreateSnapshot(Volume) (Volume, error)
-	ForkVolume(Volume) (Volume, error)
+	ForkVolume(Volume, *Info) (Volume, error)
 
 	ListHaves(Volume) ([]json.RawMessage, error) // Report known data addresses; this can be given to `SendSnapshot` to attempt deduplicated/incrememntal transport.
 	SendSnapshot(vol Volume, haves []json.RawMessage, stream io.Writer) error

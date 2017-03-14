@@ -116,7 +116,7 @@ func (s *ZfsSnapshotTests) TestForkedSnapshotShouldIsolateNewChangesToFork(c *C)
 
 	snap, err := s.VolProv.CreateSnapshot(v)
 	c.Assert(err, IsNil)
-	v2, err := s.VolProv.ForkVolume(snap)
+	v2, err := s.VolProv.ForkVolume(snap, nil)
 	c.Assert(err, IsNil)
 
 	// write another file to the fork
