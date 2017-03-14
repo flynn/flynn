@@ -567,6 +567,9 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	if job.Config.Env == nil {
 		job.Config.Env = make(map[string]string)
 	}
+	for i, v := range job.Config.Volumes {
+		job.Config.Env[fmt.Sprintf("VOLUME_%d", i)] = v.VolumeID
+	}
 	for i, p := range job.Config.Ports {
 		if p.Proto != "tcp" && p.Proto != "udp" {
 			err := fmt.Errorf("unknown port proto %q", p.Proto)
