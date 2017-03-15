@@ -107,6 +107,49 @@ func (s *S) TestJobGet(c *C) {
 	}
 }
 
+func (s *S) TestJobStateChanges(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "job-state-changes"})
+	release := s.createTestRelease(c, app.ID, &ct.Release{})
+	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
+
+	// add a new pending job
+	uuid := random.UUID()
+	job := &ct.Job{
+		ID:        cluster.GenerateJobID("host0", uuid),
+		UUID:      uuid,
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Type:      "web",
+		State:     ct.JobStatePending,
+	}
+	c.Assert(s.c.PutJob(job), IsNil)
+	gotJob, err := s.c.GetJob(app.ID, job.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotJob.State, Equals, ct.JobStatePending)
+
+	// update the state to starting
+	job.State = ct.JobStateStarting
+	c.Assert(s.c.PutJob(job), IsNil)
+	gotJob, err = s.c.GetJob(app.ID, job.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotJob.State, Equals, ct.JobStateStarting)
+
+	// update the state to up
+	job.State = ct.JobStateUp
+	c.Assert(s.c.PutJob(job), IsNil)
+	gotJob, err = s.c.GetJob(app.ID, job.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotJob.State, Equals, ct.JobStateUp)
+
+	// delete the app and check we can still mark the job as down
+	c.Assert(s.hc.db.Exec("app_delete", app.ID), IsNil)
+	job.State = ct.JobStateDown
+	c.Assert(s.c.PutJob(job), IsNil)
+	gotJob, err = s.c.GetJob(app.ID, job.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotJob.State, Equals, ct.JobStateDown)
+}
+
 func fakeHostID() string {
 	return random.Hex(16)
 }
