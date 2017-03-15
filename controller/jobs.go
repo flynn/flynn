@@ -192,15 +192,11 @@ func (c *controllerAPI) GetJob(ctx context.Context, w http.ResponseWriter, req *
 }
 
 func (c *controllerAPI) PutJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app := c.getApp(ctx)
-
 	var job ct.Job
 	if err := httphelper.DecodeJSON(req, &job); err != nil {
 		respondWithError(w, err)
 		return
 	}
-
-	job.AppID = app.ID
 
 	if err := schema.Validate(job); err != nil {
 		respondWithError(w, err)
