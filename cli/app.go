@@ -124,11 +124,6 @@ func runDelete(args *docopt.Args, client controller.Client) error {
 		}
 	}
 
-	// scale formation down to 0
-	if err := scaleToZero(appName, client); err != nil {
-		return err
-	}
-
 	res, err := client.DeleteApp(appName)
 	if err != nil {
 		return err
@@ -194,18 +189,4 @@ func runInfo(_ *docopt.Args, client controller.Client) error {
 	}
 
 	return nil
-}
-
-func scaleToZero(appName string, client controller.Client) error {
-	release, err := client.GetAppRelease(appName)
-	if err == controller.ErrNotFound {
-		return nil
-	} else if err != nil {
-		return err
-	}
-	opts := ct.ScaleOptions{Processes: make(map[string]int, len(release.Processes))}
-	for typ := range release.Processes {
-		opts.Processes[typ] = 0
-	}
-	return client.ScaleAppRelease(appName, release.ID, opts)
 }
