@@ -554,7 +554,7 @@ func (s *ControllerSuite) TestBackup(t *c.C) {
 		}
 		t.Assert(err, c.IsNil)
 		b := make([]byte, h.Size)
-		_, err = tr.Read(b)
+		_, err = io.ReadFull(tr, b)
 		t.Assert(err, c.IsNil)
 		_, filename := filepath.Split(h.Name)
 		data[filename] = b
