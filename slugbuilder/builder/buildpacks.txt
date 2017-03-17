@@ -1,10 +1,10 @@
-https://github.com/heroku/heroku-buildpack-multi.git#4e187b97
-https://github.com/cloudfoundry/staticfile-buildpack.git#babd7d54
-https://github.com/heroku/heroku-buildpack-ruby.git#760b3054
-https://github.com/heroku/heroku-buildpack-nodejs.git#1e27aeb1
+https://github.com/heroku/heroku-buildpack-multi.git#ed950773
+https://github.com/cloudfoundry/staticfile-buildpack.git#206728f9
+https://github.com/heroku/heroku-buildpack-ruby.git#6988832f
+https://github.com/heroku/heroku-buildpack-nodejs.git#9b8a98d8
 https://github.com/heroku/heroku-buildpack-clojure.git#8768a8ff
-https://github.com/heroku/heroku-buildpack-python.git#677dfeec
-https://github.com/heroku/heroku-buildpack-java.git#81cc44b1
+https://github.com/heroku/heroku-buildpack-python.git#cafd4182
+https://github.com/heroku/heroku-buildpack-java.git#8c34efe9
 https://github.com/heroku/heroku-buildpack-gradle.git#13fa1fe7
 https://github.com/heroku/heroku-buildpack-scala.git#dd0dd806
 https://github.com/heroku/heroku-buildpack-play.git#cc5e6166
