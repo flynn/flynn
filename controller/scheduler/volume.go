@@ -36,6 +36,13 @@ func (v *Volume) Info() *volume.Info {
 	}
 }
 
+func (v *Volume) ControllerVolume() *ct.Volume {
+	v.stateMtx.Lock()
+	defer v.stateMtx.Unlock()
+	vol := v.Volume
+	return &vol
+}
+
 func NewVolume(info *volume.Info, state ct.VolumeState, hostID string) *Volume {
 	return &Volume{
 		Volume: ct.Volume{

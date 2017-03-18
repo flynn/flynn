@@ -1337,35 +1337,45 @@ var controllerPersistAttempts = attempt.Strategy{
 	Total: time.Minute,
 }
 
-// ControllerPersistLoop starts a loop which receives jobs and scale requests
-// from the s.controllerPersist channel and persists them to the controller
-// using the controllerPersistAttempts retry strategy.
+// ControllerPersistLoop starts a loop which receives jobs, volumes and scale
+// requests from the s.controllerPersist channel and persists them to the
+// controller using the controllerPersistAttempts retry strategy.
 //
-// A goroutine is started per job and scale request to persist, but care is
-// taken to persist jobs with the same UUID sequentially and in order (to avoid
-// for example a job transitioning from "down" to "up" in the controller) and
-// scale requests after associated jobs (so that scale events are emitted after
-// job events).
+// A goroutine is started per job, volume and scale request to persist, but
+// care is taken to persist jobs with the same UUID sequentially and in order
+// (to avoid for example a job transitioning from "down" to "up" in the
+// controller) and scale requests after associated jobs (so that scale events
+// are emitted after job events).
 func (s *Scheduler) ControllerPersistLoop() {
 	log := s.logger.New("fn", "ControllerPersistLoop")
 	log.Info("starting controller persistence loop")
 
-	// queue is a map of job UUID to a slice of jobs to persist for that
-	// given UUID, and the loop below persists the jobs in the slice
-	// in FIFO order
-	queue := make(map[string][]*ct.Job)
+	// jobQueue is a map of job UUID to a slice of jobs to persist for that
+	// given UUID, and the loop below persists the jobs in the slice in
+	// FIFO order
+	jobQueue := make(map[string][]*ct.Job)
 
-	// done is a channel which receives a UUID once a job has been
+	// jobDone is a channel which receives a UUID once a job has been
 	// persisted for that UUID, thus potentially triggering the
 	// persistence of the next job in the queue for that UUID
-	done := make(chan string)
+	jobDone := make(chan string)
+
+	// volQueue is a map of volume ID to a slice of volumes to persist for
+	// that given ID, and the loop below persists the volumes in the slice
+	// in FIFO order
+	volQueue := make(map[string][]*ct.Volume)
+
+	// volDone is a channel which receives an ID once a volume has been
+	// persisted for that ID, thus potentially triggering the persistence
+	// of the next volume in the queue for that ID
+	volDone := make(chan string)
 
 	// scaleRequests is a queue of scale requests waiting to be persisted
 	// after the associated job events
 	scaleRequests := make(map[string]*ct.ScaleRequest)
 
 	// persistJob makes multiple attempts to persist the given job, sending
-	// to the done channel once the attempts have finished
+	// to the jobDone channel once the attempts have finished
 	persistJob := func(job *ct.Job) {
 		err := controllerPersistAttempts.RunWithValidator(func() error {
 			return s.PutJob(job)
@@ -1373,14 +1383,26 @@ func (s *Scheduler) ControllerPersistLoop() {
 		if err != nil {
 			log.Error("error persisting job", "job.id", job.ID, "job.state", job.State, "err", err)
 		}
-		done <- job.UUID
+		jobDone <- job.UUID
+	}
+
+	// persistVolume makes multiple attempts to persist the given volume,
+	// sending to the volDone channel once the attempts have finished
+	persistVolume := func(vol *ct.Volume) {
+		err := controllerPersistAttempts.RunWithValidator(func() error {
+			return s.PutVolume(vol)
+		}, httphelper.IsRetryableError)
+		if err != nil {
+			s.logger.Error("error persisting volume", "vol.id", vol.ID, "vol.state", vol.State, "err", err)
+		}
+		volDone <- vol.ID
 	}
 
 	maybePersistScaleRequest := func(req *ct.ScaleRequest) {
 		// if there are any associated jobs being persisted, add to the
 		// scale request queue to be persisted later (to avoid scale
 		// events preceeding job events)
-		for _, jobs := range queue {
+		for _, jobs := range jobQueue {
 			for _, job := range jobs {
 				if job.AppID == req.AppID && job.ReleaseID == req.ReleaseID {
 					scaleRequests[req.ID] = req
@@ -1401,10 +1423,9 @@ func (s *Scheduler) ControllerPersistLoop() {
 		delete(scaleRequests, req.ID)
 	}
 
-	// start the persistence loop which receives from both the
-	// s.controllerPersist and the done channel, modifies the
-	// queue accordingly and then calls the persist functions
-	// if necessary
+	// start the persistence loop which receives from s.controllerPersist,
+	// jobDone and volDone, modifies the queues accordingly and then calls
+	// the persist functions if necessary
 	for {
 		select {
 		case v, ok := <-s.controllerPersist:
@@ -1416,29 +1437,47 @@ func (s *Scheduler) ControllerPersistLoop() {
 			switch v := v.(type) {
 			case *ct.Job:
 				// push the job to the back of the queue
-				queue[v.UUID] = append(queue[v.UUID], v)
+				jobQueue[v.UUID] = append(jobQueue[v.UUID], v)
 
 				// if there is only one job in the queue, persist it
-				if len(queue[v.UUID]) == 1 {
+				if len(jobQueue[v.UUID]) == 1 {
 					go persistJob(v)
+				}
+			case *ct.Volume:
+				// push the volume to the back of the queue
+				volQueue[v.ID] = append(volQueue[v.ID], v)
+
+				// if there is only one volume in the queue, persist it
+				if len(volQueue[v.ID]) == 1 {
+					go persistVolume(v)
 				}
 			case *ct.ScaleRequest:
 				maybePersistScaleRequest(v)
 			}
-		case uuid := <-done:
+		case uuid := <-jobDone:
 			// remove the persisted job from the queue
-			queue[uuid] = queue[uuid][1:]
+			jobQueue[uuid] = jobQueue[uuid][1:]
 
 			// if the queue has more jobs, persist the first one
-			if len(queue[uuid]) > 0 {
-				go persistJob(queue[uuid][0])
+			if len(jobQueue[uuid]) > 0 {
+				go persistJob(jobQueue[uuid][0])
 			} else {
-				delete(queue, uuid)
+				delete(jobQueue, uuid)
 			}
 
 			// try and persist scale requests
 			for _, req := range scaleRequests {
 				maybePersistScaleRequest(req)
+			}
+		case id := <-volDone:
+			// remove the persisted volume from the queue
+			volQueue[id] = volQueue[id][1:]
+
+			// if the queue has more volumes, persist the first one
+			if len(volQueue[id]) > 0 {
+				go persistVolume(volQueue[id][0])
+			} else {
+				delete(volQueue, id)
 			}
 		}
 	}
@@ -2186,6 +2225,12 @@ func (s *Scheduler) persistJob(job *Job) {
 	s.persistControllerJob(job.ControllerJob())
 }
 
+func (s *Scheduler) persistVolume(vol *Volume) {
+	if s.isLeader == nil || *s.isLeader {
+		s.controllerPersist <- vol.ControllerVolume()
+	}
+}
+
 // persistControllerJob triggers the ControllerPersistLoop goroutine to persist
 // the job to the controller, but only if the scheduler either doesn't know the
 // current leader (e.g. if this is the first scheduler to start) or it itself
@@ -2195,22 +2240,6 @@ func (s *Scheduler) persistControllerJob(job *ct.Job) {
 	if s.isLeader == nil || *s.isLeader {
 		s.controllerPersist <- job
 	}
-}
-
-var putVolumeAttempts = attempt.Strategy{
-	Delay: 100 * time.Millisecond,
-	Total: time.Minute,
-}
-
-func (s *Scheduler) persistVolume(vol *Volume) {
-	go func() {
-		err := putVolumeAttempts.RunWithValidator(func() error {
-			return s.PutVolume(&vol.Volume)
-		}, httphelper.IsRetryableError)
-		if err != nil {
-			s.logger.Error("error persisting volume", "vol.id", vol.ID, "err", err)
-		}
-	}()
 }
 
 func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Formation) {
