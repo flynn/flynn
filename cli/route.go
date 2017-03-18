@@ -19,7 +19,7 @@ import (
 func init() {
 	register("route", runRoute, `
 usage: flynn route
-       flynn route add http [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--leader] [--no-leader] [--no-drain-backends] <domain>
+       flynn route add http [-s <service>] [-p <port>] [-c <tls-cert> -k <tls-key>] [--sticky] [--leader] [--no-leader] [--no-drain-backends] <domain>
        flynn route add tcp [-s <service>] [-p <port>] [--leader] [--no-drain-backends]
        flynn route update <id> [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--no-sticky] [--leader] [--no-leader]
        flynn route remove <id>
@@ -34,7 +34,7 @@ Options:
 	--no-sticky                disable cookie-based sticky routing (update http only)
 	--leader                   enable leader-only routing mode
 	--no-leader                disable leader-only routing mode (update only)
-	-p, --port=<port>          port to accept traffic on (tcp only)
+	-p, --port=<port>          port to accept traffic on
 	--no-drain-backends        don't wait for in-flight requests to complete before stopping backends
 
 Commands:
@@ -87,16 +87,20 @@ func runRoute(args *docopt.Args, client controller.Client) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	var route, protocol, service, sticky, path string
+	var route, port, protocol, service, sticky, path string
 	listRec(w, "ROUTE", "SERVICE", "ID", "STICKY", "LEADER", "PATH")
 	for _, k := range routes {
+		port = strconv.Itoa(int(k.Port))
 		switch k.Type {
 		case "tcp":
+			route = port
 			protocol = "tcp"
-			route = strconv.Itoa(k.TCPRoute().Port)
 			service = k.TCPRoute().Service
 		case "http":
 			route = k.HTTPRoute().Domain
+			if port != "0" {
+				route = k.HTTPRoute().Domain + ":" + port
+			}
 			service = k.TCPRoute().Service
 			httpRoute := k.HTTPRoute()
 			if httpRoute.Certificate == nil && httpRoute.LegacyTLSCert == "" {
@@ -154,6 +158,15 @@ func runRouteAddHTTP(args *docopt.Args, client controller.Client) error {
 		return err
 	}
 
+	port := 0
+	if args.String["--port"] != "" {
+		p, err := strconv.Atoi(args.String["--port"])
+		if err != nil {
+			return err
+		}
+		port = p
+	}
+
 	u, err := url.Parse("http://" + args.String["<domain>"])
 	if err != nil {
 		return fmt.Errorf("Failed to parse %s as URL", args.String["<domain>"])
@@ -162,6 +175,7 @@ func runRouteAddHTTP(args *docopt.Args, client controller.Client) error {
 	hr := &router.HTTPRoute{
 		Service:       service,
 		Domain:        u.Host,
+		Port:          port,
 		LegacyTLSCert: tlsCert,
 		LegacyTLSKey:  tlsKey,
 		Sticky:        args.Bool["--sticky"],

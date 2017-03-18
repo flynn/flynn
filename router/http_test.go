@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -168,7 +169,20 @@ func (s *S) newHTTPListener(t testutil.TestingT) *HTTPListener {
 	if err := l.Start(); err != nil {
 		t.Fatal(err)
 	}
+	l.defaultPorts = getDefaultPortsFromAddrs(l)
 	return l
+}
+
+func getDefaultPortsFromAddrs(l *HTTPListener) (defaultPorts []int) {
+	addressArrays := [][]string{l.Addrs, l.TLSAddrs}
+	for _, addressArray := range addressArrays {
+		for _, addr := range addressArray {
+			_, portStr, _ := net.SplitHostPort(addr)
+			port, _ := strconv.Atoi(portStr)
+			defaultPorts = append(defaultPorts, port)
+		}
+	}
+	return
 }
 
 func (s *S) buildHTTPListener(t testutil.TestingT) *HTTPListener {
@@ -178,12 +192,13 @@ func (s *S) buildHTTPListener(t testutil.TestingT) *HTTPListener {
 		t.Fatal(err)
 	}
 	l := &HTTPListener{
-		Addr:      "127.0.0.1:0",
-		TLSAddr:   "127.0.0.1:0",
+		Addrs:     []string{"127.0.0.1:0"},
+		TLSAddrs:  []string{"127.0.0.1:0"},
 		keypair:   pair,
 		ds:        NewPostgresDataStore("http", s.pgx),
 		discoverd: s.discoverd,
 	}
+
 	return l
 }
 
@@ -199,7 +214,7 @@ func (s *S) TestIssue5381(c *C) {
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "example.com", "")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "")
 }
 
 func (s *S) TestAddHTTPRoute(c *C) {
@@ -215,8 +230,8 @@ func (s *S) TestAddHTTPRoute(c *C) {
 
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "example.com", "1")
-	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertGet(c, "https://"+l.TLSAddrs[0], "example.com", "1")
 
 	unregister()
 	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
@@ -224,17 +239,17 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	// Close the connection we just used to trigger a new backend choice
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
 
-	assertGet(c, "http://"+l.Addr, "example.com", "2")
-	assertGet(c, "https://"+l.TLSAddr, "example.com", "2")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "2")
+	assertGet(c, "https://"+l.TLSAddrs[0], "example.com", "2")
 
-	res, err := httpClient.Do(newReq("http://"+l.Addr, "example2.com"))
+	res, err := httpClient.Do(newReq("http://"+l.Addrs[0], "example2.com"))
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 404)
 	res.Body.Close()
 
 	_, err = (&http.Client{
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{ServerName: "example2.com"}},
-	}).Do(newReq("https://"+l.TLSAddr, "example2.com"))
+	}).Do(newReq("https://"+l.TLSAddrs[0], "example2.com"))
 	c.Assert(err, Not(IsNil))
 
 	wait := waitForEvent(c, l, "remove", r.ID)
@@ -243,7 +258,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	wait()
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
 
-	res, err = httpClient.Do(newReq("http://"+l.Addr, "example.com"))
+	res, err = httpClient.Do(newReq("http://"+l.Addrs[0], "example.com"))
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 404)
 	res.Body.Close()
@@ -261,10 +276,10 @@ func (s *S) TestAddHTTPRouteWithCert(c *C) {
 
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, domain, "1")
-	assertGet(c, "https://"+l.TLSAddr, domain, "1")
+	assertGet(c, "http://"+l.Addrs[0], domain, "1")
+	assertGet(c, "https://"+l.TLSAddrs[0], domain, "1")
 
-	res, err := newHTTP2Client(domain).Do(newReq("https://"+l.TLSAddr, domain))
+	res, err := newHTTP2Client(domain).Do(newReq("https://"+l.TLSAddrs[0], domain))
 	c.Assert(err, IsNil)
 	defer res.Body.Close()
 	c.Assert(res.StatusCode, Equals, 200)
@@ -314,15 +329,15 @@ func (s *S) TestAddHTTPRouteWithExistingCert(c *C) {
 		},
 	}.ToRoute())
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
-	assertGet(c, "http://"+l.Addr, domain, "1")
-	assertGet(c, "https://"+l.TLSAddr, domain, "1")
+	assertGet(c, "http://"+l.Addrs[0], domain, "1")
+	assertGet(c, "https://"+l.TLSAddrs[0], domain, "1")
 	unregister()
 
 	domain = "2.bar.example.org"
 	r2 := addHTTPRouteForDomain(domain, c, l)
 	unregister = discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
-	assertGet(c, "http://"+l.Addr, domain, "2")
-	assertGet(c, "https://"+l.TLSAddr, domain, "2")
+	assertGet(c, "http://"+l.Addrs[0], domain, "2")
+	assertGet(c, "https://"+l.TLSAddrs[0], domain, "2")
 	unregister()
 
 	c.Assert(r1.Certificate, DeepEquals, r2.Certificate)
@@ -344,8 +359,8 @@ func (s *S) TestAddAndDeleteCert(c *C) {
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 	defer unregister()
 
-	assertGet(c, "http://"+l.Addr, domain, "1")
-	assertGet(c, "https://"+l.TLSAddr, domain, "1")
+	assertGet(c, "http://"+l.Addrs[0], domain, "1")
+	assertGet(c, "https://"+l.TLSAddrs[0], domain, "1")
 
 	tlsCert := refreshTLSConfigForDomain(domain)
 	cert := &router.Certificate{
@@ -358,8 +373,8 @@ func (s *S) TestAddAndDeleteCert(c *C) {
 	c.Assert(err, IsNil)
 	wait()
 
-	assertGet(c, "http://"+l.Addr, domain, "1")
-	assertGet(c, "https://"+l.TLSAddr, domain, "1")
+	assertGet(c, "http://"+l.Addrs[0], domain, "1")
+	assertGet(c, "https://"+l.TLSAddrs[0], domain, "1")
 
 	wait = waitForEvent(c, l, "set", "")
 	err = api.DeleteCert(cert.ID)
@@ -544,9 +559,9 @@ func (s *S) TestWildcardRouting(c *C) {
 	discoverdRegisterHTTPService(c, l, "2", srv2.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "3", srv3.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "foo.bar", "1")
-	assertGet(c, "http://"+l.Addr, "flynn.foo.bar", "2")
-	assertGet(c, "http://"+l.Addr, "dev.foo.bar", "3")
+	assertGet(c, "http://"+l.Addrs[0], "foo.bar", "1")
+	assertGet(c, "http://"+l.Addrs[0], "flynn.foo.bar", "2")
+	assertGet(c, "http://"+l.Addrs[0], "dev.foo.bar", "3")
 }
 
 func (s *S) TestWildcardCatchAllRouting(c *C) {
@@ -570,10 +585,10 @@ func (s *S) TestWildcardCatchAllRouting(c *C) {
 	discoverdRegisterHTTPService(c, l, "1", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "2", srv2.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "foo", "1")
-	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0], "foo", "1")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 	// Make sure other wildcards have priority
-	assertGet(c, "http://"+l.Addr, "foo.bar", "2")
+	assertGet(c, "http://"+l.Addrs[0], "foo.bar", "2")
 }
 
 func (s *S) TestLeaderRouting(c *C) {
@@ -601,11 +616,11 @@ func (s *S) TestLeaderRouting(c *C) {
 	discoverdRegisterHTTPService(c, l, "leader-routing-http", srv2.Listener.Addr().String())
 
 	discoverdSetLeaderHTTP(c, l, "leader-routing-http", md5sum("tcp-"+srv1.Listener.Addr().String()))
-	assertGet(c, "http://"+l.Addr, "foo.bar", "1")
+	assertGet(c, "http://"+l.Addrs[0], "foo.bar", "1")
 
 	discoverdSetLeaderHTTP(c, l, "leader-routing-http", md5sum("tcp-"+srv2.Listener.Addr().String()))
 	c.Assert(err, IsNil)
-	assertGet(c, "http://"+l.Addr, "foo.bar", "2")
+	assertGet(c, "http://"+l.Addrs[0], "foo.bar", "2")
 }
 
 func (s *S) TestPathRouting(c *C) {
@@ -640,11 +655,11 @@ func (s *S) TestPathRouting(c *C) {
 	discoverdRegisterHTTPService(c, l, "3", srv3.Listener.Addr().String())
 
 	// Check that traffic received at the path is directed to correct backend
-	assertGet(c, "http://"+l.Addr, "foo.bar", "1")
-	assertGet(c, "http://"+l.Addr+"/2/", "foo.bar", "2")
-	assertGet(c, "http://"+l.Addr+"/2", "foo.bar", "2")
-	assertGet(c, "http://"+l.Addr+"/3", "foo.bar", "3")
-	assertGet(c, "http://"+l.Addr+"/3/", "foo.bar", "3")
+	assertGet(c, "http://"+l.Addrs[0], "foo.bar", "1")
+	assertGet(c, "http://"+l.Addrs[0]+"/2/", "foo.bar", "2")
+	assertGet(c, "http://"+l.Addrs[0]+"/2", "foo.bar", "2")
+	assertGet(c, "http://"+l.Addrs[0]+"/3", "foo.bar", "3")
+	assertGet(c, "http://"+l.Addrs[0]+"/3/", "foo.bar", "3")
 
 	// Test that adding a routes with invalid paths error
 	invalidPaths := []string{"noleadingslash/"}
@@ -685,8 +700,8 @@ func (s *S) TestHTTPInitialSync(c *C) {
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "example.com", "1")
-	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertGet(c, "https://"+l.TLSAddrs[0], "example.com", "1")
 }
 
 func (s *S) TestHTTPResync(c *C) {
@@ -705,13 +720,14 @@ func (s *S) TestHTTPResync(c *C) {
 		c.Fatal(err)
 	}
 	l := &HTTPListener{
-		Addr:      "127.0.0.1:0",
+		Addrs:     []string{"127.0.0.1:0"},
 		ds:        NewPostgresDataStore("http", pgxpool),
 		discoverd: s.discoverd,
 	}
 	if err := l.Start(); err != nil {
 		c.Fatal(err)
 	}
+	l.defaultPorts = getDefaultPortsFromAddrs(l)
 	defer l.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))
@@ -724,7 +740,7 @@ func (s *S) TestHTTPResync(c *C) {
 		Service: "example-com",
 	}.ToRoute())
 	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
-	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 
 	// testing hooks
 	presyncc := make(chan struct{})
@@ -794,14 +810,14 @@ func (s *S) TestHTTPResync(c *C) {
 	<-postsyncc
 
 	// ensure that route was actually removed
-	res, err := httpClient.Do(newReq("http://"+l.Addr, "example.com"))
+	res, err := httpClient.Do(newReq("http://"+l.Addrs[0], "example.com"))
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 404)
 	res.Body.Close()
 
 	// ensure that new route was added and traffic being directed
 	discoverdRegisterHTTPService(c, l, "example-org", srv2.Listener.Addr().String())
-	assertGet(c, "http://"+l.Addr, "example.org", "2")
+	assertGet(c, "http://"+l.Addrs[0], "example.org", "2")
 }
 
 // issue #26
@@ -816,7 +832,7 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	// a single request is allowed to successfully get issued
-	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 
 	// the backend server's connection gets closed, but router is
 	// able to recover
@@ -826,7 +842,7 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	// scenarios, so instead we just sleep long enough to handle the FIN.
 	// https://golang.org/issue/4677
 	time.Sleep(500 * time.Microsecond)
-	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 }
 
 // Act as an app to test HTTP headers
@@ -848,12 +864,12 @@ func (s *S) TestHTTPHeaders(c *C) {
 
 	addHTTPRoute(c, l)
 
-	port := mustPortFromAddr(l.listener.Addr().String())
+	port := mustPortFromAddr(l.listeners[0].Addr().String())
 	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1", port))
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 }
 
 func (s *S) TestHTTPHeadersFromClient(c *C) {
@@ -862,12 +878,12 @@ func (s *S) TestHTTPHeadersFromClient(c *C) {
 
 	addHTTPRoute(c, l)
 
-	port := mustPortFromAddr(l.listener.Addr().String())
+	port := mustPortFromAddr(l.listeners[0].Addr().String())
 	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1", port))
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	req := newReq("http://"+l.Addr, "example.com")
+	req := newReq("http://"+l.Addrs[0], "example.com")
 	req.Header.Set("X-Forwarded-For", "192.168.1.1")
 	req.Header.Set("X-Request-Id", "asdf1234asdf")
 	res, err := httpClient.Do(req)
@@ -909,7 +925,7 @@ func (s *S) TestClientProvidedRequestID(c *C) {
 		{"/-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+=", true},
 		{"/-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+=*", false},
 	} {
-		req := newReq(fmt.Sprintf("http://%s/%t?id=%s", l.Addr, t.ok, url.QueryEscape(t.id)), "example.com")
+		req := newReq(fmt.Sprintf("http://%s/%t?id=%s", l.Addrs[0], t.ok, url.QueryEscape(t.id)), "example.com")
 		req.Header.Set("X-Request-Id", t.id)
 		res, err := httpClient.Do(req)
 		c.Assert(err, IsNil)
@@ -939,7 +955,7 @@ func (s *S) TestHTTPProxyHeadersFromClient(c *C) {
 		{upgrade: true},  // tcp/websocket path
 	}
 	for _, test := range tests {
-		req := newReq("http://"+l.Addr, "example.com")
+		req := newReq("http://"+l.Addrs[0], "example.com")
 		req.Header.Set("Proxy-Authenticate", "fake")
 		req.Header.Set("Proxy-Authorization", "not-empty")
 		if test.upgrade {
@@ -967,7 +983,7 @@ func (s *S) TestConnectionCloseHeaderFromClient(c *C) {
 	addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	req := newReq("http://"+l.Addr, "example.com")
+	req := newReq("http://"+l.Addrs[0], "example.com")
 	req.Header.Set("Connection", "close")
 	res, err := httpClient.Do(req)
 	c.Assert(err, IsNil)
@@ -1045,7 +1061,7 @@ func (s *S) TestConnectionHeaders(c *C) {
 				c.Assert(req.Header.Get(k), Not(Equals), "", Commentf("header = %s", k))
 			}
 		})
-		req := newReq("http://"+l.Addr, "example.com")
+		req := newReq("http://"+l.Addrs[0], "example.com")
 		if test.conn != "" {
 			req.Header.Set("Connection", test.conn)
 		}
@@ -1071,7 +1087,7 @@ func (s *S) TestConnectionHeaders(c *C) {
 			w.Header().Set("Custom-Conn-Header", "test-custom-conn-header")
 			w.Header().Set("Upgrade", "test-upgrade")
 		})
-		req := newReq("http://"+l.Addr, "example.com")
+		req := newReq("http://"+l.Addrs[0], "example.com")
 		if test.upgradeFromClient {
 			req.Header.Set("Connection", "upgrade")
 			req.Header.Set("Upgrade", "special-proto")
@@ -1123,7 +1139,7 @@ func (s *S) TestHTTPWebsocket(c *C) {
 		{afterKeepAlive: true}, // ensure that upgrade still works on reused conn
 	}
 	for _, test := range tests {
-		conn, err := net.Dial("tcp", l.Addr)
+		conn, err := net.Dial("tcp", l.Addrs[0])
 		c.Assert(err, IsNil)
 		defer conn.Close()
 
@@ -1166,7 +1182,7 @@ func (s *S) TestUpgradeHeaderIsCaseInsensitive(c *C) {
 	defer srv.Close()
 
 	l := s.newHTTPListener(c)
-	url := "http://" + l.Addr
+	url := "http://" + l.Addrs[0]
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -1204,17 +1220,17 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 
-	cookies := assertGet(c, "http://"+l.Addr, "example.com", "1")
+	cookies := assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
 	for i := 0; i < 10; i++ {
-		resCookies := assertGetCookies(c, "http://"+l.Addr, "example.com", "1", cookies)
+		resCookies := assertGetCookies(c, "http://"+l.Addrs[0], "example.com", "1", cookies)
 		c.Assert(resCookies, HasLen, 0)
 		httpClient.Transport.(*http.Transport).CloseIdleConnections()
 	}
 
 	unregister()
 	for i := 0; i < 10; i++ {
-		resCookies := assertGetCookies(c, "http://"+l.Addr, "example.com", "2", cookies)
+		resCookies := assertGetCookies(c, "http://"+l.Addrs[0], "example.com", "2", cookies)
 		c.Assert(resCookies, Not(HasLen), 0)
 	}
 }
@@ -1239,7 +1255,7 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 	defer srv2.Close()
 
 	l := s.newHTTPListener(c)
-	url := "http://" + l.Addr
+	url := "http://" + l.Addrs[0]
 	defer l.Close()
 
 	addStickyHTTPRoute(c, l)
@@ -1313,7 +1329,7 @@ func (s *S) TestNoBackends(c *C) {
 		Service: "example-com",
 	}.ToRoute())
 
-	req := newReq("http://"+l.Addr, "example.com")
+	req := newReq("http://"+l.Addrs[0], "example.com")
 	res, err := newHTTPClient("example.com").Do(req)
 	c.Assert(err, IsNil)
 	defer res.Body.Close()
@@ -1350,7 +1366,7 @@ func (s *S) TestNoResponsiveBackends(c *C) {
 
 	runTest := func(test ts) {
 		c.Log("upgrade:", test.upgrade)
-		req := newReq("http://"+l.Addr, "example.com")
+		req := newReq("http://"+l.Addrs[0], "example.com")
 		if test.upgrade {
 			req.Header.Set("Connection", "Upgrade")
 		}
@@ -1383,7 +1399,7 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 		Sticky:  true,
 	}.ToRoute())
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
-	cookies := assertGet(c, "http://"+l.Addr, "example.com", "1")
+	cookies := assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 
 	// close srv1, register srv2
 	srv1.Close()
@@ -1406,7 +1422,7 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 		if test.method == "POST" {
 			body = strings.NewReader("A not-so-large Flynn test body...")
 		}
-		req, _ := http.NewRequest(test.method, "http://"+l.Addr, body)
+		req, _ := http.NewRequest(test.method, "http://"+l.Addrs[0], body)
 		req.Host = "example.com"
 		if test.upgrade {
 			req.Header.Set("Connection", "upgrade")
@@ -1486,7 +1502,7 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	discoverdRegisterHTTP(c, l, srv1.Addr().String())
 	discoverdRegisterHTTP(c, l, srv2.Addr().String())
 
-	req := newReq("http://"+l.Addr, "example.com")
+	req := newReq("http://"+l.Addrs[0], "example.com")
 	if upgrade {
 		req.Header.Set("Connection", "Upgrade")
 		req.Header.Set("Upgrade", "websocket")
@@ -1523,8 +1539,8 @@ func (s *S) TestKeepaliveHostname(c *C) {
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "example-org", srv2.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "example.com", "1")
-	assertGet(c, "http://"+l.Addr, "example.org", "2")
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0], "example.org", "2")
 }
 
 // issue #177
@@ -1543,7 +1559,7 @@ func (s *S) TestRequestURIEscaping(c *C) {
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	for _, prefix = range []string{"", "http://example.com"} {
-		conn, err := net.Dial("tcp", l.Addr)
+		conn, err := net.Dial("tcp", l.Addrs[0])
 		c.Assert(err, IsNil)
 		defer conn.Close()
 
@@ -1558,7 +1574,7 @@ func (s *S) TestRequestQueryParams(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	req := newReq(fmt.Sprintf("http://%s/query", l.Addr), "example.com")
+	req := newReq(fmt.Sprintf("http://%s/query", l.Addrs[0]), "example.com")
 	req.URL.RawQuery = "first=this+is+a+field&second=was+it+clear+%28already%29%3F"
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, inreq *http.Request) {
@@ -1599,8 +1615,8 @@ func (s *S) TestDefaultServerKeypair(c *C) {
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "foo-example-com", srv2.Listener.Addr().String())
 
-	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
-	assertGet(c, "https://"+l.TLSAddr, "foo.example.com", "2")
+	assertGet(c, "https://"+l.TLSAddrs[0], "example.com", "1")
+	assertGet(c, "https://"+l.TLSAddrs[0], "foo.example.com", "2")
 }
 
 func (s *S) TestCaseInsensitiveDomain(c *C) {
@@ -1619,8 +1635,8 @@ func (s *S) TestCaseInsensitiveDomain(c *C) {
 
 	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "Example.com", "Example.com")
-	assertGet(c, "https://"+l.TLSAddr, "ExamPle.cOm", "ExamPle.cOm")
+	assertGet(c, "http://"+l.Addrs[0], "Example.com", "Example.com")
+	assertGet(c, "https://"+l.TLSAddrs[0], "ExamPle.cOm", "ExamPle.cOm")
 }
 
 func (s *S) TestHostPortStripping(c *C) {
@@ -1639,8 +1655,8 @@ func (s *S) TestHostPortStripping(c *C) {
 
 	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr, "example.com:80", "example.com:80")
-	assertGet(c, "https://"+l.TLSAddr, "example.com:443", "example.com:443")
+	assertGet(c, "http://"+l.Addrs[0], "example.com:80", "example.com:80")
+	assertGet(c, "https://"+l.TLSAddrs[0], "example.com:443", "example.com:443")
 }
 
 func (s *S) TestHTTPResponseStreaming(c *C) {
@@ -1671,13 +1687,13 @@ func (s *S) TestHTTPResponseStreaming(c *C) {
 	client.Timeout = 1 * time.Second
 
 	// ensure that we get a flushed response header with no body written immediately
-	req := newReq(fmt.Sprintf("http://%s/header", l.Addr), "example.com")
+	req := newReq(fmt.Sprintf("http://%s/header", l.Addrs[0]), "example.com")
 	res, err := client.Do(req)
 	c.Assert(err, IsNil)
 	defer res.Body.Close()
 
 	// ensure that we get a body write immediately
-	req = newReq(fmt.Sprintf("http://%s/body", l.Addr), "example.com")
+	req = newReq(fmt.Sprintf("http://%s/body", l.Addrs[0]), "example.com")
 	res, err = client.Do(req)
 	c.Assert(err, IsNil)
 	defer res.Body.Close()
@@ -1717,7 +1733,7 @@ func (s *S) TestHTTPHijackUpgrade(c *C) {
 	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
 
 	client := httpclient.Client{
-		URL:  "http://" + l.Addr,
+		URL:  "http://" + l.Addrs[0],
 		HTTP: http.DefaultClient,
 	}
 
@@ -1754,7 +1770,7 @@ func (s *S) TestHTTPCloseNotify(c *C) {
 	addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	req := newReq("http://"+l.Addr, "example.com")
+	req := newReq("http://"+l.Addrs[0], "example.com")
 	req.Method = "POST"
 	req.Cancel = cancel
 	res, err := httpClient.Do(req)
@@ -1783,7 +1799,7 @@ func (s *S) TestDoubleSlashPath(c *C) {
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	assertGet(c, "http://"+l.Addr+"//foo/bar", "example.com", "//foo/bar")
+	assertGet(c, "http://"+l.Addrs[0]+"//foo/bar", "example.com", "//foo/bar")
 }
 
 func (s *S) TestHTTPProxyProtocol(c *C) {
@@ -1796,12 +1812,13 @@ func (s *S) TestHTTPProxyProtocol(c *C) {
 	l := s.buildHTTPListener(c)
 	l.proxyProtocol = true
 	c.Assert(l.Start(), IsNil)
+	l.defaultPorts = getDefaultPortsFromAddrs(l)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	req := newReq("http://"+l.Addr, "example.com")
+	req := newReq("http://"+l.Addrs[0], "example.com")
 
 	dialer := func(addr string) func() net.Conn {
 		return func() net.Conn {
@@ -1813,9 +1830,9 @@ func (s *S) TestHTTPProxyProtocol(c *C) {
 	}
 
 	for _, f := range []func() net.Conn{
-		dialer(l.Addr),
+		dialer(l.Addrs[0]),
 		func() net.Conn {
-			return tls.Client(dialer(l.TLSAddr)(), newHTTPClient("example.com").Transport.(*http.Transport).TLSClientConfig)
+			return tls.Client(dialer(l.TLSAddrs[0])(), newHTTPClient("example.com").Transport.(*http.Transport).TLSClientConfig)
 		},
 	} {
 		conn := f()

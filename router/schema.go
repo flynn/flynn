@@ -215,6 +215,14 @@ CREATE TRIGGER notify_route_certificates_update
 		`ALTER TABLE http_routes ADD COLUMN drain_backends boolean NOT NULL DEFAULT TRUE`,
 		`UPDATE http_routes SET drain_backends = false WHERE service = 'controller'`,
 	)
+	migrations.Add(7,
+		`ALTER TABLE http_routes ADD COLUMN port integer NOT NULL DEFAULT 0 CHECK (port > -1 AND port < 65535)`,
+	)
+	migrations.Add(8,
+		`DROP INDEX http_routes_domain_path_key`,
+		`CREATE UNIQUE INDEX http_routes_domain_port_path_key ON http_routes
+		USING btree (domain, port, path) WHERE deleted_at IS NULL`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

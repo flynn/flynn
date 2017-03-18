@@ -72,6 +72,15 @@ func (api *API) CreateRoute(ctx context.Context, w http.ResponseWriter, req *htt
 		case ErrConflict:
 			jsonError.Code = httphelper.ConflictErrorCode
 			jsonError.Message = "Duplicate route"
+		case ErrReserved:
+			jsonError.Code = httphelper.ConflictErrorCode
+			jsonError.Message = "Port reserved for HTTP/HTTPS traffic"
+		case ErrUnreservedHTTP:
+			jsonError.Code = httphelper.ValidationErrorCode
+			jsonError.Message = "Port not reserved for HTTP traffic"
+		case ErrUnreservedHTTPS:
+			jsonError.Code = httphelper.ValidationErrorCode
+			jsonError.Message = "Port not reserved for HTTPS traffic"
 		case ErrInvalid:
 			jsonError.Code = httphelper.ValidationErrorCode
 			jsonError.Message = "Invalid route"

@@ -116,7 +116,7 @@ func (s *S) TestAddTCPRouteReservedPort(c *C) {
 		r := router.TCPRoute{Port: port}.ToRoute()
 		err := l.AddRoute(r)
 		c.Assert(err, NotNil)
-		c.Assert(err.Error(), Equals, fmt.Sprintf("cannot bind to reserved port %d", port))
+		c.Assert(err.Error(), Equals, "router: cannot bind TCP to a reserved port")
 	}
 }
 

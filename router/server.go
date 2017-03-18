@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/keepalive"
@@ -72,6 +73,7 @@ var listenFunc = keepalive.ReusableListen
 
 func main() {
 	defer shutdown.Exit()
+	log := logger.New("fn", "main")
 
 	var cookieKey *[32]byte
 	if key := os.Getenv("COOKIE_KEY"); key != "" {
@@ -89,11 +91,10 @@ func main() {
 	if cookieKey == nil {
 		shutdown.Fatal("Missing random 32 byte base64-encoded COOKIE_KEY")
 	}
-
 	proxyProtocol := os.Getenv("PROXY_PROTOCOL") == "true"
 
-	httpPort := flag.Int("http-port", 8080, "http listen port")
-	httpsPort := flag.Int("https-port", 4433, "https listen port")
+	httpPort := flag.Int("http-port", 8080, "default http listen port")
+	httpsPort := flag.Int("https-port", 4433, "default https listen port")
 	tcpIP := flag.String("tcp-ip", os.Getenv("LISTEN_IP"), "tcp router listen ip")
 	tcpRangeStart := flag.Int("tcp-range-start", 3000, "tcp port range start")
 	tcpRangeEnd := flag.Int("tcp-range-end", 3500, "tcp port range end")
@@ -101,6 +102,48 @@ func main() {
 	keyFile := flag.String("tls-key", "", "TLS (SSL) key file in pem format")
 	apiPort := flag.String("api-port", "", "api listen port")
 	flag.Parse()
+
+	httpPorts := []int{*httpPort}
+	httpsPorts := []int{*httpsPort}
+	defaultPorts := []int{}
+	if portRaw := os.Getenv("DEFAULT_HTTP_PORT"); portRaw != "" {
+		if port, err := strconv.Atoi(portRaw); err != nil {
+			shutdown.Fatalf("Invalid DEFAULT_HTTP_PORTS: %s", err)
+		} else if port == 0 {
+			log.Warn("Disabling HTTP acccess (DEFAULT_HTTP_PORT=0)")
+			httpPorts = nil
+		} else {
+			httpPorts[0] = port
+		}
+	}
+	if portRaw := os.Getenv("DEFAULT_HTTPS_PORT"); portRaw != "" {
+		if port, err := strconv.Atoi(portRaw); err != nil {
+			shutdown.Fatalf("Invalid DEFAULT_HTTPS_PORTS: %s", err)
+		} else if port == 0 {
+			shutdown.Fatal("Cannot disable HTTPS access (DEFAULT_HTTPS_PORT=0)")
+		} else {
+			httpsPorts[0] = port
+		}
+	}
+	defaultPorts = append(httpPorts, httpsPorts...)
+	if added := os.Getenv("ADDITIONAL_HTTP_PORTS"); added != "" {
+		for _, raw := range strings.Split(added, ",") {
+			if port, err := strconv.Atoi(raw); err == nil {
+				httpPorts = append(httpPorts, port)
+			} else {
+				shutdown.Fatal(err)
+			}
+		}
+	}
+	if added := os.Getenv("ADDITIONAL_HTTPS_PORTS"); added != "" {
+		for _, raw := range strings.Split(added, ",") {
+			if port, err := strconv.Atoi(raw); err == nil {
+				httpsPorts = append(httpsPorts, port)
+			} else {
+				shutdown.Fatal(err)
+			}
+		}
+	}
 
 	if *apiPort == "" {
 		*apiPort = os.Getenv("PORT")
@@ -124,8 +167,6 @@ func main() {
 		}
 	}
 
-	log := logger.New("fn", "main")
-
 	log.Info("connecting to postgres")
 	db := postgres.Wait(nil, nil)
 
@@ -140,8 +181,17 @@ func main() {
 
 	shutdown.BeforeExit(func() { db.Close() })
 
-	httpAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), strconv.Itoa(*httpPort))
-	httpsAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), strconv.Itoa(*httpsPort))
+	var httpAddrs []string
+	var httpsAddrs []string
+	var reservedPorts []int
+	for _, port := range httpPorts {
+		httpAddrs = append(httpAddrs, net.JoinHostPort(os.Getenv("LISTEN_IP"), strconv.Itoa(port)))
+		reservedPorts = append(reservedPorts, port)
+	}
+	for _, port := range httpsPorts {
+		httpsAddrs = append(httpsAddrs, net.JoinHostPort(os.Getenv("LISTEN_IP"), strconv.Itoa(port)))
+		reservedPorts = append(reservedPorts, port)
+	}
 	r := Router{
 		TCP: &TCPListener{
 			IP:            *tcpIP,
@@ -149,11 +199,12 @@ func main() {
 			endPort:       *tcpRangeEnd,
 			ds:            NewPostgresDataStore("tcp", db.ConnPool),
 			discoverd:     discoverd.DefaultClient,
-			reservedPorts: []int{*httpPort, *httpsPort},
+			reservedPorts: reservedPorts,
 		},
 		HTTP: &HTTPListener{
-			Addr:          httpAddr,
-			TLSAddr:       httpsAddr,
+			Addrs:         httpAddrs,
+			TLSAddrs:      httpsAddrs,
+			defaultPorts:  defaultPorts,
 			cookieKey:     cookieKey,
 			keypair:       keypair,
 			ds:            NewPostgresDataStore("http", db.ConnPool),
@@ -175,6 +226,7 @@ func main() {
 		shutdown.Fatal(listenErr{apiAddr, err})
 	}
 
+	httpAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), strconv.Itoa(httpPorts[0]))
 	services := map[string]string{
 		"router-api":  apiAddr,
 		"router-http": httpAddr,

@@ -48,7 +48,7 @@ func (l *TCPListener) AddRoute(route *router.Route) error {
 	}
 	for _, port := range l.reservedPorts {
 		if r.Port == port {
-			return fmt.Errorf("cannot bind to reserved port %d", port)
+			return ErrReserved
 		}
 	}
 	if r.Port == 0 {
