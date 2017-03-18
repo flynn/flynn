@@ -17,6 +17,9 @@ import (
 
 var ErrNotFound = errors.New("router: route not found")
 var ErrConflict = errors.New("router: duplicate route")
+var ErrReserved = errors.New("router: cannot bind TCP to a reserved port")
+var ErrUnreservedHTTP = errors.New("router: cannot route HTTP to a non-HTTP port")
+var ErrUnreservedHTTPS = errors.New("router: cannot route HTTPS to a non-HTTPS port")
 var ErrInvalid = errors.New("router: invalid route")
 
 type DataStore interface {
@@ -113,6 +116,7 @@ func (d *pgDataStore) addHTTP(r *router.Route) error {
 		"insert_http_route",
 		r.ParentRef,
 		r.Service,
+		r.Port,
 		r.Leader,
 		r.DrainBackends,
 		r.Domain,
@@ -134,9 +138,9 @@ func (d *pgDataStore) addTCP(r *router.Route) error {
 		"insert_tcp_route",
 		r.ParentRef,
 		r.Service,
+		r.Port,
 		r.Leader,
 		r.DrainBackends,
-		r.Port,
 	).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 }
 
@@ -291,6 +295,7 @@ func (d *pgDataStore) updateHTTP(r *router.Route) error {
 		"update_http_route",
 		r.ParentRef,
 		r.Service,
+		r.Port,
 		r.Leader,
 		r.Sticky,
 		r.Path,
@@ -312,9 +317,9 @@ func (d *pgDataStore) updateTCP(r *router.Route) error {
 		"update_tcp_route",
 		r.ParentRef,
 		r.Service,
+		r.Port,
 		r.Leader,
 		r.ID,
-		r.Port,
 	))
 }
 
@@ -505,6 +510,7 @@ func (d *pgDataStore) scanRouteWithoutCert(route *router.Route, s scannable) err
 			&route.ID,
 			&route.ParentRef,
 			&route.Service,
+			&route.Port,
 			&route.Leader,
 			&route.DrainBackends,
 			&route.Domain,
@@ -518,9 +524,9 @@ func (d *pgDataStore) scanRouteWithoutCert(route *router.Route, s scannable) err
 			&route.ID,
 			&route.ParentRef,
 			&route.Service,
+			&route.Port,
 			&route.Leader,
 			&route.DrainBackends,
-			&route.Port,
 			&route.CreatedAt,
 			&route.UpdatedAt,
 		)
@@ -538,6 +544,7 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 			&route.ID,
 			&route.ParentRef,
 			&route.Service,
+			&route.Port,
 			&route.Leader,
 			&route.DrainBackends,
 			&route.Domain,
@@ -568,9 +575,9 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 			&route.ID,
 			&route.ParentRef,
 			&route.Service,
+			&route.Port,
 			&route.Leader,
 			&route.DrainBackends,
-			&route.Port,
 			&route.CreatedAt,
 			&route.UpdatedAt,
 		)

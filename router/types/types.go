@@ -33,6 +33,8 @@ type Route struct {
 	ParentRef string `json:"parent_ref,omitempty"`
 	// Service is the ID of the service.
 	Service string `json:"service"`
+	// Port is the TCP port to listen on.
+	Port int32 `json:"port,omitempty"`
 	// Leader is whether or not traffic should only be routed to the leader or
 	// all instances
 	Leader bool `json:"leader"`
@@ -59,9 +61,6 @@ type Route struct {
 	// and no Path already exists in the route table.
 	Path string `json:"path,omitempty"`
 
-	// Port is the TCP port to listen on for TCP Routes.
-	Port int32 `json:"port,omitempty"`
-
 	// DrainBackends is whether or not to track requests and trigger
 	// drain events on backend shutdown when all requests have completed
 	// (used by the scheduler to only stop jobs once all requests have
@@ -78,6 +77,7 @@ func (r Route) HTTPRoute() *HTTPRoute {
 		ID:            r.ID,
 		ParentRef:     r.ParentRef,
 		Service:       r.Service,
+		Port:          int(r.Port),
 		Leader:        r.Leader,
 		DrainBackends: r.DrainBackends,
 		CreatedAt:     r.CreatedAt,
@@ -97,12 +97,11 @@ func (r Route) TCPRoute() *TCPRoute {
 		ID:            r.ID,
 		ParentRef:     r.ParentRef,
 		Service:       r.Service,
+		Port:          int(r.Port),
 		Leader:        r.Leader,
 		DrainBackends: r.DrainBackends,
 		CreatedAt:     r.CreatedAt,
 		UpdatedAt:     r.UpdatedAt,
-
-		Port: int(r.Port),
 	}
 }
 
@@ -111,6 +110,7 @@ type HTTPRoute struct {
 	ID            string
 	ParentRef     string
 	Service       string
+	Port          int
 	Leader        bool
 	DrainBackends bool
 	CreatedAt     time.Time
@@ -139,6 +139,7 @@ func (r HTTPRoute) ToRoute() *Route {
 		ID:            r.ID,
 		ParentRef:     r.ParentRef,
 		Service:       r.Service,
+		Port:          int32(r.Port),
 		Leader:        r.Leader,
 		DrainBackends: r.DrainBackends,
 		CreatedAt:     r.CreatedAt,
@@ -159,12 +160,11 @@ type TCPRoute struct {
 	ID            string
 	ParentRef     string
 	Service       string
+	Port          int
 	Leader        bool
 	DrainBackends bool
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
-
-	Port int
 }
 
 func (r TCPRoute) FormattedID() string {
@@ -181,12 +181,11 @@ func (r TCPRoute) ToRoute() *Route {
 		ID:            r.ID,
 		ParentRef:     r.ParentRef,
 		Service:       r.Service,
+		Port:          int32(r.Port),
 		Leader:        r.Leader,
 		DrainBackends: r.DrainBackends,
 		CreatedAt:     r.CreatedAt,
 		UpdatedAt:     r.UpdatedAt,
-
-		Port: int32(r.Port),
 	}
 }
 
