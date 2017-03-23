@@ -38,7 +38,7 @@ func ExampleClosePushbackStream() {
 	fmt.Printf("chunk %s\n", chunk.msg)
 
 	// Now, say we've gotten enough data.
-	// Or, another error occured in the system we're pushing data into, and we've lost interest.
+	// Or, another error occurred in the system we're pushing data into, and we've lost interest.
 	// (Maybe we're supplying data to an HTTP stream, and the client disconnected, for example.)
 	stream.Close()
 

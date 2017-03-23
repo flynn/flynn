@@ -21,7 +21,7 @@ management tool) to determine, download, and install the dependencies of the app
 
 ### Gems
 
-The primary use of the `Gemfile` is to declare gem dependenices.
+The primary use of the `Gemfile` is to declare gem dependencies.
 
 Here is an example `Gemfile` which could be used to deploy a Ruby application which
 depends on the `rack` gem:

@@ -67,7 +67,7 @@ type Options struct {
 // Converts options into CORS headers.
 func (o *Options) Header(origin string, req *http.Request) (headers map[string]string) {
 	headers = make(map[string]string)
-	// if origin is not alowed, don't extend the headers
+	// if origin is not allowed, don't extend the headers
 	// with CORS headers.
 	if !o.AllowAllOrigins && !o.IsOriginAllowed(origin, req) {
 		return

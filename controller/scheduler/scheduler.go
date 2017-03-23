@@ -1401,7 +1401,7 @@ func (s *Scheduler) ControllerPersistLoop() {
 	maybePersistScaleRequest := func(req *ct.ScaleRequest) {
 		// if there are any associated jobs being persisted, add to the
 		// scale request queue to be persisted later (to avoid scale
-		// events preceeding job events)
+		// events preceding job events)
 		for _, jobs := range jobQueue {
 			for _, job := range jobs {
 				if job.AppID == req.AppID && job.ReleaseID == req.ReleaseID {

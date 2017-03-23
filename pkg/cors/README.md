@@ -27,7 +27,7 @@ func main() {
 }
 ~~~
 
-You may alternatively prefer to allow CORS only for certain routes. Instead of using the CORS middleware app-wide, register it for the prefered routes. The following snippet demonstrates how to enable CORS for `/api/books` endpoint's PUT handler.
+You may alternatively prefer to allow CORS only for certain routes. Instead of using the CORS middleware app-wide, register it for the preferred routes. The following snippet demonstrates how to enable CORS for `/api/books` endpoint's PUT handler.
 
 ~~~ go
 m := martini.Classic()

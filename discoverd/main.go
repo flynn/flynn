@@ -327,7 +327,7 @@ func (m *Main) Promote() error {
 	m.handler.Store = m.store
 	m.handler.Proxy.Store(false)
 
-	m.logger.Println("promoted sucessfully")
+	m.logger.Println("promoted successfully")
 	return nil
 }
 
@@ -389,7 +389,7 @@ func (m *Main) Demote() error {
 	}
 	m.handler.Store = nil
 
-	m.logger.Println("demoted sucessfully")
+	m.logger.Println("demoted successfully")
 	return nil
 }
 

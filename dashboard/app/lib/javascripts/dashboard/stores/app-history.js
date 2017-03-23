@@ -163,7 +163,7 @@ var AppHistory = Store.createClass({
 				return false;
 			}
 			if (this.state.eventIDs.indexOf(event.id) !== -1) {
-				// gaurd against duplicate events as this would break things
+				// guard against duplicate events as this would break things
 				return false;
 			}
 			return true;
