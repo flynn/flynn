@@ -87,7 +87,7 @@ func (d *discoverdWrapper) Register() (bool, error) {
 	}
 }
 
-// Only one reciever can consume from this channel at a time.
+// Only one receiver can consume from this channel at a time.
 func (d *discoverdWrapper) LeaderCh() chan bool {
 	return d.leader
 }

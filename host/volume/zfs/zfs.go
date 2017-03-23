@@ -67,7 +67,7 @@ type ProviderConfig struct {
 
 	Currently this only supports file-type vdevs; be aware that these are
 	convenient, but may have limited performance.  Advanced users should
-	consider configuring a zpool using block devices directly, and specifing
+	consider configuring a zpool using block devices directly, and specifying
 	use of datasets in those zpools those rather than this fallback mechanism.
 */
 type MakeDev struct {

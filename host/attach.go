@@ -134,7 +134,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 
 		select {
 		case <-attached:
-			log.Info("sucessfully attached")
+			log.Info("successfully attached")
 			conn.Write([]byte{host.AttachSuccess})
 			writeMtx.Unlock()
 			close(attached)

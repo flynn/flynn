@@ -1115,7 +1115,7 @@ func (s *CLISuite) TestReleaseDelete(t *c.C) {
 	slugLayerURL := slugArtifact.LayerURL(slugArtifact.Manifest().Rootfs[0].Layers[0])
 	s.assertURI(t, slugLayerURL, http.StatusOK)
 
-	// check the inital release can now be deleted
+	// check the initial release can now be deleted
 	res = r.flynn("-a", otherApp.ID, "release", "delete", "--yes", releases[1].ID)
 	t.Assert(res, Succeeds)
 	t.Assert(res.Output, c.Equals, fmt.Sprintf("Deleted release %s (deleted 2 files)\n", releases[1].ID))
