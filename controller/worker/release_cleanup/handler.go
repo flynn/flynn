@@ -63,7 +63,7 @@ func deleteFile(uri string) error {
 		return err
 	}
 	res.Body.Close()
-	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusAccepted && res.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("unexpected status %d", res.StatusCode)
 	}
 	return nil

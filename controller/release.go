@@ -7,7 +7,9 @@ import (
 
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	dockerreceive "github.com/flynn/flynn/docker-receive/utils"
 	"github.com/flynn/flynn/host/resource"
+	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -256,6 +258,11 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 							continue
 						}
 						fileURIs = append(fileURIs, artifact.LayerURL(layer))
+
+						// delete the docker-receive layer config
+						if layerID, ok := layer.Meta["docker.layer_id"]; ok {
+							fileURIs = append(fileURIs, dockerreceive.ConfigURL(layerID))
+						}
 					}
 				}
 			}
@@ -264,7 +271,9 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 		// if the artifact was created by docker-receive, delete the docker
 		// image URI to clean up the registry files
 		if uri, ok := artifact.Meta["docker-receive.uri"]; ok {
-			fileURIs = append(fileURIs, uri)
+			if ref, err := pinkerton.NewRef(uri); err == nil {
+				fileURIs = append(fileURIs, ref.ImageURI())
+			}
 		}
 
 		if err := tx.Exec("artifact_delete", artifact.ID); err != nil {
