@@ -13,6 +13,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/docker-receive/utils"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/imagebuilder"
@@ -90,7 +91,7 @@ func run(url string) error {
 		RawManifest:      rawManifest,
 		Hashes:           image.Hashes(),
 		Size:             int64(len(rawManifest)),
-		LayerURLTemplate: layerURLTemplate,
+		LayerURLTemplate: utils.LayerURLTemplate,
 	}
 	return client.CreateArtifact(artifact)
 }
@@ -114,7 +115,7 @@ func upload(data io.Reader, url string) error {
 type layerStore struct{}
 
 func (l *layerStore) Load(id string) (*ct.ImageLayer, error) {
-	res, err := http.Get(jsonURL(id))
+	res, err := http.Get(utils.ConfigURL(id))
 	if err != nil {
 		return nil, err
 	}
@@ -136,22 +137,12 @@ func (l *layerStore) Save(id, path string, layer *ct.ImageLayer) error {
 		return err
 	}
 	defer f.Close()
-	if err := upload(f, layerURL(layer)); err != nil {
+	if err := upload(f, utils.LayerURL(layer)); err != nil {
 		return err
 	}
 	data, err := json.Marshal(layer)
 	if err != nil {
 		return err
 	}
-	return upload(bytes.NewReader(data), jsonURL(id))
-}
-
-func jsonURL(id string) string {
-	return fmt.Sprintf("http://blobstore.discoverd/docker-receive/layers/%s.json", id)
-}
-
-const layerURLTemplate = "http://blobstore.discoverd/docker-receive/layers/{id}.squashfs"
-
-func layerURL(layer *ct.ImageLayer) string {
-	return fmt.Sprintf("http://blobstore.discoverd/docker-receive/layers/%s.squashfs", layer.ID)
+	return upload(bytes.NewReader(data), utils.ConfigURL(id))
 }

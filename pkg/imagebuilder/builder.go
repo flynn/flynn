@@ -204,6 +204,9 @@ func (b *Builder) createLayer(ids []string) (*ct.ImageLayer, error) {
 	if err != nil {
 		return nil, err
 	}
+	layer.Meta = map[string]string{
+		"docker.layer_id": imageID,
+	}
 
 	return layer, b.Store.Save(imageID, path, layer)
 }

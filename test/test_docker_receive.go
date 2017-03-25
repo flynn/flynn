@@ -174,4 +174,12 @@ func (s *DockerReceiveSuite) TestReleaseDeleteImageLayers(t *c.C) {
 	t.Assert(flynn(t, "/", "-a", app1, "delete", "--yes"), Succeeds)
 	assertNotExist(distinctLayers)
 	assertExist(commonLayers)
+
+	// delete app2 and check we can push app1's image to a new app and have
+	// the layers regenerated (which checks docker-receive cache invalidation)
+	t.Assert(flynn(t, "/", "-a", app2, "delete", "--yes"), Succeeds)
+	app3 := "docker-receive-test-delete-layers-3"
+	t.Assert(flynn(t, "/", "create", "--remote", "", app3), Succeeds)
+	t.Assert(flynn(t, "/", "-a", app3, "docker", "push", app1), Succeeds)
+	t.Assert(flynn(t, "/", "-a", app3, "run", "test", "-f", "/app1.txt"), Succeeds)
 }

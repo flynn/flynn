@@ -77,3 +77,15 @@ func (r *Ref) DockerRef() string {
 	}
 	return r.DockerRepo() + delim + r.Tag()
 }
+
+func (r *Ref) ImageURI() string {
+	u := &url.URL{
+		Scheme: r.scheme,
+		Host:   r.host,
+		Path:   fmt.Sprintf("/v2/%s/manifests/%s", r.repo, r.Tag()),
+	}
+	if r.username != "" || r.password != "" {
+		u.User = url.UserPassword(r.username, r.password)
+	}
+	return u.String()
+}
