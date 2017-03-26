@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v74",
+	"GodepVersion": "v79",
 	"Packages": [
 		"./..."
 	],
@@ -941,6 +941,31 @@
 		{
 			"ImportPath": "github.com/miekg/dns",
 			"Rev": "db96a2b759cdef4f11a34506a42eb8d1290c598e"
+		},
+		{
+			"ImportPath": "github.com/minio/minio-go",
+			"Comment": "v2.0.4-13-g29b0515",
+			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+		},
+		{
+			"ImportPath": "github.com/minio/minio-go/pkg/policy",
+			"Comment": "v2.0.4-13-g29b0515",
+			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+		},
+		{
+			"ImportPath": "github.com/minio/minio-go/pkg/s3signer",
+			"Comment": "v2.0.4-13-g29b0515",
+			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+		},
+		{
+			"ImportPath": "github.com/minio/minio-go/pkg/s3utils",
+			"Comment": "v2.0.4-13-g29b0515",
+			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+		},
+		{
+			"ImportPath": "github.com/minio/minio-go/pkg/set",
+			"Comment": "v2.0.4-13-g29b0515",
+			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
 		},
 		{
 			"ImportPath": "github.com/mistifyio/go-zfs",
