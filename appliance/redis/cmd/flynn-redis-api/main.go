@@ -248,7 +248,7 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	host := "leader." + serviceName
+	host := "leader." + serviceName + ".discoverd"
 	u := url.URL{
 		Scheme: "redis",
 		Host:   host + ":6379",
