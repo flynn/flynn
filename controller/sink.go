@@ -35,7 +35,11 @@ func (r *SinkRepo) Add(s *ct.Sink) error {
 	if err != nil {
 		return err
 	}
-	err = tx.QueryRow("sink_insert", s.ID, s.Kind, []byte(s.Config)).Scan(&s.CreatedAt, &s.UpdatedAt)
+	var config []byte
+	if s.Config != nil {
+		config = []byte(*s.Config)
+	}
+	err = tx.QueryRow("sink_insert", s.ID, s.Kind, config).Scan(&s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err

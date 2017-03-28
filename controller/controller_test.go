@@ -678,18 +678,20 @@ func (s *S) TestCreateSink(c *C) {
 		Prefix: "test",
 		UseIDs: true,
 	}
-	cfg, _ := json.Marshal(config)
+	data, _ := json.Marshal(config)
+	cfg := json.RawMessage(data)
 	in := &ct.Sink{
 		Kind:   ct.SinkKindSyslog,
-		Config: cfg,
+		Config: &cfg,
 	}
 	c.Assert(s.c.CreateSink(in), IsNil)
 	c.Assert(in.ID, Not(Equals), "")
 	out, err := s.c.GetSink(in.ID)
 	c.Assert(err, IsNil)
 	c.Assert(out.ID, Equals, in.ID)
+	c.Assert(out.Config, NotNil)
 	outConfig := &ct.SyslogSinkConfig{}
-	err = json.Unmarshal(out.Config, outConfig)
+	err = json.Unmarshal(*out.Config, outConfig)
 	c.Assert(err, IsNil)
 	c.Assert(outConfig, DeepEquals, config)
 }

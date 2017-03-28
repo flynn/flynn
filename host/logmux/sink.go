@@ -76,7 +76,7 @@ func (s *SinkHTTPAPI) GetSinks(w http.ResponseWriter, req *http.Request, ps http
 		sinks = append(sinks, &ct.Sink{
 			ID:          info.ID,
 			Kind:        info.Kind,
-			Config:      info.Config,
+			Config:      &info.Config,
 			HostManaged: info.HostManaged,
 		})
 	}
