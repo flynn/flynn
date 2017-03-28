@@ -204,6 +204,13 @@ func runScaleWithJobEvents(client controller.Client, app string, release *ct.Rel
 
 	currentProcs := formation.Processes
 	currentTags := formation.Tags
+
+	for k, v := range currentProcs {
+		if _, ok := processes[k]; !ok {
+			processes[k] = v
+		}
+	}
+
 	formation.Processes = processes
 	formation.Tags = tags
 
