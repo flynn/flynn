@@ -50,10 +50,14 @@ func runLogSinkList(args *docopt.Args, client *cluster.Client) error {
 	)
 
 	for _, sink := range sinks {
+		var config string
+		if sink.Config != nil {
+			config = string(*sink.Config)
+		}
 		listRec(w,
 			sink.ID,
 			sink.Kind,
-			string(sink.Config),
+			string(config),
 			sink.HostManaged,
 		)
 	}

@@ -466,7 +466,11 @@ func runLogSink(args *docopt.Args) error {
 
 	listRec(w, "ID", "KIND", "CONFIG")
 	for _, j := range sinks {
-		listRec(w, j.ID, j.Kind, string(j.Config))
+		var config string
+		if j.Config != nil {
+			config = string(*j.Config)
+		}
+		listRec(w, j.ID, j.Kind, config)
 	}
 
 	return nil
@@ -493,17 +497,18 @@ func runLogSinkAddSyslog(args *docopt.Args, client controller.Client) error {
 		return fmt.Errorf("Invalid syslog format: %s", args.String["--format"])
 	}
 
-	config, _ := json.Marshal(ct.SyslogSinkConfig{
+	data, _ := json.Marshal(ct.SyslogSinkConfig{
 		Prefix:   args.String["<prefix>"],
 		URL:      u.String(),
 		UseIDs:   args.Bool["--use-ids"],
 		Insecure: args.Bool["--insecure"],
 		Format:   format,
 	})
+	config := json.RawMessage(data)
 
 	sink := &ct.Sink{
 		Kind:   ct.SinkKindSyslog,
-		Config: config,
+		Config: &config,
 	}
 
 	if err := client.CreateSink(sink); err != nil {

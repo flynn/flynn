@@ -790,15 +790,16 @@ func (s *HostSuite) TestLogSinks(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	// add sink to controller
-	config, err := json.Marshal(&ct.SyslogSinkConfig{
+	data, err := json.Marshal(&ct.SyslogSinkConfig{
 		URL:            fmt.Sprintf("syslog://%s", instances[0].Addr),
 		UseIDs:         true,
 		StructuredData: true,
 	})
 	t.Assert(err, c.IsNil)
+	config := json.RawMessage(data)
 	sink := &ct.Sink{
 		Kind:   ct.SinkKindSyslog,
-		Config: config,
+		Config: &config,
 	}
 	t.Assert(client.CreateSink(sink), c.IsNil)
 

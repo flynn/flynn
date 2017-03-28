@@ -690,12 +690,12 @@ const (
 )
 
 type Sink struct {
-	ID          string          `json:"id"`
-	Kind        SinkKind        `json:"kind"`
-	HostManaged bool            `json:"host_managed,omitempty"`
-	Config      json.RawMessage `json:"config,omitempty"`
-	CreatedAt   *time.Time      `json:"created_at,omitempty"`
-	UpdatedAt   *time.Time      `json:"updated_at,omitempty"`
+	ID          string           `json:"id"`
+	Kind        SinkKind         `json:"kind"`
+	HostManaged bool             `json:"host_managed,omitempty"`
+	Config      *json.RawMessage `json:"config,omitempty"`
+	CreatedAt   *time.Time       `json:"created_at,omitempty"`
+	UpdatedAt   *time.Time       `json:"updated_at,omitempty"`
 }
 
 type SyslogFormat string
