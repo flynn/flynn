@@ -434,6 +434,24 @@ func (h *Helper) createAppWithClient(t *c.C, client controller.Client) (*ct.App,
 					},
 				}},
 			},
+			"minio": {
+				Args: []string{"/bin/minio", "server", "/data"},
+				Env: map[string]string{
+					"MINIO_ACCESS_KEY": minioAccessKey,
+					"MINIO_SECRET_KEY": minioSecretKey,
+				},
+				Ports: []ct.Port{{
+					Proto: "tcp",
+					Port:  9000,
+					Service: &host.Service{
+						Name:   "minio",
+						Create: true,
+						Check:  &host.HealthCheck{Type: "http", Status: 403},
+					},
+				}},
+				Service: "minio",
+				Volumes: []ct.VolumeReq{{Path: "/data"}},
+			},
 		},
 	}
 	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)

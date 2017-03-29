@@ -8,3 +8,4 @@ ADD bin/partial-logger /bin/partial-logger
 ADD bin/http-blocker /bin/http-blocker
 ADD bin/oom /bin/oom
 ADD bin/proxy /bin/proxy
+ADD bin/minio /bin/minio
