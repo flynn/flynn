@@ -7,4 +7,5 @@ include_rules
 : |> !go ./http-blocker |> bin/http-blocker
 : |> !go ./oom |> bin/oom
 : |> !go ./proxy |> bin/proxy
+: |> ./minio.sh |> bin/minio
 : bin/* | $(ROOT)/util/imagebuilder/build-image |> ^ build-image test-apps^ $(BUILDIMAGE) test-apps > %o |> $(ROOT)/image/test-apps.json

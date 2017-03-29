@@ -28,7 +28,7 @@ func (s *BlobstoreSuite) TestBlobstoreBackendS3(t *c.C) {
 		t.Skip("missing BLOBSTORE_S3_CONFIG env var")
 	}
 
-	s.testBlobstoreBackend(t, "s3", ".+s3.amazonaws.com.+", `"BACKEND_S3=$BLOBSTORE_S3_CONFIG"`)
+	s.testBlobstoreBackend(t, "s3", ".+s3.amazonaws.com.+", nil, `"BACKEND_S3=$BLOBSTORE_S3_CONFIG"`)
 }
 
 func (s *BlobstoreSuite) TestBlobstoreBackendGCS(t *c.C) {
@@ -44,7 +44,7 @@ func (s *BlobstoreSuite) TestBlobstoreBackendGCS(t *c.C) {
 	err := json.Unmarshal([]byte(gcsConfig), &data)
 	t.Assert(err, c.IsNil)
 
-	s.testBlobstoreBackend(t, "gcs", ".+google.+", fmt.Sprintf(`"BACKEND_GCS=backend=gcs bucket=%s"`, data.Bucket), `"BACKEND_GCS_KEY=$BLOBSTORE_GCS_CONFIG"`)
+	s.testBlobstoreBackend(t, "gcs", ".+google.+", nil, fmt.Sprintf(`"BACKEND_GCS=backend=gcs bucket=%s"`, data.Bucket), `"BACKEND_GCS_KEY=$BLOBSTORE_GCS_CONFIG"`)
 }
 
 func (s *BlobstoreSuite) TestBlobstoreBackendAzure(t *c.C) {
@@ -55,12 +55,33 @@ func (s *BlobstoreSuite) TestBlobstoreBackendAzure(t *c.C) {
 		t.Skip("missing BLOBSTORE_AZURE_CONFIG env var")
 	}
 
-	s.testBlobstoreBackend(t, "azure", ".+blob.core.windows.net.+", `"BACKEND_AZURE=$BLOBSTORE_AZURE_CONFIG"`)
+	s.testBlobstoreBackend(t, "azure", ".+blob.core.windows.net.+", nil, `"BACKEND_AZURE=$BLOBSTORE_AZURE_CONFIG"`)
 }
 
-func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern string, env ...string) {
+const (
+	minioAccessKey = "AKIAIOSFODNN7EXAMPLE"
+	minioSecretKey = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+)
+
+func (s *BlobstoreSuite) TestBlobstoreBackendMinio(t *c.C) {
+	setup := func(x *Cluster) {
+		app, release := s.createAppWithClient(t, x.controller)
+		err := x.controller.ScaleAppRelease(app.ID, release.ID, ct.ScaleOptions{
+			Processes: map[string]int{"minio": 1},
+		})
+		t.Assert(err, c.IsNil)
+	}
+
+	s.testBlobstoreBackend(t, "minio", ".+minio.discoverd.+", setup, fmt.Sprintf(`BACKEND_MINIO="backend=minio insecure=true endpoint=minio.discoverd:9000 bucket=flynnblobstore access_key_id=%s secret_access_key=%s"`, minioAccessKey, minioSecretKey))
+}
+
+func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern string, setup func(*Cluster), env ...string) {
 	x := s.bootCluster(t, 1)
 	defer x.Destroy()
+
+	if setup != nil {
+		setup(x)
+	}
 
 	r := s.newGitRepo(t, "http")
 	r.cluster = x
