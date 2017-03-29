@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -89,10 +90,12 @@ func (b *minioBackend) Open(tx *postgres.DBTx, info FileInfo, txControl bool) (F
 		tx.Rollback()
 	}
 
-	return b.client.GetObject(
-		b.bucket,
-		info.ExternalID,
-	)
+	url, err := b.client.PresignedGetObject(b.bucket, info.ExternalID, 10*time.Minute, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRedirectFileStream(url.String()), nil
 }
 
 func (b *minioBackend) Put(tx *postgres.DBTx, info FileInfo, r io.Reader, append bool) error {
