@@ -71,7 +71,7 @@ type Header struct {
 	MsgID     []byte
 }
 
-const syslogTimestamp = "2006-01-02T15:04:05.999999Z07:00"
+const syslogTimestamp = "2006-01-02T15:04:05.000000Z07:00"
 
 func (h Header) Bytes() []byte {
 	hostname := h.Hostname
