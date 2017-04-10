@@ -41,6 +41,8 @@ func TestMain_Discoverd(t *testing.T) {
 		return hb, nil
 	}
 
+	m.Process.Password = "password"
+
 	// Execute program.
 	if err := m.Run(); err != nil {
 		t.Fatal(err)
