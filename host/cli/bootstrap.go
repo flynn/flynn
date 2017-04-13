@@ -130,6 +130,7 @@ func runBootstrap(args *docopt.Args) error {
 }
 
 func runBootstrapBackup(manifest []byte, backupFile string, ch chan *bootstrap.StepInfo, cfg bootstrap.Config) error {
+	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
 	defer close(ch)
 	f, err := os.Open(backupFile)
 	if err != nil {
@@ -722,6 +723,23 @@ UPDATE releases SET env = jsonb_set(env, '{%[1]s_IMAGE_ID}', ('"' || (SELECT art
 WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
 			strings.ToUpper(name), artifacts[name+"-image"].URI))
 	}
+
+	// remove job and volume records created by previous clusters
+	sqlBuf.WriteString(fmt.Sprintf(`
+DELETE FROM events WHERE object_type IN ('job', 'volume') AND created_at < '%s';`,
+		startedAt))
+	sqlBuf.WriteString(fmt.Sprintf(`
+DELETE FROM job_volumes USING job_cache WHERE job_volumes.job_id = job_cache.job_id AND job_cache.created_at < '%s';`,
+		startedAt))
+	sqlBuf.WriteString(fmt.Sprintf(`
+DELETE FROM job_volumes USING volumes WHERE job_volumes.volume_id = volumes.volume_id AND volumes.created_at < '%s';`,
+		startedAt))
+	sqlBuf.WriteString(fmt.Sprintf(`
+DELETE FROM job_cache WHERE created_at < '%s';`,
+		startedAt))
+	sqlBuf.WriteString(fmt.Sprintf(`
+DELETE FROM volumes WHERE created_at < '%s';`,
+		startedAt))
 
 	// run the above artifact migration SQL against the controller database
 	cmd = exec.JobUsingHost(state.Hosts[0], artifacts["postgres"], nil)
