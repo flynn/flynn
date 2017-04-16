@@ -166,13 +166,15 @@ apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 \
   B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 \
   199369E5404BD5FC7D2FE43BCBCB082A1BB943DB \
   4D1BB29D63D98E422B2113B19334A25F8507EFA5 \
-  42F3E95A2C4F08279C4960ADD68FA50FEA312927
+  42F3E95A2C4F08279C4960ADD68FA50FEA312927 \
+  136221EE520DDFAF0A905689B9316A7BC7917B12
 
 # add repos
 echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list
 echo "deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.1/ubuntu trusty main" >> /etc/apt/sources.list.d/mariadb.list
 echo "deb http://repo.percona.com/apt trusty main" >> /etc/apt/sources.list.d/percona.list
 echo "deb http://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.2 multiverse" >> /etc/apt/sources.list.d/mongo-org-3.2.list
+echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu trusty main" >> /etc/apt/sources.list.d/redis.list
 
 # update lists
 apt-get update
@@ -193,6 +195,10 @@ service mysql stop
 # setup mongodb
 echo "manual" > /etc/init/mongod.override
 stop mongod
+
+# setup redis
+update-rc.d redis-server disable
+service redis-server stop
 
 # make tup suid root so that we can build in chroots
 chmod ug+s /usr/bin/tup
