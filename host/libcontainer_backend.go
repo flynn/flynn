@@ -1612,8 +1612,15 @@ func createTmpfs(size int64) (*Tmpfs, error) {
 }
 
 func forceMemoryOvercommit() error {
-	if err := ioutil.WriteFile("/proc/sys/vm/overcommit_memory", []byte("1"), 0640); err != nil {
-		return fmt.Errorf("error forcing overcommit: %s", err)
+	path := "/proc/sys/vm/overcommit_memory"
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if !bytes.HasPrefix(data, []byte("1")) {
+		if err := ioutil.WriteFile(path, []byte("1"), 0640); err != nil {
+			return fmt.Errorf("error forcing overcommit: %s", err)
+		}
 	}
 	return nil
 }
