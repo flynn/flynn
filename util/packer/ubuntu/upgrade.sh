@@ -56,7 +56,7 @@ EOF
 }
 
 upgrade_packages() {
-  apt-get install --install-recommends linux-generic-lts-xenial \
+  apt-get install --install-recommends linux-generic-hwe-16.04 \
     -y \
     -o Dpkg::Options::="--force-confdef" \
     -o Dpkg::Options::="--force-confold"
