@@ -33,7 +33,7 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_USEAST_AMI="ami-e6d5d2f1" # us-east-1 | xenial | 16.04 LTS | amd64 | hvm:ebs-ssd | 20161205 | hvm
+UBUNTU_USEAST_AMI="ami-80861296" # us-east-1 | xenial | 16.04 LTS | amd64 | hvm:ebs-ssd | 20170414 | hvm
 
 usage() {
   cat <<USAGE >&2
