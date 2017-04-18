@@ -272,11 +272,23 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 		release.ID = ""
 	} else {
 		release.ID = ""
+
+		if len(updates.Env) > 0 && len(release.Env) == 0 {
+			release.Env = make(map[string]string, len(updates.Env))
+		}
 		for key, value := range updates.Env {
 			release.Env[key] = value
 		}
+
+		if len(updates.Meta) > 0 && len(release.Meta) == 0 {
+			release.Meta = make(map[string]string, len(updates.Meta))
+		}
 		for key, value := range updates.Meta {
 			release.Meta[key] = value
+		}
+
+		if len(updates.Processes) > 0 && len(release.Processes) == 0 {
+			release.Processes = make(map[string]ct.ProcessType, len(updates.Processes))
 		}
 		for procKey, procUpdate := range updates.Processes {
 			procRelease, ok := release.Processes[procKey]
@@ -288,9 +300,14 @@ func runReleaseUpdate(args *docopt.Args, client controller.Client) error {
 			if len(procUpdate.Args) > 0 {
 				procRelease.Args = procUpdate.Args
 			}
+
+			if len(procUpdate.Env) > 0 && len(procRelease.Env) == 0 {
+				procRelease.Env = make(map[string]string, len(procUpdate.Env))
+			}
 			for key, value := range procUpdate.Env {
 				procRelease.Env[key] = value
 			}
+
 			if len(procUpdate.Ports) > 0 {
 				procRelease.Ports = procUpdate.Ports
 			}
