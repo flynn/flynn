@@ -436,7 +436,7 @@ and new keys can be added. Keys are stored in the environment variable
     NEW_KEY=$(openssl rand -hex 16)
 
     # Add the new key alongside the existing key
-    flynn -a controller env set AUTH_KEY=$NEW_KEY,$(flynn -a controller env get AUTH_KEY)
+    flynn -a controller env set -t web AUTH_KEY=$NEW_KEY,$(flynn -a controller env get AUTH_KEY)
 
 To rotate an authentication key:
 
