@@ -153,6 +153,10 @@ func (c *DigitalOceanCluster) createKeyPair() error {
 		return err
 	}
 
+	if err := c.base.saveField("SSHKeyName", c.base.SSHKeyName); err != nil {
+		return err
+	}
+
 	err = saveSSHKey(keypairName, keypair)
 	if err != nil {
 		return err

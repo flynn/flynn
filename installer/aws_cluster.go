@@ -242,6 +242,9 @@ func (c *AWSCluster) loadKeyPair(name string) error {
 		}
 	}
 	c.base.SSHKeyName = *res.KeyPairs[0].KeyName
+	if err := c.base.saveField("SSHKeyName", c.base.SSHKeyName); err != nil {
+		return err
+	}
 	return saveSSHKey(c.base.SSHKeyName, keypair)
 }
 
