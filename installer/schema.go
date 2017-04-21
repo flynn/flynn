@@ -122,6 +122,8 @@ type BaseCluster struct {
 	State               string            `json:"state" ql:"index xState"` // enum(starting, error, running, deleting)
 	Name                string            `json:"name" ql:"-"`
 	NumInstances        int64             `json:"num_instances"`
+	ReleaseChannel      string            `json:"release_channel,omitempty"`
+	ReleaseVersion      string            `json:"release_version,omitempty"`
 	ControllerKey       string            `json:"controller_key,omitempty"`
 	ControllerPin       string            `json:"controller_pin,omitempty"`
 	DashboardLoginToken string            `json:"dashboard_login_token,omitempty"`

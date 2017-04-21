@@ -427,6 +427,12 @@ func (c *DigitalOceanCluster) instanceInstallFlynn(sshConfig *ssh.ClientConfig, 
 	for {
 		c.base.SendLog(fmt.Sprintf("Installing flynn on %s", ipAddress))
 		cmd := "curl -fsSL -o /tmp/install-flynn https://dl.flynn.io/install-flynn && sudo bash /tmp/install-flynn --clean"
+		if c.base.ReleaseChannel != "" {
+			cmd = fmt.Sprintf("%s --channel %s", cmd, c.base.ReleaseChannel)
+		}
+		if c.base.ReleaseVersion != "" {
+			cmd = fmt.Sprintf("%s --version %s", cmd, c.base.ReleaseVersion)
+		}
 		err := c.base.instanceRunCmd(cmd, sshConfig, ipAddress)
 		if err != nil {
 			if attemptsRemaining > 0 {

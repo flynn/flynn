@@ -50,6 +50,12 @@ func (c *BareCluster) instanceInstallFlynn(t *TargetServer) error {
 	for {
 		c.Base.SendLog(fmt.Sprintf("Installing flynn on %s", t.IP))
 		cmd := "curl -fsSL -o /tmp/install-flynn https://dl.flynn.io/install-flynn && sudo bash /tmp/install-flynn"
+		if c.Base.ReleaseChannel != "" {
+			cmd = fmt.Sprintf("%s --channel %s", cmd, c.Base.ReleaseChannel)
+		}
+		if c.Base.ReleaseVersion != "" {
+			cmd = fmt.Sprintf("%s --version %s", cmd, c.Base.ReleaseVersion)
+		}
 		if c.Base.Type == "ssh" {
 			cmd = cmd + " --clean"
 		}

@@ -19,6 +19,7 @@ import (
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
+	"github.com/flynn/flynn/util/release/types"
 	"github.com/flynn/oauth2"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/browser"
@@ -38,9 +39,11 @@ type htmlTemplateData struct {
 }
 
 type installerJSConfig struct {
-	Endpoints            map[string]string `json:"endpoints"`
-	HasAWSEnvCredentials bool              `json:"has_aws_env_credentials"`
-	AWSEnvCredentialsID  string            `json:"aws_env_credentials_id,omitempty"`
+	ReleaseChannels      []*ReleaseChannel     `json:"release_channels"`
+	EC2Versions          []*release.EC2Version `json:"ec2_versions"`
+	Endpoints            map[string]string     `json:"endpoints"`
+	HasAWSEnvCredentials bool                  `json:"has_aws_env_credentials"`
+	AWSEnvCredentialsID  string                `json:"aws_env_credentials_id,omitempty"`
 }
 
 type httpAPI struct {
@@ -58,6 +61,8 @@ func ServeHTTP() error {
 		Installer: installer,
 		logger:    logger,
 		clientConfig: installerJSConfig{
+			ReleaseChannels: installer.releaseChannels,
+			EC2Versions:     installer.ec2Versions,
 			Endpoints: map[string]string{
 				"clusters":           "/clusters",
 				"cluster":            "/clusters/:id",
