@@ -898,6 +898,7 @@ func (c *BaseCluster) genStartScript(nodes int64, dataDisk string) (string, stri
 
 var iptablesConfigScript = template.Must(template.New("iptables.sh").Parse(`
 export DEBIAN_FRONTEND=noninteractive
+apt-get update
 apt-get install -y iptables-persistent
 iptables -F INPUT
 {{ range $i, $ip := .InstanceIPs }}
