@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -12,17 +13,30 @@ import (
 	"github.com/digitalocean/godo"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/util/release/types"
 	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 var ClusterNotFoundError = errors.New("Cluster not found")
 
+type ReleaseChannel struct {
+	Name    string                   `json:"name"`
+	Version string                   `json:"version"`
+	History []*ReleaseChannelVersion `json:"history"`
+}
+
+type ReleaseChannelVersion struct {
+	Version string `json:"version"`
+}
+
 type Installer struct {
-	db            *sql.DB
-	events        []*Event
-	subscriptions []*Subscription
-	clusters      []Cluster
-	logger        log.Logger
+	db              *sql.DB
+	events          []*Event
+	subscriptions   []*Subscription
+	clusters        []Cluster
+	logger          log.Logger
+	releaseChannels []*ReleaseChannel
+	ec2Versions     []*release.EC2Version
 
 	dbMtx        sync.RWMutex
 	eventsMtx    sync.RWMutex
@@ -45,6 +59,29 @@ func NewInstaller(l log.Logger) *Installer {
 	if err := installer.loadEventsFromDB(); err != nil {
 		shutdown.Fatalf("Error loading events from database: %s", err)
 	}
+
+	// Get current list of releases
+	resp, err := http.Get("https://releases.flynn.io/api/channels")
+	if err != nil {
+		l.Debug(fmt.Sprintf("Unable to fetch releases: %s", err))
+		return installer
+	}
+	defer resp.Body.Close()
+	var channels []*ReleaseChannel
+	if err := json.NewDecoder(resp.Body).Decode(&channels); err != nil {
+		l.Debug(fmt.Sprintf("Unable to read list of fetched releases: %s", err))
+		return installer
+	}
+	installer.releaseChannels = channels
+
+	// Get current list of EC2 images
+	ec2Versions, err := installer.fetchEC2Versions()
+	if err != nil {
+		l.Debug(fmt.Sprintf("Unable to fetch EC2 images: %s", err))
+		return installer
+	}
+	installer.ec2Versions = ec2Versions
+
 	return installer
 }
 
@@ -65,6 +102,25 @@ func (i *Installer) loadEventsFromDB() error {
 	}
 	i.events = events
 	return nil
+}
+
+func (i *Installer) fetchEC2Versions() ([]*release.EC2Version, error) {
+	res, err := http.Get("https://dl.flynn.io/ec2/images.json")
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Failed to fetch list of flynn images: %s", res.Status)
+	}
+	manifest := release.EC2Manifest{}
+	if err := json.NewDecoder(res.Body).Decode(&manifest); err != nil {
+		return nil, err
+	}
+	if len(manifest.Versions) == 0 {
+		return nil, errors.New("No versions in manifest")
+	}
+	return manifest.Versions, nil
 }
 
 func (i *Installer) removeClusterEvents(clusterID string) {

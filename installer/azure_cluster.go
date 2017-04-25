@@ -138,6 +138,9 @@ func (c *AzureCluster) createKeyPair() error {
 	}
 	c.base.SSHKey = keypair
 	c.base.SSHKeyName = keypairName
+	if err := c.base.saveField("SSHKeyName", c.base.SSHKeyName); err != nil {
+		return err
+	}
 	return saveSSHKey(keypairName, keypair)
 }
 

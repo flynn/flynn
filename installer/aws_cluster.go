@@ -242,6 +242,9 @@ func (c *AWSCluster) loadKeyPair(name string) error {
 		}
 	}
 	c.base.SSHKeyName = *res.KeyPairs[0].KeyName
+	if err := c.base.saveField("SSHKeyName", c.base.SSHKeyName); err != nil {
+		return err
+	}
 	return saveSSHKey(c.base.SSHKeyName, keypair)
 }
 
@@ -378,7 +381,15 @@ func (c *AWSCluster) fetchLatestEC2Images() ([]*release.EC2Image, error) {
 	if len(manifest.Versions) == 0 {
 		return nil, errors.New("No versions in manifest")
 	}
-	return manifest.Versions[0].Images, nil
+	if c.base.ReleaseVersion == "" {
+		return manifest.Versions[0].Images, nil
+	}
+	for _, v := range manifest.Versions {
+		if v.Version == c.base.ReleaseVersion {
+			return v.Images, nil
+		}
+	}
+	return nil, fmt.Errorf("No images found for version %s", c.base.ReleaseVersion)
 }
 
 type stackTemplateData struct {

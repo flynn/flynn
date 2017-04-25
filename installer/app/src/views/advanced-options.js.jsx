@@ -1,4 +1,5 @@
 import BackupSelector from './backup-selector';
+import ReleaseChannelSelector from './release-channel-selector';
 
 var AdvancedOptions = React.createClass({
 	render: function () {
@@ -12,6 +13,9 @@ var AdvancedOptions = React.createClass({
 					<div style={{
 						marginTop: 20
 					}}>
+						<ReleaseChannelSelector state={state} />
+						<br />
+						<br />
 						<BackupSelector state={state} />
 						<br />
 						<br />

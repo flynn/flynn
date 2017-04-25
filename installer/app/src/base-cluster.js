@@ -1,6 +1,12 @@
 import { extend, createClass } from 'marbles/utils';
 import State from 'marbles/state';
 import Dispatcher from './dispatcher';
+import Config from './config';
+
+var releaseChannels = Config.release_channels || [];
+if (releaseChannels.length === 0) {
+	releaseChannels = [{name: null, version: null}];
+}
 
 var BaseCluster = createClass({
 	mixins: [State],
@@ -24,6 +30,8 @@ var BaseCluster = createClass({
 
 	getInitialState: function () {
 		return {
+			releaseChannel: releaseChannels[0].name,
+			releaseVersion: releaseChannels[0].version,
 			selectedCloud: this.constructor.type,
 			selectedRegionSlug: null,
 			logEvents: [],
@@ -75,6 +83,17 @@ var BaseCluster = createClass({
 
 			__allCredentials: attrs.credentials || prevState.__allCredentials
 		};
+
+		if (attrs.hasOwnProperty('releaseChannel') && attrs.releaseChannel !== prevState.releaseChannel) {
+			state.releaseChannel = attrs.releaseChannel;
+		} else {
+			state.releaseChannel = prevState.releaseChannel;
+		}
+		if (attrs.hasOwnProperty('releaseVersion') && attrs.releaseVersion !== prevState.releaseVersion) {
+			state.releaseVersion = attrs.releaseVersion;
+		} else {
+			state.releaseVersion = prevState.releaseVersion;
+		}
 
 		var credentialIDExists = false;
 		state.credentials = state.__allCredentials.filter(function (creds) {
@@ -267,6 +286,20 @@ var BaseCluster = createClass({
 			}));
 			break;
 
+		case 'SELECT_RELEASE_CHANNEL':
+			this.setState(this.__computeState({
+				releaseChannel: event.releaseChannel,
+				releaseVersion: event.releaseVersion
+			}));
+			break;
+
+		case 'SELECT_RELEASE_VERSION':
+			this.setState(this.__computeState({
+				releaseChannel: event.releaseChannel,
+				releaseVersion: event.releaseVersion
+			}));
+			break;
+
 		case 'SELECT_BACKUP':
 			this.setState(this.__computeState({
 				backupFile: event.file
@@ -291,6 +324,8 @@ var BaseCluster = createClass({
 });
 
 BaseCluster.prototype.setState = function (newState, shouldDelay) {
+	this.attrs.releaseChannel = newState.releaseChannel;
+	this.attrs.releaseVersion = newState.releaseVersion;
 	this.attrs.credentialID = newState.credentialID;
 	this.attrs.numInstances = newState.numInstances;
 	this.attrs.region = newState.selectedRegionSlug;
@@ -306,6 +341,8 @@ BaseCluster.prototype.setState = function (newState, shouldDelay) {
 BaseCluster.jsonFields = {
 	id: 'ID',
 	type: 'type',
+	release_channel: 'releaseChannel',
+	release_version: 'releaseVersion',
 	state: 'state',
 	region: 'region',
 	num_instances: 'numInstances',
