@@ -29,9 +29,13 @@ type TarWriter struct {
 }
 
 func NewTarWriter(name string, w io.Writer, progress ProgressBar) *TarWriter {
+	userid := syscall.Getuid()
+	if userid < 0 {
+		userid = 0
+	}
 	return &TarWriter{
 		Writer:   tar.NewWriter(w),
-		uid:      syscall.Getuid(),
+		uid:      userid,
 		name:     name,
 		progress: progress,
 	}
