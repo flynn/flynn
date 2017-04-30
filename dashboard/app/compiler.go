@@ -6,16 +6,11 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 
 	matrix "github.com/jvatic/asset-matrix-go"
 )
 
 func main() {
-	installerSrcDir := os.Getenv("INSTALLER_SRC_DIR")
-	if installerSrcDir == "" {
-		installerSrcDir = "./lib/installer"
-	}
 	m := matrix.New(&matrix.Config{
 		Paths: []*matrix.AssetRoot{
 			{
@@ -29,9 +24,6 @@ func main() {
 				GitBranch: "master",
 				GitRef:    "19649ac60d7da571595d54c6368fe1601bb0b79b",
 				Path:      "assets",
-			},
-			{
-				Path: filepath.Join(installerSrcDir, "images"),
 			},
 			{
 				Path: "./lib/javascripts",

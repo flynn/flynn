@@ -24,8 +24,7 @@ to generate an API token and link it.
 
 A secret bearer token used to access the dashboard is generated when Flynn is
 installed. The bootstrap command will provide a login token upon completion. If
-you used the cloud installer or forget the token, you can retrieve it using the
-CLI:
+you lost the token, you can retrieve it using the CLI:
 
 ```text
 $ flynn -a dashboard env get LOGIN_TOKEN

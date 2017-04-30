@@ -1,6 +1,9 @@
-import UserAgent from './css/user-agent';
+import { extend } from 'marbles/utils';
+import UserAgent from './user-agent';
 import { green as GreenBtnCSS } from './css/button';
-import AssetPaths from './asset-paths';
+import Config from '../config';
+
+var AssetPaths = Config.ASSET_PATHS;
 
 var firefoxImgInfo = {
 	width: 600,

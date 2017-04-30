@@ -19,7 +19,7 @@ clean:
 test: test-unit test-integration
 
 test-unit-deps: toolchain
-	@$(GIT_DEV) $(GO_ENV) tup discoverd host/cli/root_keys.go installer/bindata.go dashboard/bindata.go
+	@$(GIT_DEV) $(GO_ENV) tup discoverd host/cli/root_keys.go dashboard/bindata.go
 
 test-unit: test-unit-deps
 	@$(GO_ENV) PATH=${PWD}/discoverd/bin:${PATH} util/_toolchain/go/bin/go test -race -cover ./...
