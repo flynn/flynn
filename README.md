@@ -34,10 +34,8 @@ searching to see if anyone has already reported the issue.
 
 ### Run your own cluster
 
-Flynn includes an installer that supports most major cloud providers.
-
 If you want to setup and run your own Flynn cluster (either locally, on
-dedicated hardware or using a cloud provider) take a look at the [Installation
+dedicated hardware or on a cloud provider) take a look at the [Installation
 Guide](https://flynn.io/docs/installation).
 
 ### Deploying applications

@@ -1,8 +1,7 @@
 [
   { "title": "Installation", "path": "/docs/installation", "children": [
-    { "title": "Cloud", "path": "/docs/installation/cloud" },
+    { "title": "Instructions", "path": "/docs/installation/manual" },
     { "title": "Vagrant", "path": "/docs/installation/vagrant" },
-    { "title": "Manual", "path": "/docs/installation/manual" },
     { "title": "Releases", "path": "https://releases.flynn.io" }
   ] },
   { "title": "Using", "children": [

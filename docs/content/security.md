@@ -54,13 +54,11 @@ associated with the CA certificate is discarded immediately to prevent misuse.
 The CA certificate is required as a work-around for how browsers handle multiple
 connections to servers with self-signed certificates. The CA certificate is
 provided to the browser by the dashboard in order to allow TLS-encrypted
-communication with the dashboard and the controller. If the Flynn installer is
-used, this CA certificate is transferred over SSH during installation and will
-prevent MITM attacks when visiting the dashboard. If the installer is not used,
-the certificate may be provided over an insecure connection the first time the
-dashboard is visited, do not install the certificate if the connection is not
-trusted. In the future we will use [Let's Encrypt](https://letsencrypt.org) to
-avoid the need for the generated certificates and trust bootstrapping.
+communication with the dashboard and the controller. The certificate may be
+provided over an insecure connection the first time the dashboard is visited, do
+not install the certificate if the connection is not trusted. In the future we
+will use [Let's Encrypt](https://letsencrypt.org) to avoid the need for the
+generated certificates and trust bootstrapping.
 
 ## Applications
 

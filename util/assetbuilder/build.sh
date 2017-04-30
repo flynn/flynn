@@ -9,7 +9,7 @@ source "${ROOT}/script/lib/ui.sh"
 
 usage() {
   cat <<USAGE >&2
-usage: $0 <image|app> <dashboard|installer>
+usage: $0 <image|app> dashboard
 USAGE
 }
 
@@ -19,10 +19,6 @@ main() {
     dashboard)
       target=$2
       pkg="main"
-      ;;
-    installer)
-      target=$2
-      pkg=$2
       ;;
     *)
       echo "unknown target"

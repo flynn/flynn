@@ -27,5 +27,6 @@
   "/docs/faq/how-to-register-a-flynn-cluster-with-the-cli-tool": "/docs/cli#adding-clusters",
   "/docs/faq/how-do-i-ssh-to-flynn-cluster-hosts": "/docs/installation/cloud#ssh-access",
   "/docs/operating": "/docs/production",
-  "/docs": "/docs/basics"
+  "/docs": "/docs/basics",
+  "/docs/installation/cloud": "/docs/installation/manual"
 }
