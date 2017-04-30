@@ -169,22 +169,6 @@
 			"Rev": "d3b6d25135b4e09ecd39ea3c2a5cad35279b0515"
 		},
 		{
-			"ImportPath": "github.com/awslabs/aws-sdk-go/aws",
-			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
-		},
-		{
-			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/ec2",
-			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
-		},
-		{
-			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/endpoints",
-			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
-		},
-		{
-			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/s3",
-			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
-		},
-		{
 			"ImportPath": "github.com/boltdb/bolt",
 			"Comment": "v1.1.0-22-g6e1ca38",
 			"Rev": "6e1ca38c6a73025366cd8705553b404746ee6e63"
@@ -1032,10 +1016,6 @@
 		{
 			"ImportPath": "github.com/vanillahsu/go_reuseport",
 			"Rev": "087e013b0a0c193ca9b1bb21f453b74aa9b31138"
-		},
-		{
-			"ImportPath": "github.com/vaughan0/go-ini",
-			"Rev": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1"
 		},
 		{
 			"ImportPath": "github.com/vbatts/tar-split/archive/tar",

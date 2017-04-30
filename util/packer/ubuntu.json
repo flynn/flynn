@@ -10,43 +10,10 @@
     "iso_url": "",
     "memory": "4096",
     "output_dir": ".",
-    "source_ami": "",
     "ubuntu_version": "",
     "version": ""
   },
   "builders": [
-    {
-      "type": "vmware-iso",
-      "boot_command": [
-        "{{ user `boot_command_prefix` }}",
-        "/install/vmlinuz noapic ",
-        "preseed/file=/floppy/preseed.cfg ",
-        "debian-installer=en_US auto locale=en_US kbd-chooser/method=us ",
-        "hostname=flynn ",
-        "grub-installer/bootdev=/dev/sda<wait> ",
-        "fb=false debconf/frontend=noninteractive ",
-        "keyboard-configuration/modelcode=SKIP keyboard-configuration/layout=USA ",
-        "keyboard-configuration/variant=USA console-setup/ask_detect=false ",
-        "initrd=/install/initrd.gz -- <enter>"
-      ],
-      "floppy_files": [
-        "ubuntu/preseed.cfg"
-      ],
-      "headless": "{{ user `headless` }}",
-      "iso_checksum": "{{ user `iso_checksum` }}",
-      "iso_checksum_type": "{{ user `iso_checksum_type` }}",
-      "iso_url": "{{ user `iso_url` }}",
-      "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
-      "ssh_password": "vagrant",
-      "ssh_username": "vagrant",
-      "ssh_wait_timeout": "20m",
-      "tools_upload_flavor": "linux",
-      "vm_name": "flynn-base-{{ user `ubuntu_version` }}",
-      "vmx_data": {
-        "memsize": "{{ user `memory` }}",
-        "numvcpus": "{{ user `cpus` }}"
-      }
-    },
     {
       "type": "virtualbox-iso",
       "boot_command": [
@@ -87,40 +54,9 @@
       ],
       "virtualbox_version_file": ".vbox_version",
       "vm_name": "flynn-base-{{ user `ubuntu_version` }}"
-    },
-    {
-      "type": "amazon-ebs",
-      "ami_block_device_mappings": [{
-        "device_name": "/dev/sda1",
-        "volume_size": "50",
-        "volume_type": "gp2"
-      }],
-      "ami_groups": ["all"],
-      "ami_name": "flynn-{{ user `version` }}-ubuntu-{{ user `ubuntu_version` }}-{{ timestamp }}",
-      "ami_regions": [
-        "ap-northeast-1",
-        "ap-southeast-1",
-        "ap-southeast-2",
-        "ca-central-1",
-        "eu-central-1",
-        "eu-west-1",
-        "sa-east-1",
-        "us-west-1",
-        "us-west-2"
-      ],
-      "instance_type": "m3.large",
-      "region": "us-east-1",
-      "source_ami": "{{ user `source_ami` }}",
-      "ssh_username": "ubuntu"
     }
   ],
-  "_comment": "Sleep provisioner for amazon-ebs is an attempt to fix gh#1829",
   "provisioners": [
-    {
-      "type": "shell",
-      "inline": ["sleep 60"],
-      "only": ["amazon-ebs"]
-    },
     {
       "type": "shell",
       "script": "ubuntu/upgrade.sh",
