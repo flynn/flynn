@@ -12,18 +12,6 @@ end
 # Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
 VAGRANTFILE_API_VERSION = "2"
 
-# Return a nested hash of amis, indexed by region and root_device_type
-def get_amis
-  require "open-uri"
-  require "json"
-
-  images_uri = "https://dl.flynn.io/ec2/images.json"
-  json = JSON.parse(open(images_uri).read())
-  latest = json["versions"][0]["images"]
-
-  Hash[ latest.map { |ami| [ ami["region"], Hash[ ami["root_device_type"], ami["id"] ] ] } ]
-end
-
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box = "flynn-base"
   config.vm.box_url = "https://dl.flynn.io/vagrant/flynn-base.json"
@@ -52,51 +40,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     # Workaround for https://www.virtualbox.org/ticket/15705
     v.customize ["modifyvm", :id, "--cableconnected1", "on"]
-  end
-
-  config.vm.provider "vmware_fusion" do |v, override|
-    v.vmx["memsize"] = ENV["VAGRANT_MEMORY"] || 4096
-    v.vmx["numvcpus"] = ENV["VAGRANT_CPUS"] || 4
-
-    # RFC 5737 TEST-NET-1 used to avoid DNS rebind protection
-    override.vm.network "private_network", ip: "192.0.2.100"
-  end
-
-  # AWS_ACCESS_KEY_ID       - AWS IAM public ID
-  # AWS_SECRET_ACCESS_KEY   - AWS IAM secret key
-  # AWS_SESSION_TOKEN       - AWS IAM role session token
-  # AWS_DEFAULT_REGION      - AWS EC2 region to launch instance in
-  # FLYNN_AWS_KEY       - SSH key (.pem file) used to connect to the instance
-  # FLYNN_AWS_KEYNAME   - AWS EC2 key pair name
-  # FLYNN_AWS_SUBNET    - AWS VPC subnet to launch instance in
-  # FLYNN_AWS_IAM       - AWS IAM role (by name) to give instance permissions
-  # FLYNN_AWS_IAM_ARN   - AWS IAM role (by ARN) to give instance permissions
-  # FLYNN_AWS_TAGS      - AWS EC2 tags to apply to instance (comma separated key-value pairs)
-  config.vm.provider "aws" do |aws, override|
-
-    aws.access_key_id = ENV["AWS_ACCESS_KEY_ID"]
-    aws.secret_access_key = ENV["AWS_SECRET_ACCESS_KEY"]
-    aws.session_token = ENV["AWS_SESSION_TOKEN"]
-    aws.keypair_name = ENV["FLYNN_AWS_KEYNAME"]
-
-    get_amis().each_pair do |region,amis|
-      aws.region_config region, :ami => amis["ebs"]
-    end
-
-    aws.region = ( ENV["AWS_DEFAULT_REGION"] || "us-east-1" )
-
-    aws.instance_type = "m3.large"
-    aws.subnet_id = ENV["FLYNN_AWS_SUBNET"]
-    aws.iam_instance_profile_name = ENV["FLYNN_AWS_IAM"]
-    aws.iam_instance_profile_arn = ENV["FLYNN_AWS_IAM_ARN"]
-    added_tags = Hash[ String( ENV["FLYNN_AWS_TAGS"] ).split(",").map {|kv| kv.split("=")} ]
-    aws.tags = { "Name" => 'flynn-vagrant' }.merge(added_tags)
-    aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.DeleteOnTermination' => true }]
-
-    override.vm.box_version = nil
-    override.vm.box_url = "https://github.com/mitchellh/vagrant-aws/raw/master/dummy.box"
-    override.ssh.username = "ubuntu"
-    override.ssh.private_key_path = ENV["FLYNN_AWS_KEY"]
   end
 
   config.vm.provision "shell", privileged: false, inline: <<-SCRIPT
