@@ -33,8 +33,6 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_USEAST_AMI="ami-80861296" # us-east-1 | xenial | 16.04 LTS | amd64 | hvm:ebs-ssd | 20170414 | hvm
-
 usage() {
   cat <<USAGE >&2
 usage: $0 [options] VERSION
@@ -91,18 +89,16 @@ main() {
 
   info "using base dir: ${dir}"
 
-  local amis="$(cat "${dir}/amis.txt" 2>/dev/null)"
   local box=$(ls "${dir}"/*_virtualbox.box 2>/dev/null)
-  if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
-    info "building VirtualBox and EC2 images"
+  if [[ -z "${box}" ]]; then
+    info "building VirtualBox image"
     pushd "${ROOT}/util/packer" >/dev/null
     local output=$(packer build \
       -machine-readable \
-      -only="amazon-ebs,virtualbox-iso" \
+      -only="virtualbox-iso" \
       -var "headless=true" \
       -var "output_dir=${dir}" \
       -var "flynn_repository=https://${domain}" \
-      -var "source_ami=${UBUNTU_USEAST_AMI}" \
       -var "version=${version}" \
       -var-file "ubuntu-xenial.json" \
       ubuntu.json | parse_packer)
@@ -116,17 +112,12 @@ main() {
         virtualbox-iso)
           box="${artifacts}"
           ;;
-        amazon-ebs)
-          amis="${artifacts}"
-          ;;
       esac
     done <<< "${output}"
 
-    if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
+    if [[ -z "${box}" ]]; then
       fail "failed to parse build output"
     fi
-
-    echo -n "${amis}" > "${dir}/amis.txt"
   fi
 
   local box_name="$(basename "${box}")"
@@ -159,22 +150,6 @@ main() {
     "virtualbox" \
     <<< "${manifest}" \
     > "${dir}/manifests/vagrant/flynn-base.json"
-
-  info "fetching current EC2 manifest"
-  local manifest="$(s3cmd \
-    --no-progress \
-    get "s3://${bucket}/ec2/images.json" - 2>/dev/null)"
-  if [[ -z "${manifest}" ]]; then
-    manifest='{"name":"flynn-base"}'
-  fi
-
-  info "updating EC2 manifest"
-  mkdir -p "${dir}/manifests/ec2"
-  "${ROOT}/util/release/flynn-release" amis \
-    "${version}" \
-    "${amis}" \
-    <<< "${manifest}" \
-    > "${dir}/manifests/ec2/images.json"
 
   info "releasing manifests"
   sync_cloudfront "${dir}/manifests/" "s3://${bucket}/"

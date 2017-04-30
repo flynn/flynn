@@ -11,7 +11,6 @@ Usage:
   flynn-release status <commit>
   flynn-release manifest [--output=<dest>] [--image-dir=<dir>] [--image-repository=<url>] <template>
   flynn-release vagrant <url> <checksum> <version> <provider>
-  flynn-release amis <version> <ids>
   flynn-release export <manifest> <dir>
 
 Options:
@@ -28,8 +27,6 @@ Options:
 		manifest(args)
 	case args.Bool["vagrant"]:
 		vagrant(args)
-	case args.Bool["amis"]:
-		amis(args)
 	case args.Bool["export"]:
 		export(args)
 	}

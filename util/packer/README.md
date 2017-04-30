@@ -1,8 +1,8 @@
 # Packer Templates
 
 This directory contains Packer templates for building machine images that
-represent an Ubuntu target system for Flynn. These are essentially stock
-images of Ubuntu 14.04 / 16.04 with Flynn installed.
+represent an Ubuntu target system for Flynn. These are essentially stock images
+of Ubuntu 16.04 with Flynn installed.
 
 ## Usage
 

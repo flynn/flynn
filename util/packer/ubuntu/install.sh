@@ -20,11 +20,6 @@ main() {
     package_cleanup
   fi
 
-  if vmware_build; then
-    install_linux_headers
-    install_vmware_guest_tools
-  fi
-
   if virtualbox_build; then
     install_vbox_guest_additions
     change_hostname
@@ -60,12 +55,8 @@ virtualbox_build() {
   [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-iso" ]]
 }
 
-vmware_build() {
-  [[ "${PACKER_BUILDER_TYPE}" == "vmware-iso" ]]
-}
-
 vagrant_build() {
-  virtualbox_build || vmware_build
+  virtualbox_build
 }
 
 setup_sudo() {
@@ -93,20 +84,6 @@ install_nfs() {
 
 package_cleanup() {
   apt-get purge -y puppet byobu juju ruby
-}
-
-install_linux_headers() {
-  apt-get install -y build-essential linux-headers-$(uname -r)
-}
-
-install_vmware_guest_tools() {
-  cd /tmp
-  mkdir -p /mnt/cdrom
-  mount -o loop ~/linux.iso /mnt/cdrom
-  tar zxf /mnt/cdrom/VMwareTools-*.tar.gz -C /tmp/
-  /tmp/vmware-tools-distrib/vmware-install.pl -d
-  rm /home/vagrant/linux.iso
-  umount /mnt/cdrom
 }
 
 install_vbox_guest_additions() {
