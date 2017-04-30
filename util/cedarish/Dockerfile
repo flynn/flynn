@@ -2,10 +2,12 @@ FROM ubuntu:trusty-20160217
 
 # Derived from https://github.com/heroku/stack-images/blob/master/bin/cedar-14.sh
 
-RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.list &&\
-    echo 'deb http://archive.ubuntu.com/ubuntu trusty-security main' >>/etc/apt/sources.list &&\
-    echo 'deb http://archive.ubuntu.com/ubuntu trusty-updates main' >>/etc/apt/sources.list &&\
+RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main restricted' >/etc/apt/sources.list &&\
+    echo 'deb http://archive.ubuntu.com/ubuntu trusty-updates main restricted' >>/etc/apt/sources.list &&\
     echo 'deb http://archive.ubuntu.com/ubuntu trusty universe' >>/etc/apt/sources.list &&\
+    echo 'deb http://archive.ubuntu.com/ubuntu trusty-updates universe' >>/etc/apt/sources.list &&\
+    echo 'deb http://archive.ubuntu.com/ubuntu trusty-security main restricted' >>/etc/apt/sources.list &&\
+    echo 'deb http://archive.ubuntu.com/ubuntu trusty-security universe' >>/etc/apt/sources.list &&\
 
     apt-get update &&\
     apt-get dist-upgrade -y &&\
