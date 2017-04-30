@@ -25,8 +25,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/awslabs/aws-sdk-go/aws"
-	"github.com/awslabs/aws-sdk-go/gen/s3"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/boltdb/bolt"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iotool"
@@ -185,12 +186,9 @@ func (r *Runner) start() error {
 		HostPolicy: autocert.HostWhitelist(args.Domain),
 	}
 
-	awsAuth, err := aws.EnvCreds()
-	if err != nil {
-		return err
-	}
-	r.s3 = s3.New(awsAuth, "us-east-1", nil)
+	r.s3 = s3.New(session.New(&aws.Config{Region: aws.String("us-east-1")}))
 
+	var err error
 	_, listenPort, err = net.SplitHostPort(args.ListenAddr)
 	if err != nil {
 		return err
@@ -491,7 +489,7 @@ func (r *Runner) uploadToS3(file *os.File, b *Build, boundary string) string {
 	if err := s3attempts.Run(func() error {
 		contentType := "multipart/mixed; boundary=" + boundary
 		acl := "public-read"
-		_, err := r.s3.PutObject(&s3.PutObjectRequest{
+		_, err := r.s3.PutObject(&s3.PutObjectInput{
 			Key:           &name,
 			Body:          file,
 			Bucket:        &logBucket,
