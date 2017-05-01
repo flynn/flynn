@@ -10,8 +10,11 @@ var ClusterDelete = React.createClass({
 					<header>
 						<h2>Delete cluster {this.props.clusterID}?</h2>
 					</header>
-
-					<button type="submit" style={RedBtnCSS}>Delete Cluster</button>
+					<label>
+						<div>Type the cluster ID ({this.props.clusterID}) to confirm deletion</div>
+						<input type="text" value={this.state.confirmation} onChange={this.handleConfirmation} />
+					</label>
+					<button type="submit" style={RedBtnCSS} disabled={this.state.confirmation !== this.props.clusterID}>Delete Cluster</button>
 					<button type="text" style={BtnCSS} onClick={function (e) {
 						e.preventDefault();
 						e.stopPropagation();
@@ -20,6 +23,14 @@ var ClusterDelete = React.createClass({
 				</form>
 			</Modal>
 		);
+	},
+
+	getInitialState: function() {
+		return {confirmation: ''};
+	},
+
+	handleConfirmation: function(e) {
+		this.setState({confirmation: e.target.value});
 	},
 
 	__handleAbort: function () {
