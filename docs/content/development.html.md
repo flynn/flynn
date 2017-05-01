@@ -60,7 +60,7 @@ The development VM has a `GOPATH` of `$HOME/go` and the Flynn source code is syn
 
 If you don't have a specific issue you are trying to fix, but are interested in contributing
 to the project, you should start by looking at GitHub issues labelled
-[easy](https://github.com/flynn/flynn/labels/easy).
+[complexity/easy](https://github.com/flynn/flynn/labels/complexity/easy).
 
 ## Building Flynn
 
