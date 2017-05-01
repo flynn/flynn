@@ -99,6 +99,7 @@
       "ami_name": "flynn-{{ user `version` }}-ubuntu-{{ user `ubuntu_version` }}-{{ timestamp }}",
       "ami_regions": [
         "ap-northeast-1",
+        "ap-south-1",
         "ap-southeast-1",
         "ap-southeast-2",
         "ca-central-1",
