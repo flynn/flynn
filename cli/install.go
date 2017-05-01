@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	register("install", runInstaller, ``)
+	register("install", runInstaller, `usage: flynn install`)
 }
 
 func runInstaller(args *docopt.Args) error {
