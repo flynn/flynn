@@ -908,6 +908,7 @@ iptables -A INPUT -i eth0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A INPUT -i eth0 -p tcp --dport 80 -j ACCEPT
 iptables -A INPUT -i eth0 -p tcp --dport 443 -j ACCEPT
 iptables -A INPUT -i eth0 -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -i eth0 -p tcp -m multiport --dports 3000:3500 -j ACCEPT
 iptables -A INPUT -i eth0 -p icmp --icmp-type echo-request -j ACCEPT
 iptables -A INPUT -i eth0 -j DROP
 netfilter-persistent save
