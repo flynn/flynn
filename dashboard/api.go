@@ -59,6 +59,8 @@ func APIHandler(conf *Config) http.Handler {
 
 	router.HandlerFunc("GET", status.Path, status.HealthyHandler.ServeHTTP)
 
+	router.GET(prefixPath("/robots.txt"), api.WrapHandler(api.ServeRobotsTxt))
+
 	router.POST(prefixPath("/user/sessions"), api.WrapHandler(api.Login))
 	router.DELETE(prefixPath("/user/session"), api.WrapHandler(api.Logout))
 
@@ -155,6 +157,10 @@ func (api *API) ContentSecurityHandler(main http.Handler) http.Handler {
 		w.Header().Add("X-XSS-Protection", "1; mode=block")
 		main.ServeHTTP(w, req)
 	})
+}
+
+func (api *API) ServeRobotsTxt(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	w.Write([]byte("User-agent: *\nDisallow: /\n"))
 }
 
 func (api *API) ServeStatic(ctx context.Context, w http.ResponseWriter, req *http.Request, path string) {
