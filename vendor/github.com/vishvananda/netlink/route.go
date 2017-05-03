@@ -3,43 +3,73 @@ package netlink
 import (
 	"fmt"
 	"net"
-	"syscall"
+	"strings"
 )
 
 // Scope is an enum representing a route scope.
 type Scope uint8
 
-const (
-	SCOPE_UNIVERSE Scope = syscall.RT_SCOPE_UNIVERSE
-	SCOPE_SITE     Scope = syscall.RT_SCOPE_SITE
-	SCOPE_LINK     Scope = syscall.RT_SCOPE_LINK
-	SCOPE_HOST     Scope = syscall.RT_SCOPE_HOST
-	SCOPE_NOWHERE  Scope = syscall.RT_SCOPE_NOWHERE
-)
-
 type NextHopFlag int
 
-const (
-	FLAG_ONLINK    NextHopFlag = syscall.RTNH_F_ONLINK
-	FLAG_PERVASIVE NextHopFlag = syscall.RTNH_F_PERVASIVE
-)
+type Destination interface {
+	Family() int
+	Decode([]byte) error
+	Encode() ([]byte, error)
+	String() string
+}
 
-// Route represents a netlink route. A route is associated with a link,
-// has a destination network, an optional source ip, and optional
-// gateway. Advanced route parameters and non-main routing tables are
-// currently not supported.
+type Encap interface {
+	Type() int
+	Decode([]byte) error
+	Encode() ([]byte, error)
+	String() string
+}
+
+// Route represents a netlink route.
 type Route struct {
-	LinkIndex int
-	Scope     Scope
-	Dst       *net.IPNet
-	Src       net.IP
-	Gw        net.IP
-	Flags     int
+	LinkIndex  int
+	ILinkIndex int
+	Scope      Scope
+	Dst        *net.IPNet
+	Src        net.IP
+	Gw         net.IP
+	MultiPath  []*NexthopInfo
+	Protocol   int
+	Priority   int
+	Table      int
+	Type       int
+	Tos        int
+	Flags      int
+	MPLSDst    *int
+	NewDst     Destination
+	Encap      Encap
 }
 
 func (r Route) String() string {
-	return fmt.Sprintf("{Ifindex: %d Dst: %s Src: %s Gw: %s Flags: %s}", r.LinkIndex, r.Dst,
-		r.Src, r.Gw, r.ListFlags())
+	elems := []string{}
+	if len(r.MultiPath) == 0 {
+		elems = append(elems, fmt.Sprintf("Ifindex: %d", r.LinkIndex))
+	}
+	if r.MPLSDst != nil {
+		elems = append(elems, fmt.Sprintf("Dst: %d", r.MPLSDst))
+	} else {
+		elems = append(elems, fmt.Sprintf("Dst: %s", r.Dst))
+	}
+	if r.NewDst != nil {
+		elems = append(elems, fmt.Sprintf("NewDst: %s", r.NewDst))
+	}
+	if r.Encap != nil {
+		elems = append(elems, fmt.Sprintf("Encap: %s", r.Encap))
+	}
+	elems = append(elems, fmt.Sprintf("Src: %s", r.Src))
+	if len(r.MultiPath) > 0 {
+		elems = append(elems, fmt.Sprintf("Gw: %s", r.MultiPath))
+	} else {
+		elems = append(elems, fmt.Sprintf("Gw: %s", r.Gw))
+	}
+	elems = append(elems, fmt.Sprintf("Flags: %s", r.ListFlags()))
+	elems = append(elems, fmt.Sprintf("Table: %d", r.Table))
+	return fmt.Sprintf("{%s}", strings.Join(elems, " "))
 }
 
 func (r *Route) SetFlag(flag NextHopFlag) {
@@ -55,23 +85,32 @@ type flagString struct {
 	s string
 }
 
-var testFlags = []flagString{
-	flagString{f: FLAG_ONLINK, s: "onlink"},
-	flagString{f: FLAG_PERVASIVE, s: "pervasive"},
-}
-
-func (r *Route) ListFlags() []string {
-	var flags []string
-	for _, tf := range testFlags {
-		if r.Flags&int(tf.f) != 0 {
-			flags = append(flags, tf.s)
-		}
-	}
-	return flags
-}
-
 // RouteUpdate is sent when a route changes - type is RTM_NEWROUTE or RTM_DELROUTE
 type RouteUpdate struct {
 	Type uint16
 	Route
+}
+
+type NexthopInfo struct {
+	LinkIndex int
+	Hops      int
+	Gw        net.IP
+	Flags     int
+	NewDst    Destination
+	Encap     Encap
+}
+
+func (n *NexthopInfo) String() string {
+	elems := []string{}
+	elems = append(elems, fmt.Sprintf("Ifindex: %d", n.LinkIndex))
+	if n.NewDst != nil {
+		elems = append(elems, fmt.Sprintf("NewDst: %s", n.NewDst))
+	}
+	if n.Encap != nil {
+		elems = append(elems, fmt.Sprintf("Encap: %s", n.Encap))
+	}
+	elems = append(elems, fmt.Sprintf("Weight: %d", n.Hops+1))
+	elems = append(elems, fmt.Sprintf("Gw: %d", n.Gw))
+	elems = append(elems, fmt.Sprintf("Flags: %s", n.ListFlags()))
+	return fmt.Sprintf("{%s}", strings.Join(elems, " "))
 }

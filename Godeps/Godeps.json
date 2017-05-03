@@ -1034,11 +1034,15 @@
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink",
-			"Rev": "a57a12c1b1d8aa37cf2f9da4fa7657b1f1fed88c"
+			"Rev": "1e045880fbc2f6703d3c771db56cfb0351208637"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink/nl",
-			"Rev": "a57a12c1b1d8aa37cf2f9da4fa7657b1f1fed88c"
+			"Rev": "1e045880fbc2f6703d3c771db56cfb0351208637"
+		},
+		{
+			"ImportPath": "github.com/vishvananda/netns",
+			"Rev": "54f0e4339ce73702a0607f49922aaa1e749b418d"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/acme",
