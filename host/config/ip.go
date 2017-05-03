@@ -4,27 +4,31 @@ import (
 	"errors"
 	"net"
 
-	"github.com/docker/libcontainer/netlink"
+	"github.com/vishvananda/netlink"
 )
 
 func DefaultExternalIP() (string, error) {
-	routes, err := netlink.NetworkGetRoutes()
+	routes, err := netlink.RouteList(nil, netlink.FAMILY_V4)
 	if err != nil {
 		return "", err
 	}
 
-	var iface *net.Interface
+	var idx *int
 	for _, r := range routes {
-		if r.Default {
-			iface = r.Iface
+		if r.Dst == nil { // default route
+			idx = &r.LinkIndex
 			break
 		}
 	}
-	if iface == nil {
+	if idx == nil {
 		return "", errors.New("config: Unable to identify default network interface")
 	}
 
-	addrs, err := iface.Addrs()
+	link, err := netlink.LinkByIndex(*idx)
+	if err != nil {
+		return "", err
+	}
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 	if err != nil {
 		return "", err
 	}
@@ -33,9 +37,8 @@ func DefaultExternalIP() (string, error) {
 	}
 	var defaultIP net.IP
 	for _, a := range addrs {
-		ip, _, _ := net.ParseCIDR(a.String())
-		if ip.To4() != nil && ip.IsGlobalUnicast() {
-			defaultIP = ip
+		if a.IPNet.IP.IsGlobalUnicast() {
+			defaultIP = a.IPNet.IP
 			break
 		}
 	}
