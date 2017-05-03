@@ -838,7 +838,7 @@ func (r *Runner) explainBuild(w http.ResponseWriter, req *http.Request, ps httpr
 }
 
 func needsBuild(event Event) bool {
-	if e, ok := event.(*PullRequestEvent); ok && e.Action == "closed" {
+	if e, ok := event.(*PullRequestEvent); ok && e.Action != "opened" && e.Action != "synchronize" {
 		return false
 	}
 	if e, ok := event.(*PushEvent); ok && (e.Deleted || e.Ref != "refs/heads/master") {
