@@ -637,11 +637,6 @@
 			"Rev": "5d2041e26a699eaca682e2ea41c8f891e1060444"
 		},
 		{
-			"ImportPath": "github.com/docker/libcontainer/netlink",
-			"Comment": "v1.4.0-20-g4940cee",
-			"Rev": "4940cee052ece5a8b2ea477699e7bb232de1e1f8"
-		},
-		{
 			"ImportPath": "github.com/docker/libnetwork/ipallocator",
 			"Comment": "v0.2-551-ge57c67d",
 			"Rev": "e57c67d6bf5709b38ddb9cf9e10d1d1417e94712"
