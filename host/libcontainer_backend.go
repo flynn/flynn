@@ -251,6 +251,18 @@ func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) er
 			return err
 		}
 	}
+
+	// Workaround for a kernel bug that results in a unregister_netdevice error
+	// in dmesg and hang of netlink, requiring a reboot.
+	//
+	// Remove when the kernel bug is fixed.
+	//
+	// https://github.com/moby/moby/issues/5618
+	// https://github.com/kubernetes/kubernetes/issues/20096
+	if err := netlink.SetPromiscOn(bridge); err != nil {
+		return err
+	}
+
 	if err := netlink.LinkSetUp(bridge); err != nil {
 		return err
 	}
