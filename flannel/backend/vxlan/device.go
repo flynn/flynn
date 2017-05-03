@@ -234,7 +234,7 @@ func setAddr4(link *netlink.Vxlan, ipn *net.IPNet) error {
 		return err
 	}
 
-	addr := netlink.Addr{ipn, ""}
+	addr := netlink.Addr{IPNet: ipn}
 	existing := false
 	for _, old := range addrs {
 		if old.IPNet.String() == addr.IPNet.String() {
