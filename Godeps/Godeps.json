@@ -1041,99 +1041,115 @@
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/acme",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/acme/autocert",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/curve25519",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ed25519",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ed25519/internal/edwards25519",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/nacl/secretbox",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/poly1305",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/salsa20/salsa",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ssh",
-			"Rev": "81372b2fc2f10bef2a7f338da115c315a56b2726"
+			"Rev": "04eae0b62feaaf659a0ce2c4e8dc70b6ae2fff67"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context/ctxhttp",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/http2",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/http2/hpack",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/idna",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/internal/timeseries",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/lex/httplex",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/trace",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "feeb485667d1fdabe727840fe00adc22431bc86e"
 		},
 		{
 			"ImportPath": "golang.org/x/oauth2",
-			"Rev": "1e695b1c8febf17aad3bfa7bf0a819ef94b98ad5"
+			"Rev": "a6bd8cefa1811bd24b86f8902872e4e8225f74c4"
 		},
 		{
 			"ImportPath": "golang.org/x/oauth2/google",
-			"Rev": "1e695b1c8febf17aad3bfa7bf0a819ef94b98ad5"
+			"Rev": "a6bd8cefa1811bd24b86f8902872e4e8225f74c4"
 		},
 		{
 			"ImportPath": "golang.org/x/oauth2/internal",
-			"Rev": "1e695b1c8febf17aad3bfa7bf0a819ef94b98ad5"
+			"Rev": "a6bd8cefa1811bd24b86f8902872e4e8225f74c4"
 		},
 		{
 			"ImportPath": "golang.org/x/oauth2/jws",
-			"Rev": "1e695b1c8febf17aad3bfa7bf0a819ef94b98ad5"
+			"Rev": "a6bd8cefa1811bd24b86f8902872e4e8225f74c4"
 		},
 		{
 			"ImportPath": "golang.org/x/oauth2/jwt",
-			"Rev": "1e695b1c8febf17aad3bfa7bf0a819ef94b98ad5"
+			"Rev": "a6bd8cefa1811bd24b86f8902872e4e8225f74c4"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
-			"Rev": "442cd600860ce722f6615730eb008a37a87b13ee"
+			"Rev": "9ccfe848b9db8435a24c424abbc07a921adf1df5"
+		},
+		{
+			"ImportPath": "golang.org/x/text/secure/bidirule",
+			"Rev": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4"
+		},
+		{
+			"ImportPath": "golang.org/x/text/transform",
+			"Rev": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4"
+		},
+		{
+			"ImportPath": "golang.org/x/text/unicode/bidi",
+			"Rev": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4"
+		},
+		{
+			"ImportPath": "golang.org/x/text/unicode/norm",
+			"Rev": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4"
 		},
 		{
 			"ImportPath": "google.golang.org/api/gensupport",
@@ -1304,6 +1320,22 @@
 		{
 			"ImportPath": "gopkg.in/yaml.v2",
 			"Rev": "a83829b6f1293c91addabc89d0571c246397bbf4"
+		},
+		{
+			"ImportPath": "golang.org/x/text/secure/bidirule",
+			"Rev": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4"
+		},
+		{
+			"ImportPath": "golang.org/x/text/unicode/norm",
+			"Rev": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4"
+		},
+		{
+			"ImportPath": "golang.org/x/text/transform",
+			"Rev": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4"
+		},
+		{
+			"ImportPath": "golang.org/x/text/unicode/bidi",
+			"Rev": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4"
 		}
 	]
 }
