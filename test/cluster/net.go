@@ -10,15 +10,15 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libnetwork/ipallocator"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/vishvananda/netlink"
 )
 
 type Bridge struct {
 	name   string
-	iface  *net.Interface
+	iface  *netlink.Bridge
 	ipAddr net.IP
 	ipNet  *net.IPNet
 	alloc  *ipallocator.IPAllocator
@@ -29,30 +29,33 @@ func (b *Bridge) IP() string {
 }
 
 func createBridge(name, network, natIface string) (*Bridge, error) {
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	br := netlink.Link(&netlink.Bridge{LinkAttrs: la})
+
 	ipAddr, ipNet, err := net.ParseCIDR(network)
 	if err != nil {
 		return nil, err
 	}
-	if err := netlink.CreateBridge(name, true); err != nil {
+	if err := netlink.LinkAdd(br); err != nil {
 		return nil, err
 	}
-	iface, err := net.InterfaceByName(name)
+
+	iface, err := netlink.LinkByName(name)
 	if err != nil {
 		return nil, err
 	}
 
 	// We need to explicitly assign the MAC address to avoid it changing to a lower value
 	// See: https://github.com/flynn/flynn/issues/223
-	b := random.Bytes(5)
-	mac := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
-	if err := netlink.NetworkSetMacAddress(iface, mac); err != nil {
+	mac := random.Bytes(5)
+	if err := netlink.LinkSetHardwareAddr(iface, append([]byte{0xfe}, mac...)); err != nil {
 		return nil, err
 	}
-
-	if err := netlink.NetworkLinkAddIp(iface, ipAddr, ipNet); err != nil {
+	if netlink.AddrAdd(iface, &netlink.Addr{IPNet: &net.IPNet{IP: ipAddr, Mask: ipNet.Mask}}); err != nil {
 		return nil, err
 	}
-	if err := netlink.NetworkLinkUp(iface); err != nil {
+	if err := netlink.LinkSetUp(iface); err != nil {
 		return nil, err
 	}
 	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1\n"), 0644); err != nil {
@@ -64,7 +67,7 @@ func createBridge(name, network, natIface string) (*Bridge, error) {
 
 	bridge := &Bridge{
 		name:   name,
-		iface:  iface,
+		iface:  iface.(*netlink.Bridge),
 		ipAddr: ipAddr,
 		ipNet:  ipNet,
 		alloc:  ipallocator.New(),
@@ -74,10 +77,10 @@ func createBridge(name, network, natIface string) (*Bridge, error) {
 }
 
 func deleteBridge(bridge *Bridge) error {
-	if err := netlink.NetworkLinkDown(bridge.iface); err != nil {
+	if err := netlink.LinkSetDown(bridge.iface); err != nil {
 		return err
 	}
-	if err := netlink.DeleteBridge(bridge.name); err != nil {
+	if err := netlink.LinkDel(bridge.iface); err != nil {
 		return err
 	}
 	cleanupIPTables(bridge.name)
@@ -235,16 +238,16 @@ func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
 		return nil, err
 	}
 
-	iface, err := net.InterfaceByName(tap.Name)
+	iface, err := netlink.LinkByName(tap.Name)
 	if err != nil {
 		tap.Close()
 		return nil, err
 	}
-	if err := netlink.NetworkLinkUp(iface); err != nil {
+	if err := netlink.LinkSetUp(iface); err != nil {
 		tap.Close()
 		return nil, err
 	}
-	if err := netlink.AddToBridge(iface, t.bridge.iface); err != nil {
+	if err := netlink.LinkSetMaster(iface, t.bridge.iface); err != nil {
 		tap.Close()
 		return nil, err
 	}
