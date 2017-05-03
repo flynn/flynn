@@ -3,6 +3,7 @@ package httpclient
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,10 @@ import (
 type DialFunc func(network, addr string) (net.Conn, error)
 
 type writeCloser interface {
+	CloseWrite() error
+}
+
+type writerCloser interface {
 	io.WriteCloser
 	CloseWrite() error
 }
@@ -136,10 +141,6 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 	if err != nil {
 		return nil, err
 	}
-	dial := c.HijackDial
-	if dial == nil {
-		dial = net.Dial
-	}
 
 	addr := uri.Host
 	if _, _, err := net.SplitHostPort(addr); err != nil { // host is missing port
@@ -148,6 +149,28 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 			port = "80"
 		}
 		addr = net.JoinHostPort(addr, port)
+	}
+
+	dial := c.HijackDial
+	if dial == nil {
+		if uri.Scheme == "https" {
+			dial = func(network, addr string) (net.Conn, error) {
+				host, _, _ := net.SplitHostPort(addr)
+				conn, err := net.Dial(network, addr)
+				if err != nil {
+					return nil, err
+				}
+				return struct {
+					net.Conn
+					writeCloser
+				}{
+					tls.Client(conn, &tls.Config{ServerName: host}),
+					conn.(writeCloser),
+				}, nil
+			}
+		} else {
+			dial = net.Dial
+		}
 	}
 
 	conn, err := dial("tcp", addr)
@@ -184,10 +207,10 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 	if buf.Buffered() > 0 {
 		rwc = struct {
 			io.Reader
-			writeCloser
+			writerCloser
 		}{
 			io.MultiReader(io.LimitReader(buf, int64(buf.Buffered())), rwc),
-			rwc.(writeCloser),
+			rwc.(writerCloser),
 		}
 	}
 	return rwc.(ReadWriteCloser), nil
