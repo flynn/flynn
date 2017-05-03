@@ -22,7 +22,6 @@ import (
 
 	"github.com/docker/docker/pkg/term"
 	"github.com/docker/go-units"
-	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libnetwork/ipallocator"
 	"github.com/docker/libnetwork/netutils"
 	"github.com/flynn/flynn/discoverd/client"
@@ -48,6 +47,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/rancher/sparse-tools/sparse"
+	"github.com/vishvananda/netlink"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -211,46 +211,47 @@ func (l *LibcontainerBackend) ConfigureNetworking(config *host.NetworkConfig) er
 	}
 	l.ipalloc.RequestIP(l.bridgeNet, l.bridgeAddr)
 
-	err = netlink.CreateBridge(l.BridgeName, false)
+	la := netlink.NewLinkAttrs()
+	la.Name = l.BridgeName
+	bridge := netlink.Link(&netlink.Bridge{LinkAttrs: la})
+	err = netlink.LinkAdd(bridge)
 	bridgeExists := os.IsExist(err)
 	if err != nil && !bridgeExists {
 		return err
 	}
 
-	bridge, err := net.InterfaceByName(l.BridgeName)
+	bridge, err = netlink.LinkByName(l.BridgeName)
 	if err != nil {
 		return err
 	}
 	if !bridgeExists {
 		// We need to explicitly assign the MAC address to avoid it changing to a lower value
 		// See: https://github.com/flynn/flynn/issues/223
-		b := random.Bytes(5)
-		bridgeMAC := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
-		if err := netlink.NetworkSetMacAddress(bridge, bridgeMAC); err != nil {
+		mac := random.Bytes(5)
+		if err := netlink.LinkSetHardwareAddr(bridge, append([]byte{0xfe}, mac...)); err != nil {
 			return err
 		}
 	}
-	currAddrs, err := bridge.Addrs()
+	currAddrs, err := netlink.AddrList(bridge, netlink.FAMILY_ALL)
 	if err != nil {
 		return err
 	}
 	setIP := true
 	for _, addr := range currAddrs {
-		ip, net, _ := net.ParseCIDR(addr.String())
-		if ip.Equal(l.bridgeAddr) && net.String() == l.bridgeNet.String() {
+		if addr.IPNet.IP.Equal(l.bridgeAddr) && bytes.Equal(addr.IPNet.Mask, l.bridgeNet.Mask) {
 			setIP = false
 		} else {
-			if err := netlink.NetworkLinkDelIp(bridge, ip, net); err != nil {
+			if err := netlink.AddrDel(bridge, &addr); err != nil {
 				return err
 			}
 		}
 	}
 	if setIP {
-		if err := netlink.NetworkLinkAddIp(bridge, l.bridgeAddr, l.bridgeNet); err != nil {
+		if err := netlink.AddrAdd(bridge, &netlink.Addr{IPNet: &net.IPNet{IP: l.bridgeAddr, Mask: l.bridgeNet.Mask}}); err != nil {
 			return err
 		}
 	}
-	if err := netlink.NetworkLinkUp(bridge); err != nil {
+	if err := netlink.LinkSetUp(bridge); err != nil {
 		return err
 	}
 
