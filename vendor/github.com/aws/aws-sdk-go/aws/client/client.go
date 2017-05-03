@@ -2,25 +2,34 @@ package client
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http/httputil"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 // A Config provides configuration to a service client instance.
 type Config struct {
-	Config                  *aws.Config
-	Handlers                request.Handlers
-	Endpoint, SigningRegion string
+	Config        *aws.Config
+	Handlers      request.Handlers
+	Endpoint      string
+	SigningRegion string
+	SigningName   string
 }
 
 // ConfigProvider provides a generic way for a service client to receive
 // the ClientConfig without circular dependencies.
 type ConfigProvider interface {
 	ClientConfig(serviceName string, cfgs ...*aws.Config) Config
+}
+
+// ConfigNoResolveEndpointProvider same as ConfigProvider except it will not
+// resolve the endpoint automatically. The service client's endpoint must be
+// provided via the aws.Config.Endpoint field.
+type ConfigNoResolveEndpointProvider interface {
+	ClientConfigNoResolveEndpoint(cfgs ...*aws.Config) Config
 }
 
 // A Client implements the base client request and response handling
@@ -38,7 +47,7 @@ func New(cfg aws.Config, info metadata.ClientInfo, handlers request.Handlers, op
 	svc := &Client{
 		Config:     cfg,
 		ClientInfo: info,
-		Handlers:   handlers,
+		Handlers:   handlers.Copy(),
 	}
 
 	switch retryer, ok := cfg.Retryer.(request.Retryer); {
@@ -78,8 +87,8 @@ func (c *Client) AddDebugHandlers() {
 		return
 	}
 
-	c.Handlers.Send.PushFront(logRequest)
-	c.Handlers.Send.PushBack(logResponse)
+	c.Handlers.Send.PushFrontNamed(request.NamedHandler{Name: "awssdk.client.LogRequest", Fn: logRequest})
+	c.Handlers.Send.PushBackNamed(request.NamedHandler{Name: "awssdk.client.LogResponse", Fn: logResponse})
 }
 
 const logReqMsg = `DEBUG: Request %s/%s Details:
@@ -87,16 +96,25 @@ const logReqMsg = `DEBUG: Request %s/%s Details:
 %s
 -----------------------------------------------------`
 
+const logReqErrMsg = `DEBUG ERROR: Request %s/%s:
+---[ REQUEST DUMP ERROR ]-----------------------------
+%s
+-----------------------------------------------------`
+
 func logRequest(r *request.Request) {
 	logBody := r.Config.LogLevel.Matches(aws.LogDebugWithHTTPBody)
-	dumpedBody, _ := httputil.DumpRequestOut(r.HTTPRequest, logBody)
+	dumpedBody, err := httputil.DumpRequestOut(r.HTTPRequest, logBody)
+	if err != nil {
+		r.Config.Logger.Log(fmt.Sprintf(logReqErrMsg, r.ClientInfo.ServiceName, r.Operation.Name, err))
+		r.Error = awserr.New(request.ErrCodeRead, "an error occurred during request body reading", err)
+		return
+	}
 
 	if logBody {
 		// Reset the request body because dumpRequest will re-wrap the r.HTTPRequest's
 		// Body as a NoOpCloser and will not be reset after read by the HTTP
 		// client reader.
-		r.Body.Seek(r.BodyStart, 0)
-		r.HTTPRequest.Body = ioutil.NopCloser(r.Body)
+		r.ResetBody()
 	}
 
 	r.Config.Logger.Log(fmt.Sprintf(logReqMsg, r.ClientInfo.ServiceName, r.Operation.Name, string(dumpedBody)))
@@ -107,11 +125,22 @@ const logRespMsg = `DEBUG: Response %s/%s Details:
 %s
 -----------------------------------------------------`
 
+const logRespErrMsg = `DEBUG ERROR: Response %s/%s:
+---[ RESPONSE DUMP ERROR ]-----------------------------
+%s
+-----------------------------------------------------`
+
 func logResponse(r *request.Request) {
 	var msg = "no response data"
 	if r.HTTPResponse != nil {
 		logBody := r.Config.LogLevel.Matches(aws.LogDebugWithHTTPBody)
-		dumpedBody, _ := httputil.DumpResponse(r.HTTPResponse, logBody)
+		dumpedBody, err := httputil.DumpResponse(r.HTTPResponse, logBody)
+		if err != nil {
+			r.Config.Logger.Log(fmt.Sprintf(logRespErrMsg, r.ClientInfo.ServiceName, r.Operation.Name, err))
+			r.Error = awserr.New(request.ErrCodeRead, "an error occurred during response body reading", err)
+			return
+		}
+
 		msg = string(dumpedBody)
 	} else if r.Error != nil {
 		msg = r.Error.Error()
