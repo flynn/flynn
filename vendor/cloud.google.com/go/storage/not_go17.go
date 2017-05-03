@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2017 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,29 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build appengine
+// +build !go1.7
 
-package transport
+package storage
 
 import (
-	"net"
 	"net/http"
-	"time"
-
-	"golang.org/x/net/context"
-	"google.golang.org/appengine/socket"
-	"google.golang.org/appengine/urlfetch"
-	"google.golang.org/grpc"
 )
 
-func init() {
-	appengineDialerHook = func(ctx context.Context) grpc.DialOption {
-		return grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-			return socket.DialTimeout(ctx, "tcp", addr, timeout)
-		})
-	}
-
-	appengineUrlfetchHook = func(ctx context.Context) http.RoundTripper {
-		return &urlfetch.Transport{Context: ctx}
-	}
+func withContext(r *http.Request, _ interface{}) *http.Request {
+	// In Go 1.6 and below, ignore the context.
+	return r
 }

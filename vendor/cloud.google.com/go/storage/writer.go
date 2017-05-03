@@ -15,6 +15,8 @@
 package storage
 
 import (
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"unicode/utf8"
@@ -30,6 +32,22 @@ type Writer struct {
 	// must be initialized before the first Write call. Nil or zero-valued
 	// attributes are ignored.
 	ObjectAttrs
+
+	// SendCRC specifies whether to transmit a CRC32C field. It should be set
+	// to true in addition to setting the Writer's CRC32C field, because zero
+	// is a valid CRC and normally a zero would not be transmitted.
+	SendCRC32C bool
+
+	// ChunkSize controls the maximum number of bytes of the object that the
+	// Writer will attempt to send to the server in a single request. Objects
+	// smaller than the size will be sent in a single request, while larger
+	// objects will be split over multiple requests. The size will be rounded up
+	// to the nearest multiple of 256K. If zero, chunking will be disabled and
+	// the object will be uploaded in a single request.
+	//
+	// ChunkSize will default to a reasonable value. Any custom configuration
+	// must be done before the first Write call.
+	ChunkSize int
 
 	ctx context.Context
 	o   *ObjectHandle
@@ -56,7 +74,12 @@ func (w *Writer) open() error {
 	w.pw = pw
 	w.opened = true
 
-	var mediaOpts []googleapi.MediaOption
+	if w.ChunkSize < 0 {
+		return errors.New("storage: Writer.ChunkSize must non-negative")
+	}
+	mediaOpts := []googleapi.MediaOption{
+		googleapi.ChunkSize(w.ChunkSize),
+	}
 	if c := attrs.ContentType; c != "" {
 		mediaOpts = append(mediaOpts, googleapi.ContentType(c))
 	}
@@ -64,14 +87,26 @@ func (w *Writer) open() error {
 	go func() {
 		defer close(w.donec)
 
-		call := w.o.c.raw.Objects.Insert(w.o.bucket, attrs.toRawObject(w.o.bucket)).
+		rawObj := attrs.toRawObject(w.o.bucket)
+		if w.SendCRC32C {
+			rawObj.Crc32c = encodeUint32(attrs.CRC32C)
+		}
+		if w.MD5 != nil {
+			rawObj.Md5Hash = base64.StdEncoding.EncodeToString(w.MD5)
+		}
+		call := w.o.c.raw.Objects.Insert(w.o.bucket, rawObj).
 			Media(pr, mediaOpts...).
 			Projection("full").
 			Context(w.ctx)
-
+		if err := setEncryptionHeaders(call.Header(), w.o.encryptionKey, false); err != nil {
+			w.err = err
+			pr.CloseWithError(w.err)
+			return
+		}
 		var resp *raw.Object
-		err := applyConds("NewWriter", w.o.conds, call)
+		err := applyConds("NewWriter", w.o.gen, w.o.conds, call)
 		if err == nil {
+			setClientHeader(call.Header())
 			resp, err = call.Do()
 		}
 		if err != nil {
@@ -84,7 +119,7 @@ func (w *Writer) open() error {
 	return nil
 }
 
-// Write appends to w.
+// Write appends to w. It implements the io.Writer interface.
 func (w *Writer) Write(p []byte) (n int, err error) {
 	if w.err != nil {
 		return 0, w.err
@@ -99,7 +134,7 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 
 // Close completes the write operation and flushes any buffered data.
 // If Close doesn't return an error, metadata about the written object
-// can be retrieved by calling Object.
+// can be retrieved by calling Attrs.
 func (w *Writer) Close() error {
 	if !w.opened {
 		if err := w.open(); err != nil {
@@ -122,7 +157,7 @@ func (w *Writer) CloseWithError(err error) error {
 	return w.pw.CloseWithError(err)
 }
 
-// ObjectAttrs returns metadata about a successfully-written object.
+// Attrs returns metadata about a successfully-written object.
 // It's only valid to call it after Close returns nil.
 func (w *Writer) Attrs() *ObjectAttrs {
 	return w.obj
