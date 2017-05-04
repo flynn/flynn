@@ -38,8 +38,8 @@
 		},
 		{
 			"ImportPath": "github.com/Azure/azure-sdk-for-go/storage",
-			"Comment": "v4.0.0-beta-8-g63d3f3e",
-			"Rev": "63d3f3e3b12ffb726ba3f72fef1aa8c1c7cd1012"
+			"Comment": "v9.0.1-beta-2-g8dd1f3f",
+			"Rev": "8dd1f3ff407c300cff0a4bfedd969111ca5a7903"
 		},
 		{
 			"ImportPath": "github.com/Azure/go-ansiterm",
@@ -48,6 +48,26 @@
 		{
 			"ImportPath": "github.com/Azure/go-ansiterm/winterm",
 			"Rev": "70b2c90b260171e829f1ebd7c17f600c11858dbe"
+		},
+		{
+			"ImportPath": "github.com/Azure/go-autorest/autorest",
+			"Comment": "v8.0.0",
+			"Rev": "58f6f26e200fa5dfb40c9cd1c83f3e2c860d779d"
+		},
+		{
+			"ImportPath": "github.com/Azure/go-autorest/autorest/adal",
+			"Comment": "v8.0.0",
+			"Rev": "58f6f26e200fa5dfb40c9cd1c83f3e2c860d779d"
+		},
+		{
+			"ImportPath": "github.com/Azure/go-autorest/autorest/azure",
+			"Comment": "v8.0.0",
+			"Rev": "58f6f26e200fa5dfb40c9cd1c83f3e2c860d779d"
+		},
+		{
+			"ImportPath": "github.com/Azure/go-autorest/autorest/date",
+			"Comment": "v8.0.0",
+			"Rev": "58f6f26e200fa5dfb40c9cd1c83f3e2c860d779d"
 		},
 		{
 			"ImportPath": "github.com/BurntSushi/toml",
@@ -221,6 +241,11 @@
 		{
 			"ImportPath": "github.com/cupcake/jsonschema",
 			"Rev": "51bf6945446b931e0f902e65a74e8bae7f794d95"
+		},
+		{
+			"ImportPath": "github.com/dgrijalva/jwt-go",
+			"Comment": "v3.0.0-17-g2268707",
+			"Rev": "2268707a8f0843315e2004ee4f1d021dc08baedf"
 		},
 		{
 			"ImportPath": "github.com/dgryski/go-skip32",
