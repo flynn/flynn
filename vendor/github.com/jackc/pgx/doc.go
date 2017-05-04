@@ -50,7 +50,7 @@ pgx also implements QueryRow in the same style as database/sql.
         return err
     }
 
-Use exec to execute a query that does not return a result set.
+Use Exec to execute a query that does not return a result set.
 
     commandTag, err := conn.Exec("delete from widgets where id=$1", 42)
     if err != nil {
@@ -81,43 +81,39 @@ releasing connections when you do not need that level of control.
         return err
     }
 
-Transactions
+Base Type Mapping
 
-Transactions are started by calling Begin or BeginIso. The BeginIso variant
-creates a transaction with a specified isolation level.
+pgx maps between all common base types directly between Go and PostgreSQL. In
+particular:
 
-    tx, err := conn.Begin()
-    if err != nil {
-        return err
-    }
-    // Rollback is safe to call even if the tx is already closed, so if
-    // the tx commits successfully, this is a no-op
-    defer tx.Rollback()
+    Go           PostgreSQL
+    -----------------------
+    string       varchar
+                 text
 
-    _, err = tx.Exec("insert into foo(id) values (1)")
-    if err != nil {
-        return err
-    }
+    // Integers are automatically be converted to any other integer type if
+    // it can be done without overflow or underflow.
+    int8
+    int16        smallint
+    int32        int
+    int64        bigint
+    int
+    uint8
+    uint16
+    uint32
+    uint64
+    uint
 
-    err = tx.Commit()
-    if err != nil {
-        return err
-    }
+    // Floats are strict and do not automatically convert like integers.
+    float32      float4
+    float64      float8
 
-Listen and Notify
+    time.Time   date
+                timestamp
+                timestamptz
 
-pgx can listen to the PostgreSQL notification system with the
-WaitForNotification function. It takes a maximum time to wait for a
-notification.
+    []byte      bytea
 
-    err := conn.Listen("channelname")
-    if err != nil {
-        return nil
-    }
-
-    if notification, err := conn.WaitForNotification(time.Second); err != nil {
-        // do something with notification
-    }
 
 Null Mapping
 
@@ -136,7 +132,7 @@ Array Mapping
 
 pgx maps between int16, int32, int64, float32, float64, and string Go slices
 and the equivalent PostgreSQL array type. Go slices of native types do not
-support nulls, so if a PostgreSQL array that contains a slice is read into a
+support nulls, so if a PostgreSQL array that contains a null is read into a
 native Go slice an error will occur.
 
 Hstore Mapping
@@ -161,14 +157,15 @@ Custom Type Support
 pgx includes support for the common data types like integers, floats, strings,
 dates, and times that have direct mappings between Go and SQL. Support can be
 added for additional types like point, hstore, numeric, etc. that do not have
-direct mappings in Go by the types implementing Scanner and Encoder.
+direct mappings in Go by the types implementing ScannerPgx and Encoder.
 
 Custom types can support text or binary formats. Binary format can provide a
 large performance increase. The natural place for deciding the format for a
-value would be in Scanner as it is responsible for decoding the returned data.
-However, that is impossible as the query has already been sent by the time the
-Scanner is invoked. The solution to this is the global DefaultTypeFormats. If a
-custom type prefers binary format it should register it there.
+value would be in ScannerPgx as it is responsible for decoding the returned
+data. However, that is impossible as the query has already been sent by the time
+the ScannerPgx is invoked. The solution to this is the global
+DefaultTypeFormats. If a custom type prefers binary format it should register it
+there.
 
         pgx.DefaultTypeFormats["point"] = pgx.BinaryFormatCode
 
@@ -191,6 +188,64 @@ to PostgreSQL. In like manner, a *[]byte passed to Scan will be filled with
 the raw bytes returned by PostgreSQL. This can be especially useful for reading
 varchar, text, json, and jsonb values directly into a []byte and avoiding the
 type conversion from string.
+
+Transactions
+
+Transactions are started by calling Begin or BeginIso. The BeginIso variant
+creates a transaction with a specified isolation level.
+
+    tx, err := conn.Begin()
+    if err != nil {
+        return err
+    }
+    // Rollback is safe to call even if the tx is already closed, so if
+    // the tx commits successfully, this is a no-op
+    defer tx.Rollback()
+
+    _, err = tx.Exec("insert into foo(id) values (1)")
+    if err != nil {
+        return err
+    }
+
+    err = tx.Commit()
+    if err != nil {
+        return err
+    }
+
+Copy Protocol
+
+Use CopyFrom to efficiently insert multiple rows at a time using the PostgreSQL
+copy protocol. CopyFrom accepts a CopyFromSource interface. If the data is already
+in a [][]interface{} use CopyFromRows to wrap it in a CopyFromSource interface. Or
+implement CopyFromSource to avoid buffering the entire data set in memory.
+
+    rows := [][]interface{}{
+        {"John", "Smith", int32(36)},
+        {"Jane", "Doe", int32(29)},
+    }
+
+    copyCount, err := conn.CopyFrom(
+        "people",
+        []string{"first_name", "last_name", "age"},
+        pgx.CopyFromRows(rows),
+    )
+
+CopyFrom can be faster than an insert with as few as 5 rows.
+
+Listen and Notify
+
+pgx can listen to the PostgreSQL notification system with the
+WaitForNotification function. It takes a maximum time to wait for a
+notification.
+
+    err := conn.Listen("channelname")
+    if err != nil {
+        return nil
+    }
+
+    if notification, err := conn.WaitForNotification(time.Second); err != nil {
+        // do something with notification
+    }
 
 TLS
 

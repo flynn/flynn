@@ -21,6 +21,12 @@ const (
 	ForeignKeyViolation       = "23503"
 )
 
+func init() {
+	// Use text instead of binary for jsonb/json, to allow encoding and decoding into []byte
+	pgx.DefaultTypeFormats["jsonb"] = pgx.TextFormatCode
+	pgx.DefaultTypeFormats["json"] = pgx.TextFormatCode
+}
+
 type Conf struct {
 	Discoverd *discoverd.Client
 	Service   string
