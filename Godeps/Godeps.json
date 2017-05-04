@@ -904,7 +904,7 @@
 		},
 		{
 			"ImportPath": "github.com/miekg/dns",
-			"Rev": "db96a2b759cdef4f11a34506a42eb8d1290c598e"
+			"Rev": "f282f80e243cc2bf8f6410c30d821b93b794e168"
 		},
 		{
 			"ImportPath": "github.com/minio/minio-go",
