@@ -215,8 +215,8 @@
 		},
 		{
 			"ImportPath": "github.com/boltdb/bolt",
-			"Comment": "v1.1.0-22-g6e1ca38",
-			"Rev": "6e1ca38c6a73025366cd8705553b404746ee6e63"
+			"Comment": "v1.3.0-58-ge9cf4fa",
+			"Rev": "e9cf4fae01b5a8ff89d0ec6b32f0d9c9f79aefdd"
 		},
 		{
 			"ImportPath": "github.com/cheggaaa/pb",
