@@ -769,8 +769,8 @@
 		},
 		{
 			"ImportPath": "github.com/go-sql-driver/mysql",
-			"Comment": "v1.2-156-g7c7f556",
-			"Rev": "7c7f556282622f94213bc028b4d0a7b6151ba239"
+			"Comment": "v1.3-14-gae5a66d",
+			"Rev": "ae5a66df4d33ba404d639bd0fc9189cd5ee79bcf"
 		},
 		{
 			"ImportPath": "github.com/godbus/dbus",
