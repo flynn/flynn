@@ -908,28 +908,33 @@
 		},
 		{
 			"ImportPath": "github.com/minio/minio-go",
-			"Comment": "v2.0.4-13-g29b0515",
-			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+			"Comment": "v2.0.4-38-gfe31943",
+			"Rev": "fe31943bd4638093653a6a584dc1c6c6487e06c9"
+		},
+		{
+			"ImportPath": "github.com/minio/minio-go/pkg/encrypt",
+			"Comment": "v2.0.4-38-gfe31943",
+			"Rev": "fe31943bd4638093653a6a584dc1c6c6487e06c9"
 		},
 		{
 			"ImportPath": "github.com/minio/minio-go/pkg/policy",
-			"Comment": "v2.0.4-13-g29b0515",
-			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+			"Comment": "v2.0.4-38-gfe31943",
+			"Rev": "fe31943bd4638093653a6a584dc1c6c6487e06c9"
 		},
 		{
 			"ImportPath": "github.com/minio/minio-go/pkg/s3signer",
-			"Comment": "v2.0.4-13-g29b0515",
-			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+			"Comment": "v2.0.4-38-gfe31943",
+			"Rev": "fe31943bd4638093653a6a584dc1c6c6487e06c9"
 		},
 		{
 			"ImportPath": "github.com/minio/minio-go/pkg/s3utils",
-			"Comment": "v2.0.4-13-g29b0515",
-			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+			"Comment": "v2.0.4-38-gfe31943",
+			"Rev": "fe31943bd4638093653a6a584dc1c6c6487e06c9"
 		},
 		{
 			"ImportPath": "github.com/minio/minio-go/pkg/set",
-			"Comment": "v2.0.4-13-g29b0515",
-			"Rev": "29b05151452ac74ee9b46c93c2200f8b57331e24"
+			"Comment": "v2.0.4-38-gfe31943",
+			"Rev": "fe31943bd4638093653a6a584dc1c6c6487e06c9"
 		},
 		{
 			"ImportPath": "github.com/mistifyio/go-zfs",
