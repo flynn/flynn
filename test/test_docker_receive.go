@@ -201,6 +201,6 @@ func (s *DockerReceiveSuite) TestTabsInEnv(t *c.C) {
 	// flynn docker push image
 	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
 
-	// check the whiteouts are effective
+	// check the environment variable has the correct value
 	t.Assert(flynn(t, "/", "-a", app.Name, "run", "sh", "-c", "[[ \"$TAB\" = \"test\ttest\" ]]"), Succeeds)
 }
