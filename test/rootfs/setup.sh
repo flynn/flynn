@@ -180,7 +180,7 @@ echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu trusty main" >>
 apt-get update
 
 # install packages
-apt-get install -y postgresql-9.5 postgresql-contrib-9.5 redis-server mariadb-server percona-xtrabackup mongodb-org
+apt-get install -y postgresql-9.6 postgresql-contrib-9.6 redis-server mariadb-server percona-xtrabackup mongodb-org
 
 # setup postgres
 service postgresql start
