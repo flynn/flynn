@@ -65,7 +65,8 @@ func (b *Builder) Build(name string, groupByTags bool) (*ct.ImageManifest, error
 		if len(keyVal) != 2 {
 			continue
 		}
-		entrypoint.Env[keyVal[0]] = keyVal[1]
+		val := strings.Replace(keyVal[1], "\t", "\\t", -1)
+		entrypoint.Env[keyVal[0]] = val
 	}
 
 	return &ct.ImageManifest{

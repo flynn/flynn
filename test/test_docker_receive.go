@@ -183,3 +183,24 @@ func (s *DockerReceiveSuite) TestReleaseDeleteImageLayers(t *c.C) {
 	t.Assert(flynn(t, "/", "-a", app3, "docker", "push", app1), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app3, "run", "test", "-f", "/app1.txt"), Succeeds)
 }
+
+// TestTabsInEnv ensures that a docker container containing tabs
+// in the environment variables can be imported.
+func (s *DockerReceiveSuite) TestTabsInEnv(t *c.C) {
+	// build a Docker image with tabs in env
+	repo := "docker-receive-test-tab-env"
+	s.buildDockerImage(t, repo,
+		"ENV TAB test\ttest",
+	)
+
+	// create app
+	client := s.controllerClient(t)
+	app := &ct.App{Name: repo}
+	t.Assert(client.CreateApp(app), c.IsNil)
+
+	// flynn docker push image
+	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
+
+	// check the environment variable has the correct value
+	t.Assert(flynn(t, "/", "-a", app.Name, "run", "sh", "-c", "[[ \"$TAB\" = \"test\ttest\" ]]"), Succeeds)
+}
