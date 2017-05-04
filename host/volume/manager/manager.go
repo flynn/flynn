@@ -343,6 +343,7 @@ func (m *Manager) SendSnapshot(id string, haves []json.RawMessage, stream io.Wri
 	m.mutex.Lock()
 	vol := m.volumes[id]
 	if vol == nil {
+		m.mutex.Unlock()
 		return volume.ErrNoSuchVolume
 	}
 	m.mutex.Unlock() // don't lock the manager for the duration of the send operation.
@@ -353,9 +354,11 @@ func (m *Manager) ReceiveSnapshot(id string, stream io.Reader) (volume.Volume, e
 	m.mutex.Lock()
 	vol := m.volumes[id]
 	if vol == nil {
+		m.mutex.Unlock()
 		return nil, volume.ErrNoSuchVolume
 	}
 	if err := m.LockDB(); err != nil {
+		m.mutex.Unlock()
 		return nil, err
 	}
 	defer m.UnlockDB()
