@@ -114,7 +114,7 @@ func NewProcess(c Config) *Process {
 		p.port = "5432"
 	}
 	if p.binDir == "" {
-		p.binDir = "/usr/lib/postgresql/9.5/bin/"
+		p.binDir = "/usr/lib/postgresql/9.6/bin/"
 	}
 	if p.dataDir == "" {
 		p.dataDir = "/data"
