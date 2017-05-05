@@ -1,13 +1,13 @@
 
 # Providers: virtualbox, vmware_fusion, aws
-PROVIDER := virtualbox
+PROVIDER ?= virtualbox
 
 # Domain to use when starting flynn
-CLUSTER_DOMAIN := demo.localflynn.com
-CLUSTER := demo-${PROVIDER}
+CLUSTER_DOMAIN ?= demo.localflynn.com
+CLUSTER ?= demo-${PROVIDER}
 
 # Location to install flynn CLI bin
-CLI_INSTALL_BIN := /usr/local/bin/flynn
+CLI_INSTALL_BIN ?= /usr/local/bin/flynn
 
 # ENV to set when running vagrant
 # See https://github.com/mitchellh/vagrant/issues/4367 for use of SSH_AUTH_SOCK=''
