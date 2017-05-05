@@ -809,16 +809,6 @@ func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[st
 	// binary with the given version if the build inputs have changed.
 	job.Config.Env["FLYNN_VERSION"] = b.version
 
-	// run the job in the host network to avoid a kernel bug which causes
-	// subsequent jobs to block waiting on the lo network device to become
-	// free (see https://github.com/docker/docker/issues/5618).
-	//
-	// NOTE: this leads to an impure build, jobs sometimes use the state of
-	//   the network to change the installation procedure (e.g. PostgreSQL
-	//   changes the default port to 5433 if something is already listening
-	//   on port 5432 at install time)
-	job.Config.HostNetwork = true
-
 	linuxCapabilities := append(host.DefaultCapabilities, l.LinuxCapabilities...)
 	job.Config.LinuxCapabilities = &linuxCapabilities
 
