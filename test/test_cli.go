@@ -1346,12 +1346,9 @@ func (s *CLISuite) TestSlugReleaseGarbageCollection(t *c.C) {
 }
 
 func (s *CLISuite) TestDockerPush(t *c.C) {
-	// build image with ENV and CMD
+	// build HTTP image with ENV
 	repo := "cli-test-push"
-	s.buildDockerImage(t, repo,
-		`ENV FOO=BAR`,
-		`CMD ["/bin/pingserv"]`,
-	)
+	s.buildHTTPDockerImage(t, repo, `ENV FOO=BAR`)
 
 	// create app
 	client := s.controllerClient(t)
@@ -1371,7 +1368,7 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	if !ok {
 		t.Fatal(`release missing "app" process type`)
 	}
-	t.Assert(proc.Args, c.DeepEquals, []string{"/bin/pingserv"})
+	t.Assert(proc.Args, c.DeepEquals, []string{"sh", "/server.sh"})
 
 	// check updated env vars are not overwritten
 	//
@@ -1406,7 +1403,7 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	app := &ct.App{Name: "cli-test-docker-export"}
 	t.Assert(client.CreateApp(app), c.IsNil)
 	repo := "cli-test-export"
-	s.buildDockerImage(t, repo, `CMD ["/bin/pingserv"]`)
+	s.buildHTTPDockerImage(t, repo)
 	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "app=1"), Succeeds)
 	defer flynn(t, "/", "-a", app.Name, "scale", "app=0")
