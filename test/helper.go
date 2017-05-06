@@ -556,8 +556,17 @@ func (h *Helper) assertURI(t *c.C, uri string, status int) {
 
 func (h *Helper) buildDockerImage(t *c.C, repo string, lines ...string) {
 	cmd := exec.Command("docker", "build", "--tag", repo, "-")
-	cmd.Stdin = bytes.NewReader([]byte(fmt.Sprintf("FROM flynn/test-apps\n%s\n", strings.Join(lines, "\n"))))
+	cmd.Stdin = bytes.NewReader([]byte(fmt.Sprintf("FROM busybox\n%s\n", strings.Join(lines, "\n"))))
 	t.Assert(run(t, cmd), Succeeds)
+}
+
+func (h *Helper) buildHTTPDockerImage(t *c.C, repo string, lines ...string) {
+	h.buildDockerImage(t, repo, append(lines,
+		`RUN echo -e '#!/bin/sh\necho -e "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"' > /http.sh`,
+		`RUN chmod +x /http.sh`,
+		`RUN echo 'exec nc -ll -p $PORT -e /http.sh' > /server.sh`,
+		`CMD ["sh", "/server.sh"]`,
+	)...)
 }
 
 func (h *Helper) testBuildCaching(t *c.C, x *Cluster) {
