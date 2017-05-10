@@ -79,13 +79,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     # Stop redis by default, in case the VM is being used for integration testing
     sudo service redis-server stop
 
-    # Install protobuf compiler
-    sudo apt-get install --yes unzip
-    curl -sL https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip > "${tmpdir}/protoc.zip"
-    unzip -d "${tmpdir}/protoc" "${tmpdir}/protoc.zip"
-    sudo mv "${tmpdir}/protoc" /opt
-    sudo ln -s /opt/protoc/bin/protoc /usr/local/bin/protoc
-
     # Setup postgres for controller unit tests
     sudo -u postgres createuser --superuser vagrant || true
     grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
