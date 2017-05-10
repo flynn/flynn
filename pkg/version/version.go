@@ -1,6 +1,9 @@
 package version
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 // version is set at build time (see builder/go-wrapper.sh)
 var version string
@@ -10,6 +13,13 @@ func String() string {
 		return version
 	}
 	return "dev"
+}
+
+// Release returns the release version (which is the version with the
+// "-<commit>" suffix removed)
+func Release() string {
+	parts := strings.SplitN(String(), "-", 2)
+	return parts[0]
 }
 
 func Dev() bool {
