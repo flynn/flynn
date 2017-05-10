@@ -1,14 +1,14 @@
 {
   "tuf": {
-    "repository": "https://s3.amazonaws.com/flynn-temp/builder/tuf",
+    "repository": "https://dl.flynn.io/tuf",
     "root_keys": [
-      {"keytype":"ed25519","keyval":{"public":"6a120f60077bbad0e3e16103fb25253ac49ff5e3d238a452ba7d303d0f385767"}}
+      {"keytype":"ed25519","keyval":{"public":"6cfda23aa48f530aebd5b9c01030d06d02f25876b5508d681675270027af4731"}}
     ]
   },
   "base_layer": {
     "type":   "squashfs",
     "id":     "4b6eb1c283dac64590f32a38e61cc448fb3ca499946d41dba51edab97b46a10e",
-    "url":    "https://s3.amazonaws.com/flynn-temp/builder/tuf/targets/layers/8804e92cba40018baec15a29dae84d210c0fe57da12654aa53928fb4c4a2ff6a65158906d4f3d044a282ec61d59fd340694f48130023bce22243279a6af3d900.4b6eb1c283dac64590f32a38e61cc448fb3ca499946d41dba51edab97b46a10e.squashfs",
+    "url":    "https://dl.flynn.io/tuf/targets/layers/8804e92cba40018baec15a29dae84d210c0fe57da12654aa53928fb4c4a2ff6a65158906d4f3d044a282ec61d59fd340694f48130023bce22243279a6af3d900.4b6eb1c283dac64590f32a38e61cc448fb3ca499946d41dba51edab97b46a10e.squashfs",
     "size":   62631936,
     "hashes": {"sha512_256": "066e1829132a8571b7a1c59e86b54340b22cfa47427725c322ca21ec63946ec5"}
   },
