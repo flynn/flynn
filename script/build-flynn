@@ -83,7 +83,7 @@ main() {
     "${ROOT}/script/kill-flynn"
 
     info "downloading binaries + images"
-    local dl_version="v20170510.6"
+    local dl_version="v20170510.5-0b8e583"
     mkdir -p "${ROOT}/build/manifests"
     sudo FLYNN_VERSION="${dl_version}" "${flynn_host}" download \
       --tuf-db     "${ROOT}/build/tuf.db" \
