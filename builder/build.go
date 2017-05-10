@@ -244,6 +244,7 @@ func runBuild(args *docopt.Args) error {
 		envTemplateData: map[string]string{
 			"TUFRootKeys":   string(tufRootKeys),
 			"TUFRepository": manifest.TUFConfig.Repository,
+			"Version":       args.String["--version"],
 		},
 		goInputs: make(map[GoPlatform]*GoInputs),
 		log:      log,
