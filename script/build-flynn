@@ -80,16 +80,16 @@ main() {
     chmod +x "${flynn_host}"
 
     info "downloading binaries + images"
-    local version="dev"
+    local dl_version="dev"
     mkdir -p "${ROOT}/build/manifests"
-    sudo FLYNN_VERSION="${version}" "${flynn_host}" download \
+    sudo FLYNN_VERSION="${dl_version}" "${flynn_host}" download \
       --tuf-db     "${ROOT}/build/tuf.db" \
       --bin-dir    "${ROOT}/build/bin" \
       --config-dir "${ROOT}/build/manifests" \
       --volpath    "/var/lib/flynn/volumes-0"
 
     mkdir -p "${ROOT}/build/image"
-    jq '.builder' "${ROOT}/build/manifests/images.${version}.json" > "${builder_image}"
+    jq '.builder' "${ROOT}/build/manifests/images.${dl_version}.json" > "${builder_image}"
   fi
 
   # bootstrap the cluster if not running
