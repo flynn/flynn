@@ -94,12 +94,16 @@ func runExport(args *docopt.Args) error {
 
 }
 
+// determineVersion determines the version by running 'flynn-host version',
+// potentially stripping off the '-<commit>' suffix
 func determineVersion() (string, error) {
 	out, err := exec.Command("build/bin/flynn-host", "version").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("error getting flynn-host version: %s: %s", err, out)
 	}
-	return string(bytes.TrimSpace(out)), nil
+	version := string(bytes.TrimSpace(out))
+	parts := strings.SplitN(version, "-", 2)
+	return parts[0], nil
 }
 
 type Exporter struct {
