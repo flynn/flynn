@@ -221,7 +221,7 @@ main() {
   info "successfully released Flynn version ${version}"
 
   info "removing locally built files"
-  rm -rf "${dir}"
+  sudo rm -rf "${dir}"
 
   info "done!"
 }
