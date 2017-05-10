@@ -79,6 +79,9 @@ main() {
     gunzip --force "${flynn_host}.gz"
     chmod +x "${flynn_host}"
 
+    # kill existing cluster to unlock the volume database
+    "${ROOT}/script/kill-flynn"
+
     info "downloading binaries + images"
     local dl_version="dev"
     mkdir -p "${ROOT}/build/manifests"
