@@ -55,7 +55,7 @@ cd "${ROOT}"
   mv /tmp/manifest.json builder/manifest.json
 
   # build new images and binaries
-  FLYNN_VERSION="v20161108.0-test"
+  FLYNN_VERSION="v20161108.0.test"
   script/build-flynn --host "{{ .HostID }}" --version "${FLYNN_VERSION}"
 
   # release components
@@ -137,7 +137,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	// check the flynn-host version is correct
 	var hostVersion bytes.Buffer
 	t.Assert(installHost.Run("flynn-host version", &tc.Streams{Stdout: &hostVersion}), c.IsNil)
-	t.Assert(strings.TrimSpace(hostVersion.String()), c.Equals, "v20161108.0-test")
+	t.Assert(strings.TrimSpace(hostVersion.String()), c.Equals, "v20161108.0.test")
 
 	// check rebuilt images were downloaded
 	assertInstallOutput := func(format string, v ...interface{}) {
