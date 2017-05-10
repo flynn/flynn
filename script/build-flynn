@@ -69,8 +69,8 @@ main() {
 
   # if building from clean, download binaries + images
   if ! [[ -e "${builder_image}" ]]; then
-    local sha="b4bdf2a31704a4c6a6a78607fb6a8820f2b80007e08be12f8e662429fa8ec213b482d803d2ceba541decc8f28b77f62cb0b28d8867c279ff541a9d45d21b3d82"
-    local url="https://s3.amazonaws.com/flynn-temp/builder/tuf/targets/${sha}.flynn-host.gz"
+    local sha="de87e0d04d262a134fe7e7471e3c4c20e40ae229f20bf753a54a78656f72737e1a3ef3e8a165e8d4e39201f412173faf9bf4518c24678681ff5449e95fb82374"
+    local url="https://dl.flynn.io/tuf/targets/${sha}.flynn-host.gz"
 
     info "downloading flynn-host from ${url}"
     mkdir -p "${ROOT}/build/bin"
@@ -83,7 +83,6 @@ main() {
     local version="dev"
     mkdir -p "${ROOT}/build/manifests"
     sudo FLYNN_VERSION="${version}" "${flynn_host}" download \
-      --repository "https://s3.amazonaws.com/flynn-temp/builder/tuf" \
       --tuf-db     "${ROOT}/build/tuf.db" \
       --bin-dir    "${ROOT}/build/bin" \
       --config-dir "${ROOT}/build/manifests" \
