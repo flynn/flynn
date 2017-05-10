@@ -89,6 +89,8 @@ main() {
       --config-dir "${ROOT}/build/manifests" \
       --volpath    "/var/lib/flynn/volumes-0"
 
+    sudo rm "${ROOT}/build/tuf.db"
+
     mkdir -p "${ROOT}/build/image"
     jq '.builder' "${ROOT}/build/manifests/images.${version}.json" > "${builder_image}"
   fi
