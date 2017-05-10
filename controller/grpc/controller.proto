@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package controller;
+
+service Controller {
+  // Returns an app matching the provided ID or nil
+  rpc GetApp (AppRequest) returns (App) {}
+}
+
+message AppRequest {
+  string id = 1;
+}
+
+message App {
+  string id = 1;
+  string name = 2;
+  map<string,string> meta = 3;
+  string strategy = 4;
+  string release_id = 5;
+  int32 deploy_timeout = 6;
+  Timestamp created_at = 7;
+  Timestamp updated_at = 7;
+}
