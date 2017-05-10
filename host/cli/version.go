@@ -4,15 +4,24 @@ import (
 	"fmt"
 
 	"github.com/flynn/flynn/pkg/version"
+	"github.com/flynn/go-docopt"
 )
 
 func init() {
 	Register("version", runVersion, `
-usage: flynn-host version
+usage: flynn-host version [--release]
 
-Show current version`)
+Options:
+	--release   Print the release version
+
+Show current version.
+`)
 }
 
-func runVersion() {
-	fmt.Println(version.String())
+func runVersion(args *docopt.Args) {
+	if args.Bool["--release"] {
+		fmt.Println(version.Release())
+	} else {
+		fmt.Println(version.String())
+	}
 }

@@ -99,7 +99,7 @@ func runDownload(args *docopt.Args) error {
 
 	// use the requested version of flynn-host to download the images as
 	// the format changed in v20161106
-	if version.String() != requestedVersion {
+	if version.Release() != requestedVersion {
 		log.Info(fmt.Sprintf("executing %s flynn-host binary", requestedVersion))
 		binPath := filepath.Join(binDir, "flynn-host")
 		argv := append([]string{binPath}, os.Args[1:]...)
