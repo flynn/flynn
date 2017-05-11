@@ -86,7 +86,7 @@ main() {
     local dl_version="v20170510.7"
     mkdir -p "${ROOT}/build/manifests"
     sudo FLYNN_VERSION="${dl_version}" "${flynn_host}" download \
-      --tuf-db     "${ROOT}/build/tuf.db" \
+      --tuf-db     "/tmp/tuf.db" \
       --bin-dir    "${ROOT}/build/bin" \
       --config-dir "${ROOT}/build/manifests" \
       --volpath    "/var/lib/flynn/volumes-0"
@@ -106,6 +106,7 @@ main() {
   if $verbose; then
     args+=("--verbose")
   fi
+  args+=("--tuf-db=/tmp/tuf.db")
 
   sudo mkdir -p "/var/lib/flynn/layer-cache"
   "${flynn_host}" run \
