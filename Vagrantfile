@@ -47,8 +47,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
     grep '^export DISCOVERD' ~/.bashrc || echo export DISCOVERD="192.0.2.200:1111" >> ~/.bashrc
-    grep '^export GOROOT' ~/.bashrc || echo export GOROOT=~/go/src/github.com/flynn/flynn/util/_toolchain/go >> ~/.bashrc
-    grep '^export PATH' ~/.bashrc || echo export PATH=~/go/bin:~/go/src/github.com/flynn/flynn/util/_toolchain/go/bin:~/go/src/github.com/flynn/flynn/discoverd/bin:~/go/src/github.com/flynn/flynn/cli/bin:~/go/src/github.com/flynn/flynn/host/bin:~/go/src/github.com/flynn/flynn/script:\\\$PATH: >> ~/.bashrc
+    grep '^export GOROOT' ~/.bashrc || echo export GOROOT=~/go/src/github.com/flynn/flynn/build/_go >> ~/.bashrc
+    grep '^export PATH' ~/.bashrc || echo export PATH=~/go/bin:~/go/src/github.com/flynn/flynn/build/_go/bin:~/go/src/github.com/flynn/flynn/build/bin:~/go/src/github.com/flynn/flynn/script:\\\$PATH: >> ~/.bashrc
 
     # Install Docker 1.9.1 for building Flynn images
     ~/go/src/github.com/flynn/flynn/util/docker/install.sh
