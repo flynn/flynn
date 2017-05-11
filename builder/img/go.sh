@@ -58,6 +58,12 @@ goinstall \
   "796a3227145680d8be9aede03e98d9ee9c9c93fc" \
   "/bin/godep"
 
+goinstall \
+  "github.com/golang/protobuf/" \
+  "./protoc-gen-go" \
+  "154c03a3a9331d88d991096c1c3023aafafecf64" \
+  "/bin/protoc-gen-go"
+
 mkdir -p "${GOPATH}/src/github.com/flynn"
 ln -nfs "$(pwd)" "${GOPATH}/src/github.com/flynn/flynn"
 
