@@ -139,11 +139,13 @@
         "inputs": [
           "schema/*.json",
           "schema/controller/*.json",
-          "schema/router/*.json"
+          "schema/router/*.json",
+          "controller/grpc/*.proto"
         ],
         "run": [
           "mkdir -p /etc/flynn-controller",
-          "cp -r schema /etc/flynn-controller/jsonschema"
+          "cp -r schema /etc/flynn-controller/jsonschema",
+          "protoc -I controller/grpc/ controller/grpc/controller.proto --go_out=plugins=grpc:controller"
         ]
       }],
       "entrypoint": {

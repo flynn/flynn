@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package controller;
 
+import "google/protobuf/timestamp.proto";
+
 service Controller {
   // Returns an app matching the provided ID or nil
   rpc GetApp (AppRequest) returns (App) {}
@@ -18,6 +20,6 @@ message App {
   string strategy = 4;
   string release_id = 5;
   int32 deploy_timeout = 6;
-  Timestamp created_at = 7;
-  Timestamp updated_at = 7;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
 }
