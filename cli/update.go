@@ -101,7 +101,7 @@ func (u *Updater) update() error {
 	if err != nil {
 		return err
 	}
-	if latestVersion == version.String() {
+	if latestVersion == version.Release() {
 		return nil
 	}
 
@@ -121,7 +121,7 @@ func (u *Updater) update() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Updated %s -> %s.", version.String(), latestVersion)
+	log.Printf("Updated %s -> %s.", version.Release(), latestVersion)
 	return nil
 }
 
