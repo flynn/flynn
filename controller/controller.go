@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"github.com/flynn/flynn/router/types"
 	"github.com/flynn/que-go"
 	"github.com/julienschmidt/httprouter"
+	"github.com/soheilhy/cmux"
 	"golang.org/x/net/context"
 	"gopkg.in/inconshreveable/log15.v2"
 )
@@ -102,15 +104,30 @@ func main() {
 		hb.Close()
 	})
 
-	handler := appHandler(handlerConfig{
+	c := handlerConfig{
 		db:     db,
 		cc:     utils.ClusterClientWrapper(cluster.NewClient()),
 		lc:     lc,
 		rc:     rc,
 		keys:   strings.Split(os.Getenv("AUTH_KEY"), ","),
 		caCert: []byte(os.Getenv("CA_CERT")),
-	})
-	shutdown.Fatal(http.ListenAndServe(addr, handler))
+	}
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	tcpm := cmux.New(l)
+	grpcl := tcpm.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+	httpl := tcpm.Match(cmux.Any())
+	go serveGRPC(grpcl, c)
+	go serveHTTP(httpl, c)
+}
+
+func serveHTTP(l *net.Listener, c handlerConfig) {
+	handler := appHandler(c)
+	if err := http.Serve(l, handler); err != nil {
+		shutdown.Fatal(err)
+	}
 }
 
 func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}) error {
