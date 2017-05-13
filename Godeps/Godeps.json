@@ -666,31 +666,31 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf",
-			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+			"Rev": "a98aea1463c972506e302344ebbfa30f85b74f2f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/client",
-			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+			"Rev": "a98aea1463c972506e302344ebbfa30f85b74f2f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/data",
-			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+			"Rev": "a98aea1463c972506e302344ebbfa30f85b74f2f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/encrypted",
-			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+			"Rev": "a98aea1463c972506e302344ebbfa30f85b74f2f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/sign",
-			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+			"Rev": "a98aea1463c972506e302344ebbfa30f85b74f2f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/util",
-			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+			"Rev": "a98aea1463c972506e302344ebbfa30f85b74f2f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/verify",
-			"Rev": "da965c127236db58f16490c56a9b0568397cd4fd"
+			"Rev": "a98aea1463c972506e302344ebbfa30f85b74f2f"
 		},
 		{
 			"ImportPath": "github.com/flynn/que-go",

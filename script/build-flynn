@@ -133,6 +133,7 @@ main() {
   extract_bin "builder"           "/bin/flynn-builder"
   extract_bin "discoverd"         "/bin/discoverd"
   extract_bin "test"              "/bin/flynn-test-file-server"
+  extract_bin "go"                "/bin/godep"
   ln -nfs "flynn-linux-amd64" "${ROOT}/build/bin/flynn"
 
   # extract GOROOT from the Go image into build/_go and symlink
