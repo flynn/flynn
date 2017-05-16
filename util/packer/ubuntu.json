@@ -60,12 +60,7 @@
     {
       "type": "shell",
       "script": "ubuntu/upgrade.sh",
-      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
-      "override": {
-        "amazon-ebs": {
-          "execute_command": "{{ .Vars }} sudo -E bash '{{ .Path }}'"
-        }
-      }
+      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
     },
     {
       "type": "shell",
@@ -75,19 +70,13 @@
         "FLYNN_VERSION={{ user `version` }}"
       ],
       "pause_before": "10s",
-      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
-      "override": {
-        "amazon-ebs": {
-          "execute_command": "{{ .Vars }} sudo -E bash '{{ .Path }}'"
-        }
-      }
+      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
     }
   ],
   "post-processors": [
     {
       "type": "vagrant",
-      "output": "{{ user `output_dir` }}/flynn_{{ user `version` }}_ubuntu-{{ user `ubuntu_version` }}_{{ .Provider }}.box",
-      "except": ["amazon-ebs"]
+      "output": "{{ user `output_dir` }}/flynn_{{ user `version` }}_ubuntu-{{ user `ubuntu_version` }}_{{ .Provider }}.box"
     }
   ]
 }
