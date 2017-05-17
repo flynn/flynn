@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type ERBAsset struct {
@@ -18,6 +19,7 @@ type ERBAsset struct {
 	indexKey     string
 	cacheBreaker string
 	erbRBPath    string
+	l            log.Logger
 }
 
 func (a *ERBAsset) OutputExt() string {
@@ -27,7 +29,8 @@ func (a *ERBAsset) OutputExt() string {
 func (a *ERBAsset) OutputPath() string {
 	p, err := a.RelPath()
 	if err != nil {
-		log.Fatal(err)
+		a.l.Error("Error getting rel path", "err", err)
+		os.Exit(1)
 	}
 	return strings.TrimSuffix(p, ".erb")
 }
@@ -69,6 +72,8 @@ func (a *ERBAsset) Compile() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	a.l.Info("Compiling ERB")
 
 	var buf bytes.Buffer
 	var cmd *exec.Cmd

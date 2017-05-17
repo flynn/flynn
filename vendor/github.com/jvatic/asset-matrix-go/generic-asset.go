@@ -4,9 +4,10 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
+
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type GenericAsset struct {
@@ -14,6 +15,7 @@ type GenericAsset struct {
 	p        string
 	indexKey string
 	checkSum string
+	l        log.Logger
 }
 
 func (a *GenericAsset) OutputExt() string {
@@ -23,7 +25,8 @@ func (a *GenericAsset) OutputExt() string {
 func (a *GenericAsset) OutputPath() string {
 	p, err := a.RelPath()
 	if err != nil {
-		log.Fatal(err)
+		a.l.Error("Error getting rel path", "err", err)
+		os.Exit(1)
 	}
 	return p
 }
@@ -84,7 +87,8 @@ func (a *GenericAsset) Compile() (io.Reader, error) {
 		defer file.Close()
 		defer w.Close()
 		if _, err := io.Copy(w, file); err != nil {
-			log.Fatal(err)
+			a.l.Error("Error writing output", "err", err)
+			os.Exit(1)
 		}
 	}()
 	return r, nil

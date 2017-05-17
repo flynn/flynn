@@ -3,11 +3,12 @@ package assetmatrix
 import (
 	"bytes"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type JSXAsset struct {
@@ -15,6 +16,7 @@ type JSXAsset struct {
 	r        *AssetRoot
 	p        string
 	indexKey string
+	l        log.Logger
 }
 
 func (a *JSXAsset) OutputExt() string {
@@ -24,7 +26,8 @@ func (a *JSXAsset) OutputExt() string {
 func (a *JSXAsset) OutputPath() string {
 	p, err := a.RelPath()
 	if err != nil {
-		log.Fatal(err)
+		a.l.Error("Error getting rel path", "err", err)
+		os.Exit(1)
 	}
 	if filepath.Ext(p) == ".jsx" {
 		p = strings.TrimSuffix(p, ".jsx")
@@ -73,8 +76,10 @@ func (a *JSXAsset) Compile() (io.Reader, error) {
 		return nil, err
 	}
 
+	a.l.Info("Compiling JSX")
+
 	var buf bytes.Buffer
-	cmd := exec.Command("node_modules/react-tools/bin/jsx", "--es6module")
+	cmd := exec.Command("node_modules/babel-cli/bin/babel.js", "--plugins", "transform-react-jsx")
 	cmd.Stdin = data
 	cmd.Stdout = &buf
 	cmd.Stderr = os.Stderr
