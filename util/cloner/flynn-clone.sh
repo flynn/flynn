@@ -86,10 +86,11 @@ main() {
         .env = (if(.env) then .env | with_entries(select(.key | in($whitelist))) else null end) |
         .processes |= (map_values(.env = (if(.env) then with_entries(select(.key | in($whitelist))) else null end)))
       ' \
-      < "${tmp}/src.json" \
+      < "${tmp}/src.json" | \
+      sed "s|${src_app}-web|${dst_app}-web|g" \
       > "${tmp}/dst.json"
   else
-    cp "${tmp}/src.json" "${tmp}/dst.json"
+    sed "s|${src_app}-web|${dst_app}-web|g" "${tmp}/src.json" > "${tmp}/dst.json"
   fi
 
   info "creating destination app"
