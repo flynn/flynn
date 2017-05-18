@@ -1,6 +1,6 @@
 # Prime Directive Privacy Policy
 
-_September 22, 2016_
+_May 18, 2017_
 
 Your privacy is an important factor that Prime Directive (that's us) considers in the
 development of each of our products and services. We are committed to being
@@ -103,8 +103,9 @@ convenient, we will post an effective date at the top of the page.
 
 Some of our websites use Twitter Analytics to collect user data for the purposes
 of conversion tracking and serving ads targeted to users’ interests. You can
-avoid the collection of your data for this purpose and opt out by enabling [Do
-Not Track](https://en.wikipedia.org/wiki/Do_Not_Track) in your web browser.
+avoid the collection of your data for this purpose and opt out by using one of
+the methods [specified by
+Twitter](https://support.twitter.com/articles/20170405).
 
 ## Usage Statistics
 
