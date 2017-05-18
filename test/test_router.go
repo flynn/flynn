@@ -1,8 +1,15 @@
 package main
 
 import (
+	"crypto/tls"
+	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
+
+	"github.com/flynn/flynn/pkg/tlscert"
 
 	c "github.com/flynn/go-check"
 )
@@ -53,6 +60,49 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	t.Assert(err, c.IsNil)
 	req.SetBasicAuth("", x.Key)
 	res, err = http.DefaultClient.Do(req)
+	t.Assert(err, c.IsNil)
+	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+	res.Body.Close()
+
+	writeTemp := func(data, prefix string) (string, error) {
+		f, err := ioutil.TempFile(os.TempDir(), fmt.Sprintf("flynn-test-%s", prefix))
+		t.Assert(err, c.IsNil)
+		_, err = f.WriteString(data)
+		t.Assert(err, c.IsNil)
+		stat, err := f.Stat()
+		t.Assert(err, c.IsNil)
+		return filepath.Join(os.TempDir(), stat.Name()), nil
+	}
+
+	// add an HTTPS controller route on the new port
+	cert, err := tlscert.Generate([]string{"dashboard." + x.Domain})
+	t.Assert(err, c.IsNil)
+	certPath, err := writeTemp(cert.Cert, "tls-cert")
+	t.Assert(err, c.IsNil)
+	keyPath, err := writeTemp(cert.PrivateKey, "tls-key")
+	certRoute := x.flynn("/", "-a", "dashboard", "route", "add", "http", "-s", "dashboard-web", "-p", "8081", "--tls-cert", certPath, "--tls-key", keyPath, "dashboard."+x.Domain)
+	t.Assert(certRoute, Succeeds)
+
+	// pause to allow router to catch up (see above)
+	time.Sleep(1 * time.Second)
+
+	// ignore TLS CA issues
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+
+	// check a routed HTTP request succeeds
+	req, err = http.NewRequest("GET", "https://dashboard."+x.Domain+":8081", nil)
+	t.Assert(err, c.IsNil)
+	req.SetBasicAuth("", x.Key)
+	res, err = client.Do(req)
+	t.Assert(err, c.IsNil)
+	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+	res.Body.Close()
+
+	// check that a HTTPS request to the default port succeeds
+	req, err = http.NewRequest("GET", "https://dashboard."+x.Domain, nil)
+	t.Assert(err, c.IsNil)
+	req.SetBasicAuth("", x.Key)
+	res, err = client.Do(req)
 	t.Assert(err, c.IsNil)
 	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
 	res.Body.Close()
