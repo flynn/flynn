@@ -203,7 +203,7 @@ func (s *HTTPListener) AddRoute(r *router.Route) error {
 	// If not using default ports, check that the port is reserved, first
 	addrs := s.Addrs
 	err := ErrUnreservedHTTP
-	if r.Certificate != nil {
+	if r.LegacyTLSCert != "" {
 		addrs = s.TLSAddrs
 		err = ErrUnreservedHTTPS
 	}
