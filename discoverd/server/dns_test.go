@@ -477,6 +477,10 @@ func (s *DNSSuite) TestServiceLookup(c *C) {
 					addr = srv.TCPAddr
 				}
 				res, _, err := client.Exchange(req, addr)
+				if err != nil && strings.Contains(err.Error(), "i/o timeout") {
+					// retry once in case our UDP packet was dropped by the kernel
+					res, _, err = client.Exchange(req, addr)
+				}
 				c.Assert(err, IsNil)
 
 				if strings.Contains(t.name, "NXDOMAIN") {
