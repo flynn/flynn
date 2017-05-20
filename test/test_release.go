@@ -42,14 +42,22 @@ cd "${ROOT}"
 
 # send all output to stderr so only images.json is output to stdout
 (
-  # update the TUF root keys and create new image manifests for each released
-  # image by updating entrypoints
-  curl -fsSLo jq "https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"
-  chmod +x jq
-  ./jq \
+  # serve the test TUF repository over HTTP
+  dir="$(mktemp --directory)"
+  ln -s "${ROOT}/test/release/repository" "${dir}/tuf"
+  ln -s "${ROOT}/script/install-flynn" "${dir}/install-flynn"
+  sudo start-stop-daemon \
+    --start \
+    --background \
+    --chdir "${dir}" \
+    --exec "${ROOT}/build/bin/flynn-test-file-server"
+
+  # update the builder manifest to use the test TUF repository and create new
+  # image manifests for each released image by updating entrypoints
+  jq \
     --argjson root_keys       "$(tuf --dir test/release root-keys)" \
     --argjson released_images "$(jq --compact-output 'keys | reduce .[] as $name ({}; .[$name] = true)' build/manifests/images.json)" \
-    '.tuf.root_keys = $root_keys | .images = (.images | map(if (.id | in($released_images)) then .entrypoint.env = {"FOO":"BAR"} else . end))' \
+    '.tuf.root_keys = $root_keys | .tuf.repository = "http://{{ .HostIP }}:8080/tuf" | .images |= map(if (.id | in($released_images)) then .entrypoint.env = {"FOO":"BAR"} else . end)' \
     builder/manifest.json \
     > /tmp/manifest.json
   mv /tmp/manifest.json builder/manifest.json
@@ -71,16 +79,6 @@ cd "${ROOT}"
     SLUG_IMAGE_ID="{{ .SlugImageID }}" \
     /builder/build.sh \
     < <(tar c -C test/apps/http .)
-
-  # serve the TUF repository over HTTP
-  dir="$(mktemp --directory)"
-  ln -s "${ROOT}/test/release/repository" "${dir}/tuf"
-  ln -s "${ROOT}/script/install-flynn" "${dir}/install-flynn"
-  sudo start-stop-daemon \
-    --start \
-    --background \
-    --chdir "${dir}" \
-    --exec "${ROOT}/build/bin/flynn-test-file-server"
 
 ) </dev/null >&2
 
