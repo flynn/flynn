@@ -52,7 +52,6 @@ import (
 )
 
 const (
-	imageRoot         = "/var/lib/docker"
 	containerRoot     = "/var/lib/flynn/container"
 	defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 	defaultPartition  = "user"
@@ -185,19 +184,6 @@ func writeContainerConfig(path string, c *containerinit.Config, envs ...map[stri
 	}
 
 	return json.NewEncoder(f).Encode(c)
-}
-
-func readDockerImageConfig(id string) (*dockerImageConfig, error) {
-	res := &struct{ Config dockerImageConfig }{}
-	f, err := os.Open(filepath.Join(imageRoot, "graph", id, "json"))
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	if err := json.NewDecoder(f).Decode(res); err != nil {
-		return nil, err
-	}
-	return &res.Config, nil
 }
 
 // ConfigureNetworking is called once during host startup and sets up the local
