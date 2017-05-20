@@ -22,6 +22,7 @@ OPTIONS:
   -z, --no-destroy-vols    Don't destroy volumes
   -v, --version=VERSION    Boot using the released VERSION (e.g. v20151104.1)
   --from-backup=FILE       Bootstrap from backup file or URL (e.g. https://s3.amazonaws.com/flynn-test/backups/nodejs-v20160624.1.tar)
+  --steps=STEPS            Only run the given steps (comma separated)
 USAGE
 }
 
@@ -31,6 +32,7 @@ main() {
   local host_flags=()
   local backup=""
   local backup_url=""
+  local steps=""
 
   while true; do
     case "$1" in
@@ -68,6 +70,13 @@ main() {
         else
           backup="$2"
         fi
+        shift 2
+        ;;
+      --steps)
+        if [[ -z "$2" ]]; then
+          fail "--steps flag requires an argument"
+        fi
+        steps="$2"
         shift 2
         ;;
       *)
@@ -141,6 +150,9 @@ main() {
   )
   if [[ -n "${backup}" ]]; then
     flags+=("--from-backup=${backup}")
+  fi
+  if [[ -n "${steps}" ]]; then
+    flags+=("--steps=${steps}")
   fi
   "${flynn_host}" bootstrap ${flags[@]} "${manifest}"
 }
