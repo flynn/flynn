@@ -99,7 +99,7 @@ main() {
   export DISCOVERD="${DISCOVERD:-"1.localflynn.com:1111"}"
   if ! curl -fsSLo /dev/null --connect-timeout 1 "${DISCOVERD}/.well-known/status"; then
     info "Flynn cluster not running, bootstrapping"
-    "${ROOT}/script/bootstrap-flynn"
+    "${ROOT}/script/bootstrap-flynn" --steps "discoverd,flannel,wait-hosts"
   fi
 
   local args=("--version" "${version}")
