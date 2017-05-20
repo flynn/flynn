@@ -145,7 +145,7 @@ func runUpdate(args *docopt.Args) error {
 		stream, err := host.PullImages(
 			args.String["--repository"],
 			args.String["--config-dir"],
-			version.String(),
+			version.Release(),
 			bytes.NewReader(tufDB),
 			ch,
 		)
@@ -183,7 +183,7 @@ func runUpdate(args *docopt.Args) error {
 			args.String["--repository"],
 			args.String["--bin-dir"],
 			args.String["--config-dir"],
-			version.String(),
+			version.Release(),
 			bytes.NewReader(tufDB),
 		)
 		if err != nil {
