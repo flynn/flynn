@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"time"
+
 	ct "github.com/flynn/flynn/controller/types"
 	tspb "github.com/golang/protobuf/ptypes/timestamp"
 )
@@ -22,4 +24,26 @@ func NewApp(app *ct.App) *App {
 		pbApp.UpdatedAt, _ = tspb.TimestampProto(app.UpdatedAt)
 	}
 	return pbApp
+}
+
+// ControllerApp converts a protobuf app into a controller app
+func (a *App) ControllerApp() *ct.App {
+	return &ct.App{
+		ID:            a.GetId(),
+		Name:          a.GetName(),
+		Strategy:      a.GetStrategy(),
+		ReleaseID:     a.GetReleaseId(),
+		DeployTimeout: a.GetDeployTimeout(),
+		CreatedAt:     fromGRPCTime(a.GetCreatedAt()),
+		UpdatedAt:     fromGRPCTime(a.GetUpdatedAt()),
+	}
+}
+
+func fromGRPCTime(in *tspb.Timestamp) *time.Time {
+	var t time.Time
+	if in == nil {
+		return nil
+	}
+	t := time.Unix(in.Seconds, in.Nanos).UTC()
+	return &t
 }

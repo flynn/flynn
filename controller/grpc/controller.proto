@@ -5,8 +5,13 @@ package controller;
 import "google/protobuf/timestamp.proto";
 
 service Controller {
+  // Creates an app
+  rpc CreateApp(App) returns (CreateAppResponse) {}
   // Returns an app matching the provided ID or nil
   rpc GetApp (AppRequest) returns (App) {}
+}
+
+message CreateAppResponse {
 }
 
 message AppRequest {

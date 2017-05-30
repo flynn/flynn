@@ -15,6 +15,10 @@ type server struct {
 	appRepo *AppRepo
 }
 
+func (s *server) CreateApp(ctx context.Context, in *pb.App) error {
+	return s.appRepo.Add(in.ControllerApp())
+}
+
 func (s *server) GetApp(ctx context.Context, in *pb.AppRequest) (*pb.App, error) {
 	app, err := s.appRepo.selectApp(in.Id)
 	if err != nil {
