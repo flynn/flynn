@@ -145,7 +145,7 @@
         "run": [
           "mkdir -p /etc/flynn-controller",
           "cp -r schema /etc/flynn-controller/jsonschema",
-          "protoc -I controller/grpc/ controller/grpc/controller.proto --go_out=plugins=grpc:controller"
+          "protoc -I controller/grpc/ controller/grpc/controller.proto --go_out=plugins=grpc:controller/grpc"
         ]
       }],
       "entrypoint": {
