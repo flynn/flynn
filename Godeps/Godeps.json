@@ -752,6 +752,14 @@
 			"Rev": "78b168c14fc28c8c711844d210f7ab845083e3b1"
 		},
 		{
+			"ImportPath": "github.com/golang/protobuf/protoc-gen-go/descriptor",
+			"Rev": "78b168c14fc28c8c711844d210f7ab845083e3b1"
+		},
+		{
+			"ImportPath": "github.com/golang/protobuf/ptypes/timestamp",
+			"Rev": "78b168c14fc28c8c711844d210f7ab845083e3b1"
+		},
+		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "14f550f51af52180c2eefed15e5fd18d63c0a64a"
 		},
@@ -994,6 +1002,11 @@
 		{
 			"ImportPath": "github.com/seccomp/libseccomp-golang",
 			"Rev": "32f571b70023028bd57d9288c20efbcb237f3ce0"
+		},
+		{
+			"ImportPath": "github.com/soheilhy/cmux",
+			"Comment": "v0.1.2-6-g0068a46",
+			"Rev": "0068a46c9c22b4cd1aef5b063a9a47f473826d52"
 		},
 		{
 			"ImportPath": "github.com/stevvooe/resumable",
@@ -1265,6 +1278,16 @@
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/peer",
+			"Comment": "v1.0.1-GA-49-g3e1c91c",
+			"Rev": "3e1c91c1e0a72a34f68542bc029792b031835cbf"
+		},
+		{
+			"ImportPath": "google.golang.org/grpc/reflection",
+			"Comment": "v1.0.1-GA-49-g3e1c91c",
+			"Rev": "3e1c91c1e0a72a34f68542bc029792b031835cbf"
+		},
+		{
+			"ImportPath": "google.golang.org/grpc/reflection/grpc_reflection_v1alpha",
 			"Comment": "v1.0.1-GA-49-g3e1c91c",
 			"Rev": "3e1c91c1e0a72a34f68542bc029792b031835cbf"
 		},
