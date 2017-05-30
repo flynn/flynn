@@ -121,6 +121,7 @@ func main() {
 	httpl := tcpm.Match(cmux.Any())
 	go serveGRPC(grpcl, c)
 	go serveHTTP(httpl, c)
+	tcpm.Serve()
 }
 
 func serveHTTP(l *net.Listener, c handlerConfig) {
