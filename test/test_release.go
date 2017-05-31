@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"text/template"
 
@@ -205,7 +206,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	script.Reset()
 	updateScript.Execute(&script, map[string]string{"Blobstore": blobstoreAddr, "Discoverd": updateHost.IP + ":1111"})
 	var updateOutput bytes.Buffer
-	out = io.MultiWriter(logWriter, &updateOutput)
+	out = io.MultiWriter(logWriter, &updateOutput, os.Stdout)
 	t.Assert(updateHost.Run("bash -ex", &tc.Streams{Stdin: &script, Stdout: out, Stderr: out}), c.IsNil)
 
 	// check rebuilt images were downloaded
