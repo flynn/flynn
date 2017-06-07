@@ -107,9 +107,9 @@ main() {
 Cloning finished at $(date +%H:%M:%S).
 
 Database appliances have not been cloned, provision them now if
-necessary with 'flynn -a ${dst_app} resource add ...'.
+necessary with 'flynn -c ${dst_cluster} -a ${dst_app} resource add ...'.
 
-Run 'flynn -a ${dst_app} remote add <remote>' to add a git remote for
+Run 'flynn -c ${dst_cluster} -a ${dst_app} remote add <remote>' to add a git remote for
 the new app and then 'git push <remote> master' to deploy the app.
 ========================
 
