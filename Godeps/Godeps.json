@@ -891,6 +891,18 @@
 			"Rev": "7d2d8c8a4e078ce3c58736ab521a40b37a504c52"
 		},
 		{
+			"ImportPath": "github.com/ncw/swift",
+			"Rev": "bf51ccd3b5c3a1f12ac762b4511c5f9f1ce6b26f"
+		},
+		{
+			"ImportPath": "github.com/ncw/swift/rs",
+			"Rev": "bf51ccd3b5c3a1f12ac762b4511c5f9f1ce6b26f"
+		},
+		{
+			"ImportPath": "github.com/ncw/swift/swifttest",
+			"Rev": "bf51ccd3b5c3a1f12ac762b4511c5f9f1ce6b26f"
+		},
+		{
 			"ImportPath": "github.com/olekukonko/ts",
 			"Rev": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8"
 		},
