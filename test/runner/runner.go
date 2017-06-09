@@ -166,7 +166,7 @@ func (r *Runner) start() error {
 	}
 	r.runEnv["TEST_RUNNER_AUTH_KEY"] = r.authKey
 
-	for _, s := range []string{"S3", "GCS", "AZURE"} {
+	for _, s := range []string{"S3", "GCS", "AZURE", "SWIFT"} {
 		name := fmt.Sprintf("BLOBSTORE_%s_CONFIG", s)
 		if c := os.Getenv(name); c != "" {
 			r.runEnv[name] = c

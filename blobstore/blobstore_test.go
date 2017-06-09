@@ -142,6 +142,25 @@ func TestAzureFilesystem(t *testing.T) {
 	testExternalBackendReplace(r, t)
 }
 
+func TestSwiftFilesystem(t *testing.T) {
+	cfg := os.Getenv("BLOBSTORE_SWIFT_CONFIG")
+	if cfg == "" {
+		t.Skip("Swift not configured")
+	}
+	db := initDB(t)
+	defer db.Close()
+	b, err := backend.NewSwift("swift-test", parseBackendEnv(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := data.NewFileRepo(db, []backend.Backend{b}, "swift-test")
+	testList(r, t)
+	testDelete(r, t)
+	testOffset(r, t, false)
+	testFilesystem(r, false, t)
+	testExternalBackendReplace(r, t)
+}
+
 func testList(r *data.FileRepo, t *testing.T) {
 	srv := httptest.NewServer(handler(r))
 	defer srv.Close()

@@ -75,6 +75,18 @@ func (s *BlobstoreSuite) TestBlobstoreBackendMinio(t *c.C) {
 	s.testBlobstoreBackend(t, "minio", ".+minio.discoverd.+", setup, fmt.Sprintf(`BACKEND_MINIO="backend=minio insecure=true endpoint=minio.discoverd:9000 bucket=flynnblobstore access_key_id=%s secret_access_key=%s"`, minioAccessKey, minioSecretKey))
 }
 
+func (s *BlobstoreSuite) TestBlobstoreBackendSwift(t *c.C) {
+	swiftConfig := os.Getenv("BLOBSTORE_SWIFT_CONFIG")
+	if swiftConfig == "" {
+		// BLOBSTORE_SWIFT_CONFIG should be set to a valid configuration.
+		// For Auth v2
+		// backend=swift username=xxx password=xxx auth_url=xxx tenant_id=xxx region=xxx container=xxx
+		t.Skip("missing BLOBSTORE_SWIFT_CONFIG env var")
+	}
+
+	s.testBlobstoreBackend(t, "swift", ".+temp_url_sig.+temp_url_expires.+", nil, `"BACKEND_SWIFT=$BLOBSTORE_SWIFT_CONFIG"`)
+}
+
 func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern string, setup func(*Cluster), env ...string) {
 	x := s.bootCluster(t, 1)
 	defer x.Destroy()
