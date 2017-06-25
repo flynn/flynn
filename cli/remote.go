@@ -15,6 +15,8 @@ usage: flynn remote add [<remote>] [-y]
 Create a git remote that allows deploying the application via git.
 If a name for the remote is not provided 'flynn' will be used.
 
+Note that the -a <app> option must be given so the remote to add is known.
+
 Options:
 	-y, --yes              Skip the confirmation prompt if the git remote already exists.
 
