@@ -16,6 +16,8 @@ import (
 
 	"golang.org/x/net/context"
 	"gopkg.in/inconshreveable/log15.v2"
+
+	"github.com/tomnomnom/linkheader"
 )
 
 const (
@@ -136,6 +138,13 @@ func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, re
 	defer res.Body.Close()
 	defer p.RequestTracker.TrackRequestDone(backend)
 
+	// Use HTTP/2 server push for preloadable assets
+	//
+	// https://www.w3.org/TR/preload/#server-push-http-2
+	if req.ProtoMajor == 2 && res.Header.Get("Link") != "" {
+		p.prepareServerPush(rw, res.Header.Get("Link"))
+	}
+
 	prepareResponseHeaders(res)
 	p.writeResponse(rw, res)
 }
@@ -206,6 +215,32 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, l log15.Logger, req 
 		return
 	}
 	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
+}
+
+// Adds HTTP/2 Server push for assets with preload
+func (p *ReverseProxy) prepareServerPush(rw http.ResponseWriter, linkHeader string) {
+	var preloadList []string
+
+	links := linkheader.Parse(linkHeader)
+
+	// TODO: Check for nopush assets
+	for _, link := range links {
+		if link.Rel == "preload" && len(link.URL) > 0 {
+			preloadList = append(preloadList, link.URL)
+		}
+	}
+
+	if len(preloadList) > 0 {
+
+		pusher, ok := rw.(http.Pusher)
+		if ok { // Push is supported. Try pushing rather than waiting for the browser.
+			for _, preload := range preloadList {
+				if err := pusher.Push(preload, nil); err != nil {
+					p.Logger.New("http2_push_failed", preload)
+				}
+			}
+		}
+	}
 }
 
 func prepareResponseHeaders(res *http.Response) {
