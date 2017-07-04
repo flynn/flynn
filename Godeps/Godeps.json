@@ -665,6 +665,14 @@
 			"Rev": "f6dd2ebbb31e9721c860cf1faf5c944aa73e3844"
 		},
 		{
+			"ImportPath": "github.com/flynn/go-p9p",
+			"Rev": "701321e87d2fd13b7a8240eb1ec0c66d7867d1cd"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-p9p/ufs",
+			"Rev": "701321e87d2fd13b7a8240eb1ec0c66d7867d1cd"
+		},
+		{
 			"ImportPath": "github.com/flynn/go-tuf",
 			"Rev": "a98aea1463c972506e302344ebbfa30f85b74f2f"
 		},
