@@ -301,7 +301,7 @@ git-archive-all() {
 	GIT_DIR="$(pwd)"
 	cd ..
 	git checkout --force --quiet $1
-	git submodule --quiet update --init --recursive
+	git submodule --quiet update --force --init --checkout --recursive
 	tar --create --exclude-vcs .
 }
 

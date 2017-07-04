@@ -247,6 +247,11 @@ func (s *GitDeploySuite) TestGitSubmodules(t *c.C) {
 	t.Assert(r.flynn("create"), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 	t.Assert(r.flynn("run", "ls", "go-flynn-example"), SuccessfulOutputContains, "main.go")
+
+	// deploy again to test cached repo
+	t.Assert(r.git("commit", "-m", "foo", "--allow-empty"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	t.Assert(r.flynn("run", "ls", "go-flynn-example"), SuccessfulOutputContains, "main.go")
 }
 
 func (s *GitDeploySuite) TestCancel(t *c.C) {
