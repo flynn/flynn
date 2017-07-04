@@ -992,10 +992,6 @@
 			"Rev": "9cac891ad8a2029146df905ae09622eb1de8b19c"
 		},
 		{
-			"ImportPath": "github.com/rminnich/go9p",
-			"Rev": "d5b889a79786f72043b32e4294abc40c5cd050c9"
-		},
-		{
 			"ImportPath": "github.com/rnd42/go-jsonpointer",
 			"Rev": "0480215403db768c5bf6db30d82908043c58422c"
 		},
