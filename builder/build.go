@@ -35,7 +35,6 @@ import (
 	tuf "github.com/flynn/go-tuf/client"
 	tufdata "github.com/flynn/go-tuf/data"
 	"github.com/golang/groupcache/singleflight"
-	"github.com/rminnich/go9p"
 	"github.com/tent/canonical-json-go"
 	"gopkg.in/inconshreveable/log15.v2"
 )
@@ -837,10 +836,7 @@ func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[st
 		return nil, err
 	}
 	defer ln.Close()
-	fs := &go9p.Ufs{Root: dir}
-	fs.Dotu = true
-	fs.Start(fs)
-	go fs.StartListener(ln)
+	go serveFilesystem(dir, ln)
 	addr := ln.Addr().(*net.TCPAddr)
 	job.Config.Mounts = append(job.Config.Mounts, host.Mount{
 		Device:   "9p",
