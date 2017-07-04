@@ -130,14 +130,25 @@ func runDockerLogout() error {
 var ErrDockerTLSError = errors.New("docker TLS error")
 
 func dockerLogin(host, key string) error {
+	return dockerLoginWithEmail(host, key, false)
+}
+
+func dockerLoginWithEmail(host, key string, useEmail bool) error {
+	flags := []string{"--username=user", "--password=" + key}
+	if useEmail {
+		flags = append(flags, "--email=user@"+host)
+	}
+	cmd := exec.Command("docker", append([]string{"login"}, append(flags, host)...)...)
 	var out bytes.Buffer
-	cmd := exec.Command("docker", "login", "--email=user@"+host, "--username=user", "--password="+key, host)
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	err := cmd.Run()
-	if strings.Contains(out.String(), "certificate signed by unknown authority") {
+	switch {
+	case !useEmail && strings.Contains(out.String(), "Email: EOF"):
+		return dockerLoginWithEmail(host, key, true)
+	case strings.Contains(out.String(), "certificate signed by unknown authority"):
 		return ErrDockerTLSError
-	} else if err != nil {
+	case err != nil:
 		return fmt.Errorf("error running `docker login`: %s - output: %q", err, out)
 	}
 	return nil
