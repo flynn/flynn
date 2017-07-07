@@ -431,7 +431,7 @@ flynn=$GOPATH/src/github.com/flynn/flynn
 cd $flynn
 
 if [[ -f test/scripts/test-unit.sh ]]; then
-  timeout --signal=QUIT --kill-after=10 5m test/scripts/test-unit.sh
+  timeout --signal=QUIT --kill-after=25 20m test/scripts/test-unit.sh
 fi
 `[1:]
 
