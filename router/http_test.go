@@ -1475,7 +1475,9 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 			case <-closec:
 				return
 			default:
-				c.Assert(err, IsNil)
+				if err != nil {
+					c.Fatal("accept error")
+				}
 				hitCount++
 				conn.Close()
 				if hitCount > 1 {
