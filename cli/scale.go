@@ -157,7 +157,7 @@ func runScaleWithScaleRequest(client controller.Client, app string, release *ct.
 		}
 		scale := make([]string, 0, len(release.Processes))
 		for typ := range release.Processes {
-			if count := (*req.NewProcesses)[typ]; count != req.OldProcesses[typ] {
+			if count, ok := (*req.NewProcesses)[typ]; ok && count != req.OldProcesses[typ] {
 				scale = append(scale, fmt.Sprintf("%s: %d=>%d", typ, req.OldProcesses[typ], count))
 			}
 		}
