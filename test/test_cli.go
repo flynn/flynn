@@ -165,6 +165,7 @@ func (s *CLISuite) TestScale(t *c.C) {
 	scale = app.flynn("scale", "printer=2")
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "printer: 1=>2")
+	t.Assert(scale, c.Not(OutputContains), "echoer")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
 	assertEventOutput(scale, ct.JobEvents{"printer": {ct.JobStateUp: 1}})
 	scale = app.flynn("scale")
