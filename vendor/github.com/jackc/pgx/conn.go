@@ -63,8 +63,8 @@ type Conn struct {
 	logLevel           int
 	mr                 msgReader
 	fp                 *fastpath
-	pgsql_af_inet      *byte
-	pgsql_af_inet6     *byte
+	pgsqlAfInet        *byte
+	pgsqlAfInet6       *byte
 	busy               bool
 	poolResetCount     int
 	preallocatedRows   []Rows
@@ -111,6 +111,19 @@ func (ct CommandTag) RowsAffected() int64 {
 	return n
 }
 
+// Identifier a PostgreSQL identifier or name. Identifiers can be composed of
+// multiple parts such as ["schema", "table"] or ["table", "column"].
+type Identifier []string
+
+// Sanitize returns a sanitized string safe for SQL interpolation.
+func (ident Identifier) Sanitize() string {
+	parts := make([]string, len(ident))
+	for i := range ident {
+		parts[i] = `"` + strings.Replace(ident[i], `"`, `""`, -1) + `"`
+	}
+	return strings.Join(parts, ".")
+}
+
 // ErrNoRows occurs when rows are expected but none are returned.
 var ErrNoRows = errors.New("no rows in result set")
 
@@ -145,7 +158,7 @@ func Connect(config ConnConfig) (c *Conn, err error) {
 	return connect(config, nil, nil, nil)
 }
 
-func connect(config ConnConfig, pgTypes map[Oid]PgType, pgsql_af_inet *byte, pgsql_af_inet6 *byte) (c *Conn, err error) {
+func connect(config ConnConfig, pgTypes map[Oid]PgType, pgsqlAfInet *byte, pgsqlAfInet6 *byte) (c *Conn, err error) {
 	c = new(Conn)
 
 	c.config = config
@@ -157,13 +170,13 @@ func connect(config ConnConfig, pgTypes map[Oid]PgType, pgsql_af_inet *byte, pgs
 		}
 	}
 
-	if pgsql_af_inet != nil {
-		c.pgsql_af_inet = new(byte)
-		*c.pgsql_af_inet = *pgsql_af_inet
+	if pgsqlAfInet != nil {
+		c.pgsqlAfInet = new(byte)
+		*c.pgsqlAfInet = *pgsqlAfInet
 	}
-	if pgsql_af_inet6 != nil {
-		c.pgsql_af_inet6 = new(byte)
-		*c.pgsql_af_inet6 = *pgsql_af_inet6
+	if pgsqlAfInet6 != nil {
+		c.pgsqlAfInet6 = new(byte)
+		*c.pgsqlAfInet6 = *pgsqlAfInet6
 	}
 
 	if c.config.LogLevel != 0 {
@@ -209,12 +222,21 @@ func connect(config ConnConfig, pgTypes map[Oid]PgType, pgsql_af_inet *byte, pgs
 		c.config.Dial = (&net.Dialer{KeepAlive: 5 * time.Minute}).Dial
 	}
 
+	if c.shouldLog(LogLevelInfo) {
+		c.log(LogLevelInfo, fmt.Sprintf("Dialing PostgreSQL server at %s address: %s", network, address))
+	}
 	err = c.connect(config, network, address, config.TLSConfig)
 	if err != nil && config.UseFallbackTLS {
+		if c.shouldLog(LogLevelInfo) {
+			c.log(LogLevelInfo, fmt.Sprintf("Connect with TLSConfig failed, trying FallbackTLSConfig: %v", err))
+		}
 		err = c.connect(config, network, address, config.FallbackTLSConfig)
 	}
 
 	if err != nil {
+		if c.shouldLog(LogLevelError) {
+			c.log(LogLevelError, fmt.Sprintf("Connect failed: %v", err))
+		}
 		return nil, err
 	}
 
@@ -222,23 +244,14 @@ func connect(config ConnConfig, pgTypes map[Oid]PgType, pgsql_af_inet *byte, pgs
 }
 
 func (c *Conn) connect(config ConnConfig, network, address string, tlsConfig *tls.Config) (err error) {
-	if c.shouldLog(LogLevelInfo) {
-		c.log(LogLevelInfo, fmt.Sprintf("Dialing PostgreSQL server at %s address: %s", network, address))
-	}
 	c.conn, err = c.config.Dial(network, address)
 	if err != nil {
-		if c.shouldLog(LogLevelError) {
-			c.log(LogLevelError, fmt.Sprintf("Connection failed: %v", err))
-		}
 		return err
 	}
 	defer func() {
 		if c != nil && err != nil {
 			c.conn.Close()
 			c.alive = false
-			if c.shouldLog(LogLevelError) {
-				c.log(LogLevelError, err.Error())
-			}
 		}
 	}()
 
@@ -253,9 +266,6 @@ func (c *Conn) connect(config ConnConfig, network, address string, tlsConfig *tl
 			c.log(LogLevelDebug, "Starting TLS handshake")
 		}
 		if err := c.startTLS(tlsConfig); err != nil {
-			if c.shouldLog(LogLevelError) {
-				c.log(LogLevelError, fmt.Sprintf("TLS failed: %v", err))
-			}
 			return err
 		}
 	}
@@ -308,6 +318,12 @@ func (c *Conn) connect(config ConnConfig, network, address string, tlsConfig *tl
 				c.log(LogLevelInfo, "Connection established")
 			}
 
+			// Replication connections can't execute the queries to
+			// populate the c.PgTypes and c.pgsqlAfInet
+			if _, ok := msg.options["replication"]; ok {
+				return nil
+			}
+
 			if c.PgTypes == nil {
 				err = c.loadPgTypes()
 				if err != nil {
@@ -315,7 +331,7 @@ func (c *Conn) connect(config ConnConfig, network, address string, tlsConfig *tl
 				}
 			}
 
-			if c.pgsql_af_inet == nil || c.pgsql_af_inet6 == nil {
+			if c.pgsqlAfInet == nil || c.pgsqlAfInet6 == nil {
 				err = c.loadInetConstants()
 				if err != nil {
 					return err
@@ -372,8 +388,8 @@ func (c *Conn) loadInetConstants() error {
 		return err
 	}
 
-	c.pgsql_af_inet = &ipv4[0]
-	c.pgsql_af_inet6 = &ipv6[0]
+	c.pgsqlAfInet = &ipv4[0]
+	c.pgsqlAfInet6 = &ipv6[0]
 
 	return nil
 }
@@ -430,7 +446,7 @@ func ParseURI(uri string) (ConnConfig, error) {
 	}
 
 	ignoreKeys := map[string]struct{}{
-		"sslmode": struct{}{},
+		"sslmode": {},
 	}
 
 	cp.RuntimeParams = make(map[string]string)
@@ -442,11 +458,13 @@ func ParseURI(uri string) (ConnConfig, error) {
 
 		cp.RuntimeParams[k] = v[0]
 	}
-
+	if cp.Password == "" {
+		pgpass(&cp)
+	}
 	return cp, nil
 }
 
-var dsn_regexp = regexp.MustCompile(`([a-zA-Z_]+)=((?:"[^"]+")|(?:[^ ]+))`)
+var dsnRegexp = regexp.MustCompile(`([a-zA-Z_]+)=((?:"[^"]+")|(?:[^ ]+))`)
 
 // ParseDSN parses a database DSN (data source name) into a ConnConfig
 //
@@ -462,7 +480,7 @@ var dsn_regexp = regexp.MustCompile(`([a-zA-Z_]+)=((?:"[^"]+")|(?:[^ ]+))`)
 func ParseDSN(s string) (ConnConfig, error) {
 	var cp ConnConfig
 
-	m := dsn_regexp.FindAllStringSubmatch(s, -1)
+	m := dsnRegexp.FindAllStringSubmatch(s, -1)
 
 	var sslmode string
 
@@ -477,11 +495,11 @@ func ParseDSN(s string) (ConnConfig, error) {
 		case "host":
 			cp.Host = b[2]
 		case "port":
-			if p, err := strconv.ParseUint(b[2], 10, 16); err != nil {
+			p, err := strconv.ParseUint(b[2], 10, 16)
+			if err != nil {
 				return cp, err
-			} else {
-				cp.Port = uint16(p)
 			}
+			cp.Port = uint16(p)
 		case "dbname":
 			cp.Database = b[2]
 		case "sslmode":
@@ -495,8 +513,19 @@ func ParseDSN(s string) (ConnConfig, error) {
 	if err != nil {
 		return cp, err
 	}
-
+	if cp.Password == "" {
+		pgpass(&cp)
+	}
 	return cp, nil
+}
+
+// ParseConnectionString parses either a URI or a DSN connection string.
+// see ParseURI and ParseDSN for details.
+func ParseConnectionString(s string) (ConnConfig, error) {
+	if strings.HasPrefix(s, "postgres://") || strings.HasPrefix(s, "postgresql://") {
+		return ParseURI(s)
+	}
+	return ParseDSN(s)
 }
 
 // ParseEnvLibpq parses the environment like libpq does into a ConnConfig
@@ -558,7 +587,9 @@ func ParseEnvLibpq() (ConnConfig, error) {
 	if appname := os.Getenv("PGAPPNAME"); appname != "" {
 		cc.RuntimeParams["application_name"] = appname
 	}
-
+	if cc.Password == "" {
+		pgpass(&cc)
+	}
 	return cc, nil
 }
 
@@ -627,7 +658,7 @@ func (c *Conn) PrepareEx(name, sql string, opts *PrepareExOptions) (ps *Prepared
 
 	if opts != nil {
 		if len(opts.ParameterOids) > 65535 {
-			return nil, errors.New(fmt.Sprintf("Number of PrepareExOptions ParameterOids must be between 0 and 65535, received %d", len(opts.ParameterOids)))
+			return nil, fmt.Errorf("Number of PrepareExOptions ParameterOids must be between 0 and 65535, received %d", len(opts.ParameterOids))
 		}
 		wbuf.WriteInt16(int16(len(opts.ParameterOids)))
 		for _, oid := range opts.ParameterOids {
@@ -917,7 +948,7 @@ func (c *Conn) sendPreparedQuery(ps *PreparedStatement, arguments ...interface{}
 			wbuf.WriteInt16(TextFormatCode)
 		default:
 			switch oid {
-			case BoolOid, ByteaOid, Int2Oid, Int4Oid, Int8Oid, Float4Oid, Float8Oid, TimestampTzOid, TimestampTzArrayOid, TimestampOid, TimestampArrayOid, DateOid, BoolArrayOid, ByteaArrayOid, Int2ArrayOid, Int4ArrayOid, Int8ArrayOid, Float4ArrayOid, Float8ArrayOid, TextArrayOid, VarcharArrayOid, OidOid, InetOid, CidrOid, InetArrayOid, CidrArrayOid, RecordOid:
+			case BoolOid, ByteaOid, Int2Oid, Int4Oid, Int8Oid, Float4Oid, Float8Oid, TimestampTzOid, TimestampTzArrayOid, TimestampOid, TimestampArrayOid, DateOid, BoolArrayOid, ByteaArrayOid, Int2ArrayOid, Int4ArrayOid, Int8ArrayOid, Float4ArrayOid, Float8ArrayOid, TextArrayOid, VarcharArrayOid, OidOid, InetOid, CidrOid, InetArrayOid, CidrArrayOid, RecordOid, JsonOid, JsonbOid:
 				wbuf.WriteInt16(BinaryFormatCode)
 			default:
 				wbuf.WriteInt16(TextFormatCode)

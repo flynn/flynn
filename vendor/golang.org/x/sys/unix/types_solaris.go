@@ -5,7 +5,7 @@
 // +build ignore
 
 /*
-Input to cgo -godefs.  See also mkerrors.sh and mkall.sh
+Input to cgo -godefs.  See README.md
 */
 
 // +godefs map struct_in_addr [4]byte /* in_addr */
@@ -22,6 +22,7 @@ package unix
 #define __USE_LEGACY_PROTOTYPES__      // iovec
 #include <dirent.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <limits.h>
 #include <signal.h>
 #include <termios.h>
@@ -81,6 +82,7 @@ const (
 	sizeofLong     = C.sizeof_long
 	sizeofLongLong = C.sizeof_longlong
 	PathMax        = C.PATH_MAX
+	MaxHostNameLen = C.MAXHOSTNAMELEN
 )
 
 // Basic types

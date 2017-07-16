@@ -27,6 +27,7 @@ type ACLRole string
 const (
 	RoleOwner  ACLRole = "OWNER"
 	RoleReader ACLRole = "READER"
+	RoleWriter ACLRole = "WRITER"
 )
 
 // ACLEntity refers to a user or group.
@@ -92,7 +93,14 @@ func (a *ACLHandle) List(ctx context.Context) ([]ACLRule, error) {
 }
 
 func (a *ACLHandle) bucketDefaultList(ctx context.Context) ([]ACLRule, error) {
-	acls, err := a.c.raw.DefaultObjectAccessControls.List(a.bucket).Context(ctx).Do()
+	var acls *raw.ObjectAccessControls
+	var err error
+	err = runWithRetry(ctx, func() error {
+		req := a.c.raw.DefaultObjectAccessControls.List(a.bucket).Context(ctx)
+		setClientHeader(req.Header())
+		acls, err = req.Do()
+		return err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("storage: error listing default object ACL for bucket %q: %v", a.bucket, err)
 	}
@@ -105,7 +113,12 @@ func (a *ACLHandle) bucketDefaultSet(ctx context.Context, entity ACLEntity, role
 		Entity: string(entity),
 		Role:   string(role),
 	}
-	_, err := a.c.raw.DefaultObjectAccessControls.Update(a.bucket, string(entity), acl).Context(ctx).Do()
+	err := runWithRetry(ctx, func() error {
+		req := a.c.raw.DefaultObjectAccessControls.Update(a.bucket, string(entity), acl).Context(ctx)
+		setClientHeader(req.Header())
+		_, err := req.Do()
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("storage: error updating default ACL entry for bucket %q, entity %q: %v", a.bucket, entity, err)
 	}
@@ -113,7 +126,11 @@ func (a *ACLHandle) bucketDefaultSet(ctx context.Context, entity ACLEntity, role
 }
 
 func (a *ACLHandle) bucketDefaultDelete(ctx context.Context, entity ACLEntity) error {
-	err := a.c.raw.DefaultObjectAccessControls.Delete(a.bucket, string(entity)).Context(ctx).Do()
+	err := runWithRetry(ctx, func() error {
+		req := a.c.raw.DefaultObjectAccessControls.Delete(a.bucket, string(entity)).Context(ctx)
+		setClientHeader(req.Header())
+		return req.Do()
+	})
 	if err != nil {
 		return fmt.Errorf("storage: error deleting default ACL entry for bucket %q, entity %q: %v", a.bucket, entity, err)
 	}
@@ -121,7 +138,14 @@ func (a *ACLHandle) bucketDefaultDelete(ctx context.Context, entity ACLEntity) e
 }
 
 func (a *ACLHandle) bucketList(ctx context.Context) ([]ACLRule, error) {
-	acls, err := a.c.raw.BucketAccessControls.List(a.bucket).Context(ctx).Do()
+	var acls *raw.BucketAccessControls
+	var err error
+	err = runWithRetry(ctx, func() error {
+		req := a.c.raw.BucketAccessControls.List(a.bucket).Context(ctx)
+		setClientHeader(req.Header())
+		acls, err = req.Do()
+		return err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("storage: error listing bucket ACL for bucket %q: %v", a.bucket, err)
 	}
@@ -139,7 +163,12 @@ func (a *ACLHandle) bucketSet(ctx context.Context, entity ACLEntity, role ACLRol
 		Entity: string(entity),
 		Role:   string(role),
 	}
-	_, err := a.c.raw.BucketAccessControls.Update(a.bucket, string(entity), acl).Context(ctx).Do()
+	err := runWithRetry(ctx, func() error {
+		req := a.c.raw.BucketAccessControls.Update(a.bucket, string(entity), acl).Context(ctx)
+		setClientHeader(req.Header())
+		_, err := req.Do()
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("storage: error updating bucket ACL entry for bucket %q, entity %q: %v", a.bucket, entity, err)
 	}
@@ -147,7 +176,11 @@ func (a *ACLHandle) bucketSet(ctx context.Context, entity ACLEntity, role ACLRol
 }
 
 func (a *ACLHandle) bucketDelete(ctx context.Context, entity ACLEntity) error {
-	err := a.c.raw.BucketAccessControls.Delete(a.bucket, string(entity)).Context(ctx).Do()
+	err := runWithRetry(ctx, func() error {
+		req := a.c.raw.BucketAccessControls.Delete(a.bucket, string(entity)).Context(ctx)
+		setClientHeader(req.Header())
+		return req.Do()
+	})
 	if err != nil {
 		return fmt.Errorf("storage: error deleting bucket ACL entry for bucket %q, entity %q: %v", a.bucket, entity, err)
 	}
@@ -155,7 +188,14 @@ func (a *ACLHandle) bucketDelete(ctx context.Context, entity ACLEntity) error {
 }
 
 func (a *ACLHandle) objectList(ctx context.Context) ([]ACLRule, error) {
-	acls, err := a.c.raw.ObjectAccessControls.List(a.bucket, a.object).Context(ctx).Do()
+	var acls *raw.ObjectAccessControls
+	var err error
+	err = runWithRetry(ctx, func() error {
+		req := a.c.raw.ObjectAccessControls.List(a.bucket, a.object).Context(ctx)
+		setClientHeader(req.Header())
+		acls, err = req.Do()
+		return err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("storage: error listing object ACL for bucket %q, file %q: %v", a.bucket, a.object, err)
 	}
@@ -168,7 +208,12 @@ func (a *ACLHandle) objectSet(ctx context.Context, entity ACLEntity, role ACLRol
 		Entity: string(entity),
 		Role:   string(role),
 	}
-	_, err := a.c.raw.ObjectAccessControls.Update(a.bucket, a.object, string(entity), acl).Context(ctx).Do()
+	err := runWithRetry(ctx, func() error {
+		req := a.c.raw.ObjectAccessControls.Update(a.bucket, a.object, string(entity), acl).Context(ctx)
+		setClientHeader(req.Header())
+		_, err := req.Do()
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("storage: error updating object ACL entry for bucket %q, file %q, entity %q: %v", a.bucket, a.object, entity, err)
 	}
@@ -176,23 +221,21 @@ func (a *ACLHandle) objectSet(ctx context.Context, entity ACLEntity, role ACLRol
 }
 
 func (a *ACLHandle) objectDelete(ctx context.Context, entity ACLEntity) error {
-	err := a.c.raw.ObjectAccessControls.Delete(a.bucket, a.object, string(entity)).Context(ctx).Do()
+	err := runWithRetry(ctx, func() error {
+		req := a.c.raw.ObjectAccessControls.Delete(a.bucket, a.object, string(entity)).Context(ctx)
+		setClientHeader(req.Header())
+		return req.Do()
+	})
 	if err != nil {
 		return fmt.Errorf("storage: error deleting object ACL entry for bucket %q, file %q, entity %q: %v", a.bucket, a.object, entity, err)
 	}
 	return nil
 }
 
-func toACLRules(items []interface{}) []ACLRule {
+func toACLRules(items []*raw.ObjectAccessControl) []ACLRule {
 	r := make([]ACLRule, 0, len(items))
-	for _, v := range items {
-		if m, ok := v.(map[string]interface{}); ok {
-			entity, ok1 := m["entity"].(string)
-			role, ok2 := m["role"].(string)
-			if ok1 && ok2 {
-				r = append(r, ACLRule{Entity: ACLEntity(entity), Role: ACLRole(role)})
-			}
-		}
+	for _, item := range items {
+		r = append(r, ACLRule{Entity: ACLEntity(item.Entity), Role: ACLRole(item.Role)})
 	}
 	return r
 }

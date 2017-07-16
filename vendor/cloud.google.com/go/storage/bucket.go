@@ -35,28 +35,29 @@ func (b *BucketHandle) Create(ctx context.Context, projectID string, attrs *Buck
 	}
 	bkt.Name = b.name
 	req := b.c.raw.Buckets.Insert(projectID, bkt)
-	_, err := req.Context(ctx).Do()
-	return err
+	setClientHeader(req.Header())
+	return runWithRetry(ctx, func() error { _, err := req.Context(ctx).Do(); return err })
 }
 
 // Delete deletes the Bucket.
 func (b *BucketHandle) Delete(ctx context.Context) error {
 	req := b.c.raw.Buckets.Delete(b.name)
-	return req.Context(ctx).Do()
+	setClientHeader(req.Header())
+	return runWithRetry(ctx, func() error { return req.Context(ctx).Do() })
 }
 
 // ACL returns an ACLHandle, which provides access to the bucket's access control list.
 // This controls who can list, create or overwrite the objects in a bucket.
 // This call does not perform any network operations.
-func (c *BucketHandle) ACL() *ACLHandle {
-	return c.acl
+func (b *BucketHandle) ACL() *ACLHandle {
+	return &b.acl
 }
 
 // DefaultObjectACL returns an ACLHandle, which provides access to the bucket's default object ACLs.
 // These ACLs are applied to newly created objects in this bucket that do not have a defined ACL.
 // This call does not perform any network operations.
-func (c *BucketHandle) DefaultObjectACL() *ACLHandle {
-	return c.defaultObjectACL
+func (b *BucketHandle) DefaultObjectACL() *ACLHandle {
+	return &b.defaultObjectACL
 }
 
 // Object returns an ObjectHandle, which provides operations on the named object.
@@ -70,17 +71,25 @@ func (b *BucketHandle) Object(name string) *ObjectHandle {
 		c:      b.c,
 		bucket: b.name,
 		object: name,
-		acl: &ACLHandle{
+		acl: ACLHandle{
 			c:      b.c,
 			bucket: b.name,
 			object: name,
 		},
+		gen: -1,
 	}
 }
 
 // Attrs returns the metadata for the bucket.
 func (b *BucketHandle) Attrs(ctx context.Context) (*BucketAttrs, error) {
-	resp, err := b.c.raw.Buckets.Get(b.name).Projection("full").Context(ctx).Do()
+	req := b.c.raw.Buckets.Get(b.name).Projection("full")
+	setClientHeader(req.Header())
+	var resp *raw.Bucket
+	var err error
+	err = runWithRetry(ctx, func() error {
+		resp, err = req.Context(ctx).Do()
+		return err
+	})
 	if e, ok := err.(*googleapi.Error); ok && e.Code == http.StatusNotFound {
 		return nil, ErrBucketNotExist
 	}
@@ -108,14 +117,21 @@ type BucketAttrs struct {
 	// MetaGeneration is the metadata generation of the bucket.
 	MetaGeneration int64
 
-	// StorageClass is the storage class of the bucket. This defines
+	// StorageClass is the default storage class of the bucket. This defines
 	// how objects in the bucket are stored and determines the SLA
-	// and the cost of storage. Typical values are "STANDARD" and
-	// "DURABLE_REDUCED_AVAILABILITY". Defaults to "STANDARD".
+	// and the cost of storage. Typical values are "MULTI_REGIONAL",
+	// "REGIONAL", "NEARLINE", "COLDLINE", "STANDARD" and
+	// "DURABLE_REDUCED_AVAILABILITY". Defaults to "STANDARD", which
+	// is equivalent to "MULTI_REGIONAL" or "REGIONAL" depending on
+	// the bucket's location settings.
 	StorageClass string
 
 	// Created is the creation time of the bucket.
 	Created time.Time
+
+	// VersioningEnabled reports whether this bucket has versioning enabled.
+	// This field is read-only.
+	VersioningEnabled bool
 }
 
 func newBucket(b *raw.Bucket) *BucketAttrs {
@@ -123,11 +139,12 @@ func newBucket(b *raw.Bucket) *BucketAttrs {
 		return nil
 	}
 	bucket := &BucketAttrs{
-		Name:           b.Name,
-		Location:       b.Location,
-		MetaGeneration: b.Metageneration,
-		StorageClass:   b.StorageClass,
-		Created:        convertTime(b.TimeCreated),
+		Name:              b.Name,
+		Location:          b.Location,
+		MetaGeneration:    b.Metageneration,
+		StorageClass:      b.StorageClass,
+		Created:           convertTime(b.TimeCreated),
+		VersioningEnabled: b.Versioning != nil && b.Versioning.Enabled,
 	}
 	acl := make([]ACLRule, len(b.Acl))
 	for i, rule := range b.Acl {
@@ -170,47 +187,6 @@ func (b *BucketAttrs) toRawBucket() *raw.Bucket {
 	}
 }
 
-// ObjectList represents a list of objects returned from a bucket List call.
-type ObjectList struct {
-	// Results represent a list of object results.
-	Results []*ObjectAttrs
-
-	// Next is the continuation query to retrieve more
-	// results with the same filtering criteria. If there
-	// are no more results to retrieve, it is nil.
-	Next *Query
-
-	// Prefixes represents prefixes of objects
-	// matching-but-not-listed up to and including
-	// the requested delimiter.
-	Prefixes []string
-}
-
-// List lists objects from the bucket. You can specify a query
-// to filter the results. If q is nil, no filtering is applied.
-//
-// Deprecated. Use BucketHandle.Objects instead.
-func (b *BucketHandle) List(ctx context.Context, q *Query) (*ObjectList, error) {
-	it := b.Objects(ctx, q)
-	nextToken, err := it.fetch(it.pageInfo.MaxSize, it.pageInfo.Token)
-	if err != nil {
-		return nil, err
-	}
-	list := &ObjectList{}
-	for _, item := range it.items {
-		if item.Prefix != "" {
-			list.Prefixes = append(list.Prefixes, item.Prefix)
-		} else {
-			list.Results = append(list.Results, item)
-		}
-	}
-	if nextToken != "" {
-		it.query.Cursor = nextToken
-		list.Next = &it.query
-	}
-	return list, nil
-}
-
 // Objects returns an iterator over the objects in the bucket that match the Query q.
 // If q is nil, no filtering is done.
 func (b *BucketHandle) Objects(ctx context.Context, q *Query) *ObjectIterator {
@@ -224,8 +200,6 @@ func (b *BucketHandle) Objects(ctx context.Context, q *Query) *ObjectIterator {
 		func() interface{} { b := it.items; it.items = nil; return b })
 	if q != nil {
 		it.query = *q
-		it.pageInfo.MaxSize = q.MaxResults
-		it.pageInfo.Token = q.Cursor
 	}
 	return it
 }
@@ -243,9 +217,9 @@ type ObjectIterator struct {
 // PageInfo supports pagination. See the google.golang.org/api/iterator package for details.
 func (it *ObjectIterator) PageInfo() *iterator.PageInfo { return it.pageInfo }
 
-// Next returns the next result. Its second return value is Done if there are
-// no more results. Once Next returns Done, all subsequent calls will return
-// Done.
+// Next returns the next result. Its second return value is iterator.Done if
+// there are no more results. Once Next returns iterator.Done, all subsequent
+// calls will return iterator.Done.
 //
 // If Query.Delimiter is non-empty, some of the ObjectAttrs returned by Next will
 // have a non-empty Prefix field, and a zero value for all other fields. These
@@ -261,6 +235,7 @@ func (it *ObjectIterator) Next() (*ObjectAttrs, error) {
 
 func (it *ObjectIterator) fetch(pageSize int, pageToken string) (string, error) {
 	req := it.bucket.c.raw.Objects.List(it.bucket.name)
+	setClientHeader(req.Header())
 	req.Projection("full")
 	req.Delimiter(it.query.Delimiter)
 	req.Prefix(it.query.Prefix)
@@ -269,8 +244,16 @@ func (it *ObjectIterator) fetch(pageSize int, pageToken string) (string, error) 
 	if pageSize > 0 {
 		req.MaxResults(int64(pageSize))
 	}
-	resp, err := req.Context(it.ctx).Do()
+	var resp *raw.Objects
+	var err error
+	err = runWithRetry(it.ctx, func() error {
+		resp, err = req.Context(it.ctx).Do()
+		return err
+	})
 	if err != nil {
+		if e, ok := err.(*googleapi.Error); ok && e.Code == http.StatusNotFound {
+			err = ErrBucketNotExist
+		}
 		return "", err
 	}
 	for _, item := range resp.Items {
@@ -314,9 +297,9 @@ type BucketIterator struct {
 	nextFunc  func() error
 }
 
-// Next returns the next result. Its second return value is Done if there are
-// no more results. Once Next returns Done, all subsequent calls will return
-// Done.
+// Next returns the next result. Its second return value is iterator.Done if
+// there are no more results. Once Next returns iterator.Done, all subsequent
+// calls will return iterator.Done.
 func (it *BucketIterator) Next() (*BucketAttrs, error) {
 	if err := it.nextFunc(); err != nil {
 		return nil, err
@@ -331,13 +314,19 @@ func (it *BucketIterator) PageInfo() *iterator.PageInfo { return it.pageInfo }
 
 func (it *BucketIterator) fetch(pageSize int, pageToken string) (string, error) {
 	req := it.client.raw.Buckets.List(it.projectID)
+	setClientHeader(req.Header())
 	req.Projection("full")
 	req.Prefix(it.Prefix)
 	req.PageToken(pageToken)
 	if pageSize > 0 {
 		req.MaxResults(int64(pageSize))
 	}
-	resp, err := req.Context(it.ctx).Do()
+	var resp *raw.Buckets
+	var err error
+	err = runWithRetry(it.ctx, func() error {
+		resp, err = req.Context(it.ctx).Do()
+		return err
+	})
 	if err != nil {
 		return "", err
 	}

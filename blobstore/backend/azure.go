@@ -43,7 +43,8 @@ func NewAzure(name string, info map[string]string) (Backend, error) {
 	}
 	b.client = client.GetBlobService()
 
-	ok, err := b.client.ContainerExists(b.container)
+	c := b.client.GetContainerReference(b.container)
+	ok, err := c.Exists()
 	if err != nil {
 		return nil, fmt.Errorf("blobstore: error checking if Azure Storage container %q exists for %s: %s", b.container, name, err)
 	}

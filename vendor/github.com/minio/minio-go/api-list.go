@@ -35,7 +35,7 @@ import (
 //
 func (c Client) ListBuckets() ([]BucketInfo, error) {
 	// Execute GET on service.
-	resp, err := c.executeMethod("GET", requestMetadata{})
+	resp, err := c.executeMethod("GET", requestMetadata{contentSHA256Bytes: emptySHA256})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -168,14 +168,14 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 // ?delimiter - A delimiter is a character you use to group keys.
 // ?prefix - Limits the response to keys that begin with the specified prefix.
 // ?max-keys - Sets the maximum number of keys returned in the response body.
-func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int) (listBucketV2Result, error) {
+func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int) (ListBucketV2Result, error) {
 	// Validate bucket name.
 	if err := isValidBucketName(bucketName); err != nil {
-		return listBucketV2Result{}, err
+		return ListBucketV2Result{}, err
 	}
 	// Validate object prefix.
 	if err := isValidObjectPrefix(objectPrefix); err != nil {
-		return listBucketV2Result{}, err
+		return ListBucketV2Result{}, err
 	}
 	// Get resources properly escaped and lined up before
 	// using them in http request.
@@ -211,21 +211,22 @@ func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken s
 
 	// Execute GET on bucket to list objects.
 	resp, err := c.executeMethod("GET", requestMetadata{
-		bucketName:  bucketName,
-		queryValues: urlValues,
+		bucketName:         bucketName,
+		queryValues:        urlValues,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {
-		return listBucketV2Result{}, err
+		return ListBucketV2Result{}, err
 	}
 	if resp != nil {
 		if resp.StatusCode != http.StatusOK {
-			return listBucketV2Result{}, httpRespToErrorResponse(resp, bucketName, "")
+			return ListBucketV2Result{}, httpRespToErrorResponse(resp, bucketName, "")
 		}
 	}
 
 	// Decode listBuckets XML.
-	listBucketResult := listBucketV2Result{}
+	listBucketResult := ListBucketV2Result{}
 	err = xmlDecoder(resp.Body, &listBucketResult)
 	if err != nil {
 		return listBucketResult, err
@@ -381,8 +382,9 @@ func (c Client) listObjectsQuery(bucketName, objectPrefix, objectMarker, delimit
 
 	// Execute GET on bucket to list objects.
 	resp, err := c.executeMethod("GET", requestMetadata{
-		bucketName:  bucketName,
-		queryValues: urlValues,
+		bucketName:         bucketName,
+		queryValues:        urlValues,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -559,8 +561,9 @@ func (c Client) listMultipartUploadsQuery(bucketName, keyMarker, uploadIDMarker,
 
 	// Execute GET on bucketName to list multipart uploads.
 	resp, err := c.executeMethod("GET", requestMetadata{
-		bucketName:  bucketName,
-		queryValues: urlValues,
+		bucketName:         bucketName,
+		queryValues:        urlValues,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -676,9 +679,10 @@ func (c Client) listObjectPartsQuery(bucketName, objectName, uploadID string, pa
 
 	// Execute GET on objectName to get list of parts.
 	resp, err := c.executeMethod("GET", requestMetadata{
-		bucketName:  bucketName,
-		objectName:  objectName,
-		queryValues: urlValues,
+		bucketName:         bucketName,
+		objectName:         objectName,
+		queryValues:        urlValues,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {
