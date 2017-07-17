@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
-	"GoVersion": "go1.7",
+	"GoVersion": "go1.8",
 	"GodepVersion": "v79",
 	"Packages": [
 		"./..."
@@ -666,11 +666,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-p9p",
-			"Rev": "701321e87d2fd13b7a8240eb1ec0c66d7867d1cd"
+			"Rev": "42f7901ca21a2449fe239b33d84fdf916b8ea859"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-p9p/ufs",
-			"Rev": "701321e87d2fd13b7a8240eb1ec0c66d7867d1cd"
+			"Rev": "42f7901ca21a2449fe239b33d84fdf916b8ea859"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf",
