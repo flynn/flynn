@@ -1105,39 +1105,39 @@
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context/ctxhttp",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/net/http2",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/net/http2/hpack",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/net/idna",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/net/internal/timeseries",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/net/lex/httplex",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/net/trace",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
-			"Rev": "749a502dd1eaf3e5bfd4f8956748c502357c0bbe"
+			"Rev": "b3756b4b77d7b13260a0a2ec658753cf48922eac"
 		},
 		{
 			"ImportPath": "golang.org/x/oauth2",
@@ -1162,6 +1162,22 @@
 		{
 			"ImportPath": "golang.org/x/sys/unix",
 			"Rev": "442cd600860ce722f6615730eb008a37a87b13ee"
+		},
+		{
+			"ImportPath": "golang.org/x/text/secure/bidirule",
+			"Rev": "836efe42bb4aa16aaa17b9c155d8813d336ed720"
+		},
+		{
+			"ImportPath": "golang.org/x/text/transform",
+			"Rev": "836efe42bb4aa16aaa17b9c155d8813d336ed720"
+		},
+		{
+			"ImportPath": "golang.org/x/text/unicode/bidi",
+			"Rev": "836efe42bb4aa16aaa17b9c155d8813d336ed720"
+		},
+		{
+			"ImportPath": "golang.org/x/text/unicode/norm",
+			"Rev": "836efe42bb4aa16aaa17b9c155d8813d336ed720"
 		},
 		{
 			"ImportPath": "google.golang.org/api/gensupport",
