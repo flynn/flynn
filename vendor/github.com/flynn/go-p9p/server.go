@@ -2,6 +2,7 @@ package p9p
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -188,7 +189,11 @@ func (c *conn) read(requests chan *Fcall) {
 				}
 			}
 
-			c.CloseWithError(fmt.Errorf("error reading fcall: %v", err))
+			if err == io.EOF {
+				c.CloseWithError(err)
+			} else {
+				c.CloseWithError(fmt.Errorf("error reading fcall: %v", err))
+			}
 			return
 		}
 
