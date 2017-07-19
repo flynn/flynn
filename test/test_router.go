@@ -34,7 +34,6 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	// check a non-routed HTTP request to an additional port fails
 	req, err := http.NewRequest("GET", "http://dashboard."+x.Domain+":8080", nil)
 	t.Assert(err, c.IsNil)
-	req.SetBasicAuth("", x.Key)
 	res, err := http.DefaultClient.Do(req)
 	t.Assert(err, c.IsNil)
 	t.Assert(res.StatusCode, c.Equals, http.StatusNotFound)
@@ -60,7 +59,6 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	// check that a HTTP request to the default port succeeds
 	req, err = http.NewRequest("GET", "http://dashboard."+x.Domain, nil)
 	t.Assert(err, c.IsNil)
-	req.SetBasicAuth("", x.Key)
 	res, err = http.DefaultClient.Do(req)
 	t.Assert(err, c.IsNil)
 	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
@@ -94,7 +92,6 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	// check a routed HTTP request succeeds
 	req, err = http.NewRequest("GET", "https://dashboard."+x.Domain+":8081", nil)
 	t.Assert(err, c.IsNil)
-	req.SetBasicAuth("", x.Key)
 	res, err = client.Do(req)
 	t.Assert(err, c.IsNil)
 	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
@@ -103,7 +100,6 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	// check that a HTTPS request to the default port succeeds
 	req, err = http.NewRequest("GET", "https://dashboard."+x.Domain, nil)
 	t.Assert(err, c.IsNil)
-	req.SetBasicAuth("", x.Key)
 	res, err = client.Do(req)
 	t.Assert(err, c.IsNil)
 	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
