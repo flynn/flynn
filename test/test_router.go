@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/tlscert"
-
 	c "github.com/flynn/go-check"
 )
 
@@ -26,8 +26,10 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	defer x.Destroy()
 
 	// Test that setting added HTTP and HTTPS ports succeeds
-	t.Assert(x.flynn("/", "-a", "router", "env", "set", "ADDITIONAL_HTTP_PORTS=8080"), Succeeds)
-	t.Assert(x.flynn("/", "-a", "router", "env", "set", "ADDITIONAL_HTTPS_PORTS=8081"), Succeeds)
+	watcher, err := x.controller.WatchJobEvents("router", "")
+	t.Assert(err, c.IsNil)
+	t.Assert(x.flynn("/", "-a", "router", "env", "set", "ADDITIONAL_HTTP_PORTS=8080", "ADDITIONAL_HTTPS_PORTS=8081"), Succeeds)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"app": {ct.JobStateUp: 1, ct.JobStateDown: 1}}, 10*time.Second, nil), c.IsNil)
 
 	// check a non-routed HTTP request to an additional port fails
 	req, err := http.NewRequest("GET", "http://dashboard."+x.Domain+":8080", nil)
