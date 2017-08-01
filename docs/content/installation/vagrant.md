@@ -15,7 +15,7 @@ Both Vagrant and VirtualBox need to be installed, so if you don't have them alre
 install them by following the directions on their respective web sites:
 
 * [VirtualBox](https://www.virtualbox.org/wiki/Downloads)
-* [Vagrant 1.6 or greater](https://www.vagrantup.com/downloads.html)
+* [Vagrant 1.9 or greater](https://www.vagrantup.com/downloads.html)
 
 ## Installation
 
