@@ -82,8 +82,13 @@ main() {
     # kill existing cluster to unlock the volume database
     "${ROOT}/script/kill-flynn"
 
-    info "downloading binaries + images"
-    local dl_version="v20170626.0"
+    info "getting stable release version"
+    local dl_version="$(curl -fsSL "https://releases.flynn.io/api/channels" | jq -r '.[] | select(.name == "stable") | .version')"
+    if [[ -z "${dl_version}" ]]; then
+      fail "unable to determine stable release version"
+    fi
+
+    info "downloading binaries + images (${dl_version})"
     mkdir -p "${ROOT}/build/manifests"
     sudo FLYNN_VERSION="${dl_version}" "${flynn_host}" download \
       --tuf-db     "/tmp/tuf.db" \
