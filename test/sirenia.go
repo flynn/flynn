@@ -205,6 +205,13 @@ func testSireniaDeploy(client controller.Client, disc *discoverd.Client, t *c.C,
 	// check currently writeable
 	d.db.assertWriteable(t, release, d)
 
+	// wait for the async to have some data to test volume snapshotting
+	debug(t, "waiting for async to have some data")
+	sireniaClient = sc.NewClient(sireniaState.Async[0].Addr)
+	t.Assert(sireniaClient.WaitForStatus(func(status *sc.Status) bool {
+		return status.Database.XLog != ""
+	}, time.Minute), c.IsNil)
+
 	// check a deploy completes with expected cluster state changes
 	release.ID = ""
 	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
