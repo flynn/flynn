@@ -571,6 +571,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		if p.Proto != "tcp" && p.Proto != "udp" {
 			err := fmt.Errorf("unknown port proto %q", p.Proto)
 			log.Error("error allocating port", "proto", p.Proto, "err", err)
+			l.State.mtx.Unlock()
 			return err
 		}
 
