@@ -568,7 +568,7 @@ func (m *Main) ParseFlags(args ...string) (Options, error) {
 	fs.StringVar(&opt.Host, "host", "", "advertised hostname")
 	fs.StringVar(&opt.Addr, "addr", ":1111", "address to serve http and raft from")
 	fs.StringVar(&opt.DNSAddr, "dns-addr", "", "address to service DNS from")
-	fs.StringVar(&recursors, "recursors", "8.8.8.8,8.8.4.4", "upstream recursive DNS servers")
+	fs.StringVar(&recursors, "recursors", "", "upstream recursive DNS servers")
 	fs.StringVar(&opt.Notify, "notify", "", "url to send webhook to after starting listener")
 	fs.BoolVar(&opt.WaitNetDNS, "wait-net-dns", false, "start DNS server after host network is configured")
 	if err := fs.Parse(args); err != nil {
