@@ -33,10 +33,7 @@ python-2.7.8
 
 ### Supported Runtimes
 
-The latest `python-2.7.x` and `python-3.6.x` are officially supported, but any
-runtime between 2.4.4–3.6.2 can be used, including PyPy runtimes. See
-[the buildpack's GitHub page](https://github.com/heroku/heroku-buildpack-python/tree/master/builds/runtimes)
-for a full list.
+The Python buildpack supports both the latest Python 2 and Python 3 runtimes, as well as PyPy runtimes. See the list of supported runtimes at [the buildpack's GitHub page](https://github.com/heroku/heroku-buildpack-python/tree/master/builds/runtimes).
 
 ## Default Process Types
 
