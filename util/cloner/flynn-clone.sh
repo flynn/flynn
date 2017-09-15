@@ -87,12 +87,12 @@ main() {
         .processes |= (map_values(.env = (if(.env) then with_entries(select(.key | in($whitelist))) else null end)))
       ' \
       < "${tmp}/src.json" | \
-      sed "s|${src_app}-web|${dst_app}-web|g" | \
-      sed "s|${src_app}-\(.*\)-web|${dst_app}-\\1-web|g" \
+      sed "s|${src_app}-\(.*\)-web|${dst_app}-\\1-web|g" | \
+      sed "s|${src_app}-web|${dst_app}-web|g" \
       > "${tmp}/dst.json"
   else
-    sed "s|${src_app}-web|${dst_app}-web|g" "${tmp}/src.json" | \
-    sed "s|${src_app}-\(.*\)-web|${dst_app}-\\1-web|g" \
+    sed "s|${src_app}-\(.*\)-web|${dst_app}-\\1-web|g" "${tmp}/src.json" | \
+    sed "s|${src_app}-web|${dst_app}-web|g" \
     > "${tmp}/dst.json"
   fi
 
