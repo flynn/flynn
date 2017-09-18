@@ -534,6 +534,9 @@ $$ LANGUAGE plpgsql`,
 		)`,
 		`INSERT INTO job_states (name) VALUES ('blocked')`,
 	)
+	migrations.Add(32,
+		`INSERT INTO deployment_strategies (name) VALUES ('one-down-one-up')`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

@@ -191,6 +191,21 @@ func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
 	d.waitForDeploymentStatus("complete")
 }
 
+func (s *DeployerSuite) TestOneDownOneUpStrategy(t *c.C) {
+	d := s.createDeployment(t, "printer", "one-down-one-up", "")
+	defer d.cleanup()
+	releaseID := d.deployment.NewReleaseID
+	oldReleaseID := d.deployment.OldReleaseID
+
+	d.waitForJobEvents("printer", []*ct.Job{
+		{ReleaseID: oldReleaseID, State: ct.JobStateDown},
+		{ReleaseID: releaseID, State: ct.JobStateUp},
+		{ReleaseID: oldReleaseID, State: ct.JobStateDown},
+		{ReleaseID: releaseID, State: ct.JobStateUp},
+	})
+	d.waitForDeploymentStatus("complete")
+}
+
 func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 	d := s.createDeployment(t, "printer", "all-at-once", "")
 	defer d.cleanup()
