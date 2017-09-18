@@ -31,6 +31,8 @@ func (d *DeployJob) Perform() error {
 	switch d.Strategy {
 	case "one-by-one":
 		deployFunc = d.deployOneByOne
+	case "one-down-one-up":
+		deployFunc = d.deployOneDownOneUp
 	case "all-at-once":
 		deployFunc = d.deployAllAtOnce
 	case "sirenia":
@@ -162,6 +164,18 @@ func (d *DeployJob) scaleOneByOne(typ string, log log15.Logger) error {
 		}
 
 		if err := d.scaleOldFormationDownByOne(typ, log); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *DeployJob) scaleOneDownOneUp(typ string, log log15.Logger) error {
+	for i := 0; i < d.Processes[typ]; i++ {
+		if err := d.scaleOldFormationDownByOne(typ, log); err != nil {
+			return err
+		}
+		if err := d.scaleNewFormationUpByOne(typ, log); err != nil {
 			return err
 		}
 	}
