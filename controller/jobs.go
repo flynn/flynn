@@ -344,6 +344,9 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Args) > 0 {
 		job.Config.Args = newJob.Args
 	}
+	if typ := newJob.MountsFrom; typ != "" {
+		job.Config.Mounts = release.Processes[typ].Mounts
+	}
 	utils.SetupMountspecs(job, artifacts)
 
 	// provision data volume if required

@@ -22,16 +22,17 @@ import (
 
 func init() {
 	cmd := register("run", runRun, `
-usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [-l] [--limits <limits>] [--] <command> [<argument>...]
+usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [-l] [--limits <limits>] [--mounts-from <proc>] [--] <command> [<argument>...]
 
 Run a job.
 
 Options:
-	-d, --detached     run job without connecting io streams (implies --enable-log)
-	-r <release>       id of release to run (defaults to current app release)
-	-e <entrypoint>    [DEPRECATED] overwrite the default entrypoint of the release's image
-	-l, --enable-log   send output to log streams
-	--limits <limits>  comma separated limits for the run job (see "flynn limit -h" for format)
+	-d, --detached        run job without connecting io streams (implies --enable-log)
+	-r <release>          id of release to run (defaults to current app release)
+	-e <entrypoint>       [DEPRECATED] overwrite the default entrypoint of the release's image
+	-l, --enable-log      send output to log streams
+	--limits <limits>     comma separated limits for the run job (see "flynn limit -h" for format)
+	--mounts-from <proc>  process type to copy mounts from
 `)
 	cmd.optsFirst = true
 }
@@ -48,6 +49,7 @@ func runRun(args *docopt.Args, client controller.Client) error {
 		ReleaseEnv: true,
 		Exit:       true,
 		DisableLog: !args.Bool["--detached"] && !args.Bool["--enable-log"],
+		MountsFrom: args.String["--mounts-from"],
 	}
 	if config.Release == "" {
 		release, err := client.GetAppRelease(config.App)
@@ -94,6 +96,7 @@ type runConfig struct {
 	Exit       bool
 	Data       bool
 	Resources  resource.Resources
+	MountsFrom string
 
 	// DeprecatedArtifact is to support using an explicit artifact
 	// with old clusters which don't accept multiple artifacts
@@ -112,6 +115,7 @@ func runJob(client controller.Client, config runConfig) error {
 		DisableLog:         config.DisableLog,
 		Data:               config.Data,
 		Resources:          config.Resources,
+		MountsFrom:         config.MountsFrom,
 	}
 
 	// ensure slug apps from old clusters use /runner/init
