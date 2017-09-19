@@ -67,6 +67,10 @@
     },
     "partition": {
       "$ref": "/schema/controller/common#/definitions/partition"
+    },
+    "mounts_from": {
+      "description": "process type to copy mounts from",
+      "type": "string"
     }
   }
 }

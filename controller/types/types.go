@@ -341,6 +341,9 @@ type NewJob struct {
 	Data        bool               `json:"data,omitempty"`
 	Partition   PartitionType      `json:"partition,omitempty"`
 
+	// MountsFrom is a process type to copy mounts from
+	MountsFrom string `json:"mounts_from,omitempty"`
+
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
 	DeprecatedCmd        []string `json:"cmd,omitempty"`
 	DeprecatedEntrypoint []string `json:"entrypoint,omitempty"`
