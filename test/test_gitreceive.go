@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -98,4 +99,27 @@ func (s *GitreceiveSuite) TestDeployWithEnv(t *c.C) {
 
 	t.Assert(tarResult, Succeeds)
 	t.Assert(tarResult.Err, c.IsNil)
+}
+
+func (s *GitreceiveSuite) TestGitReleaseMeta(t *c.C) {
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
+	r := s.newGitRepo(t, "empty")
+	r.cluster = x
+	r.trace = false
+	app := "test-git-release-meta"
+	t.Assert(r.flynn("create", app), Succeeds)
+
+	t.Assert(r.git("commit", "-m", "bump", "--allow-empty"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	release, err := x.controller.GetAppRelease(app)
+	t.Assert(err, c.IsNil)
+	commit := strings.TrimSpace(r.git("rev-parse", "HEAD").Output)
+	t.Assert(commit, c.Not(c.Equals), "")
+	t.Assert(release.Meta, c.DeepEquals, map[string]string{
+		"git":        "true",
+		"git.commit": commit,
+	})
 }

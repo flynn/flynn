@@ -307,7 +307,7 @@ git-archive-all() {
 
 while read oldrev newrev refname; do
 	if [[ $refname = "refs/heads/master" ]]; then
-		git-archive-all $newrev | /bin/flynn-receiver "$RECEIVE_APP" "$newrev" --meta git=true | sed -u "s/^/"$'\e[1G\e[K'"/"
+		git-archive-all $newrev | /bin/flynn-receiver "$RECEIVE_APP" "$newrev" --meta git=true --meta "git.commit=$newrev"| sed -u "s/^/"$'\e[1G\e[K'"/"
 		master_pushed=1
 		break
 	fi
