@@ -48,6 +48,7 @@ It should also have added a default route of `example.demo.localflynn.com` point
 at the `example-web` service:
 
 ```
+$ flynn route
 ROUTE                             SERVICE      ID                                         STICKY  LEADER  PATH
 http:example.demo.localflynn.com  example-web  http/2e37467e-08fc-47e5-853b-4f0574cb6871  false   false   /
 ```
