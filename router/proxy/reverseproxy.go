@@ -138,6 +138,7 @@ func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, re
 
 	prepareResponseHeaders(res)
 	p.writeResponse(rw, res)
+	l.Debug("request complete", "status", res.StatusCode, "location", res.Header.Get("Location"), "backend", backend)
 }
 
 // ServeConn takes an inbound conn and proxies it to a backend.
