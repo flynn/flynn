@@ -45,7 +45,7 @@ func (repo *DomainMigrationRepo) Add(dm *ct.DomainMigration) error {
 
 func (c *controllerAPI) MigrateDomain(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	var dm *ct.DomainMigration
-	if err := json.NewDecoder(req.Body).Decode(&dm); err != nil {
+	if err := httphelper.DecodeJSON(req, &dm); err != nil {
 		respondWithError(w, err)
 		return
 	}

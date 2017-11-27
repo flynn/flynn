@@ -108,6 +108,7 @@ func main() {
 		lc:     lc,
 		rc:     rc,
 		keys:   strings.Split(os.Getenv("AUTH_KEY"), ","),
+		keyIDs: strings.Split(os.Getenv("AUTH_KEY_IDS"), ","),
 		caCert: []byte(os.Getenv("CA_CERT")),
 	})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
@@ -180,6 +181,7 @@ type handlerConfig struct {
 	lc     logClient
 	rc     routerc.Client
 	keys   []string
+	keyIDs []string
 	caCert []byte
 }
 
@@ -324,11 +326,15 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/sinks/:sink_id", httphelper.WrapHandler(api.GetSink))
 	httpRouter.DELETE("/sinks/:sink_id", httphelper.WrapHandler(api.DeleteSink))
 
+	if os.Getenv("AUDIT_LOG") == "true" {
+		return httphelper.ContextInjector("controller",
+			httphelper.NewRequestLoggerCustom(muxHandler(httpRouter, c.keyIDs, c.keys), auditLoggerFn))
+	}
 	return httphelper.ContextInjector("controller",
-		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keys)))
+		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keyIDs, c.keys)))
 }
 
-func muxHandler(main http.Handler, authKeys []string) http.Handler {
+func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
 	return httphelper.CORSAllowAll.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if shutdown.IsActive() {
 			httphelper.ServiceUnavailableError(w, ErrShutdown.Error())
@@ -348,9 +354,12 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 			password = r.URL.Query().Get("key")
 		}
 		var authed bool
-		for _, k := range authKeys {
+		for i, k := range authKeys {
 			if len(password) == len(k) && subtle.ConstantTimeCompare([]byte(password), []byte(k)) == 1 {
 				authed = true
+				if len(authIDs) == len(authKeys) {
+					r.Header.Set("Flynn-Auth-Key-ID", authIDs[i])
+				}
 				break
 			}
 		}

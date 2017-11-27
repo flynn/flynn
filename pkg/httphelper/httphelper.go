@@ -2,11 +2,13 @@ package httphelper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,7 +37,10 @@ const (
 	UnknownErrorCode            ErrorCode = "unknown_error"
 	RatelimitedErrorCode        ErrorCode = "ratelimited"
 	ServiceUnavailableErrorCode ErrorCode = "service_unavailable"
+	RequestBodyTooBigErrorCode  ErrorCode = "request_body_too_big"
 )
+
+var ErrRequestBodyTooBig = errors.New("httphelper: request body too big")
 
 var errorResponseCodes = map[ErrorCode]int{
 	NotFoundErrorCode:           404,
@@ -45,6 +50,7 @@ var errorResponseCodes = map[ErrorCode]int{
 	PreconditionFailedErrorCode: 412,
 	SyntaxErrorCode:             400,
 	ValidationErrorCode:         400,
+	RequestBodyTooBigErrorCode:  400,
 	UnauthorizedErrorCode:       401,
 	UnknownErrorCode:            500,
 	RatelimitedErrorCode:        429,
@@ -171,6 +177,12 @@ func buildJSONError(err error) *JSONError {
 		Code:    UnknownErrorCode,
 		Message: "Something went wrong",
 	}
+	if err == ErrRequestBodyTooBig {
+		return &JSONError{
+			Code:    RequestBodyTooBigErrorCode,
+			Message: "The provided request body is too big",
+		}
+	}
 	switch v := err.(type) {
 	case *json.SyntaxError, *json.UnmarshalTypeError:
 		jsonError = &JSONError{
@@ -260,6 +272,9 @@ func JSON(w http.ResponseWriter, status int, v interface{}) {
 }
 
 func DecodeJSON(req *http.Request, i interface{}) error {
+	if !strings.Contains(req.Header.Get("Content-Type"), "application/json") {
+		return JSONError{Code: ValidationErrorCode, Message: "Content-Type must be application/json"}
+	}
 	dec := json.NewDecoder(req.Body)
 	dec.UseNumber()
 	return dec.Decode(i)
