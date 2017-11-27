@@ -22,6 +22,13 @@ import (
 
 var logger = log15.New("app", "router")
 
+func init() {
+	if os.Getenv("DEBUG") == "" {
+		// filter debug log messages if DEBUG is not set
+		logger.SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StdoutHandler))
+	}
+}
+
 type Listener interface {
 	Start() error
 	Close() error
