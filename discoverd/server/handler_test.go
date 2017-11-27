@@ -734,6 +734,9 @@ func MustNewHTTPRequest(method, urlStr string, body io.Reader) *http.Request {
 	if err != nil {
 		panic(err)
 	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	// Set host
 	req.Host = u.Host
