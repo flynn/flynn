@@ -422,7 +422,8 @@
           "inputs": [
             "slugbuilder/builder/buildpacks.txt",
             "slugbuilder/builder/install-buildpack"
-          ]
+          ],
+          "limits": { "temp_disk": "1G" }
         },
         {
           "name": "slugbuilder-binaries",
