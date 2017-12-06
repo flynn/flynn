@@ -317,22 +317,72 @@ example. You should now have a directory with the following layout:
     └── targets
 ```
 
-The TUF root keys need to be compiled into the Flynn release, and image URLs must
-be relative to the file server the TUF repository will be uploaded to. This can be
-accomplished by setting `CONFIG_TUF_ROOT_KEYS` and `CONFIG_IMAGE_REPOSITORY` in
-the `tup.config` file then re-running `make`, e.g.:
+Commit the repository by running the following:
 
 ```
-CONFIG_IMAGE_REPOSITORY=https://s3.amazonaws.com/my-flynn-repo/tuf
-CONFIG_TUF_ROOT_KEYS=[{"keytype":"ed25519","keyval":{"public":"31351ecc833417968faabf98e004d1ef48ecfd996f971aeed399a7dc735d2c8c"}}]
+$ tuf add
+$ tuf snapshot
+$ tuf timestamp
+$ tuf commit
+```
+
+You should now see some files in the `repository` directory (the filenames may differ):
+
+```
+.
+├── keys
+│   ├── snapshot.json
+│   ├── targets.json
+│   └── timestamp.json
+├── repository
+│   ├── 966421c866be59e54fca0d6e2c0f62f1790934a25c065715dce0fa3378b7200a1a47b18d60647db115f6a2c8f9bd90d96985c15799c0429f985704446c39a9d3.targets.json
+│   ├── a0f8878b84aa629271c614b6816f9e9fd12dc2d880ccdf03b3141b09b37d5b16c92e9f84c21fd064aff57b90f31c9711d4c84b5a22e70e03a21943511a905cd4.root.json
+│   ├── a8a2ce2842ffab18a5217c6192735915ed3685baad05c25b6dd499634abefaa1b62a86de2640b6bedbdc21add582d8bd01ca615b740c26c019058414c8f887eb.snapshot.json
+│   ├── root.json
+│   ├── snapshot.json
+│   ├── targets.json
+│   └── timestamp.json
+└── staged
+    └── targets
+```
+
+Upload the `repository` directory to a location where you intend to serve the
+released version of Flynn from. For example, if using the `my-flynn-repo` S3
+bucket:
+
+```
+$ aws s3 cp --recursive --acl public-read repository s3://my-flynn-repo/tuf
+```
+
+### Rebuild Flynn
+
+The TUF root keys need to be compiled into the Flynn release, and image URLs must
+be relative to the file server the TUF repository is served from. This can be
+accomplished by updating the `tuf` object in `builder/manifest.json` then re-running
+`make`, e.g.:
+
+```
+"tuf": {
+  "repository": "https://s3.amazonaws.com/my-flynn-repo/tuf",
+  "root_keys": [
+    {"keytype":"ed25519","keyval":{"public":"31351ecc833417968faabf98e004d1ef48ecfd996f971aeed399a7dc735d2c8c"}}
+  ]
+}
 ```
 
 *The TUF root keys can be determined by running `tuf root-keys` in the TUF repository.*
 
+Run `script/build-flynn --version XXX` instead of `make` to set an explicit version:
+
+```
+$ script/build-flynn --version v20171206.lmars
+```
+
 ### Export components
 
-Export the Flynn components into the TUF repository (this will prompt for TUF key
-passphrases):
+Export the Flynn components into the TUF repository (it expects the targets, snapshot and
+timestamp passphrases to be set in the `TUF_TARGETS_PASSPHRASE`, `TUF_SNAPSHOT_PASSPHRASE`
+and `TUF_TIMESTAMP_PASSPHRASE` environment variables respectively):
 
 ```
 $ script/export-components /path/to/tuf-repo
@@ -340,14 +390,12 @@ $ script/export-components /path/to/tuf-repo
 
 ### Upload components
 
-Upload the `repository` directory of the TUF repo to the file server referenced
-by `CONFIG_IMAGE_REPOSITORY`.
+Upload the `repository` directory of the TUF repo to the remote file server.
 
-For example, if using S3 and `CONFIG_IMAGE_REPOSITORY` is set to
-`https://s3.amazonaws.com/my-flynn-repo/tuf`, use `s3cmd` to sync the files:
+For example, if using the `my-flynn-repo` S3 bucket:
 
 ```
-$ s3cmd sync --acl-public /path/to/tuf-repo/repository s3://my-flynn-repo/tuf
+$ aws s3 cp --recursive --acl public-read repository s3://my-flynn-repo/tuf
 ```
 
 You can now distribute `script/install-flynn` and run it with an explicit repo URL
