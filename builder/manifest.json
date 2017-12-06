@@ -503,7 +503,7 @@
           "dashboard/app/vendor/javascripts/*.js",
           "dashboard/app/vendor/stylesheets/*.scss"
         ],
-        "limits": { "memory": "2G", "temp_disk": "1G" }
+        "limits": { "memory": "3G", "temp_disk": "1G" }
       }]
     },
     {
