@@ -580,7 +580,7 @@ func (s *HostSuite) TestVolumeDeleteOnStop(t *c.C) {
 		waitCleanup(job.ID)
 
 		// check if the volume was deleted or not
-		vol, err = h.GetVolume(vol.ID)
+		_, err = h.GetVolume(vol.ID)
 		if deleteOnStop {
 			t.Assert(hh.IsObjectNotFoundError(err), c.Equals, true)
 		} else {
