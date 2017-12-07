@@ -501,7 +501,7 @@ type fakeSizeSeekerFileStream struct {
 func (fakeSizeSeekerFileStream) Close() error             { return nil }
 func (fakeSizeSeekerFileStream) Read([]byte) (int, error) { return 0, io.EOF }
 func (f fakeSizeSeekerFileStream) Seek(offset int64, whence int) (int64, error) {
-	if offset == 0 && whence == os.SEEK_END {
+	if offset == 0 && whence == io.SeekEnd {
 		return f.size, nil
 	}
 	return 0, nil

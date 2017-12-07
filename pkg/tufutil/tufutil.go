@@ -25,7 +25,7 @@ func Download(client *tuf.Client, path string) (io.ReadCloser, error) {
 	if err := client.Download(path, tmp); err != nil {
 		return nil, err
 	}
-	if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
 	return tmp, nil

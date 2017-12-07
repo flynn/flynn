@@ -2,7 +2,6 @@ package backend
 
 import (
 	"io"
-	"os"
 
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/jackc/pgx"
@@ -30,7 +29,7 @@ func (p pg) Put(tx *postgres.DBTx, info FileInfo, r io.Reader, append bool) erro
 		return err
 	}
 	if append {
-		obj.Seek(info.Size, os.SEEK_SET)
+		obj.Seek(info.Size, io.SeekStart)
 	}
 	if _, err := io.Copy(obj, r); err != nil {
 		return err
@@ -91,10 +90,10 @@ func (f *pgFile) Close() error {
 
 func (f *pgFile) Seek(offset int64, whence int) (int64, error) {
 	// HACK: work around ServeContent length detection, remove when fixed
-	if offset == 0 && whence == os.SEEK_END {
+	if offset == 0 && whence == io.SeekEnd {
 		f.sizeRead = true
 		return f.size, nil
-	} else if f.sizeRead && offset == 0 && whence == os.SEEK_SET {
+	} else if f.sizeRead && offset == 0 && whence == io.SeekStart {
 		return 0, nil
 	}
 	return f.LargeObject.Seek(offset, whence)

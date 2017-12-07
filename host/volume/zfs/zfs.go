@@ -302,7 +302,7 @@ func (p *Provider) copySparse(dst io.WriteSeeker, src sparse.FileIoProcessor) er
 	}
 
 	for _, x := range extents {
-		if _, err := dst.Seek(int64(x.Logical), os.SEEK_SET); err != nil {
+		if _, err := dst.Seek(int64(x.Logical), io.SeekStart); err != nil {
 			return err
 		}
 		if _, err := io.Copy(dst, io.NewSectionReader(src, int64(x.Logical), int64(x.Length))); err != nil {
