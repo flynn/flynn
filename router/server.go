@@ -112,7 +112,6 @@ func main() {
 
 	httpPorts := []int{*httpPort}
 	httpsPorts := []int{*httpsPort}
-	defaultPorts := []int{}
 	if portRaw := os.Getenv("DEFAULT_HTTP_PORT"); portRaw != "" {
 		if port, err := strconv.Atoi(portRaw); err != nil {
 			shutdown.Fatalf("Invalid DEFAULT_HTTP_PORTS: %s", err)
@@ -132,7 +131,7 @@ func main() {
 			httpsPorts[0] = port
 		}
 	}
-	defaultPorts = append(httpPorts, httpsPorts...)
+	defaultPorts := append(httpPorts, httpsPorts...)
 	if added := os.Getenv("ADDITIONAL_HTTP_PORTS"); added != "" {
 		for _, raw := range strings.Split(added, ",") {
 			if port, err := strconv.Atoi(raw); err == nil {
