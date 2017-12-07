@@ -358,14 +358,14 @@ func dockerSave(tag string, tw *backup.TarWriter, progress backup.ProgressBar) e
 		return err
 	}
 
-	length, err := tmp.Seek(0, os.SEEK_CUR)
+	length, err := tmp.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err
 	}
 	if err := tw.WriteHeader("docker-image.tar", int(length)); err != nil {
 		return err
 	}
-	if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 	_, err = io.Copy(tw, tmp)

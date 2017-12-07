@@ -87,14 +87,14 @@ func (t *TarWriter) WriteCommandOutput(client controller.Client, name string, ap
 		return fmt.Errorf("error running %s export: %s", app, err)
 	}
 
-	length, err := f.Seek(0, os.SEEK_CUR)
+	length, err := f.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return fmt.Errorf("error getting size: %s", err)
 	}
 	if err := t.WriteHeader(name, int(length)); err != nil {
 		return fmt.Errorf("error writing header: %s", err)
 	}
-	if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("error seeking: %s", err)
 	}
 	if _, err := io.Copy(t, f); err != nil {

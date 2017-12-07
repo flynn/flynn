@@ -364,7 +364,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			if _, err := io.Copy(f, tr); err != nil {
 				return fmt.Errorf("error reading %s: %s", header.Name, err)
 			}
-			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return fmt.Errorf("error seeking layer tempfile: %s", err)
 			}
 			layers[strings.TrimSuffix(filename, ".layer")] = f
@@ -415,7 +415,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			if _, err := io.Copy(f, tr); err != nil {
 				return fmt.Errorf("error reading slug: %s", err)
 			}
-			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return fmt.Errorf("error seeking slug tempfile: %s", err)
 			}
 			legacySlug = f
@@ -434,7 +434,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			if _, err := io.Copy(f, tr); err != nil {
 				return fmt.Errorf("error reading docker image: %s", err)
 			}
-			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return fmt.Errorf("error seeking docker image tempfile: %s", err)
 			}
 			dockerImage.archive = f
@@ -449,7 +449,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			if _, err := io.Copy(f, tr); err != nil {
 				return fmt.Errorf("error reading db dump: %s", err)
 			}
-			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return fmt.Errorf("error seeking db tempfile: %s", err)
 			}
 			pgDump = f
@@ -464,7 +464,7 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			if _, err := io.Copy(f, tr); err != nil {
 				return fmt.Errorf("error reading db dump: %s", err)
 			}
-			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return fmt.Errorf("error seeking db tempfile: %s", err)
 			}
 			mysqlDump = f

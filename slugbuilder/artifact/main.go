@@ -73,7 +73,7 @@ func run(dir string, uid, gid int) error {
 	layerSHA := hex.EncodeToString(h.Sum(nil))
 
 	// upload the layer to the blobstore
-	if _, err := layer.Seek(0, os.SEEK_SET); err != nil {
+	if _, err := layer.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 	layerURL := fmt.Sprintf("http://blobstore.discoverd/slugs/layers/%s.squashfs", layerSHA)

@@ -796,7 +796,7 @@ func (l *LibcontainerBackend) mountSquashfs(m *host.Mountspec) (string, error) {
 			return "", fmt.Errorf("error getting squashfs layer from %s: %s", m.URL, err)
 		}
 
-		if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {
+		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 			return "", fmt.Errorf("error seeking squashfs layer temp file: %s", err)
 		}
 		vol, err := l.VolManager.ImportFilesystem("default", &volume.Filesystem{

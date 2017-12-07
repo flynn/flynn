@@ -474,7 +474,7 @@ func (r *Runner) uploadToS3(file *os.File, b *Build, boundary string) string {
 	name := fmt.Sprintf("%s-build-%s-%s.txt", b.ID, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
 
-	if _, err := file.Seek(0, os.SEEK_SET); err != nil {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		log.Printf("failed to seek log file: %s\n", err)
 		return ""
 	}
