@@ -515,6 +515,9 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard' AND del
 			ExpandedFormation: data.Controller,
 		}),
 	}.RunWithState(ch, state)
+	if err != nil {
+		return err
+	}
 
 	// wait for controller to come up
 	meta = bootstrap.StepMeta{ID: "wait-controller", Action: "wait-controller"}
