@@ -386,6 +386,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	events = make(chan *ct.DeploymentEvent)
 	stream, err = client.StreamDeployment(deployment, events)
 	t.Assert(err, c.IsNil)
+	defer stream.Close()
 	expected = make([]*ct.Job, 0, 4*totalJobs+1)
 	appendEvents(deployment.NewReleaseID, ct.JobStateUp, clusterSize)
 	appendEvents(deployment.OldReleaseID, ct.JobStateDown, clusterSize)
