@@ -217,6 +217,9 @@ func httpServer(sn *subnet.SubnetManager, publicIP, port string) error {
 		return err
 	}
 	publicListener, err := net.Listen("tcp", net.JoinHostPort(publicIP, port))
+	if err != nil {
+		return err
+	}
 
 	http.HandleFunc("/ping", func(http.ResponseWriter, *http.Request) {})
 	status.AddHandler(status.SimpleHandler(func() error {
