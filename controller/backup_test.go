@@ -9,7 +9,7 @@ import (
 )
 
 func (s *S) TestGetBackup(c *C) {
-	rb, err := s.c.GetBackupMeta()
+	_, err := s.c.GetBackupMeta()
 	c.Assert(err, Not(IsNil))
 	c.Assert(err, Equals, controller.ErrNotFound)
 
@@ -24,7 +24,7 @@ func (s *S) TestGetBackup(c *C) {
 	err = db.QueryRow("backup_insert", b.Status, b.SHA512, b.Size, b.Error, b.CompletedAt).Scan(&b.ID, &b.CreatedAt, &b.UpdatedAt)
 	c.Assert(err, IsNil)
 
-	rb, err = s.c.GetBackupMeta()
+	rb, err := s.c.GetBackupMeta()
 	c.Assert(err, IsNil)
 	c.Assert(rb.ID, Equals, b.ID)
 	c.Assert(rb.Status, Equals, b.Status)

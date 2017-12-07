@@ -148,7 +148,7 @@ func (s *S) TestCreateApp(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(gotApp, DeepEquals, app)
 
-		gotApp, err = s.c.GetApp("fail" + app.ID)
+		_, err = s.c.GetApp("fail" + app.ID)
 		c.Assert(err, Equals, controller.ErrNotFound)
 	}
 }

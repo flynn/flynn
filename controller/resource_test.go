@@ -57,7 +57,7 @@ func (s *S) TestProvisionResource(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(gotResource, DeepEquals, resource)
 
-	gotResource, err = s.c.GetResource(provider.ID, resource.ID+"fail")
+	_, err = s.c.GetResource(provider.ID, resource.ID+"fail")
 	c.Assert(err, Equals, controller.ErrNotFound)
 }
 
