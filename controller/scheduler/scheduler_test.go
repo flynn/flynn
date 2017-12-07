@@ -238,8 +238,6 @@ func (TestSuite) TestFormationChange(c *C) {
 	c.Assert(err, IsNil)
 	release, err := s.GetRelease(testReleaseID)
 	c.Assert(err, IsNil)
-	artifact, err := s.GetArtifact(release.ArtifactIDs[0])
-	c.Assert(err, IsNil)
 
 	// Test scaling up an existing formation
 	c.Log("Test scaling up an existing formation. Wait for formation change and job start")
@@ -262,7 +260,7 @@ func (TestSuite) TestFormationChange(c *C) {
 
 	// Test creating a new formation
 	c.Log("Test creating a new formation. Wait for formation change and job start")
-	artifact = &ct.Artifact{ID: random.UUID()}
+	artifact := &ct.Artifact{ID: random.UUID()}
 	processes := map[string]int{testJobType: testJobCount}
 	release = NewRelease(random.UUID(), artifact, processes)
 	s.CreateArtifact(artifact)
