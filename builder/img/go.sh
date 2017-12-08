@@ -2,8 +2,8 @@
 
 set -eo pipefail
 
-version="1.9.2"
-shasum="de874549d9a8d8d8062be05808509c09a88a248e77ec14eb77453530829ac02b"
+version="1.10beta1"
+shasum="ec7a10b5bf147a8e06cf64e27384ff3c6d065c74ebd8fdd31f572714f74a1055"
 dir="/usr/local"
 
 apt-get update
