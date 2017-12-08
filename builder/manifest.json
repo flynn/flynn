@@ -43,7 +43,7 @@
       "layers": [{
         "script": "builder/img/go.sh",
         "inputs": ["builder/go-wrapper.sh"],
-        "limits": { "temp_disk": "1G" }
+        "limits": { "temp_disk": "2G" }
       }]
     },
     {
