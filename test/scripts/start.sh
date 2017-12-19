@@ -25,7 +25,7 @@ main() {
   # run the cleanup script
   "${src_dir}/test/scripts/cleanup.sh"
 
-  if ! test -f "${dir}/build/rootfs.img"; then
+  if ! test -f "${dir}/build/rootfs.img" || ! test -f "${dir}/build/vmlinuz"; then
     "${src_dir}/test/rootfs/build.sh" "${dir}/build"
     chown -R "flynn-test:flynn-test" "${dir}/build"
   fi
