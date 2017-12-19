@@ -1,20 +1,48 @@
 #!/bin/bash
 
+# Start an instance with:
+#
+# gcloud compute --project flynn-sandbox images create ubuntu-1604-vmx \
+#   --source-image-family ubuntu-1604-lts --source-image-project ubuntu-os-cloud \
+#   --licenses "https://www.googleapis.com/compute/v1/projects/vm-options/global/licenses/enable-vmx"
+#
+# gcloud beta compute --project flynn-sandbox instances create flynn-ci-0 \
+#   --zone us-central1-a \
+#   --machine-type n1-highmem-96 \
+#   --subnet default \
+#   --maintenance-policy MIGRATE \
+#   --service-account "715530988024-compute@developer.gserviceaccount.com" \
+#   --scopes "https://www.googleapis.com/auth/devstorage.read_only","https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring.write","https://www.googleapis.com/auth/servicecontrol","https://www.googleapis.com/auth/service.management.readonly","https://www.googleapis.com/auth/trace.append" \
+#   --min-cpu-platform "Intel Skylake" \
+#   --tags "https-server" \
+#   --local-ssd interface=NVME \
+#   --local-ssd interface=NVME \
+#   --local-ssd interface=NVME \
+#   --local-ssd interface=NVME \
+#   --local-ssd interface=NVME \
+#   --local-ssd interface=NVME \
+#   --local-ssd interface=NVME \
+#   --local-ssd interface=NVME \
+#   --image ubuntu-1604-vmx \
+#   --boot-disk-size 1000 \
+#   --boot-disk-type pd-ssd \
+#   --boot-disk-device-name flynn-ci-0
+
 set -e
 
-RAMDISK_SIZE="448G"
 GO_VERSION="1.9.2"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+dir="/opt/flynn-test"
+build_dir="${dir}/build"
 source "${ROOT}/script/lib/ui.sh"
 
 main() {
   local user="flynn-test"
-  local dir="/opt/flynn-test"
   local src_dir="${dir}/src/github.com/flynn/flynn"
-  local build_dir="${dir}/build"
 
   info "installing dependencies"
+  apt-get update
   apt-get install -y build-essential zerofree qemu qemu-kvm
 
   info "creating ${user} user"
@@ -29,13 +57,7 @@ main() {
   fi
 
   info "mounting build directory"
-  mkdir -p "${build_dir}"
-  if ! grep -qF "${build_dir}" /etc/fstab; then
-    echo "tmpfs ${build_dir} tmpfs defaults,size=${RAMDISK_SIZE} 0 0" >> /etc/fstab
-  fi
-  if ! mount | grep -q "${build_dir}"; then
-    mount "${build_dir}"
-  fi
+  setup_disk
 
   info "fixing permissions"
   chown -R "${user}:${user}" "${dir}"
@@ -46,12 +68,34 @@ main() {
   info "installing Go ${GO_VERSION}"
   install_go
 
-  info "installing jchroot"
-  install_jchroot
-
   info
   info "install finished!"
   info "you should add credentials to ${dir}/.credentials then start flynn-test (sudo systemctl start flynn-test)"
+}
+
+setup_disk() {
+  mkdir -p "${build_dir}"
+
+  if ! grep -qF nvme0 /proc/mdstat; then
+    mdadm --create /dev/md127 --chunk=512 --level=0 --raid-devices=8 \
+      /dev/nvme0n1 \
+      /dev/nvme0n2 \
+      /dev/nvme0n3 \
+      /dev/nvme0n4 \
+      /dev/nvme0n5 \
+      /dev/nvme0n6 \
+      /dev/nvme0n7 \
+      /dev/nvme0n8
+  fi
+
+  if ! grep -qF "${build_dir}" /etc/fstab; then
+    mkfs.ext4 -b 4096 -O ^has_journal -E stride=128,stripe-width=1024,lazy_itable_init=0,lazy_journal_init=0,discard -F /dev/md127
+    echo UUID=`sudo blkid -s UUID -o value /dev/md127` "${build_dir}" ext4 noatime,nodiratime,nodiscard,defaults,nofail,nobarrier 0 2 >> /etc/fstab
+  fi
+
+  if ! mount | grep -q "${build_dir}"; then
+    mount "${build_dir}"
+  fi
 }
 
 install_go() {
@@ -67,26 +111,10 @@ install_go() {
   popd &>/dev/null
 }
 
-install_jchroot() {
-  local target="/usr/local/bin/jchroot"
-
-  if [[ -s "${target}" ]]; then
-    return
-  fi
-
-  local tmp="$(mktemp --directory)"
-  trap "rm -rf ${tmp}" EXIT
-  git clone "https://github.com/vincentbernat/jchroot.git" "${tmp}/jchroot"
-  pushd "${tmp}/jchroot" &>/dev/null
-  make
-  mv "jchroot" "${target}"
-  popd &>/dev/null
-}
-
 install_systemd_unit() {
   cp "${src_dir}/test/scripts/start.sh" "${dir}/start.sh"
 
-  cat > /lib/systemd/system/flynn-test.service <<EOF
+  cat > /etc/systemd/system/flynn-test.service <<EOF
 [Unit]
 Description=Flynn CI Runner
 Documentation=https://flynn.io/docs
