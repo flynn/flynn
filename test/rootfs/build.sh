@@ -16,12 +16,10 @@ cleanup() {
 }
 trap cleanup ERR
 
-image="http://cdimage.ubuntu.com/ubuntu-base/releases/14.04/release/ubuntu-base-14.04-core-amd64.tar.gz"
+image="http://cdimage.ubuntu.com/ubuntu-base/releases/16.04/release/ubuntu-base-16.04.4-base-amd64.tar.gz"
 curl -L ${image} | sudo tar -xzC ${dir}
 
-# use jchroot (https://github.com/vincentbernat/jchroot) which uses a PID
-# namespace so daemons do not outlive the setup and prevent unmounting rootfs.img
-sudo jchroot ${dir} bash < "${src_dir}/setup.sh"
+sudo systemd-nspawn -D ${dir} bash < "${src_dir}/setup.sh"
 
 sudo cp ${dir}/boot/vmlinuz-* ${build_dir}/vmlinuz
 

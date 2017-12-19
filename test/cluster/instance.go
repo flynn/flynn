@@ -135,7 +135,7 @@ func (i *Instance) Start() error {
 	i.Args = append(i.Args,
 		"-enable-kvm",
 		"-kernel", i.Kernel,
-		"-append", `"root=/dev/sda"`,
+		"-append", "root=/dev/sda net.ifnames=0",
 		"-netdev", "tap,id=vmnic,ifname="+i.tap.Name+",script=no,downscript=no",
 		"-device", "virtio-net,netdev=vmnic,mac="+macaddr,
 		"-virtfs", "fsdriver=local,path="+i.netFS+",security_model=passthrough,readonly,mount_tag=netfs",
