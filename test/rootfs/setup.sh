@@ -207,7 +207,7 @@ chmod ug+s /usr/bin/tup
 sed 's/#user_allow_other/user_allow_other/' -i /etc/fuse.conf
 
 # install go
-curl https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz | tar xz
+curl -s https://storage.googleapis.com/flynn-misc/godeb.tar.gz | tar xz
 ./godeb install 1.9.2
 rm godeb
 

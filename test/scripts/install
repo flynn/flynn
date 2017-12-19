@@ -62,8 +62,7 @@ install_go() {
   local tmp="$(mktemp --directory)"
   trap "rm -rf ${tmp}" EXIT
   pushd "${tmp}" &>/dev/null
-  wget --quiet "https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz"
-  tar xzf "godeb-amd64.tar.gz"
+  curl -s "https://storage.googleapis.com/flynn-misc/godeb.tar.gz" | tar xz
   ./godeb install "${GO_VERSION}"
   popd &>/dev/null
 }
