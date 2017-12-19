@@ -43,7 +43,7 @@ main() {
 
   info "installing dependencies"
   apt-get update
-  apt-get install -y build-essential zerofree qemu qemu-kvm
+  apt-get install -y build-essential zerofree qemu qemu-kvm systemd-container
 
   info "creating ${user} user"
   if ! id "${user}" &>/dev/null; then
