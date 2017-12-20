@@ -355,11 +355,12 @@ type NewJob struct {
 const DefaultDeployTimeout = 120 // seconds
 
 type Deployment struct {
-	ID            string                       `json:"id,omitempty"`
-	AppID         string                       `json:"app,omitempty"`
-	OldReleaseID  string                       `json:"old_release,omitempty"`
-	NewReleaseID  string                       `json:"new_release,omitempty"`
-	Strategy      string                       `json:"strategy,omitempty"`
+	ID           string `json:"id,omitempty"`
+	AppID        string `json:"app,omitempty"`
+	OldReleaseID string `json:"old_release,omitempty"`
+	NewReleaseID string `json:"new_release,omitempty"`
+	Strategy     string `json:"strategy,omitempty"`
+	// TODO(jvatic): Status should be an enum (pending, failed, running, complete)
 	Status        string                       `json:"status,omitempty"`
 	Processes     map[string]int               `json:"processes,omitempty"`
 	Tags          map[string]map[string]string `json:"tags,omitempty"`

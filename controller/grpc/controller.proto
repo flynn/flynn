@@ -1,0 +1,288 @@
+syntax = 'proto3';
+package controller;
+option go_package = 'controllergrpc';
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/any.proto";
+
+service Controller {
+  rpc ListApps (ListAppsRequest) returns (ListAppsResponse) {}
+  rpc GetApp (GetAppRequest) returns (App) {
+    option (google.api.http).get = "/v2/{name=apps/-}";
+  };
+  rpc StreamAppLog (StreamAppLogRequest) returns (stream LogChunk) {
+    option (google.api.http).get = "/v2/{name=apps/-}/log}";
+  };
+  rpc CreateRelease (CreateReleaseRequest) returns (Release) {
+    option (google.api.http).post = "/v2/{parent=apps/-}/releases}";
+  };
+  rpc CreateDeployment (CreateDeploymentRequest) returns (Deployment) {
+    option (google.api.http).post = "/v2/{parent=apps/-}/deployments";
+  };
+  rpc StreamEvents (StreamEventsRequest) returns (stream Event) {
+    option (google.api.http).get = "/v2/events";
+  };
+  // TODO(jvatic): rpc ListAppRoutes
+  // TODO(jvatic): rpc CreateAppRoute
+  // TODO(jvatic): rpc UpdateAppRoute
+  // TODO(jvatic): rpc DeleteAppRoute
+}
+
+message ListAppsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListAppsResponse {
+  repeated App apps = 1;
+  string next_page_token = 2;
+}
+
+message GetAppRequest {
+  // name = "apps/APP_ID"
+  string name = 1;
+}
+
+message StreamAppLogRequest {
+  // name = "apps/APP_ID"
+  string name = 1;
+  LogAggregatorLogOpts opts = 2;
+}
+
+message CreateReleaseRequest {
+  // parent = "apps/APP_ID"
+  string parent = 1;
+  Release release = 2;
+  string request_id = 3;
+}
+
+message CreateDeploymentRequest {
+  // parent = "apps/APP_ID"
+  string parent = 1;
+  // release = Release.name
+  string release = 2;
+  string request_id = 3;
+}
+
+message StreamEventsRequest {
+  // parent = "apps/APP_ID"
+  string parent = 1;
+  repeated string object_types = 2; // []ct.EventType
+  string object_id = 3;
+  bool post = 4;
+  int32 count = 5;
+}
+
+message App {
+  // name = "apps/APP_ID"
+  string name = 1;
+  string display_name = 2;
+  map<string, string> labels = 3;
+  google.protobuf.Timestamp create_time = 4;
+  google.protobuf.Timestamp update_time = 5;
+  int32 deploy_timeout = 6;
+  string strategy = 7;
+  // release = Release.name
+  string release = 8;
+}
+
+message Release {
+  // name = "apps/APP_ID/releases/RELEASE_ID"
+  string name = 1;
+  repeated string artifacts = 3;
+  map<string, string> env = 4;
+  map<string, string> labels = 5;
+  map<string, ProcessType> processes = 6;
+  google.protobuf.Timestamp create_time = 7;
+}
+
+message Deployment {
+  // name = "apps/APP_ID/deployments/DEPLOYMENT_ID"
+  string name = 1;
+  // old_release = Release.name
+  string old_release = 3;
+  // new_release = Release.name
+  string new_release = 4;
+  string strategy = 5;
+  enum Status {
+    PENDING = 0;
+    FAILED = 1;
+    RUNNING = 2;
+    COMPLETE = 3;
+  }
+  Status status = 6;
+  map<string, int32> processes = 7;
+  // profobuf doesn't support maps within maps, so map[string]map[string]string
+  // could not be reproduced
+  map<string, DeploymentProcessTags> tags = 8;
+  int32 deploy_timeout = 9;
+  google.protobuf.Timestamp create_time = 10;
+  google.protobuf.Timestamp expire_time = 11;
+  google.protobuf.Timestamp end_time = 12;
+}
+
+message DeploymentProcessTags {
+  map<string, string> tags = 1;
+}
+
+message Event {
+  // name = "events/EVENT_ID"
+  string name = 1;
+  // parent = Any.name
+  string parent = 2;
+  google.protobuf.Any data = 3;
+  google.protobuf.Timestamp create_time = 4;
+}
+
+message ProcessType {
+  repeated string args = 1;
+  map<string, string> env = 2;
+  repeated Port ports = 3;
+  repeated VolumeReq volumes = 4;
+  bool omni = 5;
+  bool host_network = 6;
+  bool host_pid_namespace = 7;
+  string service = 8;
+  bool resurrect = 9;
+  map<string, HostResourceSpec> resources = 10;
+  repeated HostMount mounts = 11;
+  repeated string linux_capabilities = 12;
+  repeated LibContainerDevice allowed_devices = 13;
+  bool writeable_cgroups = 14;
+}
+
+message Port {
+  int32 port = 1;
+  string proto = 2;
+  HostService service = 3;
+}
+
+message VolumeReq {
+  string path = 1;
+  bool delete_on_stop = 2;
+}
+
+// See github.com/flynn/flynn/host/types Mount
+message HostService {
+  string display_name = 1;
+  // Create the service in service discovery
+  bool create = 2;
+  HostHealthCheck check = 3;
+}
+
+// See github.com/flynn/flynn/host/types Mount
+message HostHealthCheck {
+  // Type is one of tcp, http, https
+  string type = 1;
+  // Interval is the time to wait between checks after the service has been
+  // marked as up. It defaults to two seconds.
+  google.protobuf.Duration interval = 3;
+  // Threshold is the number of consecutive checks of the same status before
+  // a service will be marked as up or down after coming up for the first
+  // time. It defaults to 2.
+  int32 threshold = 4;
+  // If KillDown is true, the job will be killed if the service goes down (or
+  // does not come up)
+  bool kill_down = 5;
+  // StartTimeout is the maximum duration that a service can take to come up
+  // for the first time if KillDown is true. It defaults to ten seconds.
+  google.protobuf.Duration start_timeout = 6;
+
+  // Extra optional config fields for http/https checks
+  string path = 7;
+  string host = 8;
+  string match = 9;
+  int32 status = 10;
+}
+
+// See github.com/flynn/flynn/host/resource Spec
+message HostResourceSpec {
+  // Request, if set, is the amount of resource a job expects to consume,
+  // so the job should only be placed on a host with at least this amount
+  // of resource available, and once scheduled this amount of resource
+  // should then be unavailable on the given host.
+  int64 request = 1;
+  // Limit, if set, is an upper limit on the amount of resource a job can
+  // consume, the outcome of hitting this limit being implementation
+  // defined (e.g. a system error, throttling, catchable / uncatchable
+  // signals etc.)
+  int64 limit = 2;
+}
+
+// See github.com/flynn/flynn/host/types Mount
+message HostMount {
+  string location = 1;
+  string target = 2;
+  bool writable = 3;
+  string device = 4;
+  string data = 5;
+  int32 flags = 6;
+}
+
+// See github.com/opencontainers/runc/libcontainer/configs Device
+message LibContainerDevice {
+  // Device type, block, char, etc.
+  int32 type = 1;
+  // Path to the device.
+  string path = 2;
+  // Major is the device's major number.
+  int64 major = 3;
+  // Minor is the device's minor number.
+  int64 minor = 4;
+  // Cgroup permissions format, rwm.
+  string permissions = 5;
+  // FileMode permission bits for the device.
+  uint32 file_mode = 6;
+  // Uid of the device.
+  uint32 uid = 7;
+  // Gid of the device.
+  uint32 gid = 8;
+  // Write the file to the allowed list
+  bool allow = 9;
+}
+
+// See github.com/flynn/flynn/logaggregator/client Message
+message LogChunk {
+  // host = "hosts/HOST_ID"
+  // host is the host that the job was running on when this log message was
+  // emitted.
+  string host = 1;
+  // job_id = "apps/APP_ID/jobs/JOB_ID"
+  string job = 2;
+  // msg is the actual content of this log message.
+  string msg = 3;
+  // process_type is the type of process that emitted this log message.
+  string process_type = 4;
+  // source is the source of this log message.
+  LogAggregatorStreamSource source = 5;
+  // stream is the I/O stream that emitted this message, such as "stdout" or
+  // "stderr".
+  LogAggregatorStreamType stream = 6;
+  // create_time is the time that this log line was emitted.
+  google.protobuf.Timestamp create_time = 7;
+}
+
+// See github.com/flynn/flynn/logaggregator/types LogOpts
+message LogAggregatorLogOpts {
+  bool follow = 1;
+  // job = "apps/APP_ID/jobs/JOB_ID"
+  string job = 2;
+  int32 lines = 3;
+  string process_type = 4;
+  repeated LogAggregatorStreamType stream_types = 5;
+}
+
+// See github.com/flynn/flynn/logaggregator/types StreamType
+enum LogAggregatorStreamType {
+  STDOUT = 0;
+  STDERR = 1;
+  INIT = 2;
+  UNKNOWN = 3;
+}
+
+// See github.com/flynn/flynn/logaggregator NewMessageFromSyslog
+enum LogAggregatorStreamSource {
+  APP = 0;
+}
