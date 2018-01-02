@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/flynn/flynn/pkg/postgres"
@@ -27,23 +28,31 @@ func NewSwift(name string, info map[string]string) (Backend, error) {
 		return nil, fmt.Errorf("blobstore: missing swift param auth_url for %s", name)
 	}
 
-	if info["tenant_id"] == "" {
-		return nil, fmt.Errorf("blobstore: missing swift param tenant_id for %s", name)
-	}
-
 	if info["container"] == "" {
 		return nil, fmt.Errorf("blobstore: missing swift param container for %s", name)
+	}
+
+	auth_version, err := strconv.Atoi(info["auth_version"])
+	if err != nil {
+		auth_version = 0
 	}
 
 	b := &swiftBackend{
 		name:      name,
 		container: info["container"],
 		connection: &swift.Connection{
-			UserName: info["username"],
-			ApiKey:   info["password"],
-			AuthUrl:  info["auth_url"],
-			TenantId: info["tenant_id"],
-			Region:   info["region"],
+			Domain:         info["domain"],
+			DomainId:       info["domain_id"],
+			UserName:       info["username"],
+			ApiKey:         info["password"],
+			AuthUrl:        info["auth_url"],
+			AuthVersion:    auth_version,
+			Region:         info["region"],
+			Tenant:         info["tenant"],
+			TenantId:       info["tenant_id"],
+			TenantDomain:   info["tenant_domain"],
+			TenantDomainId: info["tenant_domain_id"],
+			TrustId:        info["trust_id"],
 		},
 	}
 

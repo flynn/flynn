@@ -225,14 +225,23 @@ If is not present or if you want to update it, you can use the command:
 ```text
 swift post -m "Temp-URL-Key:random_secure_string_here"
 ```
+Based on the auth version in use, you should specify the parameters to configure the backend:
 
-After setting those up, you should have an username, password, authentication url,
-tenant id, region and container name which can be used to configure the backend:
+| Auth Version   | Parameters    |
+|--------------- |--------------------------------------------------------------------------------------- |
+| v1             | username, password, auth_url, container                                                |
+| v2             | username, password, auth_url, container, region, tenant_id                             |
+| v3             | username, password, auth_url, container, region, tenant_id, tenant_domain_id, trust_id |
+
+Only `username, password, auth_url, container` parameters are mandatory for every version.
+You should look at your provider's documentation to know how to set optianl paramenters correctly.
+
+For example, if your provider supports auth v2, the configuration of the backend will look like:
 
 ```text
 flynn -a blobstore env set BACKEND_SWIFTMAIN="backend=swift username=xxx password=xxx \
-auth_url=xxx tenant_id=xxx \
-region=xxx container=xxx"
+auth_url=xxx container=xxx \
+region=xxx tenant_id=xxx"
 
 flynn -a blobstore env set DEFAULT_BACKEND=swiftmain
 ```
