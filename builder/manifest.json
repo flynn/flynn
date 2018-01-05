@@ -301,6 +301,9 @@
       "layers": [{
         "gobuild": {
           "router": "/bin/flynn-router"
+        },
+        "copy": {
+          "util/ca-certs/ca-certs.pem": "/etc/ssl/certs/ca-certs.pem"
         }
       }],
       "entrypoint": {

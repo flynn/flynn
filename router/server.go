@@ -2,7 +2,9 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"net"
@@ -17,6 +19,8 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/router/schema"
 	"github.com/flynn/flynn/router/types"
+	"golang.org/x/crypto/acme"
+	"golang.org/x/crypto/acme/autocert"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -218,6 +222,26 @@ func main() {
 			discoverd:     discoverd.DefaultClient,
 			proxyProtocol: proxyProtocol,
 		},
+	}
+
+	if key := os.Getenv("LETS_ENCRYPT_KEY"); key != "" {
+		log.Info("configuring Let's Encrypt")
+		block, _ := pem.Decode([]byte(key))
+		if block == nil || !strings.Contains(block.Type, "PRIVATE") {
+			shutdown.Fatal("invalid LETS_ENCRYPT_KEY")
+		}
+		key, err := x509.ParseECPrivateKey(block.Bytes)
+		if err != nil {
+			shutdown.Fatal("invalid LETS_ENCRYPT_KEY")
+		}
+		r.HTTP.(*HTTPListener).letsEncrypt = &autocert.Manager{
+			Client: &acme.Client{
+				Key:          key,
+				DirectoryURL: acme.LetsEncryptURL,
+			},
+			Prompt: autocert.AcceptTOS,
+			Cache:  &letsEncryptCache{db},
+		}
 	}
 
 	if err := r.Start(); err != nil {

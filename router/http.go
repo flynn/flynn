@@ -23,6 +23,7 @@ import (
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/proxyproto"
 	"github.com/flynn/flynn/router/types"
+	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 )
@@ -55,6 +56,8 @@ type HTTPListener struct {
 
 	preSync  func()
 	postSync func(<-chan struct{})
+
+	letsEncrypt *autocert.Manager
 }
 
 type DiscoverdClient interface {
@@ -418,6 +421,15 @@ func (s *HTTPListener) listenAndServe() error {
 				Port:    mustPortFromAddr(listener.Addr().String()),
 			},
 		}
+		if s.letsEncrypt != nil {
+			handler := s.letsEncrypt.HTTPHandler(server.Handler)
+			server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
+					logger.Info("handling ACME http-01 challenge", "domain", r.URL.Host, "path", r.URL.Path)
+				}
+				handler.ServeHTTP(w, r)
+			})
+		}
 
 		// TODO: log error
 		go server.Serve(listener)
@@ -435,11 +447,21 @@ func (s *HTTPListener) listenAndServeTLS() error {
 	for _, addr := range s.TLSAddrs {
 		port, _ := strconv.Atoi(mustPortFromAddr(addr))
 		certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			if s.letsEncrypt != nil && strings.HasSuffix(hello.ServerName, ".acme.invalid") {
+				logger.Info("handling ACME tls-sni challenge", "name", hello.ServerName)
+				return s.letsEncrypt.GetCertificate(hello)
+			}
 			r := s.findRoute(hello.ServerName, port, "/")
 			if r == nil {
 				return nil, errMissingTLS
 			}
-			return r.keypair, nil
+			if r.keypair != nil {
+				return r.keypair, nil
+			}
+			if s.letsEncrypt != nil {
+				return s.letsEncrypt.GetCertificate(hello)
+			}
+			return &s.keypair, nil
 		}
 		tlsConfig := tlsconfig.SecureCiphers(&tls.Config{
 			GetCertificate: certForHandshake,

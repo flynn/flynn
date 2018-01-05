@@ -223,6 +223,13 @@ CREATE TRIGGER notify_route_certificates_update
 		`CREATE UNIQUE INDEX http_routes_domain_port_path_key ON http_routes
 		USING btree (domain, port, path) WHERE deleted_at IS NULL`,
 	)
+	migrations.Add(9,
+		`CREATE TABLE lets_encrypt (
+			key text PRIMARY KEY,
+			data bytea NOT NULL,
+			deleted_at timestamptz
+		)`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
