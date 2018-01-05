@@ -271,6 +271,13 @@ $$ LANGUAGE plpgsql`,
 	FOR EACH ROW
 	EXECUTE PROCEDURE check_http_route_drain_backends()`,
 	)
+	migrations.Add(10,
+		`CREATE TABLE lets_encrypt (
+			key text PRIMARY KEY,
+			data bytea NOT NULL,
+			deleted_at timestamptz
+		)`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

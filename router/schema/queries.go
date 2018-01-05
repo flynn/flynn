@@ -32,6 +32,11 @@ var preparedStatements = map[string]string{
 	"insert_route_certificate":                   insertRouteCertificate,
 	"delete_route_certificate_by_route_id":       deleteRouteCertificateByRouteId,
 	"delete_route_certificate_by_certificate_id": deleteRouteCertificateByCertificateId,
+
+	// lets encrypt
+	"insert_lets_encrypt": insertLetsEncrypt,
+	"select_lets_encrypt": selectLetsEncrypt,
+	"delete_lets_encrypt": deleteLetsEncrypt,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
@@ -137,4 +142,17 @@ const (
 	deleteRouteCertificateByRouteId = `
 	DELETE FROM route_certificates
 	WHERE http_route_id = $1`
+
+	insertLetsEncrypt = `
+	INSERT INTO lets_encrypt (key, data)
+	VALUES ($1, $2)`
+
+	selectLetsEncrypt = `
+	SELECT data FROM lets_encrypt
+	WHERE key = $1 AND deleted_at IS NULL`
+
+	deleteLetsEncrypt = `
+	UPDATE lets_encrypt
+	SET deleted_at = now()
+	WHERE key = $1`
 )
