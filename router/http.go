@@ -23,6 +23,7 @@ import (
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/proxyproto"
 	"github.com/flynn/flynn/router/types"
+	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 )
@@ -55,6 +56,8 @@ type HTTPListener struct {
 
 	preSync  func()
 	postSync func(<-chan struct{})
+
+	letsEncrypt *autocert.Manager
 }
 
 type DiscoverdClient interface {
@@ -435,11 +438,20 @@ func (s *HTTPListener) listenAndServeTLS() error {
 	for _, addr := range s.TLSAddrs {
 		port, _ := strconv.Atoi(mustPortFromAddr(addr))
 		certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			if s.letsEncrypt != nil && strings.HasSuffix(hello.ServerName, ".acme.invalid") {
+				return s.letsEncrypt.GetCertificate(hello)
+			}
 			r := s.findRoute(hello.ServerName, port, "/")
 			if r == nil {
 				return nil, errMissingTLS
 			}
-			return r.keypair, nil
+			if r.keypair != nil {
+				return r.keypair, nil
+			}
+			if s.letsEncrypt != nil {
+				return s.letsEncrypt.GetCertificate(hello)
+			}
+			return &s.keypair, nil
 		}
 		tlsConfig := tlsconfig.SecureCiphers(&tls.Config{
 			GetCertificate: certForHandshake,
