@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/flynn/flynn/controller/common"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	dockerreceive "github.com/flynn/flynn/docker-receive/utils"
@@ -34,22 +35,7 @@ func NewReleaseRepo(db *postgres.DB, artifacts *ArtifactRepo, que *que.Client) *
 }
 
 func scanRelease(s postgres.Scanner) (*ct.Release, error) {
-	var artifactIDs string
-	release := &ct.Release{}
-	err := s.Scan(&release.ID, &release.AppID, &artifactIDs, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			err = ErrNotFound
-		}
-		return nil, err
-	}
-	if artifactIDs != "" {
-		release.ArtifactIDs = split(artifactIDs[1:len(artifactIDs)-1], ",")
-	}
-	if len(release.ArtifactIDs) > 0 {
-		release.LegacyArtifactID = release.ArtifactIDs[0]
-	}
-	return release, err
+	return common.ScanRelease(s)
 }
 
 func (r *ReleaseRepo) Add(data interface{}) error {

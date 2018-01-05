@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 
+	"github.com/flynn/flynn/controller/common"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/jackc/pgx"
@@ -55,7 +56,7 @@ func scanProvider(s postgres.Scanner) (*ct.Provider, error) {
 
 func (r *ProviderRepo) Get(id string) (interface{}, error) {
 	var row postgres.Scanner
-	if idPattern.MatchString(id) {
+	if common.IDPattern.MatchString(id) {
 		row = r.db.QueryRow("provider_select_by_name_or_id", id, id)
 	} else {
 		row = r.db.QueryRow("provider_select_by_name", id)

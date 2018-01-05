@@ -13,6 +13,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/flynn/flynn/controller/app"
+	"github.com/flynn/flynn/controller/common"
+	grpc "github.com/flynn/flynn/controller/grpc"
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -36,7 +39,7 @@ import (
 
 var logger = log15.New("component", "controller")
 
-var ErrNotFound = errors.New("controller: resource not found")
+var ErrNotFound = common.ErrNotFound
 var ErrShutdown = errors.New("controller: shutting down")
 
 var schemaRoot = "/etc/flynn-controller/jsonschema"
@@ -102,16 +105,41 @@ func main() {
 		hb.Close()
 	})
 
+	defaultRouteDomain := os.Getenv("DEFAULT_ROUTE_DOMAIN")
+
 	handler := appHandler(handlerConfig{
-		db:     db,
-		cc:     utils.ClusterClientWrapper(cluster.NewClient()),
-		lc:     lc,
-		rc:     rc,
-		keys:   strings.Split(os.Getenv("AUTH_KEY"), ","),
-		keyIDs: strings.Split(os.Getenv("AUTH_KEY_IDS"), ","),
-		caCert: []byte(os.Getenv("CA_CERT")),
+		db:                 db,
+		cc:                 utils.ClusterClientWrapper(cluster.NewClient()),
+		lc:                 lc,
+		rc:                 rc,
+		defaultRouteDomain: defaultRouteDomain,
+		keys:               strings.Split(os.Getenv("AUTH_KEY"), ","),
+		keyIDs:             strings.Split(os.Getenv("AUTH_KEY_IDS"), ","),
+		caCert:             []byte(os.Getenv("CA_CERT")),
 	})
-	shutdown.Fatal(http.ListenAndServe(addr, handler))
+
+	grpcHandler := grpc.NewServer(&grpc.Config{
+		DB:                 db,
+		RouterClient:       rc,
+		DefaultRouteDomain: defaultRouteDomain,
+	})
+
+	shutdown.Fatal(http.ListenAndServe(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix("/v2/", r.URL.Path) {
+			if r.ProtoMajor != 2 {
+				// Tell the client they need to use HTTP/2
+				w.Header().Set("Upgrade", "HTTP/2")
+				w.Header().Set("Connection", "Upgrade")
+				w.WriteHeader(http.StatusUpgradeRequired)
+				return
+			}
+			// API v2 requests are routed to the gRPC handler
+			grpcHandler.ServeHTTP(w, r)
+		} else {
+			// Route all other requests through the API v1 handler
+			handler.ServeHTTP(w, r)
+		}
+	})))
 }
 
 func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}) error {
@@ -176,13 +204,14 @@ type logClient interface {
 }
 
 type handlerConfig struct {
-	db     *postgres.DB
-	cc     utils.ClusterClient
-	lc     logClient
-	rc     routerc.Client
-	keys   []string
-	keyIDs []string
-	caCert []byte
+	db                 *postgres.DB
+	cc                 utils.ClusterClient
+	lc                 logClient
+	rc                 routerc.Client
+	defaultRouteDomain string
+	keys               []string
+	keyIDs             []string
+	caCert             []byte
 }
 
 // NOTE: this is temporary until httphelper supports custom errors
@@ -209,7 +238,7 @@ func appHandler(c handlerConfig) http.Handler {
 	domainMigrationRepo := NewDomainMigrationRepo(c.db)
 	providerRepo := NewProviderRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
-	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
+	appRepo := apprepo.NewRepo(c.db, c.defaultRouteDomain, c.rc)
 	artifactRepo := NewArtifactRepo(c.db)
 	releaseRepo := NewReleaseRepo(c.db, artifactRepo, q)
 	jobRepo := NewJobRepo(c.db)
@@ -373,7 +402,7 @@ func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
 
 type controllerAPI struct {
 	domainMigrationRepo *DomainMigrationRepo
-	appRepo             *AppRepo
+	appRepo             *apprepo.Repo
 	releaseRepo         *ReleaseRepo
 	providerRepo        *ProviderRepo
 	formationRepo       *FormationRepo
@@ -432,7 +461,7 @@ func (c *controllerAPI) appLookup(handler httphelper.HandlerFunc) httphelper.Han
 }
 
 func routeParentRef(appID string) string {
-	return ct.RouteParentRefPrefix + appID
+	return common.RouteParentRef(appID)
 }
 
 func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
@@ -448,32 +477,7 @@ func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
 }
 
 func createEvent(dbExec func(string, ...interface{}) error, e *ct.Event, data interface{}) error {
-	args := []interface{}{e.ObjectID, string(e.ObjectType), data}
-	fields := []string{"object_id", "object_type", "data"}
-	if e.AppID != "" {
-		fields = append(fields, "app_id")
-		args = append(args, e.AppID)
-	}
-	if e.UniqueID != "" {
-		fields = append(fields, "unique_id")
-		args = append(args, e.UniqueID)
-	}
-	query := "INSERT INTO events ("
-	for i, n := range fields {
-		if i > 0 {
-			query += ","
-		}
-		query += n
-	}
-	query += ") VALUES ("
-	for i := range fields {
-		if i > 0 {
-			query += ","
-		}
-		query += fmt.Sprintf("$%d", i+1)
-	}
-	query += ")"
-	return dbExec(query, args...)
+	return common.CreateEvent(dbExec, e, data)
 }
 
 func (c *controllerAPI) GetCACert(_ context.Context, w http.ResponseWriter, _ *http.Request) {

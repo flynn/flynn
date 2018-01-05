@@ -2,8 +2,8 @@ package main
 
 import (
 	"net/http"
-	"strings"
 
+	"github.com/flynn/flynn/controller/common"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -38,7 +38,7 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 	}
 	for i, appID := range r.Apps {
 		var row postgres.Scanner
-		if idPattern.MatchString(appID) {
+		if common.IDPattern.MatchString(appID) {
 			row = tx.QueryRow("app_resource_insert_app_by_name_or_id", appID, appID, r.ID)
 		} else {
 			row = tx.QueryRow("app_resource_insert_app_by_name", appID, r.ID)
@@ -88,7 +88,7 @@ func (rr *ResourceRepo) AddApp(resourceID, appID string) (*ct.Resource, error) {
 
 	{
 		var row postgres.Scanner
-		if idPattern.MatchString(appID) {
+		if common.IDPattern.MatchString(appID) {
 			row = tx.QueryRow("app_resource_insert_app_by_name_or_id", appID, appID, r.ID)
 		} else {
 			row = tx.QueryRow("app_resource_insert_app_by_name", appID, r.ID)
@@ -146,10 +146,7 @@ func (rr *ResourceRepo) RemoveApp(resourceID, appID string) (*ct.Resource, error
 }
 
 func split(s string, sep string) []string {
-	if s == "" {
-		return nil
-	}
-	return strings.Split(s, ",")
+	return common.Split(s, sep)
 }
 
 func scanResource(s postgres.Scanner) (*ct.Resource, error) {

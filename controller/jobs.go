@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/controller/common"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
@@ -33,7 +34,7 @@ func NewJobRepo(db *postgres.DB) *JobRepo {
 }
 
 func (r *JobRepo) Get(id string) (*ct.Job, error) {
-	if !idPattern.MatchString(id) {
+	if !common.IDPattern.MatchString(id) {
 		var err error
 		id, err = cluster.ExtractUUID(id)
 		if err != nil {

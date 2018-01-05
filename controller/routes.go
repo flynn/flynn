@@ -3,7 +3,7 @@ package main
 import (
 	"net/http"
 
-	"github.com/flynn/flynn/controller/schema"
+	"github.com/flynn/flynn/controller/common"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	routerc "github.com/flynn/flynn/router/client"
@@ -12,11 +12,7 @@ import (
 )
 
 func createRoute(db *postgres.DB, rc routerc.Client, appID string, route *router.Route) error {
-	route.ParentRef = routeParentRef(appID)
-	if err := schema.Validate(route); err != nil {
-		return err
-	}
-	return rc.CreateRoute(route)
+	return common.CreateRoute(db, rc, appID, route)
 }
 
 func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
@@ -26,7 +22,7 @@ func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 
-	if err := createRoute(c.appRepo.db, c.routerc, c.getApp(ctx).ID, &route); err != nil {
+	if err := createRoute(c.config.db, c.routerc, c.getApp(ctx).ID, &route); err != nil {
 		respondWithError(w, err)
 		return
 	}
