@@ -227,7 +227,7 @@ mv "${GOPATH}/bin/tuf-client" /usr/bin/tuf-client
 go get golang.org/x/tools/cmd/cover
 
 # allow the test runner to set certain environment variables
-echo AcceptEnv TEST_RUNNER_AUTH_KEY BLOBSTORE_S3_CONFIG BLOBSTORE_GCS_CONFIG BLOBSTORE_AZURE_CONFIG >> /etc/ssh/sshd_config
+echo AcceptEnv TEST_RUNNER_AUTH_KEY BLOBSTORE_S3_CONFIG BLOBSTORE_GCS_CONFIG BLOBSTORE_AZURE_CONFIG BLOBSTORE_SWIFT_CONFIG >> /etc/ssh/sshd_config
 
 # install Bats and jq for running script unit tests
 git clone https://github.com/sstephenson/bats.git "${tmpdir}/bats"

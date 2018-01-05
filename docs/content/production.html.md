@@ -75,10 +75,15 @@ $ sudo rm /var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev
 
 Flynn stores binary blobs like compiled applications, git repo archives,
 buildpack caches, and Docker image layers using the blobstore component. The
-blobstore supports multiple backends: Postgres, [Amazon
-S3](https://aws.amazon.com/s3/), [Google Cloud
-Storage](https://cloud.google.com/storage/), and [Microsoft Azure
-Storage](https://azure.microsoft.com/en-us/services/storage/blobs/).
+blobstore supports multiple backends: Postgres,
+[Amazon S3](https://aws.amazon.com/s3/),
+[Google Cloud Storage](https://cloud.google.com/storage/),
+[Microsoft Azure Storage](https://azure.microsoft.com/en-us/services/storage/blobs/) and
+OpenStack Swift (
+[Rackspace](https://www.rackspace.com/cloud/files),
+[Memset](https://www.memset.com/cloud/storage/),
+[OVH](https://www.ovh.ie/public-cloud/storage/object-storage/)
+).
 
 By default, the blobstore uses the built-in Postgres appliance to store these
 blobs. This works well for light workloads and is the default configuration
@@ -201,6 +206,63 @@ remove them from Postgres:
 flynn -a blobstore run /bin/flynn-blobstore migrate --delete
 ```
 
+### OpenStack Swift
+
+To migrate to the OpenStack Swift backend, you first need to provision a new container
+and create an user that can access to it.
+
+After that you must ensure that the user has the `Temp-URL-Key` metatag set.
+You can do this check using the [official swift client](https://docs.openstack.org/cli-reference/swift.html)
+by running the command:
+
+```text
+swift stat
+```
+
+In the reponse, the field `Meta Temp-Url-Key` must be present and not empty.
+If is not present or if you want to update it, you can use the command:
+
+```text
+swift post -m "Temp-URL-Key:random_secure_string_here"
+```
+Based on the auth version in use, you should specify the parameters to configure the backend:
+
+| Auth Version   | Parameters    |
+|--------------- |--------------------------------------------------------------------------------------- |
+| v1             | username, password, auth_url, container                                                |
+| v2             | username, password, auth_url, container, region, tenant_id                             |
+| v3             | username, password, auth_url, container, region, tenant_id, tenant_domain_id, trust_id |
+
+Only `username, password, auth_url, container` parameters are mandatory for every version.
+You should look at your provider's documentation to know how to set optianl paramenters correctly.
+
+For example, if your provider supports auth v2, the configuration of the backend will look like:
+
+```text
+flynn -a blobstore env set BACKEND_SWIFTMAIN="backend=swift username=xxx password=xxx \
+auth_url=xxx container=xxx \
+region=xxx tenant_id=xxx"
+
+flynn -a blobstore env set DEFAULT_BACKEND=swiftmain
+```
+
+If the credentials are invalid or the user has not a valid `Temp-Url-Key` metatag,
+the first command will fail, and you can check the logs with `flynn -a blobstore log`.
+
+Finally, migrate the existing blobs from Postgres to OpenStack Swift and
+remove them from Postgres:
+
+```text
+flynn -a blobstore run /bin/flynn-blobstore migrate --delete
+```
+
+For reference some common auth_url looks like this:
+
+| Provider    | auth_url                                      |
+|-----------  |---------------------------------------------- |
+| Rackspace   | https://identity.api.rackspacecloud.com/v2.0  |
+| Memset      | https://auth.storage.memset.com/v2.0          |
+| OVH         | https://auth.cloud.ovh.net/v2.0               |
 
 ## DNS and Load Balancing
 
