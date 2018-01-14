@@ -47,6 +47,13 @@
       }]
     },
     {
+      "id": "protobuf",
+      "base": "go",
+      "layers": [{
+        "script": "builder/img/protobuf.sh"
+      }]
+    },
+    {
       "id": "builder",
       "base": "go",
       "layers": [{
@@ -124,9 +131,27 @@
       }
     },
     {
+      "id": "controller-grpc-generated",
+      "base": "protobuf",
+      "layers": [{
+        "inputs": [
+          "controller/grpc/*.go",
+          "controller/grpc/*.proto"
+        ],
+		"run": [
+		  "go generate ./controller/grpc"
+		],
+		"copy": {
+			"controller/grpc/controller.pb.go": "/etc/controller.pb.go"
+		},
+        "limits": { "temp_disk": "1G" }
+      }]
+    },
+    {
       "id": "controller",
       "base": "busybox",
       "layers": [{
+        "build_with": "controller-grpc-generated",
         "gobuild": {
           "controller":           "/bin/flynn-controller",
           "controller/scheduler": "/bin/flynn-scheduler",
@@ -143,7 +168,8 @@
         ],
         "run": [
           "mkdir -p /etc/flynn-controller",
-          "cp -r schema /etc/flynn-controller/jsonschema"
+          "cp -r schema /etc/flynn-controller/jsonschema",
+          "cp /etc/controller.pb.go controller/grpc/controller.pb.go"
         ]
       }],
       "entrypoint": {
