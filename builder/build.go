@@ -1176,6 +1176,7 @@ func (g *GoInputs) load(pkg string) ([]string, error) {
 		files := p.GoFiles
 		files = append(files, p.CgoFiles...)
 		files = append(files, p.CFiles...)
+		files = append(files, p.HFiles...)
 		files = append(files, p.SFiles...)
 		files = append(files, p.IgnoredGoFiles...)
 
