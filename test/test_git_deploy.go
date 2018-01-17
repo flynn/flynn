@@ -424,3 +424,17 @@ func (s *GitDeploySuite) TestDevStdout(t *c.C) {
 		t.Assert(string(out), c.Equals, "foo")
 	}
 }
+
+func (s *GitDeploySuite) TestSourceVersion(t *c.C) {
+	r := s.newGitRepoWithoutTrace(t, "source-version")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	res := r.git("rev-parse", "HEAD")
+	t.Assert(res, Succeeds)
+	commit := strings.TrimSpace(res.Output)
+	t.Assert(commit, c.HasLen, 40)
+
+	push := r.git("push", "flynn", "master")
+	t.Assert(push, SuccessfulOutputContains, fmt.Sprintf("SOURCE_VERSION: %s", commit))
+}
