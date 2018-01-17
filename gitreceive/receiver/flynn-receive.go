@@ -103,6 +103,7 @@ Options:
 		"BUILD_CACHE_URL": fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID),
 		"CONTROLLER_KEY":  os.Getenv("CONTROLLER_KEY"),
 		"SLUG_IMAGE_ID":   slugImageID,
+		"SOURCE_VERSION":  args.String["<rev>"],
 	}
 	if buildpackURL, ok := env["BUILDPACK_URL"]; ok {
 		jobEnv["BUILDPACK_URL"] = buildpackURL
