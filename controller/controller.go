@@ -15,6 +15,7 @@ import (
 
 	"github.com/flynn/flynn/controller/app"
 	"github.com/flynn/flynn/controller/common"
+	"github.com/flynn/flynn/controller/database"
 	grpc "github.com/flynn/flynn/controller/grpc"
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
@@ -63,13 +64,13 @@ func main() {
 
 	db := postgres.Wait(nil, nil)
 
-	if err := migrateDB(db); err != nil {
+	if err := database.MigrateDB(db); err != nil {
 		shutdown.Fatal(err)
 	}
 
 	// Reconnect, preparing statements now that schema is migrated
 	db.Close()
-	db = postgres.Wait(nil, schema.PrepareStatements)
+	db = postgres.Wait(nil, database.PrepareStatements)
 
 	shutdown.BeforeExit(func() { db.Close() })
 
@@ -118,6 +119,7 @@ func main() {
 		caCert:             []byte(os.Getenv("CA_CERT")),
 	})
 
+	// TODO(jvatic): Set this up at the listener level
 	grpcHandler := grpc.NewServer(&grpc.Config{
 		DB:                 db,
 		RouterClient:       rc,

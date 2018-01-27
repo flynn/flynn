@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/controller/schema"
+	"github.com/flynn/flynn/controller/database"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
@@ -46,28 +45,16 @@ var _ = Suite(&S{})
 
 var authKey = "test"
 
-func setupTestDB(c *C, dbname string) *postgres.DB {
-	if err := pgtestutils.SetupPostgres(dbname); err != nil {
-		c.Fatal(err)
-	}
-	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig: pgx.ConnConfig{
-			Host:     os.Getenv("PGHOST"),
-			Database: dbname,
-		},
-	})
+func (s *S) SetUpSuite(c *C) {
+	dbname := "controllertest"
+	db, err := pgtestutils.SetupAndConnectPostgres(dbname)
 	if err != nil {
 		c.Fatal(err)
 	}
-	return postgres.New(pgxpool, nil)
-}
-
-func (s *S) SetUpSuite(c *C) {
-	dbname := "controllertest"
-	db := setupTestDB(c, dbname)
-	if err := migrateDB(db); err != nil {
+	if err := database.MigrateDB(db); err != nil {
 		c.Fatal(err)
 	}
+	db.Close()
 
 	// reconnect with que statements prepared now that schema is migrated
 
@@ -76,7 +63,7 @@ func (s *S) SetUpSuite(c *C) {
 			Host:     "/var/run/postgresql",
 			Database: dbname,
 		},
-		AfterConnect: schema.PrepareStatements,
+		AfterConnect: database.PrepareStatements,
 	})
 	if err != nil {
 		c.Fatal(err)
@@ -95,7 +82,7 @@ func (s *S) SetUpSuite(c *C) {
 		db:     db,
 		cc:     s.cc,
 		lc:     s.flac,
-		rc:     newFakeRouter(),
+		rc:     tu.NewFakeRouter(),
 		keys:   []string{authKey},
 		caCert: s.caCert,
 	}

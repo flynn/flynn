@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/jackc/pgx"
 )
 
@@ -30,4 +31,20 @@ func SetupPostgres(dbname string) error {
 		return err
 	}
 	return nil
+}
+
+func SetupAndConnectPostgres(dbname string) (*postgres.DB, error) {
+	if err := SetupPostgres(dbname); err != nil {
+		return nil, err
+	}
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     os.Getenv("PGHOST"),
+			Database: dbname,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return postgres.New(pgxpool, nil), nil
 }

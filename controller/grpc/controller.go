@@ -2,8 +2,8 @@
 package controllergrpc
 
 import (
-	"net/http"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/controller/app"
@@ -24,12 +24,42 @@ type Config struct {
 	appRepo *apprepo.Repo
 }
 
+func NewServer(c *Config) *grpc.Server {
+	c.appRepo = apprepo.NewRepo(c.DB, c.DefaultRouteDomain, c.RouterClient)
+	s := grpc.NewServer()
+	RegisterControllerServer(s, &server{Config: c})
+	// Register reflection service on gRPC server.
+	reflection.Register(s)
+	return s
+}
+
 type server struct {
 	ControllerServer
 	*Config
 }
 
-func (s *server) ListApps(context.Context, *ListAppsRequest) (*ListAppsResponse, error) {
+func parseAppID(name string) string {
+	parts := strings.Split(name, "/")
+	if len(parts) == 2 {
+		return parts[1]
+	}
+	return ""
+}
+
+func convertApp(a *ct.App) *App {
+	return &App{
+		Name:          path.Join("apps", a.ID),
+		DisplayName:   a.Name,
+		Labels:        a.Meta,
+		Strategy:      a.Strategy,
+		Release:       path.Join("apps", a.ID, "releases", a.ReleaseID),
+		DeployTimeout: a.DeployTimeout,
+		CreateTime:    protobufTimestamp(a.CreatedAt),
+		UpdateTime:    protobufTimestamp(a.UpdatedAt),
+	}
+}
+
+func (s *server) ListApps(ctx context.Context, req *ListAppsRequest) (*ListAppsResponse, error) {
 	res, err := s.appRepo.List()
 	if err != nil {
 		return nil, err
@@ -37,16 +67,7 @@ func (s *server) ListApps(context.Context, *ListAppsRequest) (*ListAppsResponse,
 	ctApps := res.([]*ct.App)
 	apps := make([]*App, len(ctApps))
 	for i, a := range ctApps {
-		apps[i] = &App{
-			Name:          path.Join("apps", a.ID),
-			DisplayName:   a.Name,
-			Labels:        a.Meta,
-			Strategy:      a.Strategy,
-			Release:       path.Join("apps", a.ID, "releases", a.ReleaseID),
-			DeployTimeout: a.DeployTimeout,
-			CreateTime:    protobufTimestamp(a.CreatedAt),
-			UpdateTime:    protobufTimestamp(a.UpdatedAt),
-		}
+		apps[i] = convertApp(a)
 	}
 	return &ListAppsResponse{
 		Apps: apps,
@@ -55,8 +76,12 @@ func (s *server) ListApps(context.Context, *ListAppsRequest) (*ListAppsResponse,
 	}, nil
 }
 
-func (s *server) GetApp(context.Context, *GetAppRequest) (*App, error) {
-	return &App{}, nil
+func (s *server) GetApp(ctx context.Context, req *GetAppRequest) (*App, error) {
+	res, err := s.appRepo.Get(parseAppID(req.Name))
+	if err != nil {
+		return nil, err
+	}
+	return convertApp(res.(*ct.App)), nil
 }
 
 func (s *server) StreamAppLog(*StreamAppLogRequest, Controller_StreamAppLogServer) error {
@@ -73,14 +98,6 @@ func (s *server) CreateDeployment(context.Context, *CreateDeploymentRequest) (*D
 
 func (s *server) StreamEvents(*StreamEventsRequest, Controller_StreamEventsServer) error {
 	return nil
-}
-
-func NewServer(c *Config) http.Handler {
-	c.appRepo = apprepo.NewRepo(c.DB, c.DefaultRouteDomain, c.RouterClient)
-	s := grpc.NewServer()
-	RegisterControllerServer(s, &server{Config: c})
-	reflection.Register(s)
-	return s
 }
 
 func protobufTimestamp(ts *time.Time) *google_protobuf1.Timestamp {

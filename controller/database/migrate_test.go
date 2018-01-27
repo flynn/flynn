@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"time"
@@ -6,6 +6,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/testutils/postgres"
 
 	. "github.com/flynn/go-check"
 )
@@ -28,7 +29,10 @@ func (t *testMigrator) migrateTo(id int) {
 // TestMigrateJobStates checks that migrating to ID 9 does not break existing
 // job records
 func (MigrateSuite) TestMigrateJobStates(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_job_states")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_job_states")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 7
@@ -46,7 +50,7 @@ func (MigrateSuite) TestMigrateJobStates(c *C) {
 
 	// migrate to 8 and check job states are still constrained
 	m.migrateTo(8)
-	err := db.Exec(`UPDATE job_cache SET state = 'foo' WHERE job_id = $1`, jobID)
+	err = db.Exec(`UPDATE job_cache SET state = 'foo' WHERE job_id = $1`, jobID)
 	c.Assert(err, NotNil)
 	if !postgres.IsPostgresCode(err, postgres.ForeignKeyViolation) {
 		c.Fatalf("expected postgres foreign key violation, got %s", err)
@@ -63,7 +67,10 @@ func (MigrateSuite) TestMigrateJobStates(c *C) {
 }
 
 func (MigrateSuite) TestMigrateCriticalApps(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_critical_apps")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_critical_apps")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 12
@@ -90,7 +97,10 @@ func (MigrateSuite) TestMigrateCriticalApps(c *C) {
 // migrates releases by creating appropriate records in the release_artifacts
 // table
 func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_release_artifacts")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_release_artifacts")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 14
@@ -152,7 +162,10 @@ func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
 // TestMigrateArtifactMeta checks that migrating to ID 16 correctly
 // sets artifact metadata for those stored in the blobstore
 func (MigrateSuite) TestMigrateArtifactMeta(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_artifact_meta")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_artifact_meta")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 15
@@ -207,7 +220,10 @@ func (MigrateSuite) TestMigrateArtifactMeta(c *C) {
 }
 
 func (MigrateSuite) TestMigrateReleaseArtifactIndex(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_release_artifact_index")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_release_artifact_index")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 16
@@ -241,7 +257,10 @@ func (MigrateSuite) TestMigrateReleaseArtifactIndex(c *C) {
 }
 
 func (MigrateSuite) TestMigrateProcessArgs(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_process_args")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_process_args")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 18
@@ -337,7 +356,10 @@ func (MigrateSuite) TestMigrateProcessArgs(c *C) {
 }
 
 func (MigrateSuite) TestMigrateRedisService(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_redis_service")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_redis_service")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 19
@@ -369,7 +391,10 @@ func (MigrateSuite) TestMigrateRedisService(c *C) {
 }
 
 func (MigrateSuite) TestMigrateDefaultAppGC(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_default_app_gc")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_default_app_gc")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 23
@@ -418,7 +443,10 @@ func (MigrateSuite) TestMigrateDefaultAppGC(c *C) {
 }
 
 func (MigrateSuite) TestMigrateProcessData(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_process_data")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_process_data")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 24
@@ -461,7 +489,10 @@ func (MigrateSuite) TestMigrateProcessData(c *C) {
 }
 
 func (MigrateSuite) TestMigrateReleaseAppID(c *C) {
-	db := setupTestDB(c, "controllertest_migrate_release_app_id")
+	db, err := pgtestutils.SetupAndConnectPostgres("controllertest_migrate_release_app_id")
+	if err != nil {
+		c.Fatal(err)
+	}
 	m := &testMigrator{c: c, db: db}
 
 	// start from ID 26

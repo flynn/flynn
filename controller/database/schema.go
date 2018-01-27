@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"fmt"
@@ -539,7 +539,7 @@ $$ LANGUAGE plpgsql`,
 	)
 }
 
-func migrateDB(db *postgres.DB) error {
+func MigrateDB(db *postgres.DB) error {
 	return migrations.Migrate(db)
 }
 
