@@ -8,7 +8,7 @@ var buildPageID = function (events) {
 	return events.map(function (e) { return e.id; }).join(':');
 };
 
-var OBJECT_TYPES = ['app_release', 'scale'];
+var OBJECT_TYPES = ['app_release', 'scale', 'release_deletion'];
 var FETCH_COUNT = 3;
 
 var AppHistory = Store.createClass({
@@ -16,6 +16,8 @@ var AppHistory = Store.createClass({
 		this.props = {
 			appID: this.id.appID
 		};
+
+		this.__releaseMapping = {};
 
 		this.fetchPageLock = Promise.resolve();
 	},
@@ -79,7 +81,7 @@ var AppHistory = Store.createClass({
 			object_types: OBJECT_TYPES,
 			count: FETCH_COUNT
 		}).then(function (args) {
-			var events = this.__rewriteEvents(this.__filterEvents(args[0]));
+			var events = this.__processReleaseEvents(this.__rewriteEvents(this.__filterEvents(args[0])));
 			var pages;
 			var hasPrevPage = true;
 			if (events.length === 0) {
@@ -118,7 +120,7 @@ var AppHistory = Store.createClass({
 			object_types: OBJECT_TYPES,
 			count: FETCH_COUNT
 		}).then(function (args) {
-			var events = (eventsBuffer || []).concat(this.__rewriteEvents(this.__filterEvents(args[0])));
+			var events = (eventsBuffer || []).concat(this.__processReleaseEvents(this.__rewriteEvents(this.__filterEvents(args[0]))));
 			var pages;
 			var hasNextPage = true;
 			var beforeID = ((args[0] || [])[args[0].length-1] || {}).id || prevState.beforeID;
@@ -145,6 +147,29 @@ var AppHistory = Store.createClass({
 			setTimeout(function () {
 				throw err;
 			}, 0);
+		});
+	},
+
+	__processReleaseEvents: function (events) {
+		var releaseMapping = this.__releaseMapping;
+		return events.filter(function (event) {
+			if (event.object_type === 'app_release') {
+				var deletedAt = releaseMapping[event.data.release.id] && releaseMapping[event.data.release.id].deletedAt;
+				if (deletedAt) {
+					event.deletedAt = deletedAt;
+				}
+				releaseMapping[event.data.release.id] = event;
+			}
+			if (event.object_type === 'release_deletion') {
+				var releaseID = event.data.release_deletion.release;
+				if (releaseMapping[releaseID]) {
+					releaseMapping[releaseID].deletedAt = event.created_at;
+				} else {
+					releaseMapping[releaseID] = { deletedAt: event.created_at };
+				}
+				return false;
+			}
+			return true;
 		});
 	},
 

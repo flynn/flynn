@@ -33,7 +33,13 @@ var ReleaseEvent = React.createClass({
 				}, this)}
 			</ul>
 		];
-		if (this.props.timestamp) {
+		if (this.props.deletedAt) {
+			children.push(
+				<div key="timestamp">
+					DELETED <Timestamp timestamp={this.props.deletedAt} />
+				</div>
+			);
+		} else if (this.props.timestamp) {
 			children.push(
 				<div key="timestamp">
 					<Timestamp timestamp={this.props.timestamp} />
@@ -43,8 +49,8 @@ var ReleaseEvent = React.createClass({
 		return (
 			<article {...this.props}>
 				{this.props.selectable ? (
-					<PrettyRadio onChange={this.__handleChange} checked={this.props.selected}>
-						<div className="body">
+					<PrettyRadio onChange={this.__handleChange} checked={this.props.selected} disabled={!!this.props.deletedAt}>
+						<div className="body" style={this.props.deletedAt ? { opacity: '0.4' } : null}>
 							{children}
 						</div>
 					</PrettyRadio>

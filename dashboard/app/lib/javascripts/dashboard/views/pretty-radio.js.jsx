@@ -1,7 +1,7 @@
 var PrettyRadio = React.createClass({
 	render: function () {
 		var input = [
-			<input key={1} className={this.props.hideDot ? 'hidden': ''} type="radio" name="selected-sha" checked={this.props.checked} onChange={this.props.onChange} />,
+			<input key={1} className={this.props.hideDot ? 'hidden': ''} type="radio" name="selected-sha" checked={this.props.checked} onChange={this.props.onChange} disabled={this.props.disabled} />,
 			<div key={2} className={"dot"} />
 		];
 		if (this.props.hideDot) {

@@ -46,6 +46,7 @@ var Event = React.createClass({
 				onSelect={this.props.onSelect}
 				event={event}
 				release={event.data.release}
+				deletedAt={event.deletedAt}
 				envDiff={event.envDiff}
 				timestamp={event.created_at} />
 		);
