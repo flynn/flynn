@@ -88,10 +88,10 @@ main() {
     # kill existing cluster to unlock the volume database
     "${ROOT}/script/kill-flynn"
 
-    info "getting stable release version"
-    local dl_version="$(curl -fsSL "https://releases.flynn.io/api/channels" | jq -r '.[] | select(.name == "stable") | .version')"
+    info "getting nightly release version"
+    local dl_version="$(curl -fsSL "https://releases.flynn.io/api/channels" | jq -r '.[] | select(.name == "nightly") | .version')"
     if [[ -z "${dl_version}" ]]; then
-      fail "unable to determine stable release version"
+      fail "unable to determine nightly release version"
     fi
 
     info "downloading binaries + images (${dl_version})"
