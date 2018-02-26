@@ -247,6 +247,12 @@
   revision = "c54fbb67c1f1e68d7d6f8d2ad7c9360404616a41"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/dustin/go-humanize"
+  packages = ["."]
+  revision = "bb3d318650d48840a39aa21a027c6630e198e626"
+
+[[projects]]
   branch = "v1"
   name = "github.com/flynn/go-check"
   packages = ["."]
@@ -273,6 +279,8 @@
   packages = [
     ".",
     "client",
+    "cmd/tuf",
+    "cmd/tuf-client",
     "data",
     "encrypted",
     "sign",
@@ -801,6 +809,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8f125d7178f67909260d722eedc9098eec22648f02665ee2bbe3fd33dc340303"
+  inputs-digest = "9beff3783cb63a8d55d30b805a11fb852d52b80d8af5739919e42bbbf8a9408e"
   solver-name = "gps-cdcl"
   solver-version = 1
