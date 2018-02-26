@@ -13,12 +13,12 @@ echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt
 apt-get update
 apt-get install -y -q \
   less \
-  postgresql-9.5 \
-  postgresql-contrib-9.5 \
-  postgresql-9.5-pgextwlist \
-  postgresql-9.5-plv8 \
-  postgresql-9.5-postgis-2.3 \
-  postgresql-9.5-pgrouting
+  postgresql-10 \
+  postgresql-contrib-10 \
+  postgresql-10-pgextwlist \
+  postgresql-10-plv8 \
+  postgresql-10-postgis-2.4 \
+  postgresql-10-pgrouting
 apt-get clean
 apt-get autoremove -y
 

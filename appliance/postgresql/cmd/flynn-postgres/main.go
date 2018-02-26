@@ -64,7 +64,7 @@ func main() {
 		ID:           id,
 		Singleton:    singleton,
 		DataDir:      filepath.Join(dataDir, "db"),
-		BinDir:       "/usr/lib/postgresql/9.5/bin/",
+		BinDir:       "/usr/lib/postgresql/10/bin/",
 		Password:     password,
 		Logger:       log.New("component", "postgres"),
 		ExtWhitelist: true,

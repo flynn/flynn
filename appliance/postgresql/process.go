@@ -114,7 +114,7 @@ func NewProcess(c Config) *Process {
 		p.port = "5432"
 	}
 	if p.binDir == "" {
-		p.binDir = "/usr/lib/postgresql/9.5/bin/"
+		p.binDir = "/usr/lib/postgresql/10/bin/"
 	}
 	if p.dataDir == "" {
 		p.dataDir = "/data"
@@ -244,9 +244,9 @@ func (p *Process) XLogPosition() (xlog.Position, error) {
 		return "", errors.New("postgres is not running")
 	}
 
-	fn := "pg_last_xlog_replay_location()"
+	fn := "pg_last_wal_replay_lsn()"
 	if p.config().Role == state.RolePrimary {
-		fn = "pg_current_xlog_location()"
+		fn = "pg_current_wal_lsn()"
 	}
 	var res string
 	err := p.db.QueryRow("SELECT " + fn).Scan(&res)
@@ -460,7 +460,7 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 				"host=%s port=%s user=flynn password=%s application_name=%s",
 				upstream.Host(), upstream.Port(), p.password, upstream.Meta[IDKey],
 			),
-			"--xlog-method=stream",
+			"--wal-method=stream",
 			"--progress",
 			"--verbose",
 		))
@@ -781,7 +781,7 @@ func (p *Process) checkReplStatus(name string) (sent, flushed xlog.Position, err
 
 	var s, f pgx.NullString
 	err = p.db.QueryRow(`
-SELECT sent_location, flush_location
+SELECT sent_lsn, flush_lsn
 FROM pg_stat_replication
 WHERE application_name = $1`, name).Scan(&s, &f)
 	if err != nil && err != pgx.ErrNoRows {

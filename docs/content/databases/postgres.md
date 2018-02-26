@@ -5,7 +5,7 @@ layout: docs
 
 # PostgreSQL
 
-The Flynn Postgres appliance provides PostgreSQL 9.5 in a highly-available
+The Flynn Postgres appliance provides PostgreSQL 10 in a highly-available
 configuration with automatic provisioning. It automatically fails over to
 a synchronous replica with no loss of data if the primary server goes down.
 
@@ -29,7 +29,8 @@ Provisioning the database will add a few environment variables to your app
 release. `PGDATABASE`, `PGUSER`, `PGPASSWORD`, and `PGHOST` provide connection
 details for the database and are used automatically by many Postgres clients.
 
-Flynn will also create the `DATABASE_URL` environment variable which is utilized by some frameworks to configure database connections.
+Flynn will also create the `DATABASE_URL` environment variable which is utilized
+by some frameworks to configure database connections.
 
 ### Connecting to a console
 
@@ -107,39 +108,38 @@ bbabc090024fcdd118b04c50a0fb0d8c=>
 
 This is a complete list of the extensions that are available:
 
-|        Name          | Version |                             Description                             |
-|----------------------|---------|---------------------------------------------------------------------|
-| btree\_gin           | 1.0     | support for indexing common datatypes in GIN                        |
-| btree\_gist          | 1.0     | support for indexing common datatypes in GiST                       |
-| chkpass              | 1.0     | data type for auto-encrypted passwords                              |
-| citext               | 1.0     | data type for case-insensitive character strings                    |
-| cube                 | 1.0     | data type for multidimensional cubes                                |
-| dblink               | 1.1     | connect to other PostgreSQL databases from within a database        |
-| dict\_int            | 1.0     | text search dictionary template for integers                        |
-| earthdistance        | 1.0     | calculate great-circle distances on the surface of the Earth        |
-| fuzzystrmatch        | 1.0     | determine similarities and distance between strings                 |
-| hstore               | 1.3     | data type for storing sets of (key, value) pairs                    |
-| intarray             | 1.0     | functions, operators, and index support for 1-D arrays of integers  |
-| isn                  | 1.0     | data types for international product numbering standards            |
-| ltree                | 1.0     | data type for hierarchical tree-like structures                     |
-| pg\_prewarm          | 1.0     | prewarm relation data                                               |
-| pg\_stat\_statements | 1.2     | track execution statistics of all SQL statements executed           |
-| pg\_trgm             | 1.1     | text similarity measurement and index searching based on trigrams   |
-| pgcrypto             | 1.1     | cryptographic functions                                             |
-| pgrouting            | 2.0     | pgRouting Extension                                                 |
-| pgrowlocks           | 1.1     | show row-level locking information                                  |
-| pgstattuple          | 1.2     | show tuple-level statistics                                         |
-| plpgsql              | 1.0     | PL/pgSQL procedural language                                        |
-| plv8                 | 1.4.2   | PL/JavaScript (v8) trusted procedural language                      |
-| postgis              | 2.1.5   | PostGIS geometry, geography, and raster spatial types and functions |
-| postgis\_topology    | 2.1.5   | PostGIS topology spatial types and functions                        |
-| postgres\_fdw        | 1.0     | foreign-data wrapper for remote PostgreSQL servers                  |
-| tablefunc            | 1.0     | functions that manipulate whole tables, including crosstab          |
-| unaccent             | 1.0     | text search dictionary that removes accents                         |
-| uuid-ossp            | 1.0     | generate universally unique identifiers (UUIDs)                     |
+|        Name          |                             Description                             |
+|----------------------|---------------------------------------------------------------------|
+| btree\_gin           | support for indexing common datatypes in GIN                        |
+| btree\_gist          | support for indexing common datatypes in GiST                       |
+| chkpass              | data type for auto-encrypted passwords                              |
+| citext               | data type for case-insensitive character strings                    |
+| cube                 | data type for multidimensional cubes                                |
+| dblink               | connect to other PostgreSQL databases from within a database        |
+| dict\_int            | text search dictionary template for integers                        |
+| earthdistance        | calculate great-circle distances on the surface of the Earth        |
+| fuzzystrmatch        | determine similarities and distance between strings                 |
+| hstore               | data type for storing sets of (key, value) pairs                    |
+| intarray             | functions, operators, and index support for 1-D arrays of integers  |
+| isn                  | data types for international product numbering standards            |
+| ltree                | data type for hierarchical tree-like structures                     |
+| pg\_prewarm          | prewarm relation data                                               |
+| pg\_stat\_statements | track execution statistics of all SQL statements executed           |
+| pg\_trgm             | text similarity measurement and index searching based on trigrams   |
+| pgcrypto             | cryptographic functions                                             |
+| pgrouting            | pgRouting Extension                                                 |
+| pgrowlocks           | show row-level locking information                                  |
+| pgstattuple          | show tuple-level statistics                                         |
+| plpgsql              | PL/pgSQL procedural language                                        |
+| plv8                 | PL/JavaScript (v8) trusted procedural language                      |
+| postgis              | PostGIS geometry, geography, and raster spatial types and functions |
+| postgis\_topology    | PostGIS topology spatial types and functions                        |
+| postgres\_fdw        | foreign-data wrapper for remote PostgreSQL servers                  |
+| tablefunc            | functions that manipulate whole tables, including crosstab          |
+| unaccent             | text search dictionary that removes accents                         |
+| uuid-ossp            | generate universally unique identifiers (UUIDs)                     |
 
-Additionally, the following full text search dictionaries are installed by
-default:
+Additionally, the following full text search dictionaries are installed:
 
 |      Name        |                        Description                        |
 |------------------|-----------------------------------------------------------|
