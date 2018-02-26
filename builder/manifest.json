@@ -60,7 +60,9 @@
       "base": "busybox",
       "layers": [{
         "gobuild": {
-          "vendor/github.com/golang/dep/cmd/dep": "/bin/dep"
+          "vendor/github.com/golang/dep/cmd/dep": "/bin/dep",
+          "vendor/github.com/flynn/go-tuf/cmd/tuf": "/bin/tuf",
+          "vendor/github.com/flynn/go-tuf/cmd/tuf-client": "/bin/tuf-client"
         }
       }]
     },

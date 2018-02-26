@@ -60,14 +60,14 @@ main() {
   info "checking snapshot expires"
   if metadata_expires_before "repository/snapshot.json" "+1 day 1 hour"; then
     info "snapshot expires soon, updating"
-    tuf snapshot
+    ${ROOT}/build/bin/tuf snapshot
   fi
 
   info "updating timestamp"
-  tuf timestamp
+  ${ROOT}/build/bin/tuf timestamp
 
   info "committing changes"
-  tuf commit
+  ${ROOT}/build/bin/tuf commit
 
   info "uploading timestamp and latest snapshot to S3"
   local tmp="$(mktemp --directory)"

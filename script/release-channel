@@ -4,10 +4,6 @@
 #
 # PREREQUISITES:
 #
-# - Install go-tuf
-#   go get github.com/flynn/go-tuf/cmd/tuf
-#   go get github.com/flynn/go-tuf/cmd/tuf-client
-#
 # - Set the TUF passphrases
 #   export TUF_TARGETS_PASSPHRASE=xxxxxx
 #   export TUF_SNAPSHOT_PASSPHRASE=xxxxxx
@@ -107,7 +103,7 @@ main() {
   fi
 
   cd "${tuf_dir}"
-  tuf clean
+  ${ROOT}/build/bin/tuf clean
 
   if $changelog; then
     info "generating changelog"
@@ -126,10 +122,10 @@ main() {
   echo "${version}" > "staged/targets/channels/${channel}"
 
   info "committing TUF repository"
-  tuf add
-  tuf snapshot
-  tuf timestamp
-  tuf commit
+  ${ROOT}/build/bin/tuf add
+  ${ROOT}/build/bin/tuf snapshot
+  ${ROOT}/build/bin/tuf timestamp
+  ${ROOT}/build/bin/tuf commit
 
   if $sync; then
     info "uploading files to S3"
@@ -159,7 +155,7 @@ generate_changelog() {
   info "getting current ${channel} version from ${repo_url}"
   local tmp="$(mktemp --directory)"
   trap "rm -rf ${tmp}" EXIT
-  tuf-client init --store "${tmp}/tuf.db" "${repo_url}" <<< "$(tuf -d "${tuf_dir}" root-keys)"
+  ${ROOT}/build/bin/tuf-client init --store "${tmp}/tuf.db" "${repo_url}" <<< "$(${ROOT}/build/bin/tuf -d "${tuf_dir}" root-keys)"
   local current="$(tuf-client get --store "${tmp}/tuf.db" "${repo_url}" "/channels/${channel}")"
   if [[ -z "${current}" ]]; then
     warn "could not determine current ${channel} version, using empty changelog"
