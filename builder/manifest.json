@@ -56,6 +56,15 @@
       }]
     },
     {
+      "id": "build-tools",
+      "base": "busybox",
+      "layers": [{
+        "gobuild": {
+          "vendor/github.com/golang/dep/cmd/dep": "/bin/dep"
+        }
+      }]
+    },
+    {
       "id": "discoverd",
       "base": "busybox",
       "layers": [{
@@ -465,7 +474,8 @@
         "script": "util/assetbuilder/build.sh",
         "env": {"TARGET": "dashboard"},
         "gobuild": {
-          "dashboard/app": "/bin/dashboard-compile"
+          "dashboard/app": "/bin/dashboard-compile",
+          "vendor/github.com/jteeuwen/go-bindata/go-bindata": "/bin/go-bindata"
         },
         "inputs": [
           "dashboard/app/Gemfile",
