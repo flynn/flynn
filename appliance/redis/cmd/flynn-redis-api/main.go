@@ -19,7 +19,7 @@ import (
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/julienschmidt/httprouter"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 const (

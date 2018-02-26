@@ -15,7 +15,7 @@ import (
 
 	"github.com/cheggaaa/pb"
 	"github.com/docker/docker/pkg/term"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 // Actual limit is likely ~200mb.

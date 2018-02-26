@@ -12,7 +12,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/flynn/flynn/host/volume"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 /*

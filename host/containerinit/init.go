@@ -40,7 +40,7 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
 	"github.com/kr/pty"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 var logger log15.Logger

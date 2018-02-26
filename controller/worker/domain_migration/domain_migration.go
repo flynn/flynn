@@ -15,7 +15,7 @@ import (
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 	"github.com/flynn/que-go"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 // limits the number of concurrent requests to the router

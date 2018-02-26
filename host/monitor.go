@@ -7,7 +7,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/fixer"
 	"github.com/flynn/flynn/pkg/cluster"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 const (

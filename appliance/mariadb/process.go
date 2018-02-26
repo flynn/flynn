@@ -28,7 +28,7 @@ import (
 	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/flynn/flynn/pkg/sirenia/xlog"
 	"github.com/go-sql-driver/mysql"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 const (

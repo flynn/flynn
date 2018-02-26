@@ -15,7 +15,7 @@ import (
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/flynn/updater/types"
 	"github.com/mattn/go-colorable"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 var redisImage, slugBuilder, slugRunner *ct.Artifact

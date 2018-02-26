@@ -9,7 +9,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/que-go"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 type context struct {

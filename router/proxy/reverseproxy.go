@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 const (

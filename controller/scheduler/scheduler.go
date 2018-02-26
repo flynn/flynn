@@ -27,7 +27,7 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/flynn/flynn/router/types"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 const (

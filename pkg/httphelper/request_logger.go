@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/pkg/ctxhelper"
-	log "gopkg.in/inconshreveable/log15.v2"
+	log "github.com/inconshreveable/log15"
 )
 
 type RequestLoggerFn func(handler http.Handler, logger log.Logger, clientIP string, rw *ResponseWriter, req *http.Request)

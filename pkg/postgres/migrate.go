@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 type Step func(*DBTx) error

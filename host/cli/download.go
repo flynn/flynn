@@ -21,7 +21,7 @@ import (
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
 	tuf "github.com/flynn/go-tuf/client"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 func init() {

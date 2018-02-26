@@ -48,7 +48,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/rancher/sparse-tools/sparse"
 	"github.com/vishvananda/netlink"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 const (

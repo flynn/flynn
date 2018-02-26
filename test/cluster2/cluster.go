@@ -28,7 +28,7 @@ import (
 	"github.com/flynn/flynn/pkg/schedutil"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 type BootConfig struct {

@@ -16,7 +16,7 @@ import (
 	"github.com/flynn/flynn/pkg/testutils"
 	. "github.com/flynn/go-check"
 	gzfs "github.com/mistifyio/go-zfs"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 func Test(t *testing.T) { TestingT(t) }

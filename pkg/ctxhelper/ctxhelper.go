@@ -5,7 +5,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
-	log "gopkg.in/inconshreveable/log15.v2"
+	log "github.com/inconshreveable/log15"
 )
 
 type ctxKey int

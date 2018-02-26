@@ -19,7 +19,7 @@ import (
 	"github.com/flynn/go-tuf"
 	tufdata "github.com/flynn/go-tuf/data"
 	"github.com/flynn/go-tuf/util"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 var cmdExport = Command{

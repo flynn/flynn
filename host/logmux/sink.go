@@ -29,7 +29,7 @@ import (
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/julienschmidt/httprouter"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 var SinkExistsError = errors.New("sink with that id already exists")

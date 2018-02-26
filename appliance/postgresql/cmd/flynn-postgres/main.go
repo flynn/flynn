@@ -13,7 +13,7 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	sd "github.com/flynn/flynn/pkg/sirenia/discoverd"
 	"github.com/flynn/flynn/pkg/sirenia/state"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 func main() {
