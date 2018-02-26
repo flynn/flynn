@@ -13,9 +13,6 @@
 # - Configure s3cmd
 #   s3cmd --configure
 #
-# - Install go-tuf
-#   go get github.com/flynn/go-tuf/cmd/tuf
-#
 # - Set the TUF passphrases
 #   export TUF_TARGETS_PASSPHRASE=xxxxxx
 #   export TUF_SNAPSHOT_PASSPHRASE=xxxxxx

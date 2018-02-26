@@ -55,7 +55,7 @@ cd "${ROOT}"
   # update the builder manifest to use the test TUF repository and create new
   # image manifests for each released image by updating entrypoints
   jq \
-    --argjson root_keys       "$(tuf --dir test/release root-keys)" \
+    --argjson root_keys       "$(build/bin/tuf --dir test/release root-keys)" \
     --argjson released_images "$(jq --compact-output 'keys | reduce .[] as $name ({}; .[$name] = true)' build/manifests/images.json)" \
     '.tuf.root_keys = $root_keys | .tuf.repository = "http://{{ .HostIP }}:8080/tuf" | .images |= map(if (.id | in($released_images)) then .entrypoint.env = {"FOO":"BAR"} else . end)' \
     builder/manifest.json \
@@ -95,7 +95,7 @@ bash -e /tmp/install-flynn -r "http://{{ .Blobstore }}"
 var updateScript = template.Must(template.New("update-script").Parse(`
 timeout --signal=QUIT --kill-after=10 10m bash -ex <<-SCRIPT
 cd ~/go/src/github.com/flynn/flynn
-tuf --dir test/release root-keys | tuf-client init --store /tmp/tuf.db http://{{ .Blobstore }}/tuf
+build/bin/tuf --dir test/release root-keys | build/bin/tuf-client init --store /tmp/tuf.db http://{{ .Blobstore }}/tuf
 echo stable | sudo tee /etc/flynn/channel.txt
 export DISCOVERD="{{ .Discoverd }}"
 build/bin/flynn-host update --repository http://{{ .Blobstore }}/tuf --tuf-db /tmp/tuf.db
