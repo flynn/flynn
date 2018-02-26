@@ -74,7 +74,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo sh -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb.list'
     sudo sh -c 'echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu xenial main" > /etc/apt/sources.list.d/redis.list'
     sudo apt-get update
-    sudo sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-9.5 postgresql-contrib-9.5 mariadb-server-10.1 percona-xtrabackup mongodb-org redis-server pkg-config libseccomp-dev'
+    sudo sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-10 postgresql-contrib-10 mariadb-server-10.1 percona-xtrabackup mongodb-org redis-server pkg-config libseccomp-dev'
 
     # Stop redis by default, in case the VM is being used for integration testing
     sudo service redis-server stop
