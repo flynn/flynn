@@ -19,7 +19,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 func apiHandler(agg *Aggregator, cursors *HostCursors) http.Handler {

@@ -36,7 +36,7 @@ import (
 	tufdata "github.com/flynn/go-tuf/data"
 	"github.com/golang/groupcache/singleflight"
 	"github.com/tent/canonical-json-go"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 var cmdBuild = Command{

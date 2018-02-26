@@ -758,6 +758,11 @@
 			"Rev": "7c7f556282622f94213bc028b4d0a7b6151ba239"
 		},
 		{
+			"ImportPath": "github.com/go-stack/stack",
+			"Comment": "v1.7.0",
+			"Rev": "259ab82a6cad3992b4e21ff5cac294ccb06474bc"
+		},
+		{
 			"ImportPath": "github.com/godbus/dbus",
 			"Comment": "v4.0.0-5-g32c6cc2",
 			"Rev": "32c6cc29c14570de4cf6d7e7737d68fb2d01ad15"
@@ -811,6 +816,11 @@
 			"ImportPath": "github.com/howeyc/fsnotify",
 			"Comment": "v0.9.0-11-g6b1ef89",
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
+		},
+		{
+			"ImportPath": "github.com/inconshreveable/log15",
+			"Comment": "v2.13",
+			"Rev": "0decfc6c20d9ca0ad143b0e89dcaa20f810b4fb3"
 		},
 		{
 			"ImportPath": "github.com/jackc/pgx",
@@ -1315,21 +1325,6 @@
 		{
 			"ImportPath": "gopkg.in/inconshreveable/go-update.v0/download",
 			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
-		},
-		{
-			"ImportPath": "gopkg.in/inconshreveable/log15.v2",
-			"Comment": "v2.7",
-			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
-		},
-		{
-			"ImportPath": "gopkg.in/inconshreveable/log15.v2/stack",
-			"Comment": "v2.7",
-			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
-		},
-		{
-			"ImportPath": "gopkg.in/inconshreveable/log15.v2/term",
-			"Comment": "v2.7",
-			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
 		},
 		{
 			"ImportPath": "gopkg.in/mgo.v2",

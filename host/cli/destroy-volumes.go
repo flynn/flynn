@@ -11,7 +11,7 @@ import (
 	"github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/go-docopt"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 func init() {

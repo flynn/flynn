@@ -18,7 +18,7 @@ import (
 
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/garyburd/redigo/redis"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 const (

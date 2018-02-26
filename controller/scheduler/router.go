@@ -7,7 +7,7 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 type RouterBackend struct {

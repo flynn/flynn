@@ -18,7 +18,7 @@ import (
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/julienschmidt/httprouter"
-	log "gopkg.in/inconshreveable/log15.v2"
+	log "github.com/inconshreveable/log15"
 )
 
 // StreamBufferSize is the size of the channel buffer used for event subscription.

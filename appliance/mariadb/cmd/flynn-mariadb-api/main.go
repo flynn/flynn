@@ -19,7 +19,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 var serviceName = os.Getenv("FLYNN_MYSQL")

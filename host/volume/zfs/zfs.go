@@ -18,7 +18,7 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 	zfs "github.com/mistifyio/go-zfs"
 	"github.com/rancher/sparse-tools/sparse"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 // blockSize is the block size used when creating new zvols

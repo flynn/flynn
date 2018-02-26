@@ -30,7 +30,7 @@ import (
 	"github.com/flynn/go-docopt"
 	"github.com/opencontainers/runc/libcontainer"
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 const configFile = "/etc/flynn/host.json"

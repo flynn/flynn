@@ -16,7 +16,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/flynn/go-docopt"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 var flynnHostLogs = map[string]string{

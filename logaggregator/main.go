@@ -8,7 +8,7 @@ import (
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 func main() {

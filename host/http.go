@@ -29,7 +29,7 @@ import (
 	"github.com/flynn/flynn/pkg/version"
 	tuf "github.com/flynn/go-tuf/client"
 	"github.com/julienschmidt/httprouter"
-	"gopkg.in/inconshreveable/log15.v2"
+	"github.com/inconshreveable/log15"
 )
 
 type Host struct {
