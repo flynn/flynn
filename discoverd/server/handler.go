@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -17,8 +18,8 @@ import (
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
-	"github.com/julienschmidt/httprouter"
 	log "github.com/inconshreveable/log15"
+	"github.com/julienschmidt/httprouter"
 )
 
 // StreamBufferSize is the size of the channel buffer used for event subscription.
@@ -313,7 +314,7 @@ func (h *Handler) serveGetInstances(w http.ResponseWriter, r *http.Request, para
 		hh.Error(w, err)
 		return
 	} else if instances == nil {
-		hh.ObjectNotFoundError(w, "service not found")
+		hh.ObjectNotFoundError(w, fmt.Sprintf("service not found: %q", params.ByName("service")))
 		return
 	}
 

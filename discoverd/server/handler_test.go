@@ -542,7 +542,7 @@ func TestHandler_GetInstances_ErrNotFound(t *testing.T) {
 	h.ServeHTTP(w, MustNewHTTPRequest("GET", "/services/abc/instances", nil))
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("unexpected status code: %d", w.Code)
-	} else if w.Body.String() != `{"code":"object_not_found","message":"service not found","retry":false}` {
+	} else if w.Body.String() != `{"code":"object_not_found","message":"service not found: \"abc\"","retry":false}` {
 		t.Fatalf("unexpected body: %s", w.Body.String())
 	}
 }
