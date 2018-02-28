@@ -136,11 +136,12 @@ func runEnvGet(args *docopt.Args, client controller.Client) error {
 		return fmt.Errorf("process type %q not found in release %s", envProc, release.ID)
 	}
 
-	if v, ok := release.Env[arg]; ok {
+	if v, ok := release.Processes[envProc].Env[arg]; ok {
 		fmt.Println(v)
 		return nil
 	}
-	if v, ok := release.Processes[envProc].Env[arg]; ok {
+
+	if v, ok := release.Env[arg]; ok {
 		fmt.Println(v)
 		return nil
 	}

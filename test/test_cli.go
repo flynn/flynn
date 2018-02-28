@@ -331,6 +331,9 @@ func (s *CLISuite) TestEnv(t *c.C) {
 	t.Assert(app.flynn("env", "set", "ENV_TEST=var", "SECOND_VAL=2"), Succeeds)
 	t.Assert(app.flynn("env"), SuccessfulOutputContains, "ENV_TEST=var\nSECOND_VAL=2")
 	t.Assert(app.flynn("env", "get", "ENV_TEST"), Outputs, "var\n")
+	t.Assert(app.flynn("env", "set", "-t", "ping", "ENV_TEST=foo"), Succeeds)
+	t.Assert(app.flynn("env", "get", "-t", "ping", "ENV_TEST"), Outputs, "foo\n")
+	t.Assert(app.flynn("env", "get", "ENV_TEST"), Outputs, "var\n")
 	// test that containers do contain the ENV var
 	t.Assert(app.sh("echo $ENV_TEST"), Outputs, "var\n")
 	t.Assert(app.flynn("env", "unset", "ENV_TEST"), Succeeds)
