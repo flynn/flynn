@@ -844,7 +844,7 @@ func needsBuild(event Event) bool {
 	if e, ok := event.(*PushEvent); ok && (e.Deleted || e.Ref != "refs/heads/master") {
 		return false
 	}
-	return true
+	return !strings.Contains(strings.ToLower(event.String()), "[ci skip]")
 }
 
 type Status struct {
