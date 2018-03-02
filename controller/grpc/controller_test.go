@@ -118,3 +118,29 @@ func (s *S) TestListApps(c *C) {
 	c.Assert(resp.Apps[0].Name, Not(Equals), "")
 	c.Assert(resp.Apps[0].DisplayName, Equals, appName)
 }
+
+func (s *S) TestGetAppByID(c *C) {
+	appName := "get-id-test"
+	app := s.createTestApp(c, &ct.App{Name: appName})
+	resp, err := s.c.GetApp(context.Background(), &GetAppRequest{
+		Name: fmt.Sprintf("apps/%s", app.ID),
+	})
+	c.Assert(err, IsNil)
+
+	c.Assert(resp, NotNil)
+	c.Assert(resp.Name, Equals, fmt.Sprintf("apps/%s", app.ID))
+	c.Assert(resp.DisplayName, Equals, appName)
+}
+
+func (s *S) TestGetAppByName(c *C) {
+	appName := "get-name-test"
+	app := s.createTestApp(c, &ct.App{Name: appName})
+	resp, err := s.c.GetApp(context.Background(), &GetAppRequest{
+		Name: fmt.Sprintf("apps/%s", appName),
+	})
+	c.Assert(err, IsNil)
+
+	c.Assert(resp, NotNil)
+	c.Assert(resp.Name, Equals, fmt.Sprintf("apps/%s", app.ID))
+	c.Assert(resp.DisplayName, Equals, appName)
+}
