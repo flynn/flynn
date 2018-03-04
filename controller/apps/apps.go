@@ -1,4 +1,4 @@
-package apprepo
+package apps
 
 import (
 	"encoding/json"

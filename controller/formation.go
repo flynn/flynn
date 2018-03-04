@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/controller/app"
+	"github.com/flynn/flynn/controller/apps"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -21,12 +21,12 @@ import (
 
 type FormationRepo struct {
 	db        *postgres.DB
-	apps      *apprepo.Repo
+	apps      *apps.Repo
 	releases  *ReleaseRepo
 	artifacts *ArtifactRepo
 }
 
-func NewFormationRepo(db *postgres.DB, appRepo *apprepo.Repo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
+func NewFormationRepo(db *postgres.DB, appRepo *apps.Repo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
 	return &FormationRepo{
 		db:        db,
 		apps:      appRepo,

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/controller/app"
+	"github.com/flynn/flynn/controller/apps"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	routerc "github.com/flynn/flynn/router/client"
@@ -21,11 +21,11 @@ type Config struct {
 	RouterClient       routerc.Client
 	DefaultRouteDomain string
 
-	appRepo *apprepo.Repo
+	appRepo *apps.Repo
 }
 
 func NewServer(c *Config) *grpc.Server {
-	c.appRepo = apprepo.NewRepo(c.DB, c.DefaultRouteDomain, c.RouterClient)
+	c.appRepo = apps.NewRepo(c.DB, c.DefaultRouteDomain, c.RouterClient)
 	s := grpc.NewServer()
 	RegisterControllerServer(s, &server{Config: c})
 	// Register reflection service on gRPC server.

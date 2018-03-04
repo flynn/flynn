@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flynn/flynn/controller/app"
+	"github.com/flynn/flynn/controller/apps"
 	"github.com/flynn/flynn/controller/common"
 	"github.com/flynn/flynn/controller/database"
 	grpc "github.com/flynn/flynn/controller/grpc"
@@ -240,7 +240,7 @@ func appHandler(c handlerConfig) http.Handler {
 	domainMigrationRepo := NewDomainMigrationRepo(c.db)
 	providerRepo := NewProviderRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
-	appRepo := apprepo.NewRepo(c.db, c.defaultRouteDomain, c.rc)
+	appRepo := apps.NewRepo(c.db, c.defaultRouteDomain, c.rc)
 	artifactRepo := NewArtifactRepo(c.db)
 	releaseRepo := NewReleaseRepo(c.db, artifactRepo, q)
 	jobRepo := NewJobRepo(c.db)
@@ -404,8 +404,8 @@ func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
 
 type controllerAPI struct {
 	domainMigrationRepo *DomainMigrationRepo
-	appRepo             *apprepo.Repo
 	releaseRepo         *ReleaseRepo
+	appRepo             *apps.Repo
 	providerRepo        *ProviderRepo
 	formationRepo       *FormationRepo
 	artifactRepo        *ArtifactRepo
