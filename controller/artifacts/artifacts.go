@@ -1,4 +1,4 @@
-package main
+package artifacts
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/flynn/flynn/controller/common"
 	ct "github.com/flynn/flynn/controller/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -14,15 +15,15 @@ import (
 	"github.com/jackc/pgx"
 )
 
-type ArtifactRepo struct {
+type Repo struct {
 	db *postgres.DB
 }
 
-func NewArtifactRepo(db *postgres.DB) *ArtifactRepo {
-	return &ArtifactRepo{db}
+func NewRepo(db *postgres.DB) *Repo {
+	return &Repo{db}
 }
 
-func (r *ArtifactRepo) Add(data interface{}) error {
+func (r *Repo) Add(data interface{}) error {
 	a := data.(*ct.Artifact)
 	// TODO: actually validate
 	if a.ID == "" {
@@ -73,7 +74,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 		tx.Rollback()
 		return err
 	}
-	if err := createEvent(tx.Exec, &ct.Event{
+	if err := common.CreateEvent(tx.Exec, &ct.Event{
 		ObjectID:   a.ID,
 		ObjectType: ct.EventTypeArtifact,
 	}, a); err != nil {
@@ -90,7 +91,7 @@ func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	var layerURLTemplate *string
 	err := s.Scan(&artifact.ID, &typ, &artifact.URI, &artifact.Meta, &artifact.RawManifest, &artifact.Hashes, &size, &layerURLTemplate, &artifact.CreatedAt)
 	if err == pgx.ErrNoRows {
-		err = ErrNotFound
+		err = common.ErrNotFound
 	}
 	artifact.Type = ct.ArtifactType(typ)
 	if size != nil {
@@ -102,12 +103,12 @@ func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	return artifact, err
 }
 
-func (r *ArtifactRepo) Get(id string) (interface{}, error) {
+func (r *Repo) Get(id string) (interface{}, error) {
 	row := r.db.QueryRow("artifact_select", id)
 	return scanArtifact(row)
 }
 
-func (r *ArtifactRepo) List() (interface{}, error) {
+func (r *Repo) List() (interface{}, error) {
 	rows, err := r.db.Query("artifact_list")
 	if err != nil {
 		return nil, err
@@ -124,7 +125,7 @@ func (r *ArtifactRepo) List() (interface{}, error) {
 	return artifacts, rows.Err()
 }
 
-func (r *ArtifactRepo) ListIDs(ids ...string) (map[string]*ct.Artifact, error) {
+func (r *Repo) ListIDs(ids ...string) (map[string]*ct.Artifact, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}

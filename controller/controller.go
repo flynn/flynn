@@ -14,10 +14,13 @@ import (
 	"sync"
 
 	"github.com/flynn/flynn/controller/apps"
+	"github.com/flynn/flynn/controller/artifacts"
 	"github.com/flynn/flynn/controller/common"
 	"github.com/flynn/flynn/controller/database"
+	"github.com/flynn/flynn/controller/formations"
 	grpc "github.com/flynn/flynn/controller/grpc"
 	"github.com/flynn/flynn/controller/name"
+	"github.com/flynn/flynn/controller/releases"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
@@ -241,11 +244,10 @@ func appHandler(c handlerConfig) http.Handler {
 	providerRepo := NewProviderRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
 	appRepo := apps.NewRepo(c.db, c.defaultRouteDomain, c.rc)
-	artifactRepo := NewArtifactRepo(c.db)
-	releaseRepo := NewReleaseRepo(c.db, artifactRepo, q)
+	artifactRepo := artifacts.NewRepo(c.db)
+	releaseRepo := releases.NewRepo(c.db, artifactRepo, q)
 	jobRepo := NewJobRepo(c.db)
-	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
-	releaseRepo.formations = formationRepo
+	formationRepo := formations.NewRepo(c.db, releaseRepo, artifactRepo)
 	deploymentRepo := NewDeploymentRepo(c.db)
 	eventRepo := NewEventRepo(c.db)
 	backupRepo := NewBackupRepo(c.db)
@@ -404,11 +406,11 @@ func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
 
 type controllerAPI struct {
 	domainMigrationRepo *DomainMigrationRepo
-	releaseRepo         *ReleaseRepo
 	appRepo             *apps.Repo
+	releaseRepo         *releases.Repo
 	providerRepo        *ProviderRepo
-	formationRepo       *FormationRepo
-	artifactRepo        *ArtifactRepo
+	formationRepo       *formations.Repo
+	artifactRepo        *artifacts.Repo
 	jobRepo             *JobRepo
 	resourceRepo        *ResourceRepo
 	deploymentRepo      *DeploymentRepo

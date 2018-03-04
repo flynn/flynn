@@ -78,6 +78,31 @@ func ScanRelease(s postgres.Scanner) (*ct.Release, error) {
 	return release, err
 }
 
+func ScanFormation(s postgres.Scanner) (*ct.Formation, error) {
+	f := &ct.Formation{}
+	err := s.Scan(&f.AppID, &f.ReleaseID, &f.Processes, &f.Tags, &f.CreatedAt, &f.UpdatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = ErrNotFound
+		}
+		return nil, err
+	}
+	return f, nil
+}
+
+func ScanFormations(rows *pgx.Rows) ([]*ct.Formation, error) {
+	var formations []*ct.Formation
+	for rows.Next() {
+		formation, err := ScanFormation(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		formations = append(formations, formation)
+	}
+	return formations, rows.Err()
+}
+
 func Split(s string, sep string) []string {
 	if s == "" {
 		return nil
