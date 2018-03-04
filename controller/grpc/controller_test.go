@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/flynn/flynn/controller/app"
+	"github.com/flynn/flynn/controller/apps"
 	"github.com/flynn/flynn/controller/database"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
@@ -102,7 +102,7 @@ func (s *S) SetUpTest(c *C) {
 }
 
 func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
-	r := apprepo.NewRepo(s.hc.DB, "", nil)
+	r := apps.NewRepo(s.hc.DB, "", nil)
 	c.Assert(r.Add(in), IsNil)
 	return in
 }
@@ -143,4 +143,17 @@ func (s *S) TestGetAppByName(c *C) {
 	c.Assert(resp, NotNil)
 	c.Assert(resp.Name, Equals, fmt.Sprintf("apps/%s", app.ID))
 	c.Assert(resp.DisplayName, Equals, appName)
+}
+
+func (s *S) TestCreateRelease(c *C) {
+	appName := "create-release-test"
+	app := s.createTestApp(c, &ct.App{Name: appName})
+	resp, err := s.c.CreateRelease(context.Background(), &CreateReleaseRequest{
+		Parent:  fmt.Sprintf("apps/%s", app.ID),
+		Release: &Release{},
+	})
+	c.Assert(err, IsNil)
+
+	c.Assert(resp, NotNil)
+	c.Assert(resp.Name, Not(Equals), "")
 }
