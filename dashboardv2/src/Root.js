@@ -1,8 +1,7 @@
 import React, { PureComponent } from 'react'
 import { Split, Box } from 'grommet'
-import './App.css'
 
-class App extends PureComponent {
+export default class Root extends PureComponent {
   render () {
     return (
       <Split flex="right">
@@ -19,5 +18,3 @@ class App extends PureComponent {
     )
   }
 }
-
-export default App
