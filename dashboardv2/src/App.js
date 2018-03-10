@@ -1,17 +1,21 @@
 import React, { PureComponent } from 'react'
+import { Split, Box } from 'grommet'
 import './App.css'
 
 class App extends PureComponent {
   render () {
     return (
-      <div className="App">
-        <header className="App-header">
-          <h1 className="App-title">Welcome to React</h1>
-        </header>
-        <p className="App-intro">
-          To get started, edit <code>src/App.js</code> and save to reload.
-        </p>
-      </div>
+      <Split flex="right">
+        <Box colorIndex='neutral-1'
+          full='vertical'
+          size='small'>
+          TODO: Main Navigation
+        </Box>
+        <Box
+          full='vertical'>
+          TODO: Component Routing
+        </Box>
+      </Split>
     )
   }
 }
