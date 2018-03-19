@@ -119,13 +119,6 @@ main() {
 
   pushd "${src}" >/dev/null
 
-  info "pulling dependent images"
-  git grep -h "^FROM" **/Dockerfile \
-    | cut -d " " -f 2 \
-    | sort \
-    | uniq \
-    | xargs -L 1 docker pull
-
   info "building flynn"
   git checkout --force --quiet "${commit}"
 
