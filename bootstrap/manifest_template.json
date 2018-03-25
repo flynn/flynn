@@ -615,6 +615,38 @@
     }
   },
   {
+    "id": "metrics",
+    "action": "deploy-app",
+    "app": {
+      "name": "metrics",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "artifacts": [$image_artifact[metrics]],
+    "release": {
+      "processes": {
+        "prometheus": {
+          "args": ["/bin/flynn-prometheus"],
+          "ports": [
+            {
+              "port": 80,
+              "proto": "tcp",
+              "service": {
+                "name": "metrics-prometheus",
+                "create": true,
+                "check": {"type": "http"}
+              }
+            }
+          ],
+          "service": "metrics-prometheus",
+          "volumes": [{"path": "/data"}]
+        }
+      }
+    },
+    "processes": {
+      "prometheus": 1
+    }
+  },
+  {
     "id": "taffy",
     "action": "deploy-app",
     "app": {

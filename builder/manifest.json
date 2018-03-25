@@ -396,6 +396,29 @@
       }
     },
     {
+      "id": "metrics",
+      "base": "busybox",
+      "layers": [
+        {
+          "name": "metrics-prometheus",
+          "build_with": "ubuntu-trusty",
+          "script": "metrics/img/prometheus.sh",
+          "limits": { "temp_disk": "1G" }
+        },
+        {
+          "name": "metrics-binaries",
+          "gobuild": {
+            "metrics": "/bin/flynn-prometheus"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/bin/flynn-prometheus"
+        ]
+      }
+    },
+    {
       "id": "taffy",
       "base": "ubuntu-trusty",
       "layers": [
