@@ -406,6 +406,17 @@
           "limits": { "temp_disk": "1G" }
         },
         {
+          "name": "metrics-grafana",
+          "build_with": "ubuntu-trusty",
+          "script": "metrics/img/grafana.sh",
+          "copy": {
+            "metrics/start-grafana.sh": "/bin/start-grafana.sh",
+            "metrics/grafana.ini":      "/etc/grafana.ini",
+            "metrics/datasource.yaml":  "/etc/grafana/provisioning/datasources/prometheus.yaml"
+          },
+          "limits": { "temp_disk": "1G" }
+        },
+        {
           "name": "metrics-binaries",
           "gobuild": {
             "metrics": "/bin/flynn-prometheus"

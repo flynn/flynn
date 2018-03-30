@@ -615,6 +615,16 @@
     }
   },
   {
+    "id": "metrics-admin-password",
+    "action": "gen-random",
+    "data": "{{ getenv \"METRICS_ADMIN_PASSWORD\" }}"
+  },
+  {
+    "id": "metrics-secret-key",
+    "action": "gen-random",
+    "data": "{{ getenv \"METRICS_SECRET_KEY\" }}"
+  },
+  {
     "id": "metrics",
     "action": "deploy-app",
     "app": {
@@ -639,12 +649,45 @@
           ],
           "service": "metrics-prometheus",
           "volumes": [{"path": "/data"}]
+        },
+        "grafana": {
+          "args": ["/bin/start-grafana.sh"],
+          "env": {
+            "GF_SECURITY_ADMIN_USER": "flynn",
+            "GF_SECURITY_ADMIN_PASSWORD": "{{ (index .StepData \"metrics-admin-password\").Data }}",
+            "GF_SECURITY_SECRET_KEY": "{{ (index .StepData \"metrics-secret-key\").Data }}"
+          },
+          "ports": [
+            {
+              "port": 80,
+              "proto": "tcp",
+              "service": {
+                "name": "metrics-grafana",
+                "create": true,
+                "check": {"type": "http"}
+              }
+            }
+          ],
+          "service": "metrics-grafana",
+          "volumes": [{"path": "/data"}]
         }
       }
     },
     "processes": {
-      "prometheus": 1
-    }
+      "prometheus": 1,
+      "grafana": 1
+    },
+    "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
+  },
+  {
+    "id": "metrics-route",
+    "action": "add-route",
+    "app_step": "metrics",
+    "cert_step": "controller-cert",
+    "type": "http",
+    "service": "metrics-grafana",
+    "domain": "metrics.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": true
   },
   {
     "id": "taffy",
