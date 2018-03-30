@@ -28,8 +28,9 @@ import (
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 	tuf "github.com/flynn/go-tuf/client"
-	"github.com/julienschmidt/httprouter"
 	"github.com/inconshreveable/log15"
+	"github.com/julienschmidt/httprouter"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Host struct {
@@ -610,6 +611,8 @@ func (h *Host) ServeHTTP() {
 	h.volAPI.RegisterRoutes(r)
 
 	h.sman.RegisterRoutes(r)
+
+	r.Handler("GET", "/metrics", promhttp.Handler())
 
 	go http.Serve(h.listener, httphelper.ContextInjector("host", httphelper.NewRequestLogger(r)))
 }

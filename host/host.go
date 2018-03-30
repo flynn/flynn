@@ -28,9 +28,9 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
+	"github.com/inconshreveable/log15"
 	"github.com/opencontainers/runc/libcontainer"
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
-	"github.com/inconshreveable/log15"
 )
 
 const configFile = "/etc/flynn/host.json"
@@ -274,6 +274,12 @@ func runDaemon(args *docopt.Args) {
 
 	state := NewState(hostID, stateFile)
 	shutdown.BeforeExit(func() { state.CloseDB() })
+
+	log.Info("initializing metrics collector")
+	if err := registerMetrics(state, logger.New("fn", "metrics")); err != nil {
+		log.Error("error initializing metrics collector", "err", err)
+		shutdown.Fatal(err)
+	}
 
 	log.Info("initializing volume manager", "provider", volProvider)
 	var newVolProvider func() (volume.Provider, error)
