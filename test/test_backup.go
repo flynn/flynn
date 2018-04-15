@@ -46,12 +46,16 @@ func (s *BackupSuite) Test_v20160814_0_nodejs_mysql(t *c.C) {
 	s.testClusterBackup(t, "v20160814.0-nodejs-mysql.tar")
 }
 
-func (s *BackupSuite) Test_v20161017_1_nodejs_docker(t *c.C) {
-	s.testClusterBackup(t, "v20161017.1-nodejs-docker.tar")
-}
-
 func (s *BackupSuite) Test_v20161114_0p1_nodejs_redis(t *c.C) {
 	s.testClusterBackup(t, "v20161114.0p1-nodejs-redis.tar")
+}
+
+func (s *BackupSuite) Test_v20170719_0_nodejs_redis(t *c.C) {
+	s.testClusterBackup(t, "v20170719.0-nodejs-redis.tar")
+}
+
+func (s *BackupSuite) Test_v20170719_0_nodejs_docker(t *c.C) {
+	s.testClusterBackup(t, "v20170719.0-nodejs-docker.tar")
 }
 
 func (s *BackupSuite) testClusterBackup(t *c.C, name string) {

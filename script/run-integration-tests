@@ -88,8 +88,6 @@ main() {
     exit 1
   fi
 
-  "${ROOT}/script/configure-docker" "${CLUSTER_DOMAIN:-"${size}.localflynn.com"}"
-
   local args=(
     "--concurrency 1"
     "--debug"

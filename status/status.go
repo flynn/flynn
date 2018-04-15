@@ -154,7 +154,6 @@ var services = []Service{
 	{Name: "flannel"},
 	{Name: "gitreceive", ReqFn: RandomReqFn("gitreceive")},
 	{Name: "tarreceive", ReqFn: RandomReqFn("tarreceive"), Optional: true},
-	{Name: "docker-receive", ReqFn: RandomReqFn("docker-receive"), Optional: true},
 	{Name: "logaggregator", ReqFn: LeaderReqFn("logaggregator", "80")},
 	{Name: "postgres", ReqFn: LeaderReqFn("postgres", "5433")},
 	{Name: "mariadb", ReqFn: LeaderReqFn("mariadb", "3307"), Optional: true},

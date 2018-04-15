@@ -26,7 +26,6 @@ var SystemApps = []SystemApp{
 	{Name: "router"},
 	{Name: "gitreceive"},
 	{Name: "tarreceive"},
-	{Name: "docker-receive"},
 	{Name: "controller"},
 	{Name: "logaggregator"},
 	{

@@ -146,11 +146,8 @@ func (s *BlobstoreSuite) testBlobstoreBackend(t *c.C, name, redirectPattern stri
 	// test a docker push
 	repo := name + "-test"
 	s.buildDockerImage(t, repo, fmt.Sprintf("RUN echo %s > /foo.txt", name))
-	u, err = url.Parse(s.clusterConf(t).DockerPushURL)
-	t.Assert(err, c.IsNil)
-	tag := fmt.Sprintf("%s/%s:latest", u.Host, repo)
-	t.Assert(run(t, exec.Command("docker", "tag", "--force", repo, tag)), Succeeds)
-	t.Assert(run(t, exec.Command("docker", "push", tag)), Succeeds)
+	t.Assert(x.flynn("/", "create", "--remote", "", "blobstore-backend-test-docker-"+name), Succeeds)
+	t.Assert(x.flynn("/", "-a", "blobstore-backend-test-docker-"+name, "docker", "push", repo), Succeeds)
 
 	// migrate blobs back to postgres
 	migration = x.flynn("/", "-a", "blobstore", "run", "-e", "/bin/flynn-blobstore", "migrate", "--delete")

@@ -24,13 +24,13 @@ import (
 	"github.com/docker/go-units"
 	"github.com/docker/libnetwork/ipallocator"
 	"github.com/docker/libnetwork/netutils"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/containerinit"
 	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
-	"github.com/flynn/flynn/host/volume/manager"
+	volumemanager "github.com/flynn/flynn/host/volume/manager"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	logutils "github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/attempt"
@@ -162,15 +162,6 @@ type Container struct {
 	done      chan struct{}
 
 	*containerinit.Client
-}
-
-type dockerImageConfig struct {
-	User       string
-	Env        []string
-	Cmd        []string
-	Entrypoint []string
-	WorkingDir string
-	Volumes    map[string]struct{}
 }
 
 func writeContainerConfig(path string, c *containerinit.Config, envs ...map[string]string) error {
