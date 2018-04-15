@@ -42,13 +42,13 @@ import (
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/verify"
 	"github.com/golang/groupcache/singleflight"
+	"github.com/inconshreveable/log15"
 	"github.com/miekg/dns"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/rancher/sparse-tools/sparse"
 	"github.com/vishvananda/netlink"
-	"github.com/inconshreveable/log15"
 )
 
 const (
@@ -158,15 +158,6 @@ type Container struct {
 	done      chan struct{}
 
 	*containerinit.Client
-}
-
-type dockerImageConfig struct {
-	User       string
-	Env        []string
-	Cmd        []string
-	Entrypoint []string
-	WorkingDir string
-	Volumes    map[string]struct{}
 }
 
 func writeContainerConfig(path string, c *containerinit.Config, envs ...map[string]string) error {

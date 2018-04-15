@@ -21,7 +21,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
@@ -387,17 +386,17 @@ $$;`)
 	var scale map[string]map[string]int
 	if cfg.Singleton {
 		scale = map[string]map[string]int{
-			"postgres":       {"postgres": 1, "web": 1},
-			"mariadb":        {"web": 1},
-			"mongodb":        {"web": 1},
-			"controller":     {"web": 1, "worker": 1},
-			"redis":          {"web": 1},
-			"blobstore":      {"web": 1},
-			"gitreceive":     {"app": 1},
-			"docker-receive": {"app": 1},
-			"logaggregator":  {"app": 1},
-			"dashboard":      {"web": 1},
-			"status":         {"web": 1},
+			"postgres":      {"postgres": 1, "web": 1},
+			"mariadb":       {"web": 1},
+			"mongodb":       {"web": 1},
+			"controller":    {"web": 1, "worker": 1},
+			"redis":         {"web": 1},
+			"blobstore":     {"web": 1},
+			"gitreceive":    {"app": 1},
+			"tarreceive":    {"app": 1},
+			"logaggregator": {"app": 1},
+			"dashboard":     {"web": 1},
+			"status":        {"web": 1},
 		}
 		data.Postgres.Processes["postgres"] = 1
 		data.Postgres.Processes["web"] = 1
@@ -411,17 +410,17 @@ $$;`)
 		}
 	} else {
 		scale = map[string]map[string]int{
-			"postgres":       {"postgres": 3, "web": 2},
-			"mariadb":        {"web": 2},
-			"mongodb":        {"web": 2},
-			"controller":     {"web": 2, "worker": 2},
-			"redis":          {"web": 2},
-			"blobstore":      {"web": 2},
-			"gitreceive":     {"app": 2},
-			"docker-receive": {"app": 2},
-			"logaggregator":  {"app": 2},
-			"dashboard":      {"web": 2},
-			"status":         {"web": 2},
+			"postgres":      {"postgres": 3, "web": 2},
+			"mariadb":       {"web": 2},
+			"mongodb":       {"web": 2},
+			"controller":    {"web": 2, "worker": 2},
+			"redis":         {"web": 2},
+			"blobstore":     {"web": 2},
+			"gitreceive":    {"app": 2},
+			"tarreceive":    {"app": 2},
+			"logaggregator": {"app": 2},
+			"dashboard":     {"web": 2},
+			"status":        {"web": 2},
 		}
 		data.Postgres.Processes["postgres"] = 3
 		data.Postgres.Processes["web"] = 2
@@ -791,6 +790,17 @@ DELETE FROM volumes WHERE created_at < '%s';`,
 		}
 	}
 
+	if migrateDocker {
+		fmt.Fprintln(os.Stderr, `
+WARN:
+WARN: There are some legacy Docker images in the backup that can no longer
+WARN: be imported to new clusters. You will need to boot a cluster with version
+WARN: less than v20180905.1, import the backup into that, then create a backup
+WARN: of that cluster which can then be imported into newer clusters.
+WARN:
+`)
+	}
+
 	runMigrator := func(cmd *exec.Cmd) error {
 		out, err := cmd.StdoutPipe()
 		if err != nil {
@@ -840,57 +850,6 @@ DELETE FROM volumes WHERE created_at < '%s';`,
 		}
 	}
 
-	if migrateDocker {
-		// start docker-receive
-		dockerRelease, err := client.GetAppRelease("docker-receive")
-		if err != nil {
-			return fmt.Errorf("error getting docker-receive release: %s", err)
-		}
-		dockerFormation, err := client.GetExpandedFormation("docker-receive", dockerRelease.ID)
-		if err != nil {
-			return fmt.Errorf("error getting docker-receive expanded formation: %s", err)
-		}
-		dockerFormation.Artifacts = []*ct.Artifact{artifacts["docker-receive"]}
-		_, err = bootstrap.Manifest{
-			step("docker-receive", "run-app", &bootstrap.RunAppAction{
-				ExpandedFormation: dockerFormation,
-			}),
-			step("docker-receive-wait", "wait", &bootstrap.WaitAction{
-				URL:    "http://docker-receive.discoverd/v2/",
-				Status: 401,
-			}),
-		}.RunWithState(ch, state)
-		if err != nil {
-			return err
-		}
-
-		// run the docker image migrator
-		cmd = exec.JobUsingHost(state.Hosts[0], artifacts["docker-receive"], nil)
-		cmd.Args = []string{"/bin/docker-migrator"}
-		cmd.Env = map[string]string{
-			"CONTROLLER_KEY": data.Controller.Release.Env["AUTH_KEY"],
-			"FLYNN_POSTGRES": data.Controller.Release.Env["FLYNN_POSTGRES"],
-			"PGHOST":         "leader.postgres.discoverd",
-			"PGUSER":         data.Controller.Release.Env["PGUSER"],
-			"PGDATABASE":     data.Controller.Release.Env["PGDATABASE"],
-			"PGPASSWORD":     data.Controller.Release.Env["PGPASSWORD"],
-		}
-		cmd.Volumes = []*ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}}
-
-		// the job needs CAP_SYS_ADMIN so it can convert AUFS opaque
-		// directories using setxattr(2)
-		cmd.LinuxCapabilities = append(host.DefaultCapabilities, "CAP_SYS_ADMIN")
-		if err := runMigrator(cmd); err != nil {
-			ch <- &bootstrap.StepInfo{
-				StepMeta:  meta,
-				State:     "error",
-				Error:     fmt.Sprintf("error migrating Docker images: %s", err),
-				Err:       err,
-				Timestamp: time.Now().UTC(),
-			}
-			return err
-		}
-	}
 	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
 
 	// start scheduler and enable cluster monitor
@@ -944,8 +903,8 @@ DELETE FROM volumes WHERE created_at < '%s';`,
 		}
 	}
 
-	// deploy docker-receive if it wasn't in the backup
-	if _, err := client.GetApp("docker-receive"); err == controller.ErrNotFound {
+	// deploy tarreceive if it wasn't in the backup
+	if _, err := client.GetApp("tarreceive"); err == controller.ErrNotFound {
 		routes, err := client.RouteList("controller")
 		if len(routes) == 0 {
 			err = errors.New("no routes found")
@@ -963,14 +922,50 @@ DELETE FROM volumes WHERE created_at < '%s';`,
 			}
 		}
 		steps := bootstrap.Manifest{
-			manifestStepMap["docker-receive-secret"],
-			manifestStepMap["docker-receive"],
-			manifestStepMap["docker-receive-route"],
-			manifestStepMap["docker-receive-wait"],
+			manifestStepMap["tarreceive"],
+			manifestStepMap["tarreceive-route"],
+			manifestStepMap["tarreceive-wait"],
 		}
 		if _, err := steps.RunWithState(ch, state); err != nil {
-			return fmt.Errorf("error deploying docker-receive: %s", err)
+			return fmt.Errorf("error deploying tarreceive: %s", err)
 		}
+	}
+
+	// delete the docker-receive app if present
+	if app, err := client.GetApp("docker-receive"); err == nil {
+		meta = bootstrap.StepMeta{ID: "docker-receive", Action: "delete-app"}
+		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
+
+		if _, err := client.DeleteApp(app.ID); err != nil {
+			fmt.Fprintf(os.Stderr, `
+WARN:
+WARN: Error deleting legacy docker-receive app:
+WARN:
+WARN: %s
+WARN:
+WARN: You will need to delete it manually with 'flynn -a docker-receive delete'.
+WARN:
+`, err)
+		}
+
+		// delete docker-receive registry files if present
+		cmd := exec.JobUsingHost(state.Hosts[0], artifacts["blobstore"], nil)
+		cmd.Args = []string{"curl", "-fsSL", "-X", "DELETE", "http://blobstore.discoverd/docker-receive/"}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, `
+WARN:
+WARN: Error deleting legacy docker-receive files:
+WARN:
+WARN: %s
+WARN: %s
+WARN:
+WARN: You will need to delete them manually with 'flynn -a blobstore run curl -X DELETE http://blobstore.discoverd/docker-receive/'.
+WARN:
+`, out, err)
+		}
+
+		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "end", Timestamp: time.Now().UTC()}
 	}
 
 	return nil

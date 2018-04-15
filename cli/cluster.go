@@ -49,8 +49,8 @@ Commands:
             --git-url=<giturl>        git URL
             --no-git                  skip git configuration
             --image-url=<url>         image URL
-            --docker-push-url=<url>   Docker push URL
-            --docker                  configure Docker to push to the cluster
+            --docker-push-url=<url>   [DEPRECATED] Docker push URL
+            --docker                  [DEPRECATED] configure Docker to push to the cluster
             -p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert
 
     remove
@@ -206,6 +206,7 @@ func runClusterAdd(args *docopt.Args) error {
 	}
 
 	if s.DockerPushURL != "" {
+		fmt.Fprintln(os.Stderr, "DEPRECATED: Pushing via a Docker registry has been deprecated in favour of pushing via the Flynn image service, set --image-url instead\n")
 		host, err := s.DockerPushHost()
 		if err != nil {
 			return err

@@ -447,7 +447,6 @@ To rotate an authentication key:
     flynn -a controller env set -t web AUTH_KEY=$NEW_KEY,$(flynn -a controller env get AUTH_KEY)
 
     # Update internal apps to use the new key
-    flynn -a docker-receive env set AUTH_KEY=$NEW_KEY CONTROLLER_KEY=$NEW_KEY
     flynn -a gitreceive env set CONTROLLER_KEY=$NEW_KEY
     flynn -a tarreceive env set CONTROLLER_KEY=$NEW_KEY
     flynn -a taffy env set CONTROLLER_KEY=$NEW_KEY

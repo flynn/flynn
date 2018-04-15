@@ -60,6 +60,7 @@ main() {
     "v20160721.2"
     "v20160814.0"
     "v20161114.0p1"
+    "v20170719.0"
   )
   for version in ${versions[@]}; do
     local name="${version}-nodejs-redis.tar"
@@ -126,7 +127,7 @@ backup_mongodb_cluster() {
 }
 
 backup_docker_cluster() {
-  local version="v20161017.1"
+  local version="v20170719.0"
   local name="${version}-nodejs-docker.tar"
   local out="${dir}/${name}"
 
@@ -148,7 +149,7 @@ bootstrap_cluster() {
 
   info "bootstrapping ${version} cluster"
   export CLUSTER_DOMAIN="$(openssl rand -hex 16).local"
-  echo "192.0.2.200 ${CLUSTER_DOMAIN} controller.${CLUSTER_DOMAIN} git.${CLUSTER_DOMAIN} docker.${CLUSTER_DOMAIN}" | sudo tee -a /etc/hosts
+  echo "192.0.2.200 ${CLUSTER_DOMAIN} controller.${CLUSTER_DOMAIN} git.${CLUSTER_DOMAIN} docker.${CLUSTER_DOMAIN} images.${CLUSTER_DOMAIN}" | sudo tee -a /etc/hosts
   "${ROOT}/script/kill-flynn"
   local cluster_add=$("${ROOT}/script/bootstrap-flynn" --version "${version}" &> >(tee "${out}") | tail -3 | head -1)
 
@@ -160,7 +161,7 @@ bootstrap_cluster() {
 
   flynn cluster remove default
 
-  if [[ "${version:1:8}" -ge "20160609" ]]; then
+  if [[ "${version:1:8}" -ge "20160609" ]] && [[ "${version:1:8}" -le "20180809" ]]; then
     "${ROOT}/script/configure-docker" "${CLUSTER_DOMAIN}"
     flynn cluster add --docker ${cluster_add:18}
   else
@@ -224,10 +225,6 @@ backup_cluster() {
 
   info "backing up cluster to ${file}"
   flynn cluster backup --file "${file}"
-}
-
-flynn() {
-  "${ROOT}/cli/bin/flynn" "$@"
 }
 
 main $@

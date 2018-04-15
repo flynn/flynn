@@ -363,25 +363,6 @@
       }
     },
     {
-      "id": "docker-receive",
-      "base": "ubuntu-trusty",
-      "layers": [{
-        "gobuild": {
-          "docker-receive":          "/bin/docker-receive",
-          "docker-receive/artifact": "/bin/docker-artifact",
-          "docker-receive/migrator": "/bin/docker-migrator"
-        },
-        "copy": {
-          "util/ca-certs/ca-certs.pem": "/etc/ssl/certs/ca-certs.pem"
-        }
-      }],
-      "entrypoint": {
-        "args": [
-          "/bin/docker-receive"
-        ]
-      }
-    },
-    {
       "id": "tarreceive",
       "base": "ubuntu-trusty",
       "layers": [{
