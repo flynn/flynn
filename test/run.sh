@@ -12,12 +12,12 @@ main() {
       "${DOMAIN}" \
       "controller.${DOMAIN}" \
       "git.${DOMAIN}" \
+      "images.${DOMAIN}" \
       "dashboard.${DOMAIN}" \
-      "docker.${DOMAIN}" \
       >> /etc/hosts
   fi
 
-  flynn cluster add --docker ${CLUSTER_ADD_ARGS}
+  flynn cluster add ${CLUSTER_ADD_ARGS}
 
   cd "${ROOT}/test"
 

@@ -254,7 +254,7 @@ var testRunScript = template.Must(template.New("test-run").Parse(`
 #!/bin/bash
 set -e -x -o pipefail
 
-echo {{ .Cluster.RouterIP }} {{ .Cluster.ClusterDomain }} {{ .Cluster.ControllerDomain }} {{ .Cluster.GitDomain }} dashboard.{{ .Cluster.ClusterDomain }} docker.{{ .Cluster.ClusterDomain }} | sudo tee -a /etc/hosts
+echo {{ .Cluster.RouterIP }} {{ .Cluster.ClusterDomain }} {{ .Cluster.ControllerDomain }} {{ .Cluster.GitDomain }} dashboard.{{ .Cluster.ClusterDomain }} images.{{ .Cluster.ClusterDomain }} | sudo tee -a /etc/hosts
 
 # Wait for the Flynn bridge interface to show up so we can use it as the
 # nameserver to resolve discoverd domains
@@ -275,8 +275,6 @@ echo "nameserver ${ip}" | sudo tee /etc/resolv.conf
 
 cd ~/go/src/github.com/flynn/flynn
 
-script/configure-docker "{{ .Cluster.ClusterDomain }}"
-
 export DISCOVERD="http://{{ (index .Cluster.Instances 0).IP }}:1111"
 
 # put the command in a file so the arguments aren't echoed in the logs
@@ -288,7 +286,7 @@ build/bin/flynn-host run \
   "build/image/test.json" \
   /usr/bin/env \
   ROOT="/go/src/github.com/flynn/flynn" \
-  CLUSTER_ADD_ARGS="-p {{ .Config.TLSPin }} default {{ .Cluster.ClusterDomain }} {{ .Config.Key }}" \
+  CLUSTER_ADD_ARGS="-p {{ .Config.TLSPin }} --image-url {{ .Config.ImageURL }} default {{ .Cluster.ClusterDomain }} {{ .Config.Key }}" \
   ROUTER_IP="{{ .Cluster.RouterIP }}" \
   DOMAIN="{{ .Cluster.ClusterDomain }}" \
   TEST_RUNNER_AUTH_KEY="\${TEST_RUNNER_AUTH_KEY}" \
