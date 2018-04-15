@@ -25,7 +25,7 @@ import (
 func init() {
 	register("cluster", runCluster, `
 usage: flynn cluster
-       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [--docker-push-url <url>] [--docker] [-p <tlspin>] <cluster-name> <domain> <key>
+       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [--image-url <url>] [--docker-push-url <url>] [--docker] [-p <tlspin>] <cluster-name> <domain> <key>
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
@@ -48,6 +48,7 @@ Commands:
             -d, --default             set as default cluster
             --git-url=<giturl>        git URL
             --no-git                  skip git configuration
+            --image-url=<url>         image URL
             --docker-push-url=<url>   Docker push URL
             --docker                  configure Docker to push to the cluster
             -p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert
@@ -126,17 +127,17 @@ func runCluster(args *docopt.Args) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	listRec(w, "NAME", "CONTROLLER URL", "GIT URL", "DOCKER URL")
+	listRec(w, "NAME", "CONTROLLER URL", "GIT URL", "IMAGE URL")
 	for _, s := range config.Clusters {
 		gitURL := s.GitURL
 		if gitURL == "" {
 			gitURL = "(none)"
 		}
-		dockerURL := s.DockerPushURL
-		if dockerURL == "" {
-			dockerURL = "(none)"
+		imageURL := s.ImageURL
+		if imageURL == "" {
+			imageURL = "(none)"
 		}
-		data := []interface{}{s.Name, s.ControllerURL, gitURL, dockerURL}
+		data := []interface{}{s.Name, s.ControllerURL, gitURL, imageURL}
 		if s.Name == config.Default {
 			data = append(data, "(default)")
 		}
@@ -150,6 +151,7 @@ func runClusterAdd(args *docopt.Args) error {
 		Name:          args.String["<cluster-name>"],
 		Key:           args.String["<key>"],
 		GitURL:        args.String["--git-url"],
+		ImageURL:      args.String["--image-url"],
 		DockerPushURL: args.String["--docker-push-url"],
 		TLSPin:        args.String["--tls-pin"],
 	}
@@ -161,6 +163,9 @@ func runClusterAdd(args *docopt.Args) error {
 	}
 	if s.GitURL == "" && !args.Bool["--no-git"] {
 		s.GitURL = "https://git." + domain
+	}
+	if s.ImageURL == "" {
+		s.ImageURL = "https://images." + domain
 	}
 	if s.DockerPushURL == "" && args.Bool["--docker"] {
 		s.DockerPushURL = "https://docker." + domain
@@ -360,6 +365,7 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 				cluster.TLSPin = dm.TLSCert.Pin
 				cluster.ControllerURL = fmt.Sprintf("https://controller.%s", dm.Domain)
 				cluster.GitURL = fmt.Sprintf("https://git.%s", dm.Domain)
+				cluster.ImageURL = fmt.Sprintf("https://images.%s", dm.Domain)
 				cluster.DockerPushURL = fmt.Sprintf("https://docker.%s", dm.Domain)
 				if err := config.SaveTo(configPath()); err != nil {
 					return fmt.Errorf("Error saving config: %s", err)

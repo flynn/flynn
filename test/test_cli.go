@@ -11,7 +11,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +28,7 @@ import (
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
+	"github.com/flynn/flynn/tarreceive/utils"
 	c "github.com/flynn/go-check"
 )
 
@@ -1369,7 +1369,6 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	release, err := client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(release.Env["FOO"], c.Equals, "BAR")
-	t.Assert(release.Meta["docker-receive"], c.Equals, "true")
 	t.Assert(release.Processes, c.HasLen, 1)
 	proc, ok := release.Processes["app"]
 	if !ok {
@@ -1378,14 +1377,6 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 	t.Assert(proc.Args, c.DeepEquals, []string{"sh", "/server.sh"})
 
 	// check updated env vars are not overwritten
-	//
-	// need to remove the tag before pushing as we are using Docker 1.9
-	// which does not overwrite tags.
-	// TODO: remove this when upgrading Docker > 1.9
-	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
-	t.Assert(err, c.IsNil)
-	tag := fmt.Sprintf("%s/%s:latest", u.Host, app.Name)
-	t.Assert(run(t, exec.Command("docker", "rmi", tag)), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app.Name, "env", "set", "FOO=BAZ"), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app.Name, "docker", "push", repo), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app.Name, "env", "get", "FOO"), Outputs, "BAZ\n")
@@ -1405,7 +1396,7 @@ func (s *CLISuite) TestDockerPush(t *c.C) {
 }
 
 func (s *CLISuite) TestDockerExportImport(t *c.C) {
-	// release via docker-receive
+	// release via tarreceive
 	client := s.controllerClient(t)
 	app := &ct.App{Name: "cli-test-docker-export"}
 	t.Assert(client.CreateApp(app), c.IsNil)
@@ -1447,16 +1438,15 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	t.Assert(flynn(t, "/", "-a", app.Name, "export", "-f", file), Succeeds)
 	assertExportContains(t, file, exportFiles...)
 
-	// delete the image from the registry
-	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
-	t.Assert(err, c.IsNil)
-	uri := fmt.Sprintf("http://%s/v2/%s/manifests/%s", u.Host, app.Name, artifact.Meta["docker-receive.digest"])
-	req, err := http.NewRequest("DELETE", uri, nil)
-	req.SetBasicAuth("", s.clusterConf(t).Key)
-	t.Assert(err, c.IsNil)
-	res, err := http.DefaultClient.Do(req)
-	t.Assert(err, c.IsNil)
-	res.Body.Close()
+	// delete the image layers from the blobstore
+	for _, layer := range layers {
+		for _, url := range []string{
+			utils.LayerURL(layer.ID),
+			utils.ConfigURL(layer.ID),
+		} {
+			t.Assert(flynn(t, "/", "-a", "blobstore", "run", "curl", "-fsSL", "-X", "DELETE", url), Succeeds)
+		}
+	}
 
 	// import to another app
 	importApp := "cli-test-docker-import"

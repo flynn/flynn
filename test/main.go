@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
@@ -98,11 +97,6 @@ func main() {
 		return
 	}
 
-	if err = setupDockerPush(); err != nil {
-		log.Println(err)
-		return
-	}
-
 	res = check.RunAll(&check.RunConf{
 		Filter:           args.Run,
 		Stream:           args.Stream,
@@ -169,22 +163,6 @@ QAvAdwDIZpqRWWMcLS7zSDrzn3ZscuHCMxSOe40HbrVdDUee24/I4YQ+R8EcuzcA
 		fmt.Sprintf("SSH_CLIENT_KEY=-----BEGIN RSA PRIVATE KEY-----\n%s\n-----END RSA PRIVATE KEY-----\n", sshKey)).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %q", err, string(out))
-	}
-	return nil
-}
-
-func setupDockerPush() error {
-	conf, err := config.ReadFile(flynnrc)
-	if err != nil {
-		return err
-	}
-	url := strings.Replace(conf.Clusters[0].ControllerURL, "controller", "docker", 1)
-	// TODO: remove this `set-push-url' call once CI configures DockerPushURL
-	if out, err := flynnCmd("/", "docker", "set-push-url", url).CombinedOutput(); err != nil {
-		return fmt.Errorf("%s: %q", err, out)
-	}
-	if out, err := flynnCmd("/", "docker", "login").CombinedOutput(); err != nil {
-		return fmt.Errorf("%s: %q", err, out)
 	}
 	return nil
 }

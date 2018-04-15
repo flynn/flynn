@@ -382,6 +382,20 @@
       }
     },
     {
+      "id": "tarreceive",
+      "base": "ubuntu-trusty",
+      "layers": [{
+        "gobuild": {
+          "tarreceive": "/bin/tarreceive"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/bin/tarreceive"
+        ]
+      }
+    },
+    {
       "id": "logaggregator",
       "base": "busybox",
       "layers": [{

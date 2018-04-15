@@ -549,6 +549,56 @@
     }
   },
   {
+    "id": "tarreceive",
+    "action": "deploy-app",
+    "app": {
+      "name": "tarreceive",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "artifacts": [$image_artifact[tarreceive]],
+    "release": {
+      "env": {
+        "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}"
+      },
+      "processes": {
+        "app": {
+          "ports": [
+            {
+              "port": 80,
+              "proto": "tcp",
+              "service": {
+                "name": "tarreceive",
+                "create": true,
+                "check": {"type": "http", "path": "/.well-known/status"}
+              }
+            }
+          ],
+          "linux_capabilities": [
+            "CAP_NET_RAW",
+            "CAP_NET_BIND_SERVICE",
+            "CAP_DAC_OVERRIDE",
+            "CAP_SETFCAP",
+            "CAP_SETPCAP",
+            "CAP_SETGID",
+            "CAP_SETUID",
+            "CAP_MKNOD",
+            "CAP_CHOWN",
+            "CAP_FOWNER",
+            "CAP_FSETID",
+            "CAP_KILL",
+            "CAP_SYS_CHROOT",
+            "CAP_SYS_ADMIN"
+          ],
+          "volumes": [{"path": "/tmp", "delete_on_stop": true}]
+        }
+      }
+    },
+    "processes": {
+      "app": 2
+    }
+  },
+  {
     "id": "router-wait",
     "action": "wait",
     "url": "http://router-api.discoverd",
@@ -572,6 +622,16 @@
     "type": "http",
     "service": "docker-receive",
     "domain": "docker.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": true
+  },
+  {
+    "id": "tarreceive-route",
+    "action": "add-route",
+    "app_step": "tarreceive",
+    "cert_step": "controller-cert",
+    "type": "http",
+    "service": "tarreceive",
+    "domain": "images.{{ getenv \"CLUSTER_DOMAIN\" }}",
     "drain_backends": true
   },
   {
@@ -755,6 +815,11 @@
     "action": "wait",
     "url": "http://docker-receive.discoverd/v2/",
     "status": 401
+  },
+  {
+    "id": "tarreceive-wait",
+    "action": "wait",
+    "url": "http://tarreceive.discoverd/.well-known/status"
   },
   {
     "id": "status-check",

@@ -1,77 +1,22 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/url"
-	"os/exec"
-	"time"
-
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/tarreceive/utils"
 	c "github.com/flynn/go-check"
 )
 
-type DockerReceiveSuite struct {
+type TarreceiveSuite struct {
 	Helper
 }
 
-var _ = c.ConcurrentSuite(&DockerReceiveSuite{})
-
-func (s *DockerReceiveSuite) TestPushImage(t *c.C) {
-	// build a Docker image
-	repo := "docker-receive-test-push"
-	s.buildDockerImage(t, repo, "RUN echo foo > /foo.txt")
-
-	// subscribe to artifact events
-	client := s.controllerClient(t)
-	events := make(chan *ct.Event)
-	stream, err := client.StreamEvents(ct.StreamEventsOptions{
-		ObjectTypes: []ct.EventType{ct.EventTypeArtifact},
-	}, events)
-	t.Assert(err, c.IsNil)
-	defer stream.Close()
-
-	// push the Docker image to docker-receive
-	u, err := url.Parse(s.clusterConf(t).DockerPushURL)
-	t.Assert(err, c.IsNil)
-	tag := fmt.Sprintf("%s/%s:latest", u.Host, repo)
-	t.Assert(run(t, exec.Command("docker", "tag", "--force", repo, tag)), Succeeds)
-	t.Assert(run(t, exec.Command("docker", "push", tag)), Succeeds)
-
-	// wait for an artifact to be created
-	var artifact ct.Artifact
-loop:
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				t.Fatalf("event stream closed unexpectedly: %s", stream.Err())
-			}
-			t.Assert(json.Unmarshal(event.Data, &artifact), c.IsNil)
-			if artifact.Meta["docker-receive.repository"] == repo {
-				break loop
-			}
-		case <-time.After(30 * time.Second):
-			t.Fatal("timed out waiting for artifact")
-		}
-	}
-
-	// create a release with the Docker artifact
-	app := &ct.App{}
-	t.Assert(client.CreateApp(app), c.IsNil)
-	release := &ct.Release{ArtifactIDs: []string{artifact.ID}}
-	t.Assert(client.CreateRelease(app.ID, release), c.IsNil)
-	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
-
-	// check running a job uses the image
-	t.Assert(flynn(t, "/", "-a", app.ID, "run", "cat", "/foo.txt"), SuccessfulOutputContains, "foo")
-}
+var _ = c.ConcurrentSuite(&TarreceiveSuite{})
 
 // TestConvertWhitouts ensures that AUFS whiteouts are converted to OverlayFS
 // whiteouts and have the same effect (i.e. hiding removed files)
-func (s *DockerReceiveSuite) TestConvertWhiteouts(t *c.C) {
+func (s *TarreceiveSuite) TestConvertWhiteouts(t *c.C) {
 	// build a Docker image with whiteouts
-	repo := "docker-receive-test-whiteouts"
+	repo := "tarreceive-test-whiteouts"
 	s.buildDockerImage(t, repo,
 		"RUN echo foo > /foo.txt",
 		"RUN rm /foo.txt",
@@ -94,10 +39,10 @@ func (s *DockerReceiveSuite) TestConvertWhiteouts(t *c.C) {
 
 // TestReleaseDeleteImageLayers ensures that deleting a release which uses an
 // image which has shared layers does not delete the shared layers
-func (s *DockerReceiveSuite) TestReleaseDeleteImageLayers(t *c.C) {
+func (s *TarreceiveSuite) TestReleaseDeleteImageLayers(t *c.C) {
 	// build Docker images with shared layers and push them to two
 	// different apps
-	app1 := "docker-receive-test-delete-layers-1"
+	app1 := "tarreceive-test-delete-layers-1"
 	s.buildDockerImage(t, app1,
 		"RUN echo shared-layer > /shared.txt",
 		"RUN echo app1-layer > /app1.txt",
@@ -105,7 +50,7 @@ func (s *DockerReceiveSuite) TestReleaseDeleteImageLayers(t *c.C) {
 	t.Assert(flynn(t, "/", "create", "--remote", "", app1), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app1, "docker", "push", app1), Succeeds)
 
-	app2 := "docker-receive-test-delete-layers-2"
+	app2 := "tarreceive-test-delete-layers-2"
 	s.buildDockerImage(t, app2,
 		"RUN echo shared-layer > /shared.txt",
 		"RUN echo app2-layer > /app2.txt",
@@ -149,7 +94,7 @@ func (s *DockerReceiveSuite) TestReleaseDeleteImageLayers(t *c.C) {
 
 	// check all the layers exist at the paths we expect in the blobstore
 	getLayer := func(id string) *CmdResult {
-		url := fmt.Sprintf("http://blobstore.discoverd/docker-receive/layers/%s.squashfs", id)
+		url := utils.LayerURL(id)
 		return flynn(t, "/", "-a", "blobstore", "run", "curl", "-fsSLo", "/dev/null", "--write-out", "%{http_code}", url)
 	}
 	assertExist := func(layers map[string]struct{}) {
@@ -176,9 +121,9 @@ func (s *DockerReceiveSuite) TestReleaseDeleteImageLayers(t *c.C) {
 	assertExist(commonLayers)
 
 	// delete app2 and check we can push app1's image to a new app and have
-	// the layers regenerated (which checks docker-receive cache invalidation)
+	// the layers regenerated (which checks tarreceive cache invalidation)
 	t.Assert(flynn(t, "/", "-a", app2, "delete", "--yes"), Succeeds)
-	app3 := "docker-receive-test-delete-layers-3"
+	app3 := "tarreceive-test-delete-layers-3"
 	t.Assert(flynn(t, "/", "create", "--remote", "", app3), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app3, "docker", "push", app1), Succeeds)
 	t.Assert(flynn(t, "/", "-a", app3, "run", "test", "-f", "/app1.txt"), Succeeds)
@@ -186,9 +131,9 @@ func (s *DockerReceiveSuite) TestReleaseDeleteImageLayers(t *c.C) {
 
 // TestTabsInEnv ensures that a docker container containing tabs
 // in the environment variables can be imported.
-func (s *DockerReceiveSuite) TestTabsInEnv(t *c.C) {
+func (s *TarreceiveSuite) TestTabsInEnv(t *c.C) {
 	// build a Docker image with tabs in env
-	repo := "docker-receive-test-tab-env"
+	repo := "tarreceive-test-tab-env"
 	s.buildDockerImage(t, repo,
 		"ENV TAB test\ttest",
 	)

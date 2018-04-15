@@ -284,7 +284,7 @@ var testRunScript = template.Must(template.New("test-run").Parse(`
 #!/bin/bash
 set -e -x -o pipefail
 
-echo {{ .Cluster.RouterIP }} {{ .Cluster.ClusterDomain }} {{ .Cluster.ControllerDomain }} {{ .Cluster.GitDomain }} dashboard.{{ .Cluster.ClusterDomain }} docker.{{ .Cluster.ClusterDomain }} | sudo tee -a /etc/hosts
+echo {{ .Cluster.RouterIP }} {{ .Cluster.ClusterDomain }} {{ .Cluster.ControllerDomain }} {{ .Cluster.GitDomain }} dashboard.{{ .Cluster.ClusterDomain }} images.{{ .Cluster.ClusterDomain }} | sudo tee -a /etc/hosts
 
 # Wait for the Flynn bridge interface to show up so we can use it as the
 # nameserver to resolve discoverd domains
@@ -305,12 +305,10 @@ echo "nameserver ${ip}" | sudo tee /etc/resolv.conf
 
 cd ~/go/src/github.com/flynn/flynn
 
-script/configure-docker "{{ .Cluster.ClusterDomain }}"
-
 build/bin/flynn cluster add \
   --tls-pin "{{ .Config.TLSPin }}" \
   --git-url "{{ .Config.GitURL }}" \
-  --docker-push-url "{{ .Config.DockerPushURL }}" \
+  --image-url "{{ .Config.ImageURL }}" \
   default \
   {{ .Config.ControllerURL }} \
   {{ .Config.Key }}
