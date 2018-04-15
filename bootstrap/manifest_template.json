@@ -511,44 +511,6 @@
     }
   },
   {
-    "id": "docker-receive-secret",
-    "action": "gen-random"
-  },
-  {
-    "id": "docker-receive",
-    "action": "deploy-app",
-    "app": {
-      "name": "docker-receive",
-      "meta": {"flynn-system-app": "true"}
-    },
-    "artifacts": [$image_artifact[docker-receive]],
-    "release": {
-      "env": {
-        "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "REGISTRY_HTTP_SECRET": "{{ (index .StepData \"docker-receive-secret\").Data }}"
-      },
-      "processes": {
-        "app": {
-          "ports": [
-            {
-              "port": 80,
-              "proto": "tcp",
-              "service": {
-                "name": "docker-receive",
-                "create": true,
-                "check": {"type": "http", "path": "/.well-known/status"}
-              }
-            }
-          ]
-        }
-      }
-    },
-    "processes": {
-      "app": 2
-    }
-  },
-  {
     "id": "tarreceive",
     "action": "deploy-app",
     "app": {
@@ -612,16 +574,6 @@
     "type": "http",
     "service": "gitreceive",
     "domain": "git.{{ getenv \"CLUSTER_DOMAIN\" }}",
-    "drain_backends": true
-  },
-  {
-    "id": "docker-receive-route",
-    "action": "add-route",
-    "app_step": "docker-receive",
-    "cert_step": "controller-cert",
-    "type": "http",
-    "service": "docker-receive",
-    "domain": "docker.{{ getenv \"CLUSTER_DOMAIN\" }}",
     "drain_backends": true
   },
   {
@@ -809,12 +761,6 @@
     "id": "gitreceive-wait",
     "action": "wait",
     "url": "tcp://gitreceive.discoverd"
-  },
-  {
-    "id": "docker-receive-wait",
-    "action": "wait",
-    "url": "http://docker-receive.discoverd/v2/",
-    "status": 401
   },
   {
     "id": "tarreceive-wait",

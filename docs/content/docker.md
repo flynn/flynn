@@ -6,32 +6,12 @@ toc_min_level: 2
 
 # Docker
 
-Flynn has a built-in `docker-receive` app which wraps a Docker registry and
-imports pushed Docker images into a Flynn cluster.
-
-## Configuration
-
-Before pushing images to a Flynn cluster, both the local `flynn` and `docker`
-CLIs need to be configured.
-
-Configure the `flynn` CLI by running:
-
-```
-$ flynn docker set-push-url
-```
-
-Configure the `docker` CLI by running:
-
-```
-$ flynn docker login
-```
-
-_If you see "Error configuring docker", follow the instructions which appear
-above the error then re-run `flynn docker login`._
+Flynn has a built-in `tarreceive` app which imports pushed Docker images into a
+Flynn cluster.
 
 ## Push an image
 
-Run the following to push a Docker image to `docker-receive` and deploy it:
+Run the following to push a Docker image to `tarreceive` and deploy it:
 
 ```
 $ flynn -a APPNAME docker push IMAGE
@@ -80,19 +60,32 @@ Push the Docker image:
 
 ```
 $ flynn -a nodejs docker push nodejs-flynn-example
-flynn: getting image config with "docker inspect -f {{ json .Config }} nodejs-flynn-example"
-flynn: tagging Docker image with "docker tag nodejs-flynn-example docker.1.localflynn.com/nodejs:latest"
-flynn: pushing Docker image with "docker push docker.1.localflynn.com/nodejs:latest"
-The push refers to a repository [docker.1.localflynn.com/nodejs] (len: 1)
-82b9b0ffb6da: Pushed
-be8edf33c031: Pushed
-...
-767584930cea: Pushed
-d34921bc2709: Pushed
-latest: digest: sha256:be6aeade058f0df30a039a432aaf4cb21accd992d4c0df80ddb333b15f401b6a size: 16114
-flynn: image pushed, waiting for artifact creation
-flynn: deploying release using artifact URI http://flynn:dbd202007171356f4551160dede351ae@docker-receive.discoverd?name=nodejs&id=sha256:be6aeade058f0df30a039a432aaf4cb21accd992d4c0df80ddb333b15f401b6a
-flynn: image deployed, scale it with 'flynn scale app=N'
+deploying Docker image: nodejs-flynn-example
+exporting image with 'docker save nodejs-flynn-example'
+650.67 MB 107.82 MB/s 6s
+uploading layer 8fad67424c4e7098f255513e160caa00852bcff347bc9f920a82ddf3f60229de
+123.29 MB 22.98 MB/s 5s
+uploading layer 86985c679800f423275a0ea3ad540e9b7f522dcdcd65ec2b20f407996162f2e0
+43.35 MB 24.49 MB/s 1s
+uploading layer 6e5e20cbf4a7246b94f7acf2a2ceb2c521e95daca334dd1e8ba388fa73443dfe
+121.03 MB 11.38 MB/s 10s
+uploading layer ff57bdb79ac820da132ad1fdc1e2d250de5985b264dbdf60aa4ce83a05c4da75
+313.16 MB 7.18 MB/s 43s
+uploading layer 0e0b4ee1c6dc1f57a46071fc075ecf66b3164e637096197f10b89b6086942c7a
+344.50 KB 632.22 KB/s 0s
+uploading layer 33aed7748ee38dd620489fce6366fab070591e3b5ec276b5f505ed957772d7bc
+132.00 KB 3.73 MB/s 0s
+uploading layer 3b227e2efc63768cd4c62d5e7e6678b98064bf5bdbc40fc845913e970ccc5610
+44.96 MB 13.26 MB/s 3s
+uploading layer 984a57f9e68ea548ace7b655095d109a94850c918d10707ac4c922c9d9778136
+4.25 MB 36.01 MB/s 0s
+uploading layer 38a320798e65a1b2faed502dcac756feddcc85b3e83d72d7a57998fc992a2564
+4.00 KB 159.07 KB/s 0s
+uploading layer 148577a474a5c57422278e836bf204288fae7bf9f3ab5d6643666c30abb9bd87
+5.50 KB 150.91 KB/s 0s
+uploading layer 7779527ad11c4b4f1edb62e7f1391ee6cd82df898b8e96a16822ae79124669e2
+108.00 KB 2.22 MB/s 0s
+Docker image deployed, scale it with 'flynn scale app=N'
 
 ```
 

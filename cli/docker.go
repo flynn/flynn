@@ -29,21 +29,22 @@ import (
 
 func init() {
 	register("docker", runDocker, `
-usage: flynn docker set-push-url [<url>]
+usage: flynn docker push <image>
+       flynn docker set-push-url [<url>]
        flynn docker login
        flynn docker logout
-       flynn docker push <image>
+
 
 Deploy Docker images to a Flynn cluster.
 
 Commands:
-	set-push-url  set the Docker push URL (defaults to https://docker.$CLUSTER_DOMAIN)
-
-	login         run "docker login" against the cluster's docker-receive app
-
-	logout        run "docker logout" against the cluster's docker-receive app
-
 	push          push and release a Docker image to the cluster
+
+	set-push-url  [DEPRECATED] set the Docker push URL (defaults to https://docker.$CLUSTER_DOMAIN)
+
+	login         [DEPRECATED] run "docker login" against the cluster's docker-receive app
+
+	logout        [DEPRECATED] run "docker logout" against the cluster's docker-receive app
 
 Example:
 
@@ -85,6 +86,7 @@ func runDocker(args *docopt.Args, client controller.Client) error {
 }
 
 func runDockerSetPushURL(args *docopt.Args) error {
+	fmt.Fprintf(os.Stderr, "DEPRECATED: Pushing via a Docker registry has been deprecated in favour of pushing via the Flynn image service.\nIf the cluster is newer than %s then just run 'flynn docker push' directly.\n", minDockerPushTarVersion)
 	cluster, err := getCluster()
 	if err != nil {
 		return err
@@ -107,6 +109,7 @@ func runDockerSetPushURL(args *docopt.Args) error {
 }
 
 func runDockerLogin() error {
+	fmt.Fprintf(os.Stderr, "DEPRECATED: Pushing via a Docker registry has been deprecated in favour of pushing via the Flynn image service.\nIf the cluster is newer than %s then just run 'flynn docker push' directly.\n", minDockerPushTarVersion)
 	cluster, err := getCluster()
 	if err != nil {
 		return err
@@ -126,6 +129,7 @@ func runDockerLogin() error {
 }
 
 func runDockerLogout() error {
+	fmt.Fprintf(os.Stderr, "DEPRECATED: Pushing via a Docker registry has been deprecated in favour of pushing via the Flynn image service.\nIf the cluster is newer than %s then just run 'flynn docker push' directly.\n", minDockerPushTarVersion)
 	cluster, err := getCluster()
 	if err != nil {
 		return err
@@ -197,6 +201,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	}
 	v := version.Parse(status.Version)
 	if !v.Dev && v.Before(version.Parse(minDockerPushTarVersion)) {
+		fmt.Fprintf(os.Stderr, "DEPRECATED: Pushing via a Docker registry has been deprecated in favour of pushing via the Flynn image service.\nConsider upgrading your cluster to a version newer than %s.\n", minDockerPushTarVersion)
 		return runDockerPushLegacy(args, client)
 	}
 	return runDockerPushTar(args, client)
