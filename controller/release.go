@@ -7,12 +7,11 @@ import (
 
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
-	dockerreceive "github.com/flynn/flynn/docker-receive/utils"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	tarreceive "github.com/flynn/flynn/tarreceive/utils"
 	"github.com/flynn/que-go"
 	"github.com/jackc/pgx"
 	"golang.org/x/net/context"
@@ -243,36 +242,26 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 		// manifest and the contained layers
 		if artifact.Blobstore() {
 			fileURIs = append(fileURIs, artifact.URI)
-			if len(artifact.Manifest().Rootfs) > 0 {
-				for _, rootfs := range artifact.Manifest().Rootfs {
-					for _, layer := range rootfs.Layers {
-						// ensure the layer is only referenced by this artifact
-						// before we delete it
-						var count int64
-						id, _ := json.Marshal(layer.ID)
-						if err := tx.QueryRow("artifact_layer_count", id).Scan(&count); err != nil {
-							tx.Rollback()
-							return err
-						}
-						if count > 1 {
-							continue
-						}
-						fileURIs = append(fileURIs, artifact.LayerURL(layer))
+			for _, rootfs := range artifact.Manifest().Rootfs {
+				for _, layer := range rootfs.Layers {
+					// ensure the layer is only referenced by this artifact
+					// before we delete it
+					var count int64
+					id, _ := json.Marshal(layer.ID)
+					if err := tx.QueryRow("artifact_layer_count", id).Scan(&count); err != nil {
+						tx.Rollback()
+						return err
+					}
+					if count > 1 {
+						continue
+					}
+					fileURIs = append(fileURIs, artifact.LayerURL(layer))
 
-						// delete the docker-receive layer config
-						if layerID, ok := layer.Meta["docker.layer_id"]; ok {
-							fileURIs = append(fileURIs, dockerreceive.ConfigURL(layerID))
-						}
+					// delete the tarreceive layer config
+					if layerID, ok := layer.Meta["tar.layer_id"]; ok {
+						fileURIs = append(fileURIs, tarreceive.ConfigURL(layerID))
 					}
 				}
-			}
-		}
-
-		// if the artifact was created by docker-receive, delete the docker
-		// image URI to clean up the registry files
-		if uri, ok := artifact.Meta["docker-receive.uri"]; ok {
-			if ref, err := pinkerton.NewRef(uri); err == nil {
-				fileURIs = append(fileURIs, ref.ImageURI())
 			}
 		}
 

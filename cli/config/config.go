@@ -12,6 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/flynn/flynn/controller/client"
+	tarclient "github.com/flynn/flynn/tarreceive/client"
 	"github.com/mitchellh/go-homedir"
 )
 
@@ -23,6 +24,7 @@ type Cluster struct {
 	TLSPin        string `json:"tls_pin" toml:"TLSPin,omitempty"`
 	ControllerURL string `json:"controller_url"`
 	GitURL        string `json:"git_url"`
+	ImageURL      string `json:"image_url"`
 	DockerPushURL string `json:"docker_push_url"`
 }
 
@@ -36,6 +38,21 @@ func (c *Cluster) Client() (controller.Client, error) {
 		}
 	}
 	return controller.NewClientWithConfig(c.ControllerURL, c.Key, controller.Config{Pin: pin})
+}
+
+func (c *Cluster) TarClient() (*tarclient.Client, error) {
+	if c.ImageURL == "" {
+		return nil, errors.New("cluster: missing ImageURL .flynnrc config")
+	}
+	var pin []byte
+	if c.TLSPin != "" {
+		var err error
+		pin, err = base64.StdEncoding.DecodeString(c.TLSPin)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding tls pin: %s", err)
+		}
+	}
+	return tarclient.NewClientWithConfig(c.ImageURL, c.Key, tarclient.Config{Pin: pin}), nil
 }
 
 func (c *Cluster) DockerPushHost() (string, error) {
