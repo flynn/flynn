@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -105,4 +106,33 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	t.Assert(err, c.IsNil)
 	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
 	res.Body.Close()
+}
+
+func (s *RouterSuite) TestCustom503ErrorPage(t *c.C) {
+	// boot 1 node cluster
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+
+	// Test that setting added HTTP and HTTPS ports succeeds
+	watcher, err := x.controller.WatchJobEvents("router", "")
+	t.Assert(err, c.IsNil)
+	t.Assert(x.flynn("/", "-a", "router", "env", "set", "ERROR_503_PAGE_URL=https://www.google.com"), Succeeds)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"app": {ct.JobStateUp: 1, ct.JobStateDown: 1}}, 10*time.Second, nil), c.IsNil)
+
+	// make sure the route returns 503
+	t.Assert(x.flynn("/", "-a", "dashboard", "scale", "web=0"), Succeeds)
+
+	// The router API does not currently give us a synchronous result on
+	// "route add", so we must pause for a moment to let it catch up. This seems
+	// related to the issue mentioned in CLISuite.TestRoute().
+	time.Sleep(1 * time.Second)
+
+	// check that a HTTP request returns the custom error page
+	res, err := http.Get("http://dashboard." + x.Domain)
+	t.Assert(err, c.IsNil)
+	t.Assert(res.StatusCode, c.Equals, http.StatusServiceUnavailable)
+	body, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	t.Assert(err, c.IsNil)
+	t.Assert(strings.Contains(string(body), "google"), c.Equals, true, c.Commentf("body = %q", string(body)))
 }

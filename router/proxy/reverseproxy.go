@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
 	"github.com/inconshreveable/log15"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -56,6 +56,8 @@ type ReverseProxy struct {
 
 	// Logger is the logger for the proxy.
 	Logger log15.Logger
+
+	Error503Page []byte
 }
 
 type RequestTracker interface {
@@ -129,8 +131,7 @@ func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, re
 
 	res, backend, err := transport.RoundTrip(ctx, outreq, l)
 	if err != nil {
-		rw.WriteHeader(http.StatusServiceUnavailable)
-		rw.Write(serviceUnavailable)
+		p.serviceUnavailable(rw)
 		return
 	}
 	defer res.Body.Close()
@@ -180,8 +181,7 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, l log15.Logger, req 
 
 	res, uconn, err := transport.UpgradeHTTP(req, l)
 	if err != nil {
-		rw.WriteHeader(http.StatusServiceUnavailable)
-		rw.Write(serviceUnavailable)
+		p.serviceUnavailable(rw)
 		return
 	}
 	defer uconn.Close()
@@ -196,8 +196,7 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, l log15.Logger, req 
 	dconn, bufrw, err := rw.(http.Hijacker).Hijack()
 	if err != nil {
 		l.Error("error hijacking request", "err", err, "status", "503")
-		rw.WriteHeader(http.StatusServiceUnavailable)
-		rw.Write(serviceUnavailable)
+		p.serviceUnavailable(rw)
 		return
 	}
 	defer dconn.Close()
@@ -207,6 +206,18 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, l log15.Logger, req 
 		return
 	}
 	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
+}
+
+func (p *ReverseProxy) serviceUnavailable(rw http.ResponseWriter) {
+	if len(p.Error503Page) > 0 {
+		rw.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		rw.Write(p.Error503Page)
+		return
+	}
+	rw.WriteHeader(http.StatusServiceUnavailable)
+	rw.Write(serviceUnavailable)
+	return
 }
 
 func prepareResponseHeaders(res *http.Response) {
