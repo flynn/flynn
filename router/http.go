@@ -53,6 +53,8 @@ type HTTPListener struct {
 	keypair       tls.Certificate
 	proxyProtocol bool
 
+	error503Page []byte
+
 	preSync  func()
 	postSync func(<-chan struct{})
 }
@@ -344,6 +346,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		bf = service.sc.Addrs
 	}
 	r.rp = proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky, service, logger)
+	r.rp.Error503Page = h.l.error503Page
 	r.service = service
 	h.l.routes[data.ID] = r
 	domain := net.JoinHostPort(strings.ToLower(r.Domain), strconv.Itoa(r.Port))

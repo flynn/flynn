@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -173,6 +175,29 @@ func main() {
 		}
 	}
 
+	var error503Page []byte
+	if error503PageURL := os.Getenv("ERROR_503_PAGE_URL"); error503PageURL != "" {
+		func() {
+			res, err := http.Get(error503PageURL)
+			if err != nil {
+				log.Error("error getting ERROR_503_PAGE_URL", "err", err)
+				return
+			}
+			defer res.Body.Close()
+			if res.StatusCode != 200 {
+				log.Error("unexpected status code getting ERROR_503_PAGE_URL", "status", res.StatusCode)
+				return
+			}
+			error503Page, err = ioutil.ReadAll(&io.LimitedReader{R: res.Body, N: 1000000})
+			if err != nil {
+				log.Error("error reading ERROR_503_PAGE_URL", "err", err)
+				return
+			}
+			return
+
+		}()
+	}
+
 	log.Info("connecting to postgres")
 	db := postgres.Wait(nil, nil)
 
@@ -216,6 +241,7 @@ func main() {
 			ds:            NewPostgresDataStore("http", db.ConnPool),
 			discoverd:     discoverd.DefaultClient,
 			proxyProtocol: proxyProtocol,
+			error503Page:  error503Page,
 		},
 	}
 
