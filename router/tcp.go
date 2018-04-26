@@ -243,9 +243,9 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	r.service = service
 	var bf proxy.BackendListFunc
 	if r.Leader {
-		bf = service.sc.LeaderAddr
+		bf = backendFunc(r.Service, service.sc.Leader)
 	} else {
-		bf = service.sc.Addrs
+		bf = backendFunc(r.Service, service.sc.Instances)
 	}
 	r.rp = proxy.NewReverseProxy(bf, nil, false, service, logger)
 	if listener, ok := h.l.listeners[r.Port]; ok {

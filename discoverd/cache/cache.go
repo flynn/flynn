@@ -22,8 +22,8 @@ type ServiceCache struct {
 	stream stream.Stream
 
 	sync.RWMutex
-	leaderAddr string
-	instances  map[string]*discoverd.Instance
+	leader    *discoverd.Instance
+	instances map[string]*discoverd.Instance
 
 	// used by the test suite
 	watchers map[chan *discoverd.Event]struct{}
@@ -79,9 +79,9 @@ func (d *ServiceCache) start(s discoverd.Service) (err error) {
 				case discoverd.EventKindLeader:
 					d.Lock()
 					if event.Instance != nil {
-						d.leaderAddr = event.Instance.Addr
+						d.leader = event.Instance
 					} else {
-						d.leaderAddr = ""
+						d.leader = nil
 					}
 					d.Unlock()
 				case discoverd.EventKindCurrent:
@@ -109,13 +109,32 @@ func (d *ServiceCache) Addrs() []string {
 	return res
 }
 
+func (d *ServiceCache) Instances() []*discoverd.Instance {
+	d.RLock()
+	defer d.RUnlock()
+	res := make([]*discoverd.Instance, 0, len(d.instances))
+	for _, inst := range d.instances {
+		res = append(res, inst)
+	}
+	return res
+}
+
 func (d *ServiceCache) LeaderAddr() []string {
 	d.RLock()
 	defer d.RUnlock()
-	if d.leaderAddr == "" {
+	if d.leader == nil {
 		return []string{}
 	}
-	return []string{d.leaderAddr}
+	return []string{d.leader.Addr}
+}
+
+func (d *ServiceCache) Leader() []*discoverd.Instance {
+	d.RLock()
+	defer d.RUnlock()
+	if d.leader == nil {
+		return []*discoverd.Instance{}
+	}
+	return []*discoverd.Instance{d.leader}
 }
 
 func (d *ServiceCache) broadcast(e *discoverd.Event) {

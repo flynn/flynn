@@ -11,9 +11,10 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/pkg/random"
+	router "github.com/flynn/flynn/router/types"
+	"github.com/inconshreveable/log15"
 	"golang.org/x/crypto/nacl/secretbox"
 	"golang.org/x/net/context"
-	"github.com/inconshreveable/log15"
 )
 
 type backendDialer interface {
@@ -39,8 +40,8 @@ var (
 	}
 )
 
-// BackendListFunc returns a slice of backend hosts (hostname:port).
-type BackendListFunc func() []string
+// BackendListFunc returns a slice of backends
+type BackendListFunc func() []*router.Backend
 
 type transport struct {
 	getBackends BackendListFunc
@@ -49,9 +50,9 @@ type transport struct {
 	useStickySessions bool
 }
 
-func (t *transport) getOrderedBackends(stickyBackend string) []string {
+func (t *transport) getOrderedBackends(stickyBackend string) []*router.Backend {
 	backends := t.getBackends()
-	shuffle(backends)
+	shuffleBackends(backends)
 
 	if stickyBackend != "" {
 		swapToFront(backends, stickyBackend)
@@ -87,19 +88,19 @@ func (t *transport) RoundTrip(ctx context.Context, req *http.Request, l log15.Lo
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
 	for i, backend := range backends {
-		req.URL.Host = backend
-		rt.TrackRequestStart(backend)
+		req.URL.Host = backend.Addr
+		rt.TrackRequestStart(backend.Addr)
 		res, err := httpTransport.RoundTrip(req)
 		if err == nil {
 			t.setStickyBackend(res, stickyBackend)
-			return res, backend, nil
+			return res, backend.Addr, nil
 		}
-		rt.TrackRequestDone(backend)
+		rt.TrackRequestDone(backend.Addr)
 		if _, ok := err.(dialErr); !ok {
-			l.Error("unretriable request error", "backend", backend, "err", err, "attempt", i)
+			l.Error("unretriable request error", "service", backend.Service, "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)
 			return nil, "", err
 		}
-		l.Error("retriable dial error", "backend", backend, "err", err, "attempt", i)
+		l.Error("retriable dial error", "service", backend.Service, "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)
 	}
 	l.Error("request failed", "status", "503", "num_backends", len(backends))
 	return nil, "", errNoBackends
@@ -140,19 +141,19 @@ func (t *transport) UpgradeHTTP(req *http.Request, l log15.Logger) (*http.Respon
 	return res, conn, nil
 }
 
-func dialTCP(ctx context.Context, l log15.Logger, addrs []string) (net.Conn, string, error) {
+func dialTCP(ctx context.Context, l log15.Logger, backends []*router.Backend) (net.Conn, string, error) {
 	donec := ctx.Done()
-	for i, addr := range addrs {
+	for i, backend := range backends {
 		select {
 		case <-donec:
 			return nil, "", errCanceled
 		default:
 		}
-		conn, err := dialer.Dial("tcp", addr)
+		conn, err := dialer.Dial("tcp", backend.Addr)
 		if err == nil {
-			return conn, addr, nil
+			return conn, backend.Addr, nil
 		}
-		l.Error("retriable dial error", "backend", addr, "err", err, "attempt", i)
+		l.Error("retriable dial error", "service", backend.Service, "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)
 	}
 	return nil, "", errNoBackends
 }
@@ -184,17 +185,17 @@ func (w *fakeCloseReadCloser) RealClose() error {
 	return w.ReadCloser.Close()
 }
 
-func shuffle(s []string) {
-	for i := len(s) - 1; i > 0; i-- {
+func shuffleBackends(backends []*router.Backend) {
+	for i := len(backends) - 1; i > 0; i-- {
 		j := random.Math.Intn(i + 1)
-		s[i], s[j] = s[j], s[i]
+		backends[i], backends[j] = backends[j], backends[i]
 	}
 }
 
-func swapToFront(ss []string, s string) {
-	for i := range ss {
-		if ss[i] == s {
-			ss[0], ss[i] = ss[i], ss[0]
+func swapToFront(backends []*router.Backend, addr string) {
+	for i, backend := range backends {
+		if backend.Addr == addr {
+			backends[0], backends[i] = backends[i], backends[0]
 			return
 		}
 	}

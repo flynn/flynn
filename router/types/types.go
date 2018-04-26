@@ -210,6 +210,7 @@ type Event struct {
 type Backend struct {
 	Service string `json:"service"`
 	Addr    string `json:"addr"`
+	App     string `json:"app"`
 	JobID   string `json:"job_id"`
 }
 
