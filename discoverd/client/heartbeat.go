@@ -17,6 +17,7 @@ import (
 // to instance metadata if present.
 var EnvInstanceMeta = map[string]struct{}{
 	"FLYNN_APP_ID":       {},
+	"FLYNN_APP_NAME":     {},
 	"FLYNN_RELEASE_ID":   {},
 	"FLYNN_PROCESS_TYPE": {},
 	"FLYNN_JOB_ID":       {},
