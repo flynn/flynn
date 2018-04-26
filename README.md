@@ -71,3 +71,7 @@ on Freenode), or [emailing](mailto:contact@flynn.io) us.
 
 Flynn® is a [trademark](https://flynn.io/docs/trademark-guidelines) of Prime
 Directive, Inc.
+
+## Licensing
+
+Prime Directive Inc. is the copyright holder for Flynn, which is licensed under the BSD 3-Clause license. Please see [LICENSE](./LICENSE) for details.
