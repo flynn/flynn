@@ -95,13 +95,17 @@ func (t *transport) RoundTrip(ctx context.Context, req *http.Request, l log15.Lo
 	backends := t.getOrderedBackends(stickyBackend)
 	for i, backend := range backends {
 		req.URL.Host = backend.Addr
+		start := time.Now()
 		rt.TrackRequestStart(backend.Addr)
 		res, err := httpTransport.RoundTrip(req)
 		if err == nil {
 			trace.Finalize(backend)
 			t.setStickyBackend(res, stickyBackend)
+			trackBackendHTTPResponse(backend, res)
+			trackBackendHTTPLatency(backend, res, time.Since(start))
 			return res, trace, nil
 		}
+		trackBackendHTTPConnError(backend)
 		rt.TrackRequestDone(backend.Addr)
 		if _, ok := err.(dialErr); !ok {
 			l.Error("unretriable request error", "status", "503", "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)

@@ -34,6 +34,7 @@ func main() {
 		ScrapeInterval: defaultScrapeInterval,
 		Jobs: []*job{
 			{"flynn-host", "/etc/prometheus/flynn-host.json"},
+			{"router-api", "/etc/prometheus/router-api.json"},
 		},
 	}
 

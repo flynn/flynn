@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/router/types"
 	"github.com/julienschmidt/httprouter"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/net/context"
 )
 
@@ -37,6 +38,8 @@ func apiHandler(rtr *Router) http.Handler {
 	r.DELETE("/certificates/:id", httphelper.WrapHandler(api.DeleteCert))
 	r.GET("/certificates", httphelper.WrapHandler(api.GetCerts))
 	r.GET("/events", httphelper.WrapHandler(api.StreamEvents))
+
+	r.Handler("GET", "/metrics", promhttp.Handler())
 
 	r.HandlerFunc("GET", "/debug/*path", pprof.Handler.ServeHTTP)
 
