@@ -67,6 +67,7 @@ func main() {
 		BinDir:       "/usr/lib/postgresql/10/bin/",
 		Password:     password,
 		Logger:       log.New("component", "postgres"),
+		TimescaleDB:  true,
 		ExtWhitelist: true,
 		WaitUpstream: true,
 		SHMType:      "posix",
