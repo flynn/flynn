@@ -21,8 +21,8 @@ import (
 	"github.com/flynn/flynn/pkg/sirenia/client"
 	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/flynn/flynn/pkg/sirenia/xlog"
-	"github.com/jackc/pgx"
 	"github.com/inconshreveable/log15"
+	"github.com/jackc/pgx"
 )
 
 const (
@@ -39,6 +39,7 @@ type Config struct {
 	OpTimeout    time.Duration
 	ReplTimeout  time.Duration
 	Logger       log15.Logger
+	TimescaleDB  bool
 	ExtWhitelist bool
 	SHMType      string
 	WaitUpstream bool
@@ -66,6 +67,7 @@ type Process struct {
 	password     string
 	opTimeout    time.Duration
 	replTimeout  time.Duration
+	timescaleDB  bool
 	extWhitelist bool
 	shmType      string
 	waitUpstream bool
@@ -98,6 +100,7 @@ func NewProcess(c Config) *Process {
 		password:       c.Password,
 		opTimeout:      c.OpTimeout,
 		replTimeout:    c.ReplTimeout,
+		timescaleDB:    c.TimescaleDB,
 		extWhitelist:   c.ExtWhitelist,
 		shmType:        c.SHMType,
 		waitUpstream:   c.WaitUpstream,
@@ -829,6 +832,7 @@ func (p *Process) runCmd(cmd *exec.Cmd) error {
 func (p *Process) writeConfig(d configData) error {
 	d.ID = p.id
 	d.Port = p.port
+	d.TimescaleDB = p.timescaleDB
 	d.ExtWhitelist = p.extWhitelist
 	d.SHMType = p.shmType
 	f, err := os.Create(p.configPath())
@@ -890,6 +894,7 @@ type configData struct {
 	Sync     string
 	ReadOnly bool
 
+	TimescaleDB  bool
 	ExtWhitelist bool
 	SHMType      string
 }
@@ -927,13 +932,17 @@ timezone = 'UTC'
 client_encoding = 'UTF8'
 default_text_search_config = 'pg_catalog.english'
 
+{{if .TimescaleDB}}
+shared_preload_libraries = 'timescaledb'
+{{end}}
+
 {{if .SHMType}}
 dynamic_shared_memory_type = '{{.SHMType}}'
 {{end}}
 
 {{if .ExtWhitelist}}
 local_preload_libraries = 'pgextwlist'
-extwlist.extensions = 'btree_gin,btree_gist,chkpass,citext,cube,dblink,dict_int,earthdistance,fuzzystrmatch,hstore,intarray,isn,ltree,pg_prewarm,pg_stat_statements,pg_trgm,pgcrypto,pgrouting,pgrowlocks,pgstattuple,plpgsql,plv8,postgis,postgis_topology,postgres_fdw,tablefunc,unaccent,uuid-ossp'
+extwlist.extensions = 'btree_gin,btree_gist,chkpass,citext,cube,dblink,dict_int,earthdistance,fuzzystrmatch,hstore,intarray,isn,ltree,pg_prewarm,pg_stat_statements,pg_trgm,pgcrypto,pgrouting,pgrowlocks,pgstattuple,plpgsql,plv8,postgis,postgis_topology,postgres_fdw,tablefunc,timescaledb,unaccent,uuid-ossp'
 {{end}}
 `[1:]))
 
