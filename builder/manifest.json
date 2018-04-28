@@ -410,9 +410,11 @@
           "build_with": "ubuntu-trusty",
           "script": "metrics/img/grafana.sh",
           "copy": {
-            "metrics/start-grafana.sh": "/bin/start-grafana.sh",
-            "metrics/grafana.ini":      "/etc/grafana.ini",
-            "metrics/datasource.yaml":  "/etc/grafana/provisioning/datasources/prometheus.yaml"
+            "metrics/start-grafana.sh":     "/bin/start-grafana.sh",
+            "metrics/grafana.ini":          "/etc/grafana.ini",
+            "metrics/datasource.yaml":      "/etc/grafana/provisioning/datasources/prometheus.yaml",
+            "metrics/dashboard.yaml":       "/etc/grafana/provisioning/dashboards/dashboard.yaml",
+            "metrics/dashboards/host.json": "/var/lib/grafana/dashboards/host.json"
           },
           "limits": { "temp_disk": "1G" }
         },
