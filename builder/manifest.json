@@ -422,7 +422,11 @@
         {
           "name": "metrics-binaries",
           "gobuild": {
-            "metrics": "/bin/flynn-prometheus"
+            "metrics": "/bin/flynn-prometheus",
+            "vendor/github.com/timescale/prometheus-postgresql-adapter": "/bin/prometheus-postgresql"
+          },
+          "copy": {
+            "metrics/start-prometheus-postgresql.sh": "/bin/start-prometheus-postgresql"
           }
         }
       ],

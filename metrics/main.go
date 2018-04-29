@@ -73,6 +73,11 @@ var globalConfig = template.Must(template.New("config").Parse(`
 global:
   scrape_interval: {{ .ScrapeInterval }}
 
+remote_write:
+    - url: "http://metrics-prometheus-postgresql.discoverd/write"
+remote_read:
+    - url: "http://metrics-prometheus-postgresql.discoverd/read"
+
 scrape_configs:
   - job_name: prometheus
     static_configs:

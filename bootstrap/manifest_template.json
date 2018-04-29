@@ -650,6 +650,21 @@
           "service": "metrics-prometheus",
           "volumes": [{"path": "/data"}]
         },
+        "prometheus-postgresql": {
+          "args": ["/bin/start-prometheus-postgresql"],
+          "ports": [
+            {
+              "port": 80,
+              "proto": "tcp",
+              "service": {
+                "name": "metrics-prometheus-postgresql",
+                "create": true,
+                "check": {"type": "http", "path": "/healthz"}
+              }
+            }
+          ],
+          "service": "metrics-prometheus-postgresql"
+        },
         "grafana": {
           "args": ["/bin/start-grafana.sh"],
           "env": {
@@ -675,6 +690,7 @@
     },
     "processes": {
       "prometheus": 1,
+      "prometheus-postgresql": 1,
       "grafana": 1
     },
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
