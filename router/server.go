@@ -22,7 +22,7 @@ import (
 	"github.com/inconshreveable/log15"
 )
 
-var logger = log15.New("app", "router")
+var logger = log15.New()
 
 func init() {
 	if os.Getenv("DEBUG") == "" {
