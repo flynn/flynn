@@ -3,6 +3,7 @@ required = [
   "github.com/jteeuwen/go-bindata/go-bindata",
   "github.com/flynn/go-tuf/cmd/tuf",
   "github.com/flynn/go-tuf/cmd/tuf-client",
+  "github.com/timescale/prometheus-postgresql-adapter"
 ]
 
 [prune]
@@ -74,6 +75,11 @@ required = [
 [[constraint]]
   branch = "master"
   name = "github.com/tiborvass/uniline"
+
+[[constraint]]
+  branch = "relax-vendor-constraint"
+  name = "github.com/timescale/prometheus-postgresql-adapter"
+  source = "github.com/flynn/prometheus-postgresql-adapter"
 
 [[constraint]]
   branch = "master"
