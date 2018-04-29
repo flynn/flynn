@@ -129,17 +129,33 @@ func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, re
 		}()
 	}
 
-	res, backend, err := transport.RoundTrip(ctx, outreq, l)
+	res, trace, err := transport.RoundTrip(ctx, outreq, l)
 	if err != nil {
 		p.serviceUnavailable(rw)
 		return
 	}
 	defer res.Body.Close()
-	defer p.RequestTracker.TrackRequestDone(backend)
+	defer p.RequestTracker.TrackRequestDone(trace.Backend.Addr)
 
 	prepareResponseHeaders(res)
 	p.writeResponse(rw, res)
-	l.Debug("request complete", "status", res.StatusCode, "location", res.Header.Get("Location"), "backend", backend)
+	if location := res.Header.Get("Location"); location != "" {
+		l = l.New("location", location)
+	}
+	if !trace.ReusedConn {
+		l = l.New("connect", trace.ConnectDone.Sub(trace.ConnectStart))
+	}
+	if req.Body != nil {
+		l = l.New("write_req_body", trace.BodyWritten.Sub(trace.HeadersWritten))
+	}
+	l.Debug("request complete",
+		"status", res.StatusCode,
+		"job.id", trace.Backend.JobID,
+		"addr", trace.Backend.Addr,
+		"conn_reused", trace.ReusedConn,
+		"write_req_headers", trace.HeadersWritten.Sub(trace.ConnectDone),
+		"read_res_first_byte", trace.FirstByte.Sub(trace.HeadersWritten),
+	)
 }
 
 // ServeConn takes an inbound conn and proxies it to a backend.
