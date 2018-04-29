@@ -942,7 +942,8 @@ dynamic_shared_memory_type = '{{.SHMType}}'
 
 {{if .ExtWhitelist}}
 local_preload_libraries = 'pgextwlist'
-extwlist.extensions = 'btree_gin,btree_gist,chkpass,citext,cube,dblink,dict_int,earthdistance,fuzzystrmatch,hstore,intarray,isn,ltree,pg_prewarm,pg_stat_statements,pg_trgm,pgcrypto,pgrouting,pgrowlocks,pgstattuple,plpgsql,plv8,postgis,postgis_topology,postgres_fdw,tablefunc,timescaledb,unaccent,uuid-ossp'
+extwlist.extensions = 'btree_gin,btree_gist,chkpass,citext,cube,dblink,dict_int,earthdistance,fuzzystrmatch,hstore,intarray,isn,ltree,pg_prewarm,pg_prometheus,pg_stat_statements,pg_trgm,pgcrypto,pgrouting,pgrowlocks,pgstattuple,plpgsql,plv8,postgis,postgis_topology,postgres_fdw,tablefunc,timescaledb,unaccent,uuid-ossp'
+extwlist.custom_path = '/usr/local/share/postgresql/extwlist'
 {{end}}
 `[1:]))
 

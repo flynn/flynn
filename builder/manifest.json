@@ -194,6 +194,7 @@
             "appliance/postgresql/cmd/flynn-postgres-api": "/bin/flynn-postgres-api"
           },
           "copy": {
+            "appliance/postgresql/extwlist/pg_prometheus-after-create.sql": "/usr/local/share/postgresql/extwlist/pg_prometheus/after-create.sql",
             "appliance/postgresql/start.sh": "/bin/start-flynn-postgres"
           }
         }

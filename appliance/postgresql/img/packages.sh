@@ -24,4 +24,17 @@ apt-get install -y -q \
 apt-get clean
 apt-get autoremove -y
 
+# install the pg_prometheus extension
+URL="https://github.com/timescale/pg_prometheus/archive/0.2.tar.gz"
+SHA="f652679cd3d385ded2a0666427faeb00862e296d7971c5b4585d4828e5ef19ab"
+curl -fsSLo /tmp/pg_prometheus.tar.gz "${URL}"
+echo "${SHA}  /tmp/pg_prometheus.tar.gz" | shasum -a 256 -c -
+mkdir -p /tmp/pg_prometheus
+tar xzf /tmp/pg_prometheus.tar.gz --strip-components=1 -C /tmp/pg_prometheus
+apt-get install -y make gcc patch
+make -C /tmp/pg_prometheus install
+apt-get remove -y make gcc patch
+apt-get clean
+apt-get autoremove -y
+
 echo "\set HISTFILE /dev/null" > /root/.psqlrc
