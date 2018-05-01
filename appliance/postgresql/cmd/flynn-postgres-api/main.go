@@ -83,7 +83,7 @@ func (p *pgAPI) createDatabase(ctx context.Context, w http.ResponseWriter, req *
 		httphelper.Error(w, err)
 		return
 	}
-	if err := p.db.Exec(fmt.Sprintf(`GRANT ALL ON DATABASE "%s" TO "%s"`, database, username)); err != nil {
+	if err := p.db.Exec(fmt.Sprintf(`ALTER DATABASE "%s" OWNER TO "%s"`, database, username)); err != nil {
 		p.db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, database))
 		p.db.Exec(fmt.Sprintf(`DROP USER "%s"`, username))
 		httphelper.Error(w, err)
