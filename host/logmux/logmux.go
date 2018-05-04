@@ -105,7 +105,7 @@ func (m *Mux) broadcast(app string, msg message) {
 }
 
 func (m *Mux) addSink(sink Sink) {
-	l := m.logger.New("fn", "addSink")
+	l := m.logger.New("fn", "addSink", "name", sink.Name())
 	shutdownCh := sink.ShutdownCh()
 	reconnectDelay := 0 * time.Second
 
@@ -123,6 +123,7 @@ func (m *Mux) addSink(sink Sink) {
 					reconnectDelay = 10 * time.Second
 					return
 				}
+				l.Info("connected to sink")
 				sinkCursor, err := sink.GetCursor(m.hostID)
 				if err != nil {
 					l.Error("failed to get cursor from sink")

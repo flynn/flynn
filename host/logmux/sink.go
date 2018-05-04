@@ -28,8 +28,8 @@ import (
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
 	"github.com/flynn/flynn/pkg/tlsconfig"
-	"github.com/julienschmidt/httprouter"
 	"github.com/inconshreveable/log15"
+	"github.com/julienschmidt/httprouter"
 )
 
 var SinkExistsError = errors.New("sink with that id already exists")
@@ -353,6 +353,7 @@ func (sm *SinkManager) StreamToAggregators(s discoverd.Service) error {
 
 type Sink interface {
 	Info() *SinkInfo
+	Name() string
 	Connect() error
 	Close()
 	GetCursor(hostID string) (*utils.HostCursor, error)
@@ -388,6 +389,10 @@ func NewLogAggregatorSink(sm *SinkManager, info *SinkInfo) (*LogAggregatorSink, 
 		hostManaged: info.HostManaged,
 		shutdownCh:  make(chan struct{}),
 	}, nil
+}
+
+func (s *LogAggregatorSink) Name() string {
+	return s.addr
 }
 
 func (s *LogAggregatorSink) Info() *SinkInfo {
@@ -504,6 +509,10 @@ func NewSyslogSink(sm *SinkManager, info *SinkInfo) (sink *SyslogSink, err error
 	}, nil
 }
 
+func (s *SyslogSink) Name() string {
+	return s.url
+}
+
 func (s *SyslogSink) Info() *SinkInfo {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -514,6 +523,10 @@ func (s *SyslogSink) Info() *SinkInfo {
 		Config: config,
 		Cursor: s.cursor,
 	}
+}
+
+var syslogDialer = &net.Dialer{
+	Timeout: 10 * time.Second,
 }
 
 func (s *SyslogSink) Connect() error {
@@ -529,13 +542,13 @@ func (s *SyslogSink) Connect() error {
 	var conn net.Conn
 	switch u.Scheme {
 	case "syslog":
-		conn, err = net.Dial("tcp", addr)
+		conn, err = syslogDialer.Dial("tcp", addr)
 	case "syslog+tls":
 		tlsConfig := tlsconfig.SecureCiphers(&tls.Config{})
 		if s.insecure {
 			tlsConfig.InsecureSkipVerify = true
 		}
-		conn, err = tls.Dial("tcp", addr, tlsConfig)
+		conn, err = tls.DialWithDialer(syslogDialer, "tcp", addr, tlsConfig)
 	default:
 		return fmt.Errorf("unknown protocol %s", u.Scheme)
 	}
