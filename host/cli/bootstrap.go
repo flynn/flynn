@@ -396,8 +396,13 @@ $$;`)
 			"gitreceive":     {"app": 1},
 			"docker-receive": {"app": 1},
 			"logaggregator":  {"app": 1},
-			"dashboard":      {"web": 1},
-			"status":         {"web": 1},
+			"metrics": {
+				"prometheus":            1,
+				"prometheus-postgresql": 1,
+				"grafana":               1,
+			},
+			"dashboard": {"web": 1},
+			"status":    {"web": 1},
 		}
 		data.Postgres.Processes["postgres"] = 1
 		data.Postgres.Processes["web"] = 1
@@ -420,8 +425,13 @@ $$;`)
 			"gitreceive":     {"app": 2},
 			"docker-receive": {"app": 2},
 			"logaggregator":  {"app": 2},
-			"dashboard":      {"web": 2},
-			"status":         {"web": 2},
+			"metrics": {
+				"prometheus":            1,
+				"prometheus-postgresql": 1,
+				"grafana":               1,
+			},
+			"dashboard": {"web": 2},
+			"status":    {"web": 2},
 		}
 		data.Postgres.Processes["postgres"] = 3
 		data.Postgres.Processes["web"] = 2
@@ -970,6 +980,42 @@ DELETE FROM volumes WHERE created_at < '%s';`,
 		}
 		if _, err := steps.RunWithState(ch, state); err != nil {
 			return fmt.Errorf("error deploying docker-receive: %s", err)
+		}
+	}
+
+	// deploy metrics if it wasn't in the backup
+	if _, err := client.GetApp("metrics"); err == controller.ErrNotFound {
+		routes, err := client.RouteList("controller")
+		if len(routes) == 0 {
+			err = errors.New("no routes found")
+		}
+		if err != nil {
+			return fmt.Errorf("error listing controller routes: %s", err)
+		}
+		for _, r := range routes {
+			if r.Domain == fmt.Sprintf("controller.%s", data.Controller.Release.Env["DEFAULT_ROUTE_DOMAIN"]) {
+				state.StepData["controller-cert"] = &tlscert.Cert{
+					Cert:       r.Certificate.Cert,
+					PrivateKey: r.Certificate.Key,
+				}
+				break
+			}
+		}
+		if _, ok := state.Providers["postgres"]; !ok {
+			provider, err := client.GetProvider("postgres")
+			if err != nil {
+				return fmt.Errorf("error getting postgres resource provider: %s", err)
+			}
+			state.Providers["postgres"] = provider
+		}
+		steps := bootstrap.Manifest{
+			manifestStepMap["metrics-admin-password"],
+			manifestStepMap["metrics-secret-key"],
+			manifestStepMap["metrics"],
+			manifestStepMap["metrics-route"],
+		}
+		if _, err := steps.RunWithState(ch, state); err != nil {
+			return fmt.Errorf("error deploying metrics: %s", err)
 		}
 	}
 
