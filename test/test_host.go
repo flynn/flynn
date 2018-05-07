@@ -156,6 +156,44 @@ func (s *HostSuite) TestExecCrashingJob(t *c.C) {
 	}
 }
 
+func (s *HostSuite) TestDoneJobsGC(t *c.C) {
+	// boot 1 node cluster
+	x := s.bootCluster(t, 1)
+	defer x.Destroy()
+	artifact := s.createArtifactWithClient(x.t, "test-apps", x.controller)
+
+	// run a job
+	firstCmd := exec.CommandUsingHost(x.Host.Host, artifact, "sh", "-c", "exit 0")
+	t.Assert(firstCmd.Run(), c.IsNil)
+
+	// run 24 more jobs, bringing the total down jobs to 25
+	for i := 0; i < 24; i++ {
+		err := exec.CommandUsingHost(x.Host.Host, artifact, "nonexistent").Run()
+		t.Assert(err, c.Not(c.IsNil))
+		t.Assert(err.Error(), c.Matches, ".+PATH")
+	}
+	jobs, err := x.Host.Host.ListJobs()
+	t.Assert(err, c.IsNil)
+	job, ok := jobs[firstCmd.Job.ID]
+	t.Assert(ok, c.Equals, true)
+	t.Assert(job.Job.ID, c.Equals, firstCmd.Job.ID)
+
+	// run a 26th job
+	cmd := exec.CommandUsingHost(x.Host.Host, artifact, "sh", "-c", "exit 0")
+	t.Assert(cmd.Run(), c.IsNil)
+
+	// check that our first job has been garbage collected
+	jobs, err = x.Host.Host.ListJobs()
+	t.Assert(err, c.IsNil)
+	_, ok = jobs[firstCmd.Job.ID]
+	t.Assert(ok, c.Equals, false)
+
+	// confirm that the first job is still accessible by ID
+	firstJob, err := x.Host.Host.GetJob(firstCmd.Job.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(firstJob.Job.ID, c.Equals, firstCmd.Job.ID)
+}
+
 type IshApp struct {
 	t           *c.C
 	cmd         *exec.Cmd
