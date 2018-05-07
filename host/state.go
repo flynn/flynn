@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/list"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,11 +19,13 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-// TODO: prune old jobs?
-
 // ErrJobExists is returned when attempting to add a job to the state with an
 // ID which already exists
 var ErrJobExists = errors.New("job already exists")
+
+// maxDownJobsPerApp is the max number of done/crashed/failed jobs that will be
+// stored per app.
+var maxDownJobsPerApp = 25
 
 type ErrVolumesInUse struct {
 	volIDs []string
@@ -35,8 +38,10 @@ func (e ErrVolumesInUse) Error() string {
 type State struct {
 	id string
 
-	jobs map[string]*host.ActiveJob
 	mtx  sync.RWMutex
+	jobs map[string]*host.ActiveJob
+
+	downJobsLRU map[string]*list.List // app ID -> down jobs list, used for garbage collection
 
 	listeners map[string]map[chan host.Event]struct{} // job id -> listener list (ID "all" gets all events)
 	listenMtx sync.RWMutex
@@ -55,6 +60,7 @@ func NewState(id string, stateFilePath string) *State {
 		id:            id,
 		stateFilePath: stateFilePath,
 		jobs:          make(map[string]*host.ActiveJob),
+		downJobsLRU:   make(map[string]*list.List),
 		listeners:     make(map[string]map[chan host.Event]struct{}),
 		attachers:     make(map[string]map[chan struct{}]struct{}),
 		dbCond:        sync.NewCond(&sync.Mutex{}),
@@ -90,6 +96,12 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 				job.CreatedAt = time.Now().UTC()
 			}
 			s.jobs[string(k)] = job
+
+			if statusDown(job.Status) {
+				if err := s.trackDownJob(job, tx); err != nil {
+					return err
+				}
+			}
 
 			return nil
 		}); err != nil {
@@ -171,6 +183,7 @@ func (s *State) OpenDB() error {
 	if err := s.stateDB.Update(func(tx *bolt.Tx) error {
 		// idempotently create buckets.  (errors ignored because they're all compile-time impossible args checks.)
 		tx.CreateBucketIfNotExists([]byte("jobs"))
+		tx.CreateBucketIfNotExists([]byte("gc-jobs"))
 		tx.CreateBucketIfNotExists([]byte("backend-jobs"))
 		tx.CreateBucketIfNotExists([]byte("backend-global"))
 		tx.CreateBucketIfNotExists([]byte("persistent-jobs"))
@@ -238,6 +251,41 @@ func (s *State) PersistBackendGlobalState(data []byte) error {
 	})
 }
 
+func (s *State) pruneDownJobs(tx *bolt.Tx, downJobs *list.List) error {
+	for downJobs.Len() > maxDownJobsPerApp {
+		el := downJobs.Back()
+		jobID := el.Value.(string)
+		job, ok := s.jobs[jobID]
+		if ok {
+			b, err := json.Marshal(job)
+			if err != nil {
+				return err
+			}
+			tx.Bucket([]byte("gc-jobs")).Put([]byte(jobID), b)
+		}
+		tx.Bucket([]byte("jobs")).Delete([]byte(jobID))
+		delete(s.jobs, jobID)
+		downJobs.Remove(el)
+	}
+	return nil
+}
+
+func (s *State) trackDownJob(job *host.ActiveJob, tx *bolt.Tx) error {
+	app := job.Job.Config.Env["FLYNN_APP_ID"]
+	l, ok := s.downJobsLRU[app]
+	if !ok {
+		l = list.New()
+		s.downJobsLRU[app] = l
+	}
+	l.PushFront(job.Job.ID)
+	if l.Len() > maxDownJobsPerApp {
+		if err := s.pruneDownJobs(tx, l); err != nil {
+			return fmt.Errorf("failed to prune down jobs: %s", err)
+		}
+	}
+	return nil
+}
+
 func (s *State) persist(jobID string) {
 	// s.mtx.RLock() should already be covered by caller
 
@@ -247,7 +295,12 @@ func (s *State) persist(jobID string) {
 		backendGlobalBucket := tx.Bucket([]byte("backend-global"))
 
 		// serialize the changed job, and push it into jobs bucket
-		if _, exists := s.jobs[jobID]; exists {
+		if job, exists := s.jobs[jobID]; exists {
+			if statusDown(job.Status) {
+				if err := s.trackDownJob(job, tx); err != nil {
+					return err
+				}
+			}
 			b, err := json.Marshal(s.jobs[jobID])
 			if err != nil {
 				return fmt.Errorf("failed to serialize job state: %s", err)
@@ -256,8 +309,6 @@ func (s *State) persist(jobID string) {
 			if err != nil {
 				return fmt.Errorf("could not persist job to boltdb: %s", err)
 			}
-		} else {
-			jobsBucket.Delete([]byte(jobID))
 		}
 
 		// save the opaque blob the backend provides regarding this job if it is starting/running
@@ -339,16 +390,22 @@ func (s *State) GetJob(id string) *host.ActiveJob {
 	defer s.mtx.RUnlock()
 	job := s.jobs[id]
 	if job == nil {
-		return nil
+		// check if job has been GC'ed
+		s.stateDB.View(func(tx *bolt.Tx) error {
+			jobData := tx.Bucket([]byte("gc-jobs")).Get([]byte(id))
+			if len(jobData) == 0 {
+				return nil
+			}
+			job = &host.ActiveJob{}
+			if err := json.Unmarshal(jobData, job); err != nil {
+				log.Printf("error unmarshalling GCed job %s: %s", id, err)
+				job = nil
+			}
+			return nil
+		})
+		return job
 	}
 	return job.Dup()
-}
-
-func (s *State) RemoveJob(jobID string) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	delete(s.jobs, jobID)
-	s.persist(jobID)
 }
 
 func (s *State) Get() map[string]*host.ActiveJob {
@@ -434,7 +491,6 @@ func (s *State) SetStatusDone(jobID string, exitStatus int) {
 	defer s.mtx.Unlock()
 	job, ok := s.jobs[jobID]
 	if !ok {
-		fmt.Println("SKIP")
 		return
 	}
 	if job.Status == host.StatusDone || job.Status == host.StatusCrashed || job.Status == host.StatusFailed {
@@ -572,4 +628,8 @@ func (s *State) SetPersistentSlot(slot string, jobID string) error {
 		persistentBucket := tx.Bucket([]byte("persistent-jobs"))
 		return persistentBucket.Put([]byte(slot), []byte(jobID))
 	})
+}
+
+func statusDown(s host.JobStatus) bool {
+	return s == host.StatusDone || s == host.StatusCrashed || s == host.StatusFailed
 }
