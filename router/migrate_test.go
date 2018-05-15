@@ -180,3 +180,86 @@ func (MigrateSuite) TestMigrateTLSObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, int64(nRoutes-1)) // the last route doesn't have a cert
 }
+
+func (MigrateSuite) TestDrainBackendsCheck(c *C) {
+	db := setupTestDB(c, "routertest_drain_backends_check_migration")
+	m := &testMigrator{c: c, db: db}
+
+	m.migrateTo(8)
+	for _, v := range []bool{true, false} {
+		r := &router.Route{
+			ParentRef:     fmt.Sprintf("some/parent/ref/%v", v),
+			Service:       "testservice",
+			Domain:        fmt.Sprintf("migrationtest-%v.example.org", v),
+			DrainBackends: v,
+		}
+		err := db.QueryRow(`
+			INSERT INTO http_routes (parent_ref, service, domain, drain_backends)
+			VALUES ($1, $2, $3, $4) RETURNING id`,
+			r.ParentRef,
+			r.Service,
+			r.Domain,
+			r.DrainBackends).Scan(&r.ID)
+		c.Assert(err, IsNil)
+	}
+
+	m.migrateTo(9)
+
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM http_routes WHERE drain_backends = false`).Scan(&count)
+	c.Assert(err, IsNil)
+	c.Assert(count, Equals, 0)
+	err = db.QueryRow(`SELECT COUNT(*) FROM http_routes WHERE drain_backends = true`).Scan(&count)
+	c.Assert(err, IsNil)
+	c.Assert(count, Equals, 2)
+
+	// try creating a new route with drain_backends false when an existing
+	// route has it set to true for the same service
+	r := &router.Route{
+		ParentRef:     "some/parent/ref/asdf",
+		Service:       "testservice",
+		Domain:        "migrationtest.example.org",
+		DrainBackends: false,
+	}
+	err = db.QueryRow(`
+			INSERT INTO http_routes (parent_ref, service, domain, drain_backends)
+			VALUES ($1, $2, $3, $4) RETURNING id`,
+		r.ParentRef,
+		r.Service,
+		r.Domain,
+		r.DrainBackends).Scan(&r.ID)
+	c.Assert(err, Not(IsNil))
+	c.Assert(err.Error(), Matches, ".*cannot create route with drain_backends.*")
+
+	// try creating a new route with drain_backends true when an existing
+	// route has it set to false for the same service
+	r = &router.Route{
+		ParentRef:     "some/parent/ref/asdf",
+		Service:       "testservice-nodrain",
+		Domain:        "migrationtest-nodrain.example.org",
+		DrainBackends: false,
+	}
+	err = db.QueryRow(`
+			INSERT INTO http_routes (parent_ref, service, domain, drain_backends)
+			VALUES ($1, $2, $3, $4) RETURNING id`,
+		r.ParentRef,
+		r.Service,
+		r.Domain,
+		r.DrainBackends).Scan(&r.ID)
+	c.Assert(err, IsNil)
+	r = &router.Route{
+		ParentRef:     "some/parent/ref/asdf",
+		Service:       "testservice-nodrain",
+		Domain:        "migrationtest-nodrain2.example.org",
+		DrainBackends: true,
+	}
+	err = db.QueryRow(`
+			INSERT INTO http_routes (parent_ref, service, domain, drain_backends)
+			VALUES ($1, $2, $3, $4) RETURNING id`,
+		r.ParentRef,
+		r.Service,
+		r.Domain,
+		r.DrainBackends).Scan(&r.ID)
+	c.Assert(err, Not(IsNil))
+	c.Assert(err.Error(), Matches, ".*cannot create route with drain_backends.*")
+}
