@@ -223,6 +223,54 @@ CREATE TRIGGER notify_route_certificates_update
 		`CREATE UNIQUE INDEX http_routes_domain_port_path_key ON http_routes
 		USING btree (domain, port, path) WHERE deleted_at IS NULL`,
 	)
+	migrations.Add(9,
+		`UPDATE http_routes r1 SET drain_backends = true WHERE (SELECT count(*) FROM http_routes r2 WHERE r2.service = r1.service AND drain_backends = true AND deleted_at IS NULL) > 0`,
+		`UPDATE tcp_routes r1 SET drain_backends = true WHERE (SELECT count(*) FROM tcp_routes r2 WHERE r2.service = r1.service AND drain_backends = true AND deleted_at IS NULL) > 0`,
+		`
+CREATE OR REPLACE FUNCTION check_http_route_drain_backends() RETURNS TRIGGER AS $$
+DECLARE
+	drain_routes int;
+BEGIN
+	IF NEW IS NULL OR NEW.deleted_at IS NOT NULL THEN
+		RETURN NEW;
+	END IF;
+
+	SELECT count(*) INTO drain_routes FROM http_routes
+	WHERE service = NEW.service AND deleted_at IS NULL AND drain_backends <> NEW.drain_backends;
+	IF drain_routes > 0 THEN
+		RAISE EXCEPTION 'cannot create route with drain_backends mismatch, other routes for service % exist with drain_backends toggled', NEW.service;
+	END IF;
+
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER check_http_route_drain_backends
+	BEFORE INSERT OR UPDATE OR DELETE ON http_routes
+	FOR EACH ROW
+	EXECUTE PROCEDURE check_http_route_drain_backends()`,
+		`
+CREATE OR REPLACE FUNCTION check_tcp_route_drain_backends() RETURNS TRIGGER AS $$
+DECLARE
+	drain_routes int;
+BEGIN
+	IF NEW IS NULL OR NEW.deleted_at IS NOT NULL THEN
+		RETURN NEW;
+	END IF;
+
+	SELECT count(*) INTO drain_routes FROM tcp_routes
+	WHERE service = NEW.service AND deleted_at IS NULL AND drain_backends <> NEW.drain_backends;
+	IF drain_routes > 0 THEN
+		RAISE EXCEPTION 'cannot create route with drain_backends mismatch, other routes for service % exist with drain_backends toggled', NEW.service;
+	END IF;
+
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER check_http_route_drain_backends
+	BEFORE INSERT OR UPDATE OR DELETE ON tcp_routes
+	FOR EACH ROW
+	EXECUTE PROCEDURE check_http_route_drain_backends()`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
