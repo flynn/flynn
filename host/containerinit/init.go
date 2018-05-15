@@ -39,8 +39,8 @@ import (
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
-	"github.com/kr/pty"
 	"github.com/inconshreveable/log15"
+	"github.com/kr/pty"
 )
 
 var logger log15.Logger
@@ -510,6 +510,7 @@ func babySit(init *ContainerInit, hbs []discoverd.Heartbeater) int {
 				continue
 			}
 			if sig == syscall.SIGTERM || sig == syscall.SIGINT {
+				log.Info("deregistering service due to signal")
 				shutdownOnce.Do(closeHBs)
 			}
 			log.Info("forwarding signal to job", "type", sig)
