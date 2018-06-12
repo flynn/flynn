@@ -1,11 +1,17 @@
 package main
 
-import "os"
+import (
+	"io/ioutil"
+	"os"
+)
+
+// This file is replaced with a version with all assets compiled into it before
+// it's run in the cluster.
 
 func Asset(path string) ([]byte, error) {
-	return nil, nil
+	return ioutil.ReadFile(path)
 }
 
 func AssetInfo(path string) (os.FileInfo, error) {
-	return nil, nil
+	return os.Stat(path)
 }
