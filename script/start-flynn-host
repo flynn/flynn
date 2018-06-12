@@ -112,9 +112,22 @@ main() {
     sudo "${flynn_host}" destroy-volumes ${args[@]}
   fi
 
-  # create IP on lo interface
+  # create IP on enp or lo interface
   info "starting flynn-host using IP ${ip}"
-  sudo ifconfig "lo:${index}" "$ip"
+  local ifname=""
+  for i in $(ls /sys/class/net/); do
+    if [[ $i = "enp"* ]]; then
+      if [[ "$(ifquery $i | grep address)" = "address: 192.0.2.100" ]]; then
+        ifname="$i:$index"
+        break
+      fi
+    fi
+  done;
+  if [[ $ifname = "" ]]; then
+    ifname="lo:$index"
+  fi
+  info "using network interface $ifname"
+  sudo ifconfig "$ifname" "$ip"
 
   # if the number of peers given is > 0 then join existing cluster
   if [[ ${#peers[@]} -gt 0 ]]; then
