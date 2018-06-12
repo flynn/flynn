@@ -7,6 +7,7 @@ var AppProcesses = React.createClass({
 	displayName: "Views.AppProcesses",
 
 	render: function () {
+		var initialProcesses = this.state.initialProcesses;
 		var processes = this.state.processes;
 		var processNames = Object.keys(processes).sort();
 
@@ -37,21 +38,47 @@ var AppProcesses = React.createClass({
 				</ul>
 
 				<Modal visible={this.state.showSaveConfirmModal} onShow={this.__handleSaveConfirmModalShow} onHide={this.__handleSaveConfirmModalHide}>
-					<section>
-						<header>
-							<h1>Deploy changes?</h1>
-						</header>
+					{this.state.showSaveConfirmModal ? (
+						<section>
+							<header>
+								<h1>Deploy changes?</h1>
+							</header>
 
-						<button className="btn-green" onClick={this.__handleSaveBtnConfirmClick} ref="saveConfirmBtn">Deploy</button>
-					</section>
+							<ul className="app-processes-diff">
+								{processNames.reduce(function (m, k) {
+									return m.concat(
+										initialProcesses[k] === processes[k] ? (
+											<li key={k}>
+												<div className="name">{k}</div>
+												<div className="value">{processes[k]}</div>
+											</li>
+										) : ([
+											<li key={k + "-old"} className="old">
+												<div className="name">{k}</div>
+												<div className="value">{initialProcesses[k]}</div>
+											</li>,
+											<li key={k + "-new"} className="new">
+												<div className="name">{k}</div>
+												<div className="value">{processes[k]}</div>
+											</li>
+										])
+									);
+								}, [])}
+							</ul>
+
+							<button className="btn-green" onClick={this.__handleSaveBtnConfirmClick} ref="saveConfirmBtn">Deploy</button>
+						</section>
+					) : null}
 				</Modal>
 			</section>
 		);
 	},
 
 	getInitialState: function () {
+		var initialProcesses = this.props.formation.processes || {};
 		return {
-			processes: this.props.formation.processes || {}, // initial value
+			initialProcesses: initialProcesses,
+			processes: initialProcesses,
 			hasChanges: false,
 			isSaving: false,
 			showSaveConfirmModal: false
