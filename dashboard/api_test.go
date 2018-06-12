@@ -29,12 +29,12 @@ type S struct {
 var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
-	cookiePath := "/"
+	s.cookiePath = "/"
 	s.srv = httptest.NewServer(APIHandler(&Config{
 		SessionStore:  sessions.NewCookieStore([]byte("session-secret")),
 		LoginToken:    testLoginToken,
 		ControllerKey: testControllerKey,
-		CookiePath:    cookiePath,
+		CookiePath:    s.cookiePath,
 	}))
 }
 
@@ -76,6 +76,6 @@ func (s *S) TestUserSessionForm(c *C) {
 	res, err := client.PostForm(s.srv.URL+"/user/sessions", data)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 302)
-	c.Assert(res.Header.Get("Location"), Equals, "/")
+	c.Assert(res.Header.Get("Location"), Equals, s.cookiePath)
 	s.testAuthenticated(c, client)
 }
