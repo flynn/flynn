@@ -54,3 +54,55 @@
   }
 }
 
+
+.app-processes-diff {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    margin-bottom: 2rem;
+
+    > li {
+      display: -webkit-flex;
+      display: flex;
+      flex-flow: row;
+      -webkit-flex-flow: row;
+      width: 150px;
+      padding: 0.25rem;
+      color: $blackColor;
+
+      > .name {
+        align-self: center;
+        -webkit-align-self: center;
+        margin-right: 1rem;
+        flex-grow: 1;
+      }
+
+      > .value {
+        align-self: center;
+        -webkit-align-self: center;
+      }
+    }
+
+    > li:before {
+      display: inline-block;
+      margin-right: 0.25rem;
+      width: 1rem;
+      content: ' ';
+    }
+
+    > li.old:before {
+      content: '-';
+    }
+
+    > li.old {
+      background-color: rgba($redColor, 0.3);
+    }
+
+    > li.new:before {
+      content: '+';
+    }
+
+    > li.new {
+      background-color: rgba($greenColor, 0.3);
+    }
+}
