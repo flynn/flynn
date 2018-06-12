@@ -22,16 +22,19 @@ const (
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
-	srv *httptest.Server
+	srv        *httptest.Server
+	cookiePath string
 }
 
 var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
+	cookiePath := "/"
 	s.srv = httptest.NewServer(APIHandler(&Config{
 		SessionStore:  sessions.NewCookieStore([]byte("session-secret")),
 		LoginToken:    testLoginToken,
 		ControllerKey: testControllerKey,
+		CookiePath:    cookiePath,
 	}))
 }
 
@@ -66,9 +69,13 @@ func (s *S) TestUserSessionForm(c *C) {
 	c.Assert(err, IsNil)
 	client := &http.Client{
 		Jar: jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 	res, err := client.PostForm(s.srv.URL+"/user/sessions", data)
 	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(res.StatusCode, Equals, 302)
+	c.Assert(res.Header.Get("Location"), Equals, "/")
 	s.testAuthenticated(c, client)
 }
