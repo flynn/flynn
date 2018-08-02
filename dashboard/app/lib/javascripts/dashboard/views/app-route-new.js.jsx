@@ -87,7 +87,8 @@ var NewAppRoute = React.createClass({
 			appID: this.props.appId,
 			data: {
 				domain: uri.hostname,
-				path: uri.pathname
+				path: uri.pathname,
+				drain_backends: true
 			}
 		});
 	}
