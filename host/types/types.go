@@ -75,8 +75,9 @@ func (j *Job) Dup() *Job {
 type JobProfile string
 
 const (
-	JobProfileZFS JobProfile = "zfs"
-	JobProfileKVM JobProfile = "kvm"
+	JobProfileZFS  JobProfile = "zfs"
+	JobProfileKVM  JobProfile = "kvm"
+	JobProfileLoop JobProfile = "loop"
 )
 
 type MountspecType string

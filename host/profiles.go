@@ -3,18 +3,21 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"golang.org/x/sys/unix"
 )
 
 type jobProfileFn func(*host.Job) error
 
 var jobProfiles = map[host.JobProfile]jobProfileFn{
-	host.JobProfileZFS: jobProfileZFS,
-	host.JobProfileKVM: jobProfileKVM,
+	host.JobProfileZFS:  jobProfileZFS,
+	host.JobProfileKVM:  jobProfileKVM,
+	host.JobProfileLoop: jobProfileLoop,
 }
 
 const zfsVolMajor = 230
@@ -113,6 +116,51 @@ func jobProfileKVM(job *host.Job) error {
 	// allow the job to create a network TAP interface
 	linuxCapabilities := append(*job.Config.LinuxCapabilities, "CAP_NET_ADMIN")
 	job.Config.LinuxCapabilities = &linuxCapabilities
+
+	return nil
+}
+
+const LOOP_CTL_GET_FREE = 0x4C82
+
+func jobProfileLoop(job *host.Job) error {
+	// find an available loop device using /dev/loop-control
+	f, err := os.OpenFile("/dev/loop-control", os.O_RDONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	index, err := unix.IoctlGetInt(int(f.Fd()), LOOP_CTL_GET_FREE)
+	if err != nil {
+		return err
+	}
+
+	// load the device
+	loopDev, err := loadDevice(fmt.Sprintf("/sys/class/block/loop%d/dev", index))
+	if err != nil {
+		return fmt.Errorf("error loading loop device: %s", err)
+	}
+
+	// allow the loop device as /dev/loop0
+	allowedDevices := append(*job.Config.AllowedDevices, []*configs.Device{
+		{
+			Path:        "/dev/loop0",
+			Type:        'b',
+			Major:       loopDev.major,
+			Minor:       loopDev.minor,
+			Permissions: "rwm",
+		},
+	}...)
+	job.Config.AllowedDevices = &allowedDevices
+
+	// auto create /dev/loop0
+	autoCreatedDevices := append(*job.Config.AutoCreatedDevices, &configs.Device{
+		Path:        "/dev/loop0",
+		Type:        'b',
+		Major:       loopDev.major,
+		Minor:       loopDev.minor,
+		Permissions: "rwm",
+	})
+	job.Config.AutoCreatedDevices = &autoCreatedDevices
 
 	return nil
 }
