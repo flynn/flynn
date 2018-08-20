@@ -12,6 +12,7 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -116,15 +117,13 @@ type Runner struct {
 	rootFS      string
 	githubToken string
 	s3          *s3.S3
-	networks    map[string]struct{}
-	netMtx      sync.Mutex
 	db          *postgres.DB
 	buildCh     chan struct{}
 	clusters    map[string]*cluster.Cluster
 	authKey     string
 	runEnv      map[string]string
-	subnet      uint64
 	ircMsgs     chan string
+	ip          string
 }
 
 var args *arg.Args
@@ -139,7 +138,6 @@ func main() {
 	runner := &Runner{
 		bc:       args.BootConfig,
 		events:   make(chan Event),
-		networks: make(map[string]struct{}),
 		buildCh:  make(chan struct{}, args.ConcurrentBuilds),
 		clusters: make(map[string]*cluster.Cluster),
 		ircMsgs:  make(chan string, 100),
@@ -171,15 +169,35 @@ func (r *Runner) start() error {
 		return errors.New("GITHUB_TOKEN not set")
 	}
 
+	// set r.ip from /.containerconfig
+	if err := func() error {
+		f, err := os.Open("/.containerconfig")
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		var config struct {
+			IP string
+		}
+		if err := json.NewDecoder(f).Decode(&config); err != nil {
+			return err
+		}
+		ip, _, err := net.ParseCIDR(config.IP)
+		if err != nil {
+			return err
+		}
+		r.ip = ip.String()
+		return nil
+	}(); err != nil {
+		return err
+	}
+
 	r.s3 = s3.New(session.New(&aws.Config{Region: aws.String("us-east-1")}))
 
-	bc := r.bc
-	bc.Network = r.allocateNet()
 	var err error
-	if r.rootFS, err = cluster.BuildFlynn(bc, args.RootFS, "origin/master", false, os.Stdout); err != nil {
+	if r.rootFS, err = cluster.BuildFlynn(r.bc, args.RootFS, "origin/master", false, os.Stdout); err != nil {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
-	r.releaseNet(bc.Network)
 	shutdown.BeforeExit(func() { removeRootFS(r.rootFS) })
 
 	db := postgres.Wait(nil, nil)
@@ -307,29 +325,34 @@ cd ~/go/src/github.com/flynn/flynn
 
 script/configure-docker "{{ .Cluster.ClusterDomain }}"
 
-build/bin/flynn cluster add \
-  --tls-pin "{{ .Config.TLSPin }}" \
-  --git-url "{{ .Config.GitURL }}" \
-  --docker-push-url "{{ .Config.DockerPushURL }}" \
-  default \
-  {{ .Config.ControllerURL }} \
-  {{ .Config.Key }}
+export DISCOVERD="http://{{ (index .Cluster.Instances 0).IP }}:1111"
 
-git config --global user.email "ci@flynn.io"
-git config --global user.name "CI"
-
-cd test
-
-cmd="bin/flynn-test \
-  --flynnrc $HOME/.flynnrc \
-  --cluster-api http://{{ .Cluster.BridgeIP }}/cluster/{{ .Cluster.ID }} \
-  --cli $(pwd)/../build/bin/flynn \
-  --flynn-host $(pwd)/../build/bin/flynn-host \
+# put the command in a file so the arguments aren't echoed in the logs
+cat > /tmp/run-tests.sh <<EOF
+build/bin/flynn-host run \
+  --host "{{ (index .Cluster.Instances 0).ID }}" \
+  --bind "$(pwd):/go/src/github.com/flynn/flynn,/var/run/docker.sock:/var/run/docker.sock,/var/lib/flynn:/var/lib/flynn,/mnt/backups:/mnt/backups" \
+  --volume "/tmp" \
+  "build/image/test.json" \
+  /usr/bin/env \
+  ROOT="/go/src/github.com/flynn/flynn" \
+  CLUSTER_ADD_ARGS="-p {{ .Config.TLSPin }} default {{ .Cluster.ClusterDomain }} {{ .Config.Key }}" \
+  ROUTER_IP="{{ .Cluster.RouterIP }}" \
+  DOMAIN="{{ .Cluster.ClusterDomain }}" \
+  TEST_RUNNER_AUTH_KEY="${TEST_RUNNER_AUTH_KEY}" \
+  BLOBSTORE_S3_CONFIG="${BLOBSTORE_S3_CONFIG}" \
+  BLOBSTORE_GCS_CONFIG="${BLOBSTORE_GCS_CONFIG}" \
+  BLOBSTORE_AZURE_CONFIG="${BLOBSTORE_AZURE_CONFIG}" \
+  /bin/run-flynn-test.sh \
+  --cluster-api http://{{ .RunnerIP }}/cluster/{{ .Cluster.ID }} \
   --router-ip {{ .Cluster.RouterIP }} \
   --backups-dir "/mnt/backups" \
-  --debug"
+  --debug
+EOF
+chmod +x /tmp/run-tests.sh
 
-timeout --signal=QUIT --kill-after=10 45m $cmd
+timeout --signal=QUIT --kill-after=10 45m /tmp/run-tests.sh
+
 `[1:]))
 
 // failPattern matches failed test output like:
@@ -396,11 +419,8 @@ func (r *Runner) build(b *Build) (err error) {
 	log.Printf("building %s\n", b.Commit)
 
 	out := &iotool.SafeWriter{W: io.MultiWriter(os.Stdout, mainLog, &failureBuf)}
-	bc := r.bc
-	bc.Network = r.allocateNet()
-	defer r.releaseNet(bc.Network)
 
-	c = cluster.New(bc, out)
+	c = cluster.New(r.bc, out)
 	log.Println("created cluster with ID", c.ID)
 	r.clusters[c.ID] = c
 	defer func() {
@@ -423,7 +443,14 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 
 	var script bytes.Buffer
-	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "Config": config.Clusters[0]})
+	args := map[string]interface{}{
+		"RunnerIP": r.ip,
+		"Cluster":  c,
+		"Config":   config.Clusters[0],
+	}
+	if err := testRunScript.Execute(&script, args); err != nil {
+		return err
+	}
 	return c.RunWithEnv(script.String(), &cluster.Streams{Stdout: out, Stderr: out}, r.runEnv)
 }
 
@@ -869,25 +896,6 @@ func (r *Runner) updateStatus(b *Build, state string) {
 			log.Printf("updateStatus: request failed: %d\n", res.StatusCode)
 		}
 	}()
-}
-
-func (r *Runner) allocateNet() string {
-	r.netMtx.Lock()
-	defer r.netMtx.Unlock()
-	for {
-		net := fmt.Sprintf("10.69.%d.1/24", r.subnet%256)
-		r.subnet++
-		if _, ok := r.networks[net]; !ok {
-			r.networks[net] = struct{}{}
-			return net
-		}
-	}
-}
-
-func (r *Runner) releaseNet(net string) {
-	r.netMtx.Lock()
-	defer r.netMtx.Unlock()
-	delete(r.networks, net)
 }
 
 func (r *Runner) buildPending() error {

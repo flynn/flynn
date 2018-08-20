@@ -633,6 +633,7 @@
           },
           "copy": {
             "test/run.sh":           "/bin/run-flynn-test.sh",
+            "test/vm.sh":            "/bin/run-vm.sh",
             "test/scripts/start.sh": "/test/bin/start-runner.sh",
             "test/rootfs/build.sh":  "/test/rootfs/build.sh",
             "test/rootfs/setup.sh":  "/test/rootfs/setup.sh",
@@ -642,7 +643,6 @@
             "test/runner/assets/index.html":     "/test/assets/",
             "test/runner/assets/style.css":      "/test/assets/",
             "test/runner/assets/ansi_up/ansi_up.js": "/test/assets/ansi_up/"
-
           }
         }
       ],

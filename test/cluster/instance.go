@@ -11,29 +11,32 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	units "github.com/docker/go-units"
+	controller "github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/resource"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 	"golang.org/x/crypto/ssh"
 )
 
-func NewVMManager(bridge *Bridge) *VMManager {
-	return &VMManager{taps: &TapManager{bridge}}
+func NewVMManager(client controller.Client) *VMManager {
+	return &VMManager{client}
 }
 
 type VMManager struct {
-	taps *TapManager
+	client controller.Client
 }
 
 type VMConfig struct {
 	Kernel     string
-	User       int
-	Group      int
-	Memory     string
+	Memory     int
 	Cores      int
-	Drives     map[string]*VMDrive
+	Disk       *VMDisk
 	Args       []string
 	Out        io.Writer `json:"-"`
 	BackupsDir string
@@ -41,14 +44,18 @@ type VMConfig struct {
 	netFS string
 }
 
-type VMDrive struct {
+type VMDisk struct {
 	FS   string
 	COW  bool
 	Temp bool
 }
 
 func (v *VMManager) NewInstance(c *VMConfig) (*Instance, error) {
-	inst := &Instance{ID: random.String(8), VMConfig: c}
+	inst := &Instance{
+		ID:       random.String(8),
+		VMConfig: c,
+		client:   v.client,
+	}
 	if c.Kernel == "" {
 		c.Kernel = "vmlinuz"
 	}
@@ -59,12 +66,6 @@ func (v *VMManager) NewInstance(c *VMConfig) (*Instance, error) {
 			return nil, err
 		}
 	}
-	var err error
-	inst.tap, err = v.taps.NewTap(c.User, c.Group)
-	if err != nil {
-		return nil, err
-	}
-	inst.IP = inst.tap.IP.String()
 	return inst, nil
 }
 
@@ -73,8 +74,8 @@ type Instance struct {
 	IP string `json:"ip"`
 
 	*VMConfig
-	tap *Tap
-	cmd *exec.Cmd
+	client controller.Client
+	job    *ct.Job
 
 	tempFiles []string
 
@@ -84,38 +85,12 @@ type Instance struct {
 	initial bool
 }
 
-func (i *Instance) writeInterfaceConfig() error {
-	dir, err := ioutil.TempDir("", "netfs-")
-	if err != nil {
-		return err
-	}
-	i.tempFiles = append(i.tempFiles, dir)
-	i.netFS = dir
-
-	if err := os.Chmod(dir, 0755); err != nil {
-		os.RemoveAll(dir)
-		return err
-	}
-
-	f, err := os.Create(filepath.Join(dir, "eth0"))
-	if err != nil {
-		os.RemoveAll(dir)
-		return err
-	}
-	defer f.Close()
-
-	return i.tap.WriteInterfaceConfig(f)
-}
-
 func (i *Instance) cleanup() {
 	for _, f := range i.tempFiles {
 		fmt.Printf("removing temp file %s\n", f)
 		if err := os.RemoveAll(f); err != nil {
 			fmt.Printf("could not remove temp file %s: %s\n", f, err)
 		}
-	}
-	if err := i.tap.Close(); err != nil {
-		fmt.Printf("could not close tap device %s: %s\n", i.tap.Name, err)
 	}
 	i.tempFiles = nil
 
@@ -127,47 +102,80 @@ func (i *Instance) cleanup() {
 }
 
 func (i *Instance) Start() error {
-	i.writeInterfaceConfig()
-
-	macRand := random.Bytes(3)
-	macaddr := fmt.Sprintf("52:54:00:%02x:%02x:%02x", macRand[0], macRand[1], macRand[2])
-
-	i.Args = append(i.Args,
-		"-enable-kvm",
-		"-kernel", i.Kernel,
-		"-append", "root=/dev/sda net.ifnames=0",
-		"-netdev", "tap,id=vmnic,ifname="+i.tap.Name+",script=no,downscript=no",
-		"-device", "virtio-net,netdev=vmnic,mac="+macaddr,
-		"-virtfs", "fsdriver=local,path="+i.netFS+",security_model=passthrough,readonly,mount_tag=netfs",
-		"-virtfs", "fsdriver=local,path="+i.BackupsDir+",security_model=passthrough,readonly,mount_tag=backupsfs",
-		"-nographic",
-	)
-	if i.Memory != "" {
-		i.Args = append(i.Args, "-m", i.Memory)
-	}
-	if i.Cores > 0 {
-		i.Args = append(i.Args, "-smp", strconv.Itoa(i.Cores))
-	}
-	for n, d := range i.Drives {
-		if d.COW {
-			fs, err := i.createCOW(d.FS, d.Temp)
-			if err != nil {
-				i.cleanup()
-				return err
-			}
-			d.FS = fs
+	// create a copy-on-write disk if necessary
+	if i.Disk.COW {
+		fs, err := i.createCOW(i.Disk.FS, i.Disk.Temp)
+		if err != nil {
+			i.cleanup()
+			return err
 		}
-		i.Args = append(i.Args, fmt.Sprintf("-%s", n), d.FS)
+		i.Disk.FS = fs
 	}
 
-	i.cmd = exec.Command("sudo", append([]string{"-u", fmt.Sprintf("#%d", i.User), "-g", fmt.Sprintf("#%d", i.Group), "-H", "/usr/bin/qemu-system-x86_64"}, i.Args...)...)
-	i.cmd.Stdout = i.Out
-	i.cmd.Stderr = i.Out
-	var err error
-	if err = i.cmd.Start(); err != nil {
+	// stream job events so we can grab the IP once the job has started
+	events := make(chan *ct.Job)
+	stream, err := i.client.StreamJobEvents(os.Getenv("FLYNN_APP_ID"), events)
+	if err != nil {
 		i.cleanup()
+		return err
 	}
-	return err
+	defer stream.Close()
+
+	// run the VM as a one-off job
+	newJob := &ct.NewJob{
+		ReleaseID: os.Getenv("FLYNN_RELEASE_ID"),
+		Args:      []string{"/bin/run-vm.sh"},
+		Env: map[string]string{
+			"MEMORY": strconv.Itoa(i.Memory),
+			"CPUS":   strconv.Itoa(i.Cores),
+			"DISK":   i.Disk.FS,
+			"KERNEL": i.Kernel,
+		},
+		MountsFrom: "runner",
+		Resources:  resource.Defaults(),
+		Profiles:   []host.JobProfile{host.JobProfileKVM},
+	}
+	newJob.Resources.SetLimit(resource.TypeMemory, int64(i.Memory*units.MiB))
+	i.job, err = i.client.RunJobDetached(os.Getenv("FLYNN_APP_ID"), newJob)
+	if err != nil {
+		i.cleanup()
+		return err
+	}
+
+	timeout := time.After(30 * time.Second)
+	for {
+		select {
+		case job, ok := <-events:
+			if !ok {
+				i.cleanup()
+				return stream.Err()
+			}
+			if job.ID != i.job.ID {
+				continue
+			}
+			switch job.State {
+			case ct.JobStateDown:
+				i.cleanup()
+				return errors.New("job stopped")
+			case ct.JobStateUp:
+				host, err := cluster.NewClient().Host(job.HostID)
+				if err != nil {
+					i.cleanup()
+					return err
+				}
+				hostJob, err := host.GetJob(job.ID)
+				if err != nil {
+					i.cleanup()
+					return err
+				}
+				i.IP = hostJob.InternalIP
+				return nil
+			}
+		case <-timeout:
+			i.cleanup()
+			return errors.New("timed out waiting for job to start")
+		}
+	}
 }
 
 func (i *Instance) createCOW(image string, temp bool) (string, error) {
@@ -179,38 +187,45 @@ func (i *Instance) createCOW(image string, temp bool) (string, error) {
 	if temp {
 		i.tempFiles = append(i.tempFiles, dir)
 	}
-	if err := os.Chown(dir, i.User, i.Group); err != nil {
-		return "", err
-	}
 	path := filepath.Join(dir, "rootfs.img")
 	cmd := exec.Command("qemu-img", "create", "-f", "qcow2", "-b", image, path)
 	if err = cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to create COW filesystem: %s", err.Error())
 	}
-	if err := os.Chown(path, i.User, i.Group); err != nil {
-		return "", err
-	}
 	return path, nil
 }
 
-func (i *Instance) Wait(timeout time.Duration) error {
-	done := make(chan error)
-	go func() {
-		done <- i.cmd.Wait()
-	}()
-	select {
-	case err := <-done:
+func (i *Instance) Wait(timeout time.Duration, f func() error) error {
+	events := make(chan *ct.Job)
+	stream, err := i.client.StreamJobEvents(os.Getenv("FLYNN_APP_ID"), events)
+	if err != nil {
 		return err
-	case <-time.After(timeout):
-		return errors.New("timeout")
+	}
+	defer stream.Close()
+	if err := f(); err != nil {
+		return err
+	}
+	timeoutCh := time.After(timeout)
+	for {
+		select {
+		case job, ok := <-events:
+			if !ok {
+				return fmt.Errorf("error streaming job events: %s", stream.Err())
+			}
+			if job.ID == i.job.ID && job.State == ct.JobStateDown {
+				return nil
+			}
+		case <-timeoutCh:
+			return errors.New("timed out waiting for job to stop")
+		}
 	}
 }
 
 func (i *Instance) Shutdown() error {
-	if err := i.Run("sudo poweroff", nil); err != nil {
-		return i.Kill()
-	}
-	if err := i.Wait(30 * time.Second); err != nil {
+	err := i.Wait(30*time.Second, func() error {
+		return i.Run("sudo poweroff", nil)
+	})
+	if err != nil {
 		return i.Kill()
 	}
 	i.cleanup()
@@ -219,13 +234,9 @@ func (i *Instance) Shutdown() error {
 
 func (i *Instance) Kill() error {
 	defer i.cleanup()
-	if err := i.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return err
-	}
-	if err := i.Wait(5 * time.Second); err != nil {
-		return i.cmd.Process.Kill()
-	}
-	return nil
+	return i.Wait(10*time.Second, func() error {
+		return i.client.DeleteJob(os.Getenv("FLYNN_APP_ID"), i.job.ID)
+	})
 }
 
 func (i *Instance) dialSSH(stderr io.Writer) error {
@@ -317,8 +328,4 @@ func (i *Instance) run(command string, s *Streams, env map[string]string, timeou
 	case <-time.After(*timeout):
 		return errors.New("command timed out")
 	}
-}
-
-func (i *Instance) Drive(name string) *VMDrive {
-	return i.Drives[name]
 }

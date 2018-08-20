@@ -17,7 +17,6 @@ main() {
 
   cd "${dir}"
   exec /bin/flynn-test-runner \
-    --user     "root" \
     --rootfs   "${dir}/build/rootfs.img" \
     --kernel   "${dir}/build/vmlinuz" \
     --assets   "/test/assets" \

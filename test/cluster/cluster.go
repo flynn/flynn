@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/cli/config"
+	controller "github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/test/buildlog"
@@ -28,10 +29,7 @@ const (
 )
 
 type BootConfig struct {
-	User       string
 	Kernel     string
-	Network    string
-	NatIface   string
 	BackupsDir string
 }
 
@@ -49,7 +47,6 @@ type Cluster struct {
 	bc     BootConfig
 	vm     *VMManager
 	out    io.Writer
-	bridge *Bridge
 	rootFS string
 }
 
@@ -107,47 +104,43 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 		return "", err
 	}
 
-	uid, gid, err := lookupUser(c.bc.User)
-	if err != nil {
-		return "", err
+	disk := &VMDisk{
+		FS:   rootFS,
+		COW:  true,
+		Temp: false,
 	}
-
 	build, err := c.vm.NewInstance(&VMConfig{
-		Kernel: c.bc.Kernel,
-		User:   uid,
-		Group:  gid,
-		Memory: "16384",
-		Cores:  8,
-		Drives: map[string]*VMDrive{
-			"hda": {FS: rootFS, COW: true, Temp: false},
-		},
+		Kernel:     c.bc.Kernel,
+		Memory:     16384,
+		Cores:      8,
+		Disk:       disk,
 		BackupsDir: c.bc.BackupsDir,
 	})
 	if err != nil {
-		return build.Drive("hda").FS, err
+		return disk.FS, err
 	}
 	c.log("Booting build instance...")
 	if err := build.Start(); err != nil {
-		return build.Drive("hda").FS, fmt.Errorf("error starting build instance: %s", err)
+		return disk.FS, fmt.Errorf("error starting build instance: %s", err)
 	}
 
 	c.log("Waiting for instance to boot...")
 	if err := buildFlynn(build, commit, merge, c.out); err != nil {
 		build.Kill()
-		return build.Drive("hda").FS, fmt.Errorf("error running build script: %s", err)
+		return disk.FS, fmt.Errorf("error running build script: %s", err)
 	}
 
 	if runTests {
 		if err := runUnitTests(build, c.out); err != nil {
 			build.Kill()
-			return build.Drive("hda").FS, fmt.Errorf("unit tests failed: %s", err)
+			return disk.FS, fmt.Errorf("unit tests failed: %s", err)
 		}
 	}
 
 	if err := build.Shutdown(); err != nil {
-		return build.Drive("hda").FS, fmt.Errorf("error while stopping build instance: %s", err)
+		return disk.FS, fmt.Errorf("error while stopping build instance: %s", err)
 	}
-	c.rootFS = build.Drive("hda").FS
+	c.rootFS = disk.FS
 	return c.rootFS, nil
 }
 
@@ -198,13 +191,6 @@ func (c *Cluster) Boot(typ ClusterType, count int, buildLog *buildlog.Log, killO
 	}, nil
 }
 
-func (c *Cluster) BridgeIP() string {
-	if c.bridge == nil {
-		return ""
-	}
-	return c.bridge.IP()
-}
-
 func (c *Cluster) AddHost() (*Instance, error) {
 	if c.rootFS == "" {
 		return nil, errors.New("cluster not yet booted")
@@ -246,28 +232,19 @@ func (c *Cluster) Size() int {
 }
 
 func (c *Cluster) startVMs(typ ClusterType, rootFS string, count int, initial bool) ([]*Instance, error) {
-	uid, gid, err := lookupUser(c.bc.User)
-	if err != nil {
-		return nil, err
-	}
-
 	instances := make([]*Instance, count)
 	for i := 0; i < count; i++ {
-		memory := "8192"
+		memory := 8192
 		if initial && i == 0 {
 			// give the first instance more memory as that is where
 			// the test binary runs, and the tests use a lot of memory
-			memory = "16384"
+			memory = 16384
 		}
 		inst, err := c.vm.NewInstance(&VMConfig{
-			Kernel: c.bc.Kernel,
-			User:   uid,
-			Group:  gid,
-			Memory: memory,
-			Cores:  2,
-			Drives: map[string]*VMDrive{
-				"hda": {FS: rootFS, COW: true, Temp: true},
-			},
+			Kernel:     c.bc.Kernel,
+			Memory:     memory,
+			Cores:      2,
+			Disk:       &VMDisk{FS: rootFS, COW: true, Temp: true},
 			BackupsDir: c.bc.BackupsDir,
 		})
 		if err != nil {
@@ -312,16 +289,15 @@ func (c *Cluster) setup() error {
 	if _, err := os.Stat(c.bc.Kernel); os.IsNotExist(err) {
 		return fmt.Errorf("cluster: not a kernel file: %s", c.bc.Kernel)
 	}
-	if c.bridge == nil {
-		var err error
-		name := "flynnbr." + random.String(5)
-		c.logf("creating network bridge %s\n", name)
-		c.bridge, err = createBridge(name, c.bc.Network, c.bc.NatIface)
-		if err != nil {
-			return fmt.Errorf("could not create network bridge: %s", err)
-		}
+	instances, err := discoverd.GetInstances("controller", 10*time.Second)
+	if err != nil {
+		return err
 	}
-	c.vm = NewVMManager(c.bridge)
+	client, err := controller.NewClient("", instances[0].Meta["AUTH_KEY"])
+	if err != nil {
+		return err
+	}
+	c.vm = NewVMManager(client)
 	return nil
 }
 
@@ -362,13 +338,6 @@ func (c *Cluster) Shutdown() {
 		if err := inst.Shutdown(); err != nil {
 			c.logf("error killing instance %d: %s\n", i, err)
 		}
-	}
-	if c.bridge != nil {
-		c.logf("deleting network bridge %s\n", c.bridge.name)
-		if err := deleteBridge(c.bridge); err != nil {
-			c.logf("error deleting network bridge %s: %s\n", c.bridge.name, err)
-		}
-		c.bridge = nil
 	}
 }
 
