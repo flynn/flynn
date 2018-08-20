@@ -151,7 +151,7 @@ new_release_json() {
           "writeable": true
         }
       ],
-      "profiles": ["kvm", "loop"],
+      "profiles": ["loop"],
       "linux_capabilities": [
         "CAP_NET_RAW",
         "CAP_NET_BIND_SERVICE",

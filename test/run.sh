@@ -21,23 +21,11 @@ main() {
 
   cd "${ROOT}/test"
 
-  # remove some flags from $@
-  # TODO: remove once the CI runner no longer passes these flags
-  local args=(
-    "--flynnrc"    "${HOME}/.flynnrc"
-    "--cli"        "$(readlink -f ../build/bin/flynn)"
-    "--flynn-host" "$(readlink -f ../build/bin/flynn-host)"
-  )
-  while [[ -n "$1" ]]; do
-    if [[ "$1" = "--flynnrc" ]] || [[ "$1" = "--flynn-host" ]] || [[ "$1" = "--cli" ]]; then
-      shift 2
-      continue
-    fi
-    args+=("$1")
-    shift
-  done
-
-  exec /bin/flynn-test ${args[@]}
+  exec /bin/flynn-test \
+    --flynnrc    "${HOME}/.flynnrc" \
+    --cli        "$(readlink -f ../build/bin/flynn)" \
+    --flynn-host "$(readlink -f ../build/bin/flynn-host)" \
+    $@
 }
 
 main "$@"

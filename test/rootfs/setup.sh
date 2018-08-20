@@ -16,10 +16,16 @@ echo ubuntu:ubuntu | chpasswd
 
 # set up fstab
 echo "LABEL=rootfs / ext4 defaults 0 1" > /etc/fstab
-echo "netfs /etc/network/interfaces.d 9p trans=virtio,noauto,x-systemd.automount 0 0" >> /etc/fstab
 
-# make sure there are no existing network interface configs
-rm -rf /etc/network/interfaces.d/*
+# setup networking
+cat > /etc/systemd/network/10-flynn.network <<EOF
+[Match]
+Name=en*
+
+[Network]
+DHCP=ipv4
+EOF
+systemctl enable systemd-networkd.service
 
 # configure hosts and dns resolution
 echo "127.0.0.1 localhost localhost.localdomain" > /etc/hosts
