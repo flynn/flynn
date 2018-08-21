@@ -341,6 +341,7 @@ type NewJob struct {
 	Resources   resource.Resources `json:"resources,omitempty"`
 	Data        bool               `json:"data,omitempty"`
 	Partition   PartitionType      `json:"partition,omitempty"`
+	Profiles    []host.JobProfile  `json:"profiles,omitempty"`
 
 	// MountsFrom is a process type to copy mounts from
 	MountsFrom string `json:"mounts_from,omitempty"`

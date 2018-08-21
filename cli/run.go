@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/go-docopt"
@@ -22,7 +24,7 @@ import (
 
 func init() {
 	cmd := register("run", runRun, `
-usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [-l] [--limits <limits>] [--mounts-from <proc>] [--] <command> [<argument>...]
+usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [-l] [--limits <limits>] [--profiles <profiles>] [--mounts-from <proc>] [--] <command> [<argument>...]
 
 Run a job.
 
@@ -32,6 +34,7 @@ Options:
 	-e <entrypoint>       [DEPRECATED] overwrite the default entrypoint of the release's image
 	-l, --enable-log      send output to log streams
 	--limits <limits>     comma separated limits for the run job (see "flynn limit -h" for format)
+	--profiles=<profiles> job profiles (comma separated)
 	--mounts-from <proc>  process type to copy mounts from
 `)
 	cmd.optsFirst = true
@@ -78,6 +81,13 @@ func runRun(args *docopt.Args, client controller.Client) error {
 			config.Resources[typ] = limit
 		}
 	}
+	if profiles := args.String["--profiles"]; profiles != "" {
+		s := strings.Split(profiles, ",")
+		config.Profiles = make([]host.JobProfile, len(s))
+		for i, profile := range s {
+			config.Profiles[i] = host.JobProfile(profile)
+		}
+	}
 	return runJob(client, config)
 }
 
@@ -97,6 +107,7 @@ type runConfig struct {
 	Data       bool
 	Resources  resource.Resources
 	MountsFrom string
+	Profiles   []host.JobProfile
 
 	// DeprecatedArtifact is to support using an explicit artifact
 	// with old clusters which don't accept multiple artifacts
@@ -116,6 +127,7 @@ func runJob(client controller.Client, config runConfig) error {
 		Data:               config.Data,
 		Resources:          config.Resources,
 		MountsFrom:         config.MountsFrom,
+		Profiles:           config.Profiles,
 	}
 
 	// ensure slug apps from old clusters use /runner/init
