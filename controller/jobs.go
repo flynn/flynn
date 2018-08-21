@@ -339,6 +339,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		},
 		Resources: newJob.Resources,
 		Partition: string(newJob.Partition),
+		Profiles:  newJob.Profiles,
 	}
 	resource.SetDefaults(&job.Resources)
 	if len(newJob.Args) > 0 {

@@ -71,6 +71,13 @@
     "mounts_from": {
       "description": "process type to copy mounts from",
       "type": "string"
+    },
+    "profiles": {
+      "description": "job profiles",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   }
 }
