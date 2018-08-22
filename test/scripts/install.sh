@@ -30,47 +30,19 @@
 
 set -e
 
-GO_VERSION="1.9.2"
-
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-dir="/opt/flynn-test"
-build_dir="${dir}/build"
 source "${ROOT}/script/lib/ui.sh"
 
 main() {
-  local user="flynn-test"
-  local src_dir="${dir}/src/github.com/flynn/flynn"
-
-  info "installing dependencies"
-  apt-get update
-  apt-get install -y build-essential zerofree qemu qemu-kvm systemd-container
-
-  info "creating ${user} user"
-  if ! id "${user}" &>/dev/null; then
-    useradd --system --home "${dir}" --user-group --groups "kvm" -M "${user}"
-  fi
-
-  info "cloning Flynn repo"
-  if [[ ! -d "${src_dir}/.git" ]]; then
-    rm -rf "${src_dir}"
-    git clone --quiet "https://github.com/flynn/flynn.git" "${src_dir}"
-  fi
+  local dir="/opt/flynn-test"
+  local build_dir="${dir}/build"
 
   info "mounting build directory"
   setup_disk
 
-  info "fixing permissions"
-  chown -R "${user}:${user}" "${dir}"
-
-  info "installing systemd unit"
-  install_systemd_unit
-
-  info "installing Go ${GO_VERSION}"
-  install_go
-
   info
   info "install finished!"
-  info "you should add credentials to ${dir}/.credentials then start flynn-test (sudo systemctl start flynn-test)"
+  info "you should now run test/scripts/setup.sh from a machine that has a local build of Flynn."
 }
 
 setup_disk() {
@@ -98,37 +70,4 @@ setup_disk() {
   fi
 }
 
-install_go() {
-  if go version 2>&1 | grep -qF "go${GO_VERSION}"; then
-    return
-  fi
-
-  local tmp="$(mktemp --directory)"
-  trap "rm -rf ${tmp}" EXIT
-  pushd "${tmp}" &>/dev/null
-  curl -s "https://storage.googleapis.com/flynn-misc/godeb.tar.gz" | tar xz
-  ./godeb install "${GO_VERSION}"
-  popd &>/dev/null
-}
-
-install_systemd_unit() {
-  cp "${src_dir}/test/scripts/start.sh" "${dir}/start.sh"
-
-  cat > /etc/systemd/system/flynn-test.service <<EOF
-[Unit]
-Description=Flynn CI Runner
-Documentation=https://flynn.io/docs
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/opt/flynn-test/start.sh
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  systemctl enable flynn-test.service
-}
-main $@
+main "$@"

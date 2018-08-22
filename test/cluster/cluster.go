@@ -399,7 +399,9 @@ git config user.name "CI"
 git merge origin/master
 {{ end }}
 
-make < /dev/null
+# build flynn, ensuring that it bootstraps on the local
+# VM (rather than using the host Flynn cluster)
+script/build-flynn --force-bootstrap </dev/null
 
 script/kill-flynn
 

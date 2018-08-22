@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/subtle"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,7 +12,6 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,7 +33,6 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/stream"
-	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/buildlog"
@@ -43,7 +40,6 @@ import (
 	"github.com/flynn/tail"
 	"github.com/julienschmidt/httprouter"
 	"github.com/thoj/go-ircevent"
-	"golang.org/x/crypto/acme/autocert"
 )
 
 var logBucket = "flynn-ci-logs"
@@ -180,22 +176,11 @@ func (r *Runner) start() error {
 		return errors.New("GITHUB_TOKEN not set")
 	}
 
-	am := autocert.Manager{
-		Prompt:     autocert.AcceptTOS,
-		Cache:      autocert.DirCache(args.TLSDir),
-		HostPolicy: autocert.HostWhitelist(args.Domain),
-	}
-
 	r.s3 = s3.New(session.New(&aws.Config{Region: aws.String("us-east-1")}))
-
-	var err error
-	_, listenPort, err = net.SplitHostPort(args.ListenAddr)
-	if err != nil {
-		return err
-	}
 
 	bc := r.bc
 	bc.Network = r.allocateNet()
+	var err error
 	if r.rootFS, err = cluster.BuildFlynn(bc, args.RootFS, "origin/master", false, os.Stdout); err != nil {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
@@ -242,16 +227,10 @@ func (r *Runner) start() error {
 	router.POST("/cluster/:cluster/release", r.clusterAPI(r.addReleaseHosts))
 	router.DELETE("/cluster/:cluster/:host", r.clusterAPI(r.removeHost))
 
-	srv := &http.Server{
-		Addr:    args.ListenAddr,
-		Handler: router,
-		TLSConfig: tlsconfig.SecureCiphers(&tls.Config{
-			GetCertificate: am.GetCertificate,
-		}),
-	}
-	log.Println("Listening on", args.ListenAddr, "...")
-	if err := srv.ListenAndServeTLS("", ""); err != nil {
-		return fmt.Errorf("ListenAndServeTLS: %s", err)
+	listenAddr := ":" + os.Getenv("PORT")
+	log.Println("Listening on", listenAddr, "...")
+	if err := http.ListenAndServe(listenAddr, router); err != nil {
+		return fmt.Errorf("error running HTTP server: %s", err)
 	}
 
 	return nil

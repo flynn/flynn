@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"io"
@@ -58,8 +59,15 @@ func createBridge(name, network, natIface string) (*Bridge, error) {
 	if err := netlink.LinkSetUp(iface); err != nil {
 		return nil, err
 	}
-	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1\n"), 0644); err != nil {
+	ipFwd := "/proc/sys/net/ipv4/ip_forward"
+	data, err := ioutil.ReadFile(ipFwd)
+	if err != nil {
 		return nil, err
+	}
+	if !bytes.HasPrefix(data, []byte("1")) {
+		if err := ioutil.WriteFile(ipFwd, []byte("1\n"), 0644); err != nil {
+			return nil, err
+		}
 	}
 	if err := setupIPTables(name, natIface); err != nil {
 		return nil, err
