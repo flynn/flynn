@@ -58,7 +58,11 @@ echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/no-languages
 # update packages
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install --install-recommends linux-generic-hwe-16.04 \
+# explicitly install linux 4.13 as the version of ZFS available on xenial is
+# not compatible with linux 4.15 (the 'zfs' command just hangs)
+#
+# TODO: switch back to linux-generic-hwe-16.04 once ZFS works with the latest kernel
+apt-get install --install-recommends linux-image-4.13.0-1019-gcp udev \
   -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
