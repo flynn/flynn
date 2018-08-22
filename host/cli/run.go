@@ -32,6 +32,7 @@ Options:
 	--workdir=<dir>        working directory
 	--hostnet              use the host network
 	--profiles=<profiles>  job profiles (comma separated)
+	--extra-caps=<caps>    extra Linux capabilities (comma separated)
 
 Example:
 	$ flynn-host run <(jq '.mongodb' images.json) mongo --version
@@ -114,6 +115,10 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 		for i, profile := range s {
 			cmd.Job.Profiles[i] = host.JobProfile(profile)
 		}
+	}
+	if extraCaps := args.String["--extra-caps"]; extraCaps != "" {
+		linuxCapabilities := append(host.DefaultCapabilities, strings.Split(extraCaps, ",")...)
+		cmd.Job.Config.LinuxCapabilities = &linuxCapabilities
 	}
 
 	var termState *term.State
