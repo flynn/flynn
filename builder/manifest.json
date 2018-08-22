@@ -619,7 +619,8 @@
       "layers": [
         {
           "name": "test-packages",
-          "script": "test/img/packages.sh"
+          "script": "test/img/packages.sh",
+          "limits": { "temp_disk": "1G" }
         },
         {
           "name": "test-binaries",
@@ -631,7 +632,17 @@
             "test/util/file-server": "/bin/flynn-test-file-server"
           },
           "copy": {
-            "test/run.sh": "/bin/run-flynn-test.sh"
+            "test/run.sh":           "/bin/run-flynn-test.sh",
+            "test/scripts/start.sh": "/test/bin/start-runner.sh",
+            "test/rootfs/build.sh":  "/test/rootfs/build.sh",
+            "test/rootfs/setup.sh":  "/test/rootfs/setup.sh",
+            "test/runner/assets/build-log.html": "/test/assets/",
+            "test/runner/assets/build-log.js":   "/test/assets/",
+            "test/runner/assets/builds.js":      "/test/assets/",
+            "test/runner/assets/index.html":     "/test/assets/",
+            "test/runner/assets/style.css":      "/test/assets/",
+            "test/runner/assets/ansi_up/ansi_up.js": "/test/assets/ansi_up/"
+
           }
         }
       ],

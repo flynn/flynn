@@ -4,44 +4,32 @@ set -e
 
 main() {
   local dir="/opt/flynn-test"
-  local src_dir="${dir}/src/github.com/flynn/flynn"
-
-  if test -s "${dir}/.credentials"; then
-    . "${dir}/.credentials"
-  else
-    echo "missing credentials file: ${dir}/.credentials" >&2
-    exit 1
+  if ! [[ -d "${dir}" ]]; then
+    fail "missing /opt/flynn-test directory"
   fi
 
-  # trace commands, making sure this is *after* sourcing the credentials
-  # file so they are not echoed into the log file
-  set -x
-
-  cd "${src_dir}"
-  git fetch origin
-  git checkout --force --quiet origin/master
-  GOPATH="${dir}" go build -race -o test/bin/flynn-test-runner ./test/runner
-
-  # run the cleanup script
-  "${src_dir}/test/scripts/cleanup.sh"
-
+  mkdir -p "${dir}/build" "${dir}/backups"
   if ! test -f "${dir}/build/rootfs.img" || ! test -f "${dir}/build/vmlinuz"; then
-    "${src_dir}/test/rootfs/build.sh" "${dir}/build"
-    chown -R "flynn-test:flynn-test" "${dir}/build"
+    /test/rootfs/build.sh "${dir}/build"
   fi
 
   export TMPDIR="${dir}/build"
 
-  cd "${src_dir}/test"
-  exec "bin/flynn-test-runner" \
-    --user     "flynn-test" \
+  cd "${dir}"
+  exec /bin/flynn-test-runner \
+    --user     "root" \
     --rootfs   "${dir}/build/rootfs.img" \
     --kernel   "${dir}/build/vmlinuz" \
     --db       "${dir}/flynn-test.db" \
-    --tls-dir  "${dir}/certs" \
-    --domain   "ci.flynn.io" \
+    --assets   "/test/assets" \
     --backups-dir "${dir}/backups" \
     --gist
+}
+
+fail() {
+  local msg=$1
+  echo "ERROR: ${msg}" >&2
+  exit 1
 }
 
 main $@
