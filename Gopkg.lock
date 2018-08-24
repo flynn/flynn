@@ -899,11 +899,12 @@
   revision = "1d60e4601c6fd243af51cc01ddf169918a5407ca"
 
 [[projects]]
-  digest = "1:3f0d5b455af8e778ec3f793c3376eeb0f371536145e5117b582d01e06c3a58da"
+  branch = "master"
+  digest = "1:eb50c3ef5dc70f737f1945c76e3129f4a36e04bbb09d8b144af3ed39022f3a6a"
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "NUT"
-  revision = "442cd600860ce722f6615730eb008a37a87b13ee"
+  revision = "11551d06cbcc94edc80a0facaccbda56473c19c1"
 
 [[projects]]
   digest = "1:97337ef8cb438f9e3a99ea91a300e916ed9a96fbf3ad50f9a020d30ea9f8692f"
@@ -1123,6 +1124,7 @@
     "golang.org/x/net/http2",
     "golang.org/x/net/websocket",
     "golang.org/x/oauth2/google",
+    "golang.org/x/sys/unix",
     "google.golang.org/api/option",
     "gopkg.in/inconshreveable/go-update.v0",
     "gopkg.in/mgo.v2",
