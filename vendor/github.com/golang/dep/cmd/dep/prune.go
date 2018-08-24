@@ -1,11 +1,10 @@
-// Copyright 2016 The Go Authors. All rights reserved.
+// Copyright 2017 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package main
 
 import (
-	"bytes"
 	"flag"
 	"io/ioutil"
 	"log"
@@ -15,18 +14,17 @@ import (
 	"strings"
 
 	"github.com/golang/dep"
+	"github.com/golang/dep/gps"
+	"github.com/golang/dep/gps/pkgtree"
 	"github.com/golang/dep/internal/fs"
-	"github.com/golang/dep/internal/gps"
-	"github.com/golang/dep/internal/gps/pkgtree"
 	"github.com/pkg/errors"
 )
 
-const pruneShortHelp = `Prune the vendor tree of unused packages`
+const pruneShortHelp = `Pruning is now performed automatically by dep ensure.`
 const pruneLongHelp = `
-Prune is used to remove unused packages from your vendor tree.
-
-STABILITY NOTICE: this command creates problems for vendor/ verification. As
-such, it may be removed and/or moved out into a separate project later on.
+Prune was merged into the ensure command.
+Set prune options in the manifest and it will be applied after every ensure.
+dep prune will be removed in a future version of dep, causing this command to exit non-0.
 `
 
 type pruneCommand struct {
@@ -36,12 +34,19 @@ func (cmd *pruneCommand) Name() string      { return "prune" }
 func (cmd *pruneCommand) Args() string      { return "" }
 func (cmd *pruneCommand) ShortHelp() string { return pruneShortHelp }
 func (cmd *pruneCommand) LongHelp() string  { return pruneLongHelp }
-func (cmd *pruneCommand) Hidden() bool      { return false }
+func (cmd *pruneCommand) Hidden() bool      { return true }
 
 func (cmd *pruneCommand) Register(fs *flag.FlagSet) {
 }
 
 func (cmd *pruneCommand) Run(ctx *dep.Ctx, args []string) error {
+	ctx.Err.Printf("Pruning is now performed automatically by dep ensure.\n")
+	ctx.Err.Printf("Set prune settings in %s and it will be applied when running ensure.\n", dep.ManifestName)
+	ctx.Err.Printf("\nThis command currently still prunes as it always has, to ease the transition.\n")
+	ctx.Err.Printf("However, it will be removed in a future version of dep.\n")
+	ctx.Err.Printf("\nNow is the time to update your Gopkg.toml and remove `dep prune` from any scripts.\n")
+	ctx.Err.Printf("\nFor more information, see: https://golang.github.io/dep/docs/Gopkg.toml.html#prune\n")
+
 	p, err := ctx.LoadProject()
 	if err != nil {
 		return err
@@ -69,22 +74,13 @@ func (cmd *pruneCommand) Run(ctx *dep.Ctx, args []string) error {
 		params.TraceLogger = ctx.Err
 	}
 
-	s, err := gps.Prepare(params, sm)
-	if err != nil {
-		return errors.Wrap(err, "could not set up solver for input hashing")
-	}
-
 	if p.Lock == nil {
 		return errors.Errorf("Gopkg.lock must exist for prune to know what files are safe to remove.")
 	}
 
-	if !bytes.Equal(s.HashInputs(), p.Lock.SolveMeta.InputsDigest) {
-		return errors.Errorf("Gopkg.lock is out of sync; run dep ensure before pruning.")
-	}
-
-	var pruneLogger *log.Logger
-	if ctx.Verbose {
-		pruneLogger = ctx.Err
+	pruneLogger := ctx.Err
+	if !ctx.Verbose {
+		pruneLogger = log.New(ioutil.Discard, "", 0)
 	}
 	return pruneProject(p, sm, pruneLogger)
 }
@@ -97,7 +93,10 @@ func pruneProject(p *dep.Project, sm gps.SourceManager, logger *log.Logger) erro
 	}
 	defer os.RemoveAll(td)
 
-	if err := gps.WriteDepTree(td, p.Lock, sm, true); err != nil {
+	onWrite := func(progress gps.WriteProgress) {
+		logger.Println(progress)
+	}
+	if err := gps.WriteDepTree(td, p.Lock, sm, gps.CascadingPruneOptions{DefaultOptions: gps.PruneNestedVendorDirs}, onWrite); err != nil {
 		return err
 	}
 
@@ -114,15 +113,13 @@ func pruneProject(p *dep.Project, sm gps.SourceManager, logger *log.Logger) erro
 		return err
 	}
 
-	if logger != nil {
-		if len(toDelete) > 0 {
-			logger.Println("Calculated the following directories to prune:")
-			for _, d := range toDelete {
-				logger.Printf("  %s\n", d)
-			}
-		} else {
-			logger.Println("No directories found to prune")
+	if len(toDelete) > 0 {
+		logger.Println("Calculated the following directories to prune:")
+		for _, d := range toDelete {
+			logger.Printf("  %s\n", d)
 		}
+	} else {
+		logger.Println("No directories found to prune")
 	}
 
 	if err := deleteDirs(toDelete); err != nil {
@@ -163,11 +160,9 @@ fail:
 }
 
 func calculatePrune(vendorDir string, keep []string, logger *log.Logger) ([]string, error) {
-	if logger != nil {
-		logger.Println("Calculating prune. Checking the following packages:")
-	}
+	logger.Println("Calculating prune. Checking the following packages:")
 	sort.Strings(keep)
-	toDelete := []string{}
+	var toDelete []string
 	err := filepath.Walk(vendorDir, func(path string, info os.FileInfo, err error) error {
 		if _, err := os.Lstat(path); err != nil {
 			return nil
@@ -180,9 +175,7 @@ func calculatePrune(vendorDir string, keep []string, logger *log.Logger) ([]stri
 		}
 
 		name := strings.TrimPrefix(path, vendorDir+string(filepath.Separator))
-		if logger != nil {
-			logger.Printf("  %s", name)
-		}
+		logger.Printf("  %s", name)
 		i := sort.Search(len(keep), func(i int) bool {
 			return name <= keep[i]
 		})
