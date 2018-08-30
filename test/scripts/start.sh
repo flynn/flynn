@@ -20,7 +20,6 @@ main() {
     --user     "root" \
     --rootfs   "${dir}/build/rootfs.img" \
     --kernel   "${dir}/build/vmlinuz" \
-    --db       "${dir}/flynn-test.db" \
     --assets   "/test/assets" \
     --backups-dir "${dir}/backups" \
     --gist

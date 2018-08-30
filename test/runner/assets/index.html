@@ -51,8 +51,8 @@
         <td><%= branch %></td>
         <td><%= created_at.fromNow() %> (<%= created_at.format("lll") %>)</td>
         <td>
-          <% if(duration > 0) { %>
-            <%= duration_formatted %>
+          <% if(duration != '') { %>
+            <%= duration %>
           <% } else { %>
             N/A
           <% } %>

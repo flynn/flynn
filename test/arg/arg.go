@@ -18,7 +18,6 @@ type Args struct {
 	Stream           bool
 	Kill             bool
 	BuildRootFS      bool
-	DBPath           string
 	AssetsDir        string
 	Run              string
 	Gist             bool
@@ -41,7 +40,6 @@ func Parse() *Args {
 	flag.StringVar(&args.FlynnHost, "flynn-host", "flynn-host", "path to flynn-host binary")
 	flag.StringVar(&args.Flynnrc, "flynnrc", "", "path to flynnrc file")
 	flag.StringVar(&args.RouterIP, "router-ip", "127.0.0.1", "IP address of the router")
-	flag.StringVar(&args.DBPath, "db", "flynn-test.db", "path to BoltDB database to store pending builds")
 	flag.StringVar(&args.AssetsDir, "assets", "runner/assets", "path to the runner assets dir")
 	flag.StringVar(&args.Run, "run", "", "regular expression selecting which tests and/or suites to run")
 	flag.StringVar(&args.ClusterAPI, "cluster-api", "", "cluster-api endpoint for adding and removing hosts")
