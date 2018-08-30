@@ -37,6 +37,11 @@ main() {
   info "setting app release"
   set_app_release "${app_id}" "${release}" >/dev/null
 
+  info "adding PostgreSQL database"
+  if ! flynn -a "${APP}" resource | grep -q "postgres"; then
+    flynn -a "${APP}" resource add postgres
+  fi
+
   info "setting ${MEMORY} memory limit"
   flynn -a "${APP}" limit set runner "memory=${MEMORY}"
 
