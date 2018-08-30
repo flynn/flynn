@@ -8,7 +8,7 @@ usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
-A script to install Flynn on Ubuntu 14.04 or 16.04.
+A script to install Flynn on Ubuntu 14.04, 16.04 or 18.04.
 See https://flynn.io/docs/installation/manual for further information.
 
 OPTIONS:
@@ -44,8 +44,8 @@ main() {
     fail "this script must be executed as the root user"
   fi
 
-  if ! is_ubuntu_xenial && ! is_ubuntu_trusty; then
-    fail "this script is only compatible with Ubuntu 16.04 or 14.04"
+  if ! is_ubuntu_bionic && ! is_ubuntu_xenial && ! is_ubuntu_trusty; then
+    fail "this script is only compatible with Ubuntu 18.04, 16.04 or 14.04"
   fi
 
   if ! check_overlayfs; then
@@ -151,7 +151,7 @@ main() {
   local packages=("iptables")
 
   info "installing ZFS"
-  if is_ubuntu_xenial; then
+  if is_ubuntu_xenial || is_ubuntu_bionic; then
     run apt-get update
     packages+=("zfsutils-linux")
   elif is_ubuntu_trusty; then
@@ -212,7 +212,7 @@ main() {
     --config-dir "/etc/flynn" \
     --bin-dir    "/usr/local/bin"
 
-  if is_ubuntu_xenial; then
+  if is_ubuntu_xenial || is_ubuntu_bionic; then
     install_systemd_unit
   elif is_ubuntu_trusty; then
     install_upstart_job
@@ -231,6 +231,10 @@ is_ubuntu_trusty() {
 
 is_ubuntu_xenial() {
   grep -qF "Ubuntu 16.04" /etc/os-release &>/dev/null
+}
+
+is_ubuntu_bionic() {
+  grep -qF "Ubuntu 18.04" /etc/os-release &>/dev/null
 }
 
 install_systemd_unit() {
@@ -299,7 +303,7 @@ do_remove() {
   fi
 
   info "stopping flynn-host daemon"
-  if is_ubuntu_xenial; then
+  if is_ubuntu_xenial || is_ubuntu_bionic; then
     systemctl stop flynn-host
     systemctl disable flynn-host
   elif is_ubuntu_trusty; then
