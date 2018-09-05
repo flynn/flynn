@@ -845,12 +845,17 @@
   revision = "54f0e4339ce73702a0607f49922aaa1e749b418d"
 
 [[projects]]
-  digest = "1:9678648a5af976a31e206e5e70abcd1f48755f71635fa42114f440ee1cac1017"
+  branch = "master"
+  digest = "1:9e2796d7afd05b3d5e5a1708202f2ae3ec5bb80c16167d9a53f6d04147762284"
   name = "golang.org/x/crypto"
   packages = [
+    "acme",
+    "acme/autocert",
     "curve25519",
     "ed25519",
     "ed25519/internal/edwards25519",
+    "internal/chacha20",
+    "internal/subtle",
     "nacl/secretbox",
     "pbkdf2",
     "poly1305",
@@ -860,7 +865,7 @@
     "ssh/terminal",
   ]
   pruneopts = "NUT"
-  revision = "81372b2fc2f10bef2a7f338da115c315a56b2726"
+  revision = "0c41d7ab0a0ee717d4590a44bcb987dfd9e183eb"
 
 [[projects]]
   digest = "1:2df2a0f1300f4a95cf1a94b1bc954d1895f2e323d9dbe8c411301a953429be3d"
@@ -906,9 +911,12 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:eb50c3ef5dc70f737f1945c76e3129f4a36e04bbb09d8b144af3ed39022f3a6a"
+  digest = "1:9f4136ab41bccb429df6e8df4f435ab48ca5a1ced2f297bcbb2bcb2b389679f1"
   name = "golang.org/x/sys"
-  packages = ["unix"]
+  packages = [
+    "unix",
+    "windows",
+  ]
   pruneopts = "NUT"
   revision = "11551d06cbcc94edc80a0facaccbda56473c19c1"
 
@@ -1123,6 +1131,8 @@
     "github.com/tiborvass/uniline",
     "github.com/vanillahsu/go_reuseport",
     "github.com/vishvananda/netlink",
+    "golang.org/x/crypto/acme",
+    "golang.org/x/crypto/acme/autocert",
     "golang.org/x/crypto/nacl/secretbox",
     "golang.org/x/crypto/ssh",
     "golang.org/x/net/context",
