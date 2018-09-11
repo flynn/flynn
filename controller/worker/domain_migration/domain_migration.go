@@ -393,10 +393,11 @@ func (m *migration) appMaybeCreateRoute(appID string, oldRoute *router.Route, ro
 		}
 	}
 	route := &router.Route{
-		Type:    "http",
-		Domain:  strings.Join([]string{prefix, m.dm.Domain}, ""),
-		Sticky:  oldRoute.Sticky,
-		Service: oldRoute.Service,
+		Type:          "http",
+		Domain:        strings.Join([]string{prefix, m.dm.Domain}, ""),
+		Sticky:        oldRoute.Sticky,
+		Service:       oldRoute.Service,
+		DrainBackends: oldRoute.DrainBackends,
 	}
 	if oldRoute.Certificate != nil && oldRoute.Certificate.Cert == strings.TrimSpace(m.dm.OldTLSCert.Cert) {
 		route.Certificate = &router.Certificate{

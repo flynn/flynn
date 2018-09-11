@@ -242,13 +242,15 @@ func (e *generator) listAppResources() {
 
 func (e *generator) createRoute() {
 	route := (&router.HTTPRoute{
-		Domain:  "http://example.com",
-		Service: e.resourceIds["app-name"] + "-web",
+		Domain:        "http://example.com",
+		Service:       e.resourceIds["app-name"] + "-web",
+		DrainBackends: true,
 	}).ToRoute()
 	err := e.client.CreateRoute(e.resourceIds["app"], route)
-	if err == nil {
-		e.resourceIds["route"] = route.FormattedID()
+	if err != nil {
+		log.Fatal(err)
 	}
+	e.resourceIds["route"] = route.FormattedID()
 }
 
 func (e *generator) getRoute() {
