@@ -44,7 +44,6 @@ import (
 )
 
 var logBucket = "flynn-ci-logs"
-var listenPort string
 
 const textPlain = "text/plain; charset=utf-8"
 
@@ -78,9 +77,6 @@ type Build struct {
 }
 
 func (b *Build) URL() string {
-	if listenPort != "" && listenPort != "443" {
-		return "https://ci.flynn.io:" + listenPort + "/builds/" + b.ID
-	}
 	return "https://ci.flynn.io/builds/" + b.ID
 }
 
@@ -326,7 +322,7 @@ cd test
 
 cmd="bin/flynn-test \
   --flynnrc $HOME/.flynnrc \
-  --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .Cluster.ID }} \
+  --cluster-api http://{{ .Cluster.BridgeIP }}/cluster/{{ .Cluster.ID }} \
   --cli $(pwd)/../build/bin/flynn \
   --flynn-host $(pwd)/../build/bin/flynn-host \
   --router-ip {{ .Cluster.RouterIP }} \
@@ -427,7 +423,7 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 
 	var script bytes.Buffer
-	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "Config": config.Clusters[0], "ListenPort": listenPort})
+	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "Config": config.Clusters[0]})
 	return c.RunWithEnv(script.String(), &cluster.Streams{Stdout: out, Stderr: out}, r.runEnv)
 }
 
