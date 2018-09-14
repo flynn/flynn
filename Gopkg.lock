@@ -844,8 +844,6 @@
   digest = "1:4940f20fde9a09c6cc1a7f84c9703dcc85bddd4f8eff4fee26fd9dc18b46a3f7"
   name = "golang.org/x/crypto"
   packages = [
-    "acme",
-    "acme/autocert",
     "curve25519",
     "ed25519",
     "ed25519/internal/edwards25519",
@@ -1117,7 +1115,6 @@
     "github.com/tiborvass/uniline",
     "github.com/vanillahsu/go_reuseport",
     "github.com/vishvananda/netlink",
-    "golang.org/x/crypto/acme/autocert",
     "golang.org/x/crypto/nacl/secretbox",
     "golang.org/x/crypto/ssh",
     "golang.org/x/net/context",
