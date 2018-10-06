@@ -600,6 +600,17 @@
   revision = "3b1f6487b7fc649d5f146df04e623bd55ba1bf7f"
 
 [[projects]]
+  branch = "master"
+  digest = "1:9fd7fda663881246d86516871f3099ca699459671f21666efb5b24175db90ec9"
+  name = "github.com/krolaw/dhcp4"
+  packages = [
+    ".",
+    "conn",
+  ]
+  pruneopts = "NUT"
+  revision = "7cead472c414711982509839c1a6a324d4c70ce6"
+
+[[projects]]
   digest = "1:2a2abe235134b65e499e00cc84b8a80abfd9fb2ffa15cb1f0ed9715c70a96e2b"
   name = "github.com/kylelemons/godebug"
   packages = [
@@ -841,7 +852,7 @@
   revision = "54f0e4339ce73702a0607f49922aaa1e749b418d"
 
 [[projects]]
-  digest = "1:4940f20fde9a09c6cc1a7f84c9703dcc85bddd4f8eff4fee26fd9dc18b46a3f7"
+  digest = "1:9678648a5af976a31e206e5e70abcd1f48755f71635fa42114f440ee1cac1017"
   name = "golang.org/x/crypto"
   packages = [
     "curve25519",
@@ -859,15 +870,19 @@
   revision = "81372b2fc2f10bef2a7f338da115c315a56b2726"
 
 [[projects]]
-  digest = "1:d944f1515f7a4bcf1cf0a14ce1886f2622b2fa2eca2f59e329eaa05a96c76c53"
+  digest = "1:2df2a0f1300f4a95cf1a94b1bc954d1895f2e323d9dbe8c411301a953429be3d"
   name = "golang.org/x/net"
   packages = [
+    "bpf",
     "context",
     "context/ctxhttp",
     "http2",
     "http2/hpack",
     "idna",
+    "internal/iana",
+    "internal/socket",
     "internal/timeseries",
+    "ipv4",
     "lex/httplex",
     "trace",
     "websocket",
@@ -1097,6 +1112,7 @@
     "github.com/jvatic/asset-matrix-go",
     "github.com/kardianos/osext",
     "github.com/kr/pty",
+    "github.com/krolaw/dhcp4",
     "github.com/kylelemons/godebug/pretty",
     "github.com/mattn/go-colorable",
     "github.com/miekg/dns",
