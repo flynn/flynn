@@ -34,6 +34,8 @@ type HTTPListener struct {
 	Addrs    []string
 	TLSAddrs []string
 
+	LegacyTLSVersions bool
+
 	defaultPorts []int
 
 	mtx      sync.RWMutex
@@ -449,6 +451,11 @@ func (s *HTTPListener) listenAndServeTLS() error {
 			Certificates:   []tls.Certificate{s.keypair},
 			NextProtos:     []string{http2.NextProtoTLS, "h2-14"},
 		})
+		if s.LegacyTLSVersions {
+			tlsConfig.MinVersion = tls.VersionTLS10
+		} else {
+			tlsConfig.MinVersion = tls.VersionTLS12
+		}
 
 		l, err := listenFunc("tcp4", addr)
 		if err != nil {

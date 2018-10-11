@@ -1848,3 +1848,26 @@ func (s *S) TestHTTPProxyProtocol(c *C) {
 		c.Assert(string(data), Equals, "1.1.1.123")
 	}
 }
+
+func (s *S) TestLegacyTLSDisallowed(c *C) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {})
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	config := newHTTPClient("example.com").Transport.(*http.Transport).TLSClientConfig
+	config.MaxVersion = tls.VersionTLS10
+	conn, err := net.Dial("tcp", l.TLSAddrs[0])
+	c.Assert(err, IsNil)
+	defer conn.Close()
+	client := tls.Client(conn, config)
+	err = client.Handshake()
+	c.Assert(err, Not(IsNil))
+	c.Assert(err, ErrorMatches, ".+protocol version not supported")
+}
