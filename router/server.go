@@ -101,6 +101,7 @@ func main() {
 		shutdown.Fatal("Missing random 32 byte base64-encoded COOKIE_KEY")
 	}
 	proxyProtocol := os.Getenv("PROXY_PROTOCOL") == "true"
+	legacyTLS := os.Getenv("LEGACY_TLS") == "true"
 
 	httpPort := flag.Int("http-port", 8080, "default http listen port")
 	httpsPort := flag.Int("https-port", 4433, "default https listen port")
@@ -233,15 +234,16 @@ func main() {
 			reservedPorts: reservedPorts,
 		},
 		HTTP: &HTTPListener{
-			Addrs:         httpAddrs,
-			TLSAddrs:      httpsAddrs,
-			defaultPorts:  defaultPorts,
-			cookieKey:     cookieKey,
-			keypair:       keypair,
-			ds:            NewPostgresDataStore("http", db.ConnPool),
-			discoverd:     discoverd.DefaultClient,
-			proxyProtocol: proxyProtocol,
-			error503Page:  error503Page,
+			Addrs:             httpAddrs,
+			TLSAddrs:          httpsAddrs,
+			LegacyTLSVersions: legacyTLS,
+			defaultPorts:      defaultPorts,
+			cookieKey:         cookieKey,
+			keypair:           keypair,
+			ds:                NewPostgresDataStore("http", db.ConnPool),
+			discoverd:         discoverd.DefaultClient,
+			proxyProtocol:     proxyProtocol,
+			error503Page:      error503Page,
 		},
 	}
 
