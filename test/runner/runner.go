@@ -20,7 +20,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 
@@ -41,7 +40,6 @@ import (
 	"github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/tail"
 	"github.com/julienschmidt/httprouter"
-	"github.com/thoj/go-ircevent"
 )
 
 var logBucket = "flynn-ci-logs"
@@ -122,7 +120,6 @@ type Runner struct {
 	clusters    map[string]*cluster.Cluster
 	authKey     string
 	runEnv      map[string]string
-	ircMsgs     chan string
 	ip          string
 }
 
@@ -140,7 +137,6 @@ func main() {
 		events:   make(chan Event),
 		buildCh:  make(chan struct{}, args.ConcurrentBuilds),
 		clusters: make(map[string]*cluster.Cluster),
-		ircMsgs:  make(chan string, 100),
 		runEnv:   make(map[string]string),
 	}
 	if err := runner.start(); err != nil {
@@ -216,7 +212,6 @@ func (r *Runner) start() error {
 		log.Printf("could not build pending builds: %s", err)
 	}
 
-	go r.connectIRC()
 	go r.watchEvents()
 
 	router := httprouter.New()
@@ -241,50 +236,6 @@ func (r *Runner) start() error {
 	}
 
 	return nil
-}
-
-const (
-	ircServer = "irc.freenode.net:6697"
-	ircNick   = "flynn-ci"
-	ircRoom   = "#flynn"
-)
-
-func (r *Runner) connectIRC() {
-	conn := irc.IRC(ircNick, ircNick)
-	conn.UseTLS = true
-	conn.AddCallback("001", func(*irc.Event) {
-		conn.Join(ircRoom)
-	})
-	var once sync.Once
-	ready := make(chan struct{})
-	conn.AddCallback("JOIN", func(*irc.Event) {
-		once.Do(func() { close(ready) })
-	})
-	for {
-		log.Printf("connecting to IRC server: %s", ircServer)
-		err := conn.Connect(ircServer)
-		if err == nil {
-			break
-		}
-		log.Printf("error connecting to IRC server: %s", err)
-		time.Sleep(time.Second)
-	}
-	go conn.Loop()
-	<-ready
-	for msg := range r.ircMsgs {
-		conn.Notice(ircRoom, msg)
-	}
-}
-
-func (r *Runner) postIRC(format string, v ...interface{}) {
-	go func() {
-		// drop the message if the buffer is full because we are
-		// reconnecting
-		select {
-		case r.ircMsgs <- fmt.Sprintf(format, v...):
-		default:
-		}
-	}()
 }
 
 func (r *Runner) watchEvents() {
@@ -408,11 +359,9 @@ func (r *Runner) build(b *Build) (err error) {
 		if err == nil {
 			log.Printf("build %s passed!\n", b.ID)
 			r.updateStatus(b, "success")
-			r.postIRC("PASS: %s %s", b.Description, b.URL())
 		} else {
 			log.Printf("build %s failed: %s\n", b.ID, err)
 			r.updateStatus(b, "failure")
-			r.postIRC("FAIL: [%d failure(s)] %s %s", len(b.Failures), b.Description, b.URL())
 		}
 	}()
 
