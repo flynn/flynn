@@ -798,13 +798,6 @@
   revision = "96e4ba3a7613a1216cbd1badca4efe382adea337"
 
 [[projects]]
-  digest = "1:9c258a75592043918c8baaf1bc5b4cdc134fb09473aaeb00bce2605b39f01e57"
-  name = "github.com/thoj/go-ircevent"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "da78ed515c0f0833e7a92c7cc52898176198e2c1"
-
-[[projects]]
   branch = "master"
   digest = "1:a29b6969ea1e23baea6180fde186fd91be3c4c8a70be06de369424fe7cc50e9e"
   name = "github.com/tiborvass/uniline"
@@ -1127,7 +1120,6 @@
     "github.com/stevvooe/resumable",
     "github.com/stevvooe/resumable/sha512",
     "github.com/tent/canonical-json-go",
-    "github.com/thoj/go-ircevent",
     "github.com/tiborvass/uniline",
     "github.com/vanillahsu/go_reuseport",
     "github.com/vishvananda/netlink",
