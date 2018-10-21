@@ -201,6 +201,25 @@ remove them from Postgres:
 flynn -a blobstore run /bin/flynn-blobstore migrate --delete
 ```
 
+### Digital Ocean Spaces
+
+To migrate to Digital Ocean Spaces backend, you must create a Digital Ocean Space along with a key through `Manage Keys` section. To setup the backend, you must use the minio backend as so:
+
+```text
+flynn -a blobstore env set BACKEND_MINIO="backend=minio endpoint=endpoint-domain bucket=space-name access_key_id=space-key secret_access_key=space-key-secret insecure=false" DEFAULT_BACKEND=minio
+```
+
+To complete the migration:
+
+```text
+flynn -a blobstore run /bin/flynn-blobstore migrate --delete
+```
+
+If the above fails, you may need to upgrade the amount of memory on your servers to at least 4GB, and limit it to 2GB as so:
+
+```text
+ flynn -a blobstore run --limits memory=2GB /bin/flynn-blobstore migrate --delete
+```
 
 ## DNS and Load Balancing
 
