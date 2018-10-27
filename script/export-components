@@ -70,7 +70,7 @@ main() {
   "${ROOT}/build/bin/flynn-host" run \
     --host    "${host}" \
     --bind    "${ROOT}:${ROOT},${tuf_dir}:${tuf_dir},/var/lib/flynn/layer-cache:/var/lib/flynn/layer-cache" \
-    --limits  "temp_disk=1G" \
+    --limits  "memory=2G,temp_disk=1G" \
     --workdir "${ROOT}" \
     "${ROOT}/build/image/builder.json" \
     /usr/bin/env \
