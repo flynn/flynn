@@ -135,7 +135,11 @@ func (i *Instance) Start() error {
 		Resources:  resource.Defaults(),
 		Profiles:   []host.JobProfile{host.JobProfileKVM},
 	}
-	newJob.Resources.SetLimit(resource.TypeMemory, int64(i.Memory*units.MiB))
+
+	// set the job's memory limit slightly higher than what we give the VM
+	memLimit := int64((i.Memory + 100) * units.MiB)
+	newJob.Resources.SetLimit(resource.TypeMemory, memLimit)
+
 	i.job, err = i.client.RunJobDetached(os.Getenv("FLYNN_APP_ID"), newJob)
 	if err != nil {
 		i.cleanup()
