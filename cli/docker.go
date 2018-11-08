@@ -44,7 +44,7 @@ Example:
 	Assuming you have a Docker image tagged "my-custom-image:v2":
 
 	$ flynn docker push my-custom-image:v2
-	flynn: getting image config with "docker inspect -f {{ json .Config }} my-custom-image:v2"
+	flynn: getting image config with "docker inspect -f {{ json .ContainerConfig }} my-custom-image:v2"
 	flynn: tagging Docker image with "docker tag my-custom-image:v2 docker.1.localflynn.com/my-app:latest"
 	flynn: pushing Docker image with "docker push docker.1.localflynn.com/my-app:latest"
 	The push refers to a repository [docker.1.localflynn.com/my-app] (len: 1)
@@ -201,7 +201,7 @@ func runDockerPush(args *docopt.Args, client controller.Client) error {
 	}
 
 	// get the image config to determine Cmd, Entrypoint and Env
-	cmd := exec.Command("docker", "inspect", "-f", "{{ json .Config }}", image)
+	cmd := exec.Command("docker", "inspect", "-f", "{{ json .ContainerConfig }}", image)
 	log.Printf("flynn: getting image config with %q", strings.Join(cmd.Args, " "))
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
