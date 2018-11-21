@@ -442,6 +442,7 @@ func (s *LogAggregatorSink) GetCursor(hostID string) (*utils.HostCursor, error) 
 }
 
 func (s *LogAggregatorSink) Write(m message) error {
+	s.conn.SetWriteDeadline(time.Now().Add(time.Second))
 	_, err := s.conn.Write(rfc6587.Bytes(m.Message))
 	return err
 }
@@ -650,6 +651,7 @@ func (s *SyslogSink) Write(m message) error {
 	case ct.SyslogFormatNewline:
 		data = append(msg.Bytes(), '\n')
 	}
+	s.conn.SetWriteDeadline(time.Now().Add(time.Second))
 	_, err := s.conn.Write(data)
 	if err != nil {
 		return err
