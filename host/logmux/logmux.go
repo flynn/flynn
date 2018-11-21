@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -95,9 +96,18 @@ func (m *Mux) broadcast(app string, msg message) {
 	m.subscribersMtx.RLock()
 	defer m.subscribersMtx.RUnlock()
 
+	timeout := time.NewTimer(time.Second)
+	l := m.logger.New("fn", "broadcast", "sample", "0.1")
+	r := rand.New(rand.NewSource(time.Now().Unix()))
 	for ch := range m.subscribers[firehoseApp] {
-		ch <- msg
-		// TODO: if blocking write, drop+notify, eventually close
+		timeout.Reset(time.Second)
+		select {
+		case ch <- msg:
+		case <-timeout.C:
+			if r.Intn(9) == 0 {
+				l.Error("dropping log line due to sink write timeout")
+			}
+		}
 	}
 	for ch := range m.subscribers[app] {
 		ch <- msg
