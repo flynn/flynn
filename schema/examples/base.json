@@ -32,7 +32,6 @@
     "response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["headers"],
       "properties": {
         "headers": {
           "type": "object"
