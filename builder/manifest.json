@@ -109,6 +109,7 @@
         },
         {
           "name": "host-binaries",
+          "limits": { "temp_disk": "1G" },
           "env": {
             "FLYNN_VERSION": "{{ .Version }}",
             "TUF_ROOT_KEYS": "{{ .TUFRootKeys }}"
@@ -624,6 +625,7 @@
         },
         {
           "name": "test-binaries",
+          "limits": { "temp_disk": "1G" },
           "cgobuild": {
             "test":                  "/bin/flynn-test",
             "test/runner":           "/bin/flynn-test-runner"
