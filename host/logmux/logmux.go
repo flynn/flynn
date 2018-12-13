@@ -246,7 +246,7 @@ func (m *Mux) addSink(sink Sink) {
 								l.Error("failed to scan message", "error", err)
 								return
 							}
-							if !cursorSaved && i == len(appLogs[appID])-1 {
+							if cursor != nil && !cursorSaved && i == len(appLogs[appID])-1 {
 								// last file, send cursor to processing goroutine
 								bufferCursorsMtx.Lock()
 								bufferCursors[appID] = *cursor
