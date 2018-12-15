@@ -11,7 +11,6 @@ type Args struct {
 	CLI              string
 	FlynnHost        string
 	RootFS           string
-	Flynnrc          string
 	RouterIP         string
 	Build            bool
 	Debug            bool
@@ -35,7 +34,6 @@ func Parse() *Args {
 	flag.StringVar(&args.RootFS, "rootfs", "rootfs/rootfs.img", "filesystem image to use with QEMU")
 	flag.StringVar(&args.CLI, "cli", "flynn", "path to flynn-cli binary")
 	flag.StringVar(&args.FlynnHost, "flynn-host", "flynn-host", "path to flynn-host binary")
-	flag.StringVar(&args.Flynnrc, "flynnrc", "", "path to flynnrc file")
 	flag.StringVar(&args.RouterIP, "router-ip", "127.0.0.1", "IP address of the router")
 	flag.StringVar(&args.AssetsDir, "assets", "runner/assets", "path to the runner assets dir")
 	flag.StringVar(&args.Run, "run", "", "regular expression selecting which tests and/or suites to run")

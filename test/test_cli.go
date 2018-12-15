@@ -1429,7 +1429,6 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	// check exporting to stdout works
 	file := filepath.Join(t.MkDir(), "export.tar")
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("%s -a %s export > %s", args.CLI, app.Name, file))
-	cmd.Env = flynnEnv(flynnrc)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if args.Stream {

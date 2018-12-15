@@ -252,7 +252,7 @@ func (h *Helper) clusterConf(t *c.C) *config.Cluster {
 	h.configMtx.Lock()
 	defer h.configMtx.Unlock()
 	if h.config == nil {
-		conf, err := config.ReadFile(flynnrc)
+		conf, err := config.ReadFile(config.DefaultPath())
 		t.Assert(err, c.IsNil)
 		t.Assert(conf.Clusters, c.HasLen, 1)
 		h.config = conf.Clusters[0]
