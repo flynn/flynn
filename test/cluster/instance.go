@@ -34,7 +34,7 @@ type VMManager struct {
 
 type VMConfig struct {
 	Kernel     string
-	Memory     int
+	Memory     int64
 	Cores      int
 	Disk       *VMDisk
 	Args       []string
@@ -126,7 +126,7 @@ func (i *Instance) Start() error {
 		ReleaseID: os.Getenv("FLYNN_RELEASE_ID"),
 		Args:      []string{"/bin/run-vm.sh"},
 		Env: map[string]string{
-			"MEMORY": strconv.Itoa(i.Memory),
+			"MEMORY": strconv.FormatInt(i.Memory/units.MiB, 10),
 			"CPUS":   strconv.Itoa(i.Cores),
 			"DISK":   i.Disk.FS,
 			"KERNEL": i.Kernel,
@@ -136,8 +136,8 @@ func (i *Instance) Start() error {
 		Profiles:   []host.JobProfile{host.JobProfileKVM},
 	}
 
-	// set the job's memory limit slightly higher than what we give the VM
-	memLimit := int64((i.Memory + 100) * units.MiB)
+	// give the job 1GB for the hypervisor plus enough memory for the VM
+	memLimit := 1*units.GiB + i.Memory
 	newJob.Resources.SetLimit(resource.TypeMemory, memLimit)
 
 	i.job, err = i.client.RunJobDetached(os.Getenv("FLYNN_APP_ID"), newJob)

@@ -13,6 +13,7 @@ import (
 	"text/template"
 	"time"
 
+	units "github.com/docker/go-units"
 	"github.com/flynn/flynn/cli/config"
 	controller "github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/discoverd/client"
@@ -111,7 +112,7 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 	}
 	build, err := c.vm.NewInstance(&VMConfig{
 		Kernel:     c.bc.Kernel,
-		Memory:     16384,
+		Memory:     16 * units.GiB,
 		Cores:      8,
 		Disk:       disk,
 		BackupsDir: c.bc.BackupsDir,
@@ -234,16 +235,10 @@ func (c *Cluster) Size() int {
 func (c *Cluster) startVMs(typ ClusterType, rootFS string, count int, initial bool) ([]*Instance, error) {
 	instances := make([]*Instance, count)
 	for i := 0; i < count; i++ {
-		memory := 8192
-		if initial && i == 0 {
-			// give the first instance more memory as that is where
-			// the test binary runs, and the tests use a lot of memory
-			memory = 16384
-		}
 		inst, err := c.vm.NewInstance(&VMConfig{
 			Kernel:     c.bc.Kernel,
-			Memory:     memory,
-			Cores:      2,
+			Memory:     16 * units.GiB,
+			Cores:      8,
 			Disk:       &VMDisk{FS: rootFS, COW: true, Temp: true},
 			BackupsDir: c.bc.BackupsDir,
 		})
