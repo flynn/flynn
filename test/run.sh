@@ -21,11 +21,7 @@ main() {
 
   cd "${ROOT}/test"
 
-  exec /bin/flynn-test \
-    --flynnrc    "${HOME}/.flynnrc" \
-    --cli        "$(readlink -f ../build/bin/flynn)" \
-    --flynn-host "$(readlink -f ../build/bin/flynn-host)" \
-    $@
+  exec /bin/flynn-test $@
 }
 
 main "$@"

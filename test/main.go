@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -12,16 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/test/arg"
-	"github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/cluster/client"
 	"github.com/flynn/go-check"
 )
 
 var args *arg.Args
-var flynnrc string
 var routerIP string
 var testCluster *testcluster.Client
 
@@ -45,45 +41,7 @@ func main() {
 		}
 	}()
 
-	flynnrc = args.Flynnrc
 	routerIP = args.RouterIP
-	if flynnrc == "" {
-		c := cluster.New(args.BootConfig, os.Stdout)
-		var rootFS string
-		rootFS, err = c.BuildFlynn(args.RootFS, "origin/master", false, false)
-		if err != nil {
-			if args.Kill {
-				c.Shutdown()
-			}
-			log.Println("could not build flynn: ", err)
-			if rootFS != "" {
-				os.RemoveAll(rootFS)
-			}
-			return
-		}
-		if args.BuildRootFS {
-			c.Shutdown()
-			fmt.Println("Built Flynn in rootfs:", rootFS)
-			return
-		} else {
-			defer os.RemoveAll(rootFS)
-		}
-		if _, err = c.Boot(cluster.ClusterTypeDefault, 3, nil, args.Kill); err != nil {
-			log.Println("could not boot cluster: ", err)
-			return
-		}
-		if args.Kill {
-			defer c.Shutdown()
-		}
-
-		if err = createFlynnrc(c); err != nil {
-			log.Println(err)
-			return
-		}
-		defer os.RemoveAll(flynnrc)
-
-		routerIP = c.RouterIP
-	}
 
 	if args.ClusterAPI != "" {
 		testCluster, err = testcluster.NewClient(args.ClusterAPI)
@@ -111,28 +69,6 @@ func main() {
 		ConcurrencyLevel: args.Concurrency,
 	})
 	fmt.Println(res)
-}
-
-func createFlynnrc(c *cluster.Cluster) error {
-	tmpfile, err := ioutil.TempFile("", "flynnrc-")
-	if err != nil {
-		return err
-	}
-	path := tmpfile.Name()
-
-	config, err := c.CLIConfig()
-	if err != nil {
-		os.RemoveAll(path)
-		return err
-	}
-
-	if err := config.SaveTo(path); err != nil {
-		os.RemoveAll(path)
-		return err
-	}
-
-	flynnrc = path
-	return nil
 }
 
 func setupGitreceive() error {
@@ -174,15 +110,6 @@ QAvAdwDIZpqRWWMcLS7zSDrzn3ZscuHCMxSOe40HbrVdDUee24/I4YQ+R8EcuzcA
 }
 
 func setupDockerPush() error {
-	conf, err := config.ReadFile(flynnrc)
-	if err != nil {
-		return err
-	}
-	url := strings.Replace(conf.Clusters[0].ControllerURL, "controller", "docker", 1)
-	// TODO: remove this `set-push-url' call once CI configures DockerPushURL
-	if out, err := flynnCmd("/", "docker", "set-push-url", url).CombinedOutput(); err != nil {
-		return fmt.Errorf("%s: %q", err, out)
-	}
 	if out, err := flynnCmd("/", "docker", "login").CombinedOutput(); err != nil {
 		return fmt.Errorf("%s: %q", err, out)
 	}
@@ -210,7 +137,6 @@ func flynnEnv(path string) []string {
 
 func flynnCmd(dir string, cmdArgs ...string) *exec.Cmd {
 	cmd := exec.Command(args.CLI, cmdArgs...)
-	cmd.Env = flynnEnv(flynnrc)
 	cmd.Dir = dir
 	return cmd
 }
