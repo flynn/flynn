@@ -39,6 +39,7 @@ import (
 	"github.com/flynn/flynn/test/buildlog"
 	"github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/tail"
+	"github.com/jackc/pgx"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -523,7 +524,13 @@ func (r *Runner) getBuilds(w http.ResponseWriter, req *http.Request, ps httprout
 		}
 	}
 
-	rows, err := r.db.Query("build_list", count)
+	var rows *pgx.Rows
+	var err error
+	if before := req.FormValue("before"); before != "" {
+		rows, err = r.db.Query("build_list_before", before, count)
+	} else {
+		rows, err = r.db.Query("build_list", count)
+	}
 	if err != nil {
 		httphelper.Error(w, err)
 		return

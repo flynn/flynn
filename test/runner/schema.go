@@ -30,10 +30,11 @@ CREATE TABLE builds (
 }
 
 var preparedStatements = map[string]string{
-	"build_list":    buildListQuery,
-	"build_select":  buildSelectQuery,
-	"build_pending": buildPendingQuery,
-	"build_insert":  buildInsertQuery,
+	"build_list":        buildListQuery,
+	"build_list_before": buildListBeforeQuery,
+	"build_select":      buildSelectQuery,
+	"build_pending":     buildPendingQuery,
+	"build_insert":      buildInsertQuery,
 }
 
 const (
@@ -42,6 +43,13 @@ SELECT id, commit, branch, merge, state, version, failures, created_at, descript
 FROM builds
 ORDER BY created_at DESC
 LIMIT $1
+	`
+	buildListBeforeQuery = `
+SELECT id, commit, branch, merge, state, version, failures, created_at, description, log_url, log_file, duration, reason, issue_link
+FROM builds
+WHERE id < $1
+ORDER BY created_at DESC
+LIMIT $2
 	`
 	buildSelectQuery = `
 SELECT id, commit, branch, merge, state, version, failures, created_at, description, log_url, log_file, duration, reason, issue_link
