@@ -1478,7 +1478,7 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 				return
 			default:
 				if err != nil {
-					c.Fatal("accept error")
+					return
 				}
 				hitCount++
 				conn.Close()
@@ -1507,6 +1507,7 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	discoverdRegisterHTTP(c, l, srv2.Addr().String())
 
 	req := newReq("http://"+l.Addrs[0], "example.com")
+	req.Method = "POST"
 	if upgrade {
 		req.Header.Set("Connection", "Upgrade")
 		req.Header.Set("Upgrade", "websocket")
