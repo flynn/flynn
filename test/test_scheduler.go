@@ -820,7 +820,7 @@ func (s *SchedulerSuite) TestGracefulShutdown(t *c.C) {
 			select {
 			case event := <-routerEvents:
 				if event.Event != typ {
-					t.Fatal("expected %s router event, got %s", typ, event.Event)
+					t.Fatalf("expected %s router event, got %s", typ, event.Event)
 				}
 				count++
 				if count == len(routers) {
