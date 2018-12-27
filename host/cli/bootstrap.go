@@ -40,6 +40,7 @@ Options:
   --discovery=TOKEN    use discovery token to connect to cluster
   --peer-ips=IPLIST    use IP address list to connect to cluster
   --steps=STEPS        only run the given STEPS (comma separated)
+  --job-timeout=SECS   seconds to wait for jobs to start [default: 30]
 
 Bootstrap layer 1 using the provided manifest`)
 }
@@ -85,7 +86,12 @@ func runBootstrap(args *docopt.Args) error {
 
 	cfg.Timeout, err = strconv.Atoi(args.String["--timeout"])
 	if err != nil {
-		return fmt.Errorf("invalid --timeout value")
+		return fmt.Errorf("invalid --timeout value %q: %s", args.String["--timeout"], err)
+	}
+
+	cfg.JobTimeout, err = strconv.Atoi(args.String["--job-timeout"])
+	if err != nil {
+		return fmt.Errorf("invalid --job-timeout value %q: %s", args.String["--job-timeout"], err)
 	}
 
 	if ipList := args.String["--peer-ips"]; ipList != "" {

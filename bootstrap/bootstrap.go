@@ -31,6 +31,7 @@ type State struct {
 	MinHosts    int
 	Hosts       []*cluster.Host
 	HostTimeout time.Duration
+	JobTimeout  time.Duration
 
 	discoverd     *discoverd.Client
 	controller    controller.Client
@@ -125,6 +126,7 @@ type Config struct {
 	MinHosts   int
 	Timeout    int
 	Singleton  bool
+	JobTimeout int
 }
 
 type Manifest []Step
@@ -145,6 +147,7 @@ func (m Manifest) Run(ch chan<- *StepInfo, cfg Config) (state *State, err error)
 		MinHosts:    cfg.MinHosts,
 		ClusterURL:  cfg.ClusterURL,
 		HostTimeout: time.Duration(cfg.Timeout) * time.Second,
+		JobTimeout:  time.Duration(cfg.JobTimeout) * time.Second,
 	}
 
 	var hostURLs []string

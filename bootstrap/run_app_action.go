@@ -134,6 +134,7 @@ func startJob(s *State, hc *cluster.Host, job *host.Job) error {
 	if err != nil {
 		return err
 	}
+	timeout := time.After(s.JobTimeout)
 	go func() {
 		defer stream.Close()
 	loop:
@@ -161,7 +162,7 @@ func startJob(s *State, hc *cluster.Host, job *host.Job) error {
 					return
 				default:
 				}
-			case <-time.After(30 * time.Second):
+			case <-timeout:
 				jobStatus <- errors.New("bootstrap: timed out waiting for job event")
 				return
 			}
