@@ -629,14 +629,12 @@ func (s *HostSuite) TestVolumeDeleteOnStop(t *c.C) {
 
 func (s *HostSuite) TestUpdate(t *c.C) {
 	dir := t.MkDir()
-	flynnHost := filepath.Join(dir, "flynn-host")
-	run(t, osexec.Command("cp", args.FlynnHost, flynnHost))
 
 	// start flynn-host
 	id := random.String(8)
 	var out bytes.Buffer
 	cmd := osexec.Command(
-		flynnHost,
+		"flynn-host",
 		"daemon",
 		"--http-port", "11113",
 		"--state", filepath.Join(dir, "host-state.bolt"),
@@ -678,7 +676,7 @@ func (s *HostSuite) TestUpdate(t *c.C) {
 
 	// exec flynn-host and check we get the status from the new daemon
 	pid, err := client.Update(
-		flynnHost,
+		"flynn-host",
 		"daemon",
 		"--http-port", "11113",
 		"--state", filepath.Join(dir, "host-state.bolt"),
