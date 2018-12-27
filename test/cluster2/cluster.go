@@ -200,8 +200,16 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		log:         log,
 	}
 
-	if _, err := cluster.AddHosts(c.Size); err != nil {
+	if err := bootCluster(c, cluster, manifest, log); err != nil {
+		cluster.Destroy()
 		return nil, err
+	}
+	return cluster, nil
+}
+
+func bootCluster(c *BootConfig, cluster *Cluster, manifest io.Reader, log log15.Logger) error {
+	if _, err := cluster.AddHosts(c.Size); err != nil {
+		return err
 	}
 
 	domain := c.Domain
@@ -211,7 +219,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 	cert, err := tlscert.Generate([]string{domain, "*." + domain})
 	if err != nil {
 		log.Error("error generating TLS certs", "err", err)
-		return nil, err
+		return err
 	}
 
 	peerIPs := make([]string, 0, len(cluster.Hosts))
@@ -228,7 +236,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		bootstrapArgs = append(bootstrapArgs, "--from-backup", c.Backup)
 	}
 	bootstrapArgs = append(bootstrapArgs, "-")
-	cmd := exec.CommandUsingHost(cluster.Host.Host, hostImage, append([]string{"flynn-host", "bootstrap"}, bootstrapArgs...)...)
+	cmd := exec.CommandUsingHost(cluster.Host.Host, cluster.HostImage, append([]string{"flynn-host", "bootstrap"}, bootstrapArgs...)...)
 	if c.Backup != "" {
 		cmd.Mounts = []host.Mount{{
 			Location: c.Backup,
@@ -267,14 +275,14 @@ func Boot(c *BootConfig) (*Cluster, error) {
 	cmd.Stderr = logW
 	if err := cmd.Run(); err != nil {
 		log.Error("error bootstrapping cluster", "err", err)
-		return nil, err
+		return err
 	}
 
 	if c.Backup != "" {
 		jobs, err := cluster.Host.ListJobs()
 		if err != nil {
 			log.Error("error getting job list", "err", err)
-			return nil, err
+			return err
 		}
 		for _, job := range jobs {
 			app := job.Job.Metadata["flynn-controller.app_name"]
@@ -292,12 +300,12 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		log.Info("retrieved cluster domain, pin and key from backup", "domain", domain, "key", key, "pin", cert.Pin)
 	}
 
-	log.Info("successfully bootstrapped cluster", "app", app.Name, "size", c.Size, "peers", peerIPs)
+	log.Info("successfully bootstrapped cluster", "app", cluster.App.Name, "size", c.Size, "peers", peerIPs)
 	cluster.IP = peerIPs[0]
 	cluster.Domain = domain
 	cluster.Key = key
 	cluster.Pin = cert.Pin
-	return cluster, nil
+	return nil
 }
 
 func (c *Cluster) AddHosts(count int) ([]*cluster.Host, error) {
@@ -390,6 +398,14 @@ loop:
 func (c *Cluster) Destroy() error {
 	log := c.log.New("fn", "Destroy", "app", c.App.Name)
 
+	// ensure we delete the app even if scaling down fails
+	defer c.config.Client.DeleteApp(c.App.ID)
+
+	// just delete the app if there are no hosts
+	if len(c.Hosts) == 0 {
+		return nil
+	}
+
 	// scale down and delete the zpools before deleting the app
 	watcher, err := c.config.Client.WatchJobEvents(c.App.Name, c.Release.ID)
 	if err != nil {
@@ -407,7 +423,7 @@ func (c *Cluster) Destroy() error {
 		return err
 	}
 
-	if err := watcher.WaitFor(ct.JobEvents{"host": ct.JobDownEvents(c.size)}, 30*time.Second, nil); err != nil {
+	if err := watcher.WaitFor(ct.JobEvents{"host": ct.JobDownEvents(len(c.Hosts))}, 30*time.Second, nil); err != nil {
 		log.Error("error waiting for hosts to stop", "err", err)
 		return err
 	}
@@ -437,8 +453,7 @@ func (c *Cluster) Destroy() error {
 		}
 	}
 
-	_, err = c.config.Client.DeleteApp(c.App.ID)
-	return err
+	return nil
 }
 
 func controllerClient() (controller.Client, error) {
