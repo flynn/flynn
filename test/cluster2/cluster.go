@@ -222,6 +222,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 	bootstrapArgs := []string{
 		"--min-hosts", strconv.Itoa(c.Size),
 		"--peer-ips", strings.Join(peerIPs, ","),
+		"--job-timeout", "120",
 	}
 	if c.Backup != "" {
 		bootstrapArgs = append(bootstrapArgs, "--from-backup", c.Backup)
