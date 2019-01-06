@@ -154,11 +154,11 @@ func runClusterAdd(args *docopt.Args) error {
 		TLSPin:        args.String["--tls-pin"],
 	}
 	domain := args.String["<domain>"]
-	if strings.HasPrefix(domain, "https://") {
-		s.ControllerURL = domain
-	} else {
-		s.ControllerURL = "https://controller." + domain
-	}
+
+	// handle legacy use where <domain> is the controller URL
+	domain = strings.TrimPrefix(domain, "https://controller.")
+
+	s.ControllerURL = "https://controller." + domain
 	if s.GitURL == "" && !args.Bool["--no-git"] {
 		s.GitURL = "https://git." + domain
 	}
