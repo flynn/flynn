@@ -814,6 +814,16 @@ func (s *CLISuite) TestCluster(t *c.C) {
 	t.Assert(flynn("cluster", "add", "--no-git", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "next", "https://controller.next.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
 	t.Assert(flynn("cluster", "remove", "test"), SuccessfulOutputContains, "Cluster \"test\" removed and \"next\" is now the default cluster.")
 	t.Assert(flynn("cluster", "default"), SuccessfulOutputContains, "next")
+
+	// check GitURL and DockerPushURL are configured correctly
+	cluster := s.clusterConf(t)
+	t.Assert(flynn("cluster", "add", "--tls-pin", cluster.TLSPin, "--docker", "baz", cluster.ControllerURL, cluster.Key), Succeeds)
+	cfg, err = config.ReadFile(file.Name())
+	t.Assert(err, c.IsNil)
+	domain := strings.TrimPrefix(cluster.ControllerURL, "https://controller.")
+	t.Assert(cfg.Clusters[1].Name, c.Equals, "baz")
+	t.Assert(cfg.Clusters[1].GitURL, c.Equals, "https://git."+domain)
+	t.Assert(cfg.Clusters[1].DockerPushURL, c.Equals, "https://docker."+domain)
 }
 
 func (s *CLISuite) TestRelease(t *c.C) {
