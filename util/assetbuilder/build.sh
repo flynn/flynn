@@ -8,7 +8,7 @@ cp ${TARGET}/app/Gemfile.lock /app/Gemfile.lock
 curl --fail --silent --location https://deb.nodesource.com/setup_4.x | bash -
 apt-get update
 apt-get install -y nodejs build-essential ruby ruby-dev
-gem install bundler --no-rdoc --no-ri
+gem install bundler --no-rdoc --no-ri --version 1.17.3
 cd /app
 bundle install --deployment
 mkdir --parents node_modules
