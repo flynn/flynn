@@ -689,7 +689,6 @@ func (s *CLISuite) TestLogStderr(t *c.C) {
 		if split {
 			args = append(args, "--split-stderr")
 		}
-		args = append(args)
 		log := app.flynnCmd(args...)
 		log.Stdout = &stdout
 		log.Stderr = &stderr

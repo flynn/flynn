@@ -69,7 +69,7 @@ func (ipt *IPTables) AppendUnique(table string, args ...string) error {
 }
 
 func (ipt *IPTables) ClearChain(table, chain string) error {
-	cmd := append([]string{"-t", table, "-N", chain})
+	cmd := []string{"-t", table, "-N", chain}
 	err := exec.Command(ipt.path, cmd...).Run()
 
 	switch {
@@ -77,7 +77,7 @@ func (ipt *IPTables) ClearChain(table, chain string) error {
 		return nil
 	case err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus() == 1:
 		// chain already exists. Flush (clear) it.
-		cmd := append([]string{"-t", table, "-F", chain})
+		cmd := []string{"-t", table, "-F", chain}
 		return exec.Command(ipt.path, cmd...).Run()
 	default:
 		return err
