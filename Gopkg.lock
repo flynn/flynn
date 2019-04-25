@@ -155,7 +155,6 @@
 [[projects]]
   name = "github.com/docker/libnetwork"
   packages = [
-    "ipallocator",
     "netutils",
     "types"
   ]
@@ -745,6 +744,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3811970011f104224d60f0a1116c14ae539f63a6712083e7b855b89cde183401"
+  inputs-digest = "71d3b1e4344edfd302368fffbd525717677dfddef4c7e00bc78bc909f2db229f"
   solver-name = "gps-cdcl"
   solver-version = 1
