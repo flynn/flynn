@@ -31,14 +31,14 @@ import (
 	"syscall"
 	"time"
 
-	sigutil "github.com/docker/docker/pkg/signal"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/health"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
+	sigutil "github.com/flynn/flynn/pkg/signal"
 	"github.com/inconshreveable/log15"
 	"github.com/kr/pty"
 )

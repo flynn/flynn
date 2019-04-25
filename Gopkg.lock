@@ -138,7 +138,6 @@
     "pkg/mount",
     "pkg/pools",
     "pkg/promise",
-    "pkg/signal",
     "pkg/symlink",
     "pkg/system",
     "pkg/term",
@@ -204,7 +203,7 @@
     "util",
     "verify"
   ]
-  revision = "a98aea1463c972506e302344ebbfa30f85b74f2f"
+  revision = "cf1ac7de1ebf26e92e17d7ce0a66a484ec2c1a6e"
 
 [[projects]]
   branch = "master"
@@ -293,6 +292,17 @@
   name = "github.com/golang/protobuf"
   packages = ["proto"]
   revision = "78b168c14fc28c8c711844d210f7ab845083e3b1"
+
+[[projects]]
+  name = "github.com/google/go-cmp"
+  packages = [
+    "cmp",
+    "cmp/internal/diff",
+    "cmp/internal/function",
+    "cmp/internal/value"
+  ]
+  revision = "3af367b6b30c263d47e8895973edcca9a49cf029"
+  version = "v0.2.0"
 
 [[projects]]
   name = "github.com/gorilla/context"
@@ -721,9 +731,21 @@
   packages = ["."]
   revision = "a83829b6f1293c91addabc89d0571c246397bbf4"
 
+[[projects]]
+  name = "gotest.tools"
+  packages = [
+    "assert",
+    "assert/cmp",
+    "internal/difflib",
+    "internal/format",
+    "internal/source"
+  ]
+  revision = "1083505acf35a0bd8a696b26837e1fb3187a7a83"
+  version = "v2.3.0"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "89da24cb27fc486e9ceb3356dafc5caba78c864fe96017088e2f5e435a473e9f"
+  inputs-digest = "c16f4c960c02ba6e6e2777e35067d3c6e9f7363eb1a8ac8631919aca1a1cf488"
   solver-name = "gps-cdcl"
   solver-version = 1

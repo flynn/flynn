@@ -13,7 +13,7 @@ import (
 
 // CatchAll catches all signals and relays them to the specified channel.
 func CatchAll(sigc chan os.Signal) {
-	handledSigs := []os.Signal{}
+	var handledSigs []os.Signal
 	for _, s := range SignalMap {
 		handledSigs = append(handledSigs, s)
 	}
@@ -41,4 +41,14 @@ func ParseSignal(rawSignal string) (syscall.Signal, error) {
 		return -1, fmt.Errorf("Invalid signal: %s", rawSignal)
 	}
 	return signal, nil
+}
+
+// ValidSignalForPlatform returns true if a signal is valid on the platform
+func ValidSignalForPlatform(sig syscall.Signal) bool {
+	for _, v := range SignalMap {
+		if v == sig {
+			return true
+		}
+	}
+	return false
 }
