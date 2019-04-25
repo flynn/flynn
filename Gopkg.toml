@@ -15,17 +15,12 @@ required = [
   name = "github.com/BurntSushi/toml"
 
 [[constraint]]
-  name = "github.com/Sirupsen/logrus"
-  version = "0.8.6"
-
-[[constraint]]
   branch = "master"
   name = "github.com/cupcake/jsonschema"
 
 [[constraint]]
-  branch = "master"
+  version = "=v1.9.1"
   name = "github.com/docker/docker"
-  source = "github.com/flynn-archive/docker"
 
 [[constraint]]
   name = "github.com/docker/go-units"
@@ -86,3 +81,11 @@ required = [
 [[constraint]]
   branch = "v0"
   name = "gopkg.in/inconshreveable/go-update.v0"
+
+[[constraint]]
+  revision = "dbe6172d8ca9faf1cd37d0864d4ac09895804a98"
+  name = "github.com/docker/libnetwork"
+
+[[override]]
+  revision = "70b2c90b260171e829f1ebd7c17f600c11858dbe"
+  name = "github.com/Azure/go-ansiterm"

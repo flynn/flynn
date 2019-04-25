@@ -59,7 +59,17 @@ func CheckRouteOverlaps(toCheck *net.IPNet) error {
 
 // NetworkOverlaps detects overlap between one IPNet and another
 func NetworkOverlaps(netX *net.IPNet, netY *net.IPNet) bool {
-	return netX.Contains(netY.IP) || netY.Contains(netX.IP)
+	// Check if both netX and netY are ipv4 or ipv6
+	if (netX.IP.To4() != nil && netY.IP.To4() != nil) ||
+		(netX.IP.To4() == nil && netY.IP.To4() == nil) {
+		if firstIP, _ := NetworkRange(netX); netY.Contains(firstIP) {
+			return true
+		}
+		if firstIP, _ := NetworkRange(netY); netX.Contains(firstIP) {
+			return true
+		}
+	}
+	return false
 }
 
 // NetworkRange calculates the first and last IP addresses in an IPNet
@@ -112,34 +122,24 @@ func GetIfaceAddr(name string) (net.Addr, []net.Addr, error) {
 	return addrs4[0], addrs6, nil
 }
 
-func genMAC(ip net.IP) net.HardwareAddr {
+// GenerateRandomMAC returns a new 6-byte(48-bit) hardware address (MAC)
+func GenerateRandomMAC() net.HardwareAddr {
 	hw := make(net.HardwareAddr, 6)
 	// The first byte of the MAC address has to comply with these rules:
 	// 1. Unicast: Set the least-significant bit to 0.
 	// 2. Address is locally administered: Set the second-least-significant bit (U/L) to 1.
+	// 3. As "small" as possible: The veth address has to be "smaller" than the bridge address.
 	hw[0] = 0x02
 	// The first 24 bits of the MAC represent the Organizationally Unique Identifier (OUI).
 	// Since this address is locally administered, we can do whatever we want as long as
 	// it doesn't conflict with other addresses.
 	hw[1] = 0x42
-	// Fill the remaining 4 bytes based on the input
-	if ip == nil {
-		rand.Read(hw[2:])
-	} else {
-		copy(hw[2:], ip.To4())
+	// Randomly generate the remaining 4 bytes (2^32)
+	_, err := rand.Read(hw[2:])
+	if err != nil {
+		return nil
 	}
 	return hw
-}
-
-// GenerateRandomMAC returns a new 6-byte(48-bit) hardware address (MAC)
-func GenerateRandomMAC() net.HardwareAddr {
-	return genMAC(nil)
-}
-
-// GenerateMACFromIP returns a locally administered MAC address where the 4 least
-// significant bytes are derived from the IPv4 address.
-func GenerateMACFromIP(ip net.IP) net.HardwareAddr {
-	return genMAC(ip)
 }
 
 // GenerateRandomName returns a new name joined with a prefix.  This size
@@ -169,4 +169,54 @@ func GenerateIfaceName(prefix string, len int) (string, error) {
 		}
 	}
 	return "", types.InternalErrorf("could not generate interface name")
+}
+
+func byteArrayToInt(array []byte, numBytes int) uint64 {
+	if numBytes <= 0 || numBytes > 8 {
+		panic("Invalid argument")
+	}
+	num := 0
+	for i := 0; i <= len(array)-1; i++ {
+		num += int(array[len(array)-1-i]) << uint(i*8)
+	}
+	return uint64(num)
+}
+
+// ATo64 converts a byte array into a uint32
+func ATo64(array []byte) uint64 {
+	return byteArrayToInt(array, 8)
+}
+
+// ATo32 converts a byte array into a uint32
+func ATo32(array []byte) uint32 {
+	return uint32(byteArrayToInt(array, 4))
+}
+
+// ATo16 converts a byte array into a uint16
+func ATo16(array []byte) uint16 {
+	return uint16(byteArrayToInt(array, 2))
+}
+
+func intToByteArray(val uint64, numBytes int) []byte {
+	array := make([]byte, numBytes)
+	for i := numBytes - 1; i >= 0; i-- {
+		array[i] = byte(val & 0xff)
+		val = val >> 8
+	}
+	return array
+}
+
+// U64ToA converts a uint64 to a byte array
+func U64ToA(val uint64) []byte {
+	return intToByteArray(uint64(val), 8)
+}
+
+// U32ToA converts a uint64 to a byte array
+func U32ToA(val uint32) []byte {
+	return intToByteArray(uint64(val), 4)
+}
+
+// U16ToA converts a uint64 to a byte array
+func U16ToA(val uint16) []byte {
+	return intToByteArray(uint64(val), 2)
 }

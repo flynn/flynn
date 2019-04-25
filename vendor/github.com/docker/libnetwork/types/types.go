@@ -24,12 +24,11 @@ func (t *TransportPort) GetCopy() TransportPort {
 
 // PortBinding represent a port binding between the container and the host
 type PortBinding struct {
-	Proto       Protocol
-	IP          net.IP
-	Port        uint16
-	HostIP      net.IP
-	HostPort    uint16
-	HostPortEnd uint16
+	Proto    Protocol
+	IP       net.IP
+	Port     uint16
+	HostIP   net.IP
+	HostPort uint16
 }
 
 // HostAddr returns the host side transport address
@@ -59,12 +58,11 @@ func (p PortBinding) ContainerAddr() (net.Addr, error) {
 // GetCopy returns a copy of this PortBinding structure instance
 func (p *PortBinding) GetCopy() PortBinding {
 	return PortBinding{
-		Proto:       p.Proto,
-		IP:          GetIPCopy(p.IP),
-		Port:        p.Port,
-		HostIP:      GetIPCopy(p.HostIP),
-		HostPort:    p.HostPort,
-		HostPortEnd: p.HostPortEnd,
+		Proto:    p.Proto,
+		IP:       GetIPCopy(p.IP),
+		Port:     p.Port,
+		HostIP:   GetIPCopy(p.HostIP),
+		HostPort: p.HostPort,
 	}
 }
 
@@ -78,8 +76,7 @@ func (p *PortBinding) Equal(o *PortBinding) bool {
 		return false
 	}
 
-	if p.Proto != o.Proto || p.Port != o.Port ||
-		p.HostPort != o.HostPort || p.HostPortEnd != o.HostPortEnd {
+	if p.Proto != o.Proto || p.Port != o.Port || p.HostPort != o.HostPort {
 		return false
 	}
 
@@ -154,9 +151,6 @@ func ParseProtocol(s string) Protocol {
 
 // GetMacCopy returns a copy of the passed MAC address
 func GetMacCopy(from net.HardwareAddr) net.HardwareAddr {
-	if from == nil {
-		return nil
-	}
 	to := make(net.HardwareAddr, len(from))
 	copy(to, from)
 	return to
@@ -164,9 +158,6 @@ func GetMacCopy(from net.HardwareAddr) net.HardwareAddr {
 
 // GetIPCopy returns a copy of the passed IP address
 func GetIPCopy(from net.IP) net.IP {
-	if from == nil {
-		return nil
-	}
 	to := make(net.IP, len(from))
 	copy(to, from)
 	return to
@@ -203,96 +194,6 @@ func CompareIPNet(a, b *net.IPNet) bool {
 	return a.IP.Equal(b.IP) && bytes.Equal(a.Mask, b.Mask)
 }
 
-// GetMinimalIP returns the address in its shortest form
-func GetMinimalIP(ip net.IP) net.IP {
-	if ip != nil && ip.To4() != nil {
-		return ip.To4()
-	}
-	return ip
-}
-
-// GetMinimalIPNet returns a copy of the passed IP Network with congruent ip and mask notation
-func GetMinimalIPNet(nw *net.IPNet) *net.IPNet {
-	if nw == nil {
-		return nil
-	}
-	if len(nw.IP) == 16 && nw.IP.To4() != nil {
-		m := nw.Mask
-		if len(m) == 16 {
-			m = m[12:16]
-		}
-		return &net.IPNet{IP: nw.IP.To4(), Mask: m}
-	}
-	return nw
-}
-
-var v4inV6MaskPrefix = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-
-// compareIPMask checks if the passed ip and mask are semantically compatible.
-// It returns the byte indexes for the address and mask so that caller can
-// do bitwise operations without modifying address representation.
-func compareIPMask(ip net.IP, mask net.IPMask) (is int, ms int, err error) {
-	// Find the effective starting of address and mask
-	if len(ip) == net.IPv6len && ip.To4() != nil {
-		is = 12
-	}
-	if len(ip[is:]) == net.IPv4len && len(mask) == net.IPv6len && bytes.Equal(mask[:12], v4inV6MaskPrefix) {
-		ms = 12
-	}
-	// Check if address and mask are semantically compatible
-	if len(ip[is:]) != len(mask[ms:]) {
-		err = fmt.Errorf("ip and mask are not compatible: (%#v, %#v)", ip, mask)
-	}
-	return
-}
-
-// GetHostPartIP returns the host portion of the ip address identified by the mask.
-// IP address representation is not modified. If address and mask are not compatible
-// an error is returned.
-func GetHostPartIP(ip net.IP, mask net.IPMask) (net.IP, error) {
-	// Find the effective starting of address and mask
-	is, ms, err := compareIPMask(ip, mask)
-	if err != nil {
-		return nil, fmt.Errorf("cannot compute host portion ip address because %s", err)
-	}
-
-	// Compute host portion
-	out := GetIPCopy(ip)
-	for i := 0; i < len(mask[ms:]); i++ {
-		out[is+i] &= ^mask[ms+i]
-	}
-
-	return out, nil
-}
-
-// GetBroadcastIP returns the broadcast ip address for the passed network (ip and mask).
-// IP address representation is not modified. If address and mask are not compatible
-// an error is returned.
-func GetBroadcastIP(ip net.IP, mask net.IPMask) (net.IP, error) {
-	// Find the effective starting of address and mask
-	is, ms, err := compareIPMask(ip, mask)
-	if err != nil {
-		return nil, fmt.Errorf("cannot compute broadcast ip address because %s", err)
-	}
-
-	// Compute broadcast address
-	out := GetIPCopy(ip)
-	for i := 0; i < len(mask[ms:]); i++ {
-		out[is+i] |= ^mask[ms+i]
-	}
-
-	return out, nil
-}
-
-// ParseCIDR returns the *net.IPNet represented by the passed CIDR notation
-func ParseCIDR(cidr string) (n *net.IPNet, e error) {
-	var i net.IP
-	if i, n, e = net.ParseCIDR(cidr); e == nil {
-		n.IP = i
-	}
-	return
-}
-
 const (
 	// NEXTHOP indicates a StaticRoute with an IP next hop.
 	NEXTHOP = iota
@@ -309,6 +210,12 @@ type StaticRoute struct {
 
 	// NextHop will be resolved by the kernel (i.e. as a loose hop).
 	NextHop net.IP
+
+	// InterfaceID must refer to a defined interface on the
+	// Endpoint to which the routes are specified.  Routes specified this way
+	// are interpreted as directly connected to the specified interface (no
+	// next hop will be used).
+	InterfaceID int
 }
 
 // GetCopy returns a copy of this StaticRoute structure
@@ -316,26 +223,9 @@ func (r *StaticRoute) GetCopy() *StaticRoute {
 	d := GetIPNetCopy(r.Destination)
 	nh := GetIPCopy(r.NextHop)
 	return &StaticRoute{Destination: d,
-		RouteType: r.RouteType,
-		NextHop:   nh,
-	}
-}
-
-// InterfaceStatistics represents the interface's statistics
-type InterfaceStatistics struct {
-	RxBytes   uint64
-	RxPackets uint64
-	RxErrors  uint64
-	RxDropped uint64
-	TxBytes   uint64
-	TxPackets uint64
-	TxErrors  uint64
-	TxDropped uint64
-}
-
-func (is *InterfaceStatistics) String() string {
-	return fmt.Sprintf("\nRxBytes: %d, RxPackets: %d, RxErrors: %d, RxDropped: %d, TxBytes: %d, TxPackets: %d, TxErrors: %d, TxDropped: %d",
-		is.RxBytes, is.RxPackets, is.RxErrors, is.RxDropped, is.TxBytes, is.TxPackets, is.TxErrors, is.TxDropped)
+		RouteType:   r.RouteType,
+		NextHop:     nh,
+		InterfaceID: r.InterfaceID}
 }
 
 /******************************
