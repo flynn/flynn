@@ -8,13 +8,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/term"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cliutil"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/term"
 	"github.com/flynn/go-docopt"
 )
 

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/cheggaaa/pb"
-	"github.com/docker/docker/pkg/term"
+	"github.com/flynn/flynn/pkg/term"
 	"github.com/inconshreveable/log15"
 )
 

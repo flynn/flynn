@@ -16,12 +16,12 @@ import (
 
 	"github.com/cheggaaa/pb"
 	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/term"
 	cfg "github.com/flynn/flynn/cli/config"
 	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/backup"
+	"github.com/flynn/flynn/pkg/term"
 	"github.com/flynn/flynn/pkg/version"
 	tarclient "github.com/flynn/flynn/tarreceive/client"
 	"github.com/flynn/go-docopt"

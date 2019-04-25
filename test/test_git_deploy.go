@@ -16,10 +16,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/term"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/term"
 	c "github.com/flynn/go-check"
 	"github.com/kr/pty"
 )

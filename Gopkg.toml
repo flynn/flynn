@@ -85,7 +85,3 @@ required = [
 [[constraint]]
   revision = "dbe6172d8ca9faf1cd37d0864d4ac09895804a98"
   name = "github.com/docker/libnetwork"
-
-[[override]]
-  revision = "70b2c90b260171e829f1ebd7c17f600c11858dbe"
-  name = "github.com/Azure/go-ansiterm"

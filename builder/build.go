@@ -22,21 +22,21 @@ import (
 	"time"
 
 	"github.com/cheggaaa/pb"
-	"github.com/docker/docker/pkg/term"
 	"github.com/docker/go-units"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/term"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
 	tuf "github.com/flynn/go-tuf/client"
 	tufdata "github.com/flynn/go-tuf/data"
 	"github.com/golang/groupcache/singleflight"
-	"github.com/tent/canonical-json-go"
 	"github.com/inconshreveable/log15"
+	cjson "github.com/tent/canonical-json-go"
 )
 
 var cmdBuild = Command{

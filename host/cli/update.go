@@ -14,12 +14,12 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/docker/docker/pkg/term"
 	"github.com/docker/go-units"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/term"
 	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"

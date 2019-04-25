@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/term"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
 	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/term"
 	"github.com/flynn/go-docopt"
 )
 

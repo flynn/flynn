@@ -16,12 +16,13 @@
   revision = "63d3f3e3b12ffb726ba3f72fef1aa8c1c7cd1012"
 
 [[projects]]
+  branch = "master"
   name = "github.com/Azure/go-ansiterm"
   packages = [
     ".",
     "winterm"
   ]
-  revision = "70b2c90b260171e829f1ebd7c17f600c11858dbe"
+  revision = "d6e3b3328b783f23731bc4d058875b0371ff8109"
 
 [[projects]]
   branch = "datetimes"
@@ -140,8 +141,6 @@
     "pkg/promise",
     "pkg/symlink",
     "pkg/system",
-    "pkg/term",
-    "pkg/term/windows",
     "pkg/units"
   ]
   revision = "a34a1d598c6096ed8b5ce5219e77d68e5cd85462"
@@ -746,6 +745,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c16f4c960c02ba6e6e2777e35067d3c6e9f7363eb1a8ac8631919aca1a1cf488"
+  inputs-digest = "3811970011f104224d60f0a1116c14ae539f63a6712083e7b855b89cde183401"
   solver-name = "gps-cdcl"
   solver-version = 1
