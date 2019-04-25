@@ -16,14 +16,14 @@ import (
 	"strings"
 
 	"github.com/cheggaaa/pb"
-	"github.com/docker/docker/pkg/term"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/backup"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
-	"github.com/flynn/flynn/router/types"
+	"github.com/flynn/flynn/pkg/term"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/go-docopt"
 )
 

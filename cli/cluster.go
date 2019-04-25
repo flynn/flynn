@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/cheggaaa/pb"
-	"github.com/docker/docker/pkg/term"
 	cfg "github.com/flynn/flynn/cli/config"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/backup"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/term"
 	"github.com/flynn/go-docopt"
 )
 

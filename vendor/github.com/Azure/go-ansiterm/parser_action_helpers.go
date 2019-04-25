@@ -27,17 +27,15 @@ func parseParams(bytes []byte) ([]string, error) {
 		params = append(params, s)
 	}
 
-	logger.Infof("Parsed params: %v with length: %d", params, len(params))
 	return params, nil
 }
 
-func parseCmd(context AnsiContext) (string, error) {
+func parseCmd(context ansiContext) (string, error) {
 	return string(context.currentChar), nil
 }
 
 func getInt(params []string, dflt int) int {
 	i := getInts(params, 1, dflt)[0]
-	logger.Infof("getInt: %v", i)
 	return i
 }
 
@@ -59,8 +57,6 @@ func getInts(params []string, minCount int, dflt int) []int {
 			ints = append(ints, dflt)
 		}
 	}
-
-	logger.Infof("getInts: %v", ints)
 
 	return ints
 }

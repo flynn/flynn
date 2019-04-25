@@ -20,7 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/term"
 	"github.com/docker/go-units"
 	"github.com/docker/libnetwork/ipallocator"
 	"github.com/docker/libnetwork/netutils"
@@ -40,6 +39,7 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
+	"github.com/flynn/flynn/pkg/term"
 	"github.com/flynn/flynn/pkg/verify"
 	"github.com/golang/groupcache/singleflight"
 	"github.com/inconshreveable/log15"
