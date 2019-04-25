@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
-	"github.com/docker/libnetwork/netutils"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/containerinit"
 	"github.com/flynn/flynn/host/logmux"
@@ -33,6 +32,7 @@ import (
 	logutils "github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/dialer"
+	"github.com/flynn/flynn/pkg/ifname"
 	"github.com/flynn/flynn/pkg/ipallocator"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
@@ -718,7 +718,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		// allow host network jobs to configure the network
 		config.Capabilities = append(config.Capabilities, "CAP_NET_ADMIN")
 	} else {
-		ifaceName, err := netutils.GenerateIfaceName("veth", 4)
+		ifaceName, err := ifname.Generate("veth", 4)
 		if err != nil {
 			return err
 		}
