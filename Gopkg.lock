@@ -153,14 +153,6 @@
   version = "v0.3.0"
 
 [[projects]]
-  name = "github.com/docker/libnetwork"
-  packages = [
-    "netutils",
-    "types"
-  ]
-  revision = "dbe6172d8ca9faf1cd37d0864d4ac09895804a98"
-
-[[projects]]
   branch = "master"
   name = "github.com/dustin/go-humanize"
   packages = ["."]
@@ -744,6 +736,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "71d3b1e4344edfd302368fffbd525717677dfddef4c7e00bc78bc909f2db229f"
+  inputs-digest = "ba3374c8e6f651f9861c129c434c356901882ade8f3f785060b866c1fb1451e7"
   solver-name = "gps-cdcl"
   solver-version = 1
