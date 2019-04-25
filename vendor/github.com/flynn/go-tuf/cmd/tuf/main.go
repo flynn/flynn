@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -9,12 +8,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/term"
 	"github.com/flynn/go-docopt"
 	"github.com/flynn/go-tuf"
 	"github.com/flynn/go-tuf/util"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 func main() {
@@ -127,34 +127,23 @@ func getPassphrase(role string, confirm bool) ([]byte, error) {
 		return []byte(pass), nil
 	}
 
-	state, err := term.SaveState(0)
-	if err != nil {
-		return nil, err
-	}
-	term.DisableEcho(0, state)
-	defer term.RestoreTerminal(0, state)
-
-	stdin := bufio.NewReader(os.Stdin)
-
 	fmt.Printf("Enter %s keys passphrase: ", role)
-	passphrase, err := stdin.ReadBytes('\n')
+	passphrase, err := terminal.ReadPassword(int(syscall.Stdin))
 	fmt.Println()
 	if err != nil {
 		return nil, err
 	}
-	passphrase = passphrase[0 : len(passphrase)-1]
 
 	if !confirm {
 		return passphrase, nil
 	}
 
 	fmt.Printf("Repeat %s keys passphrase: ", role)
-	confirmation, err := stdin.ReadBytes('\n')
+	confirmation, err := terminal.ReadPassword(int(syscall.Stdin))
 	fmt.Println()
 	if err != nil {
 		return nil, err
 	}
-	confirmation = confirmation[0 : len(confirmation)-1]
 
 	if !bytes.Equal(passphrase, confirmation) {
 		return nil, errors.New("The entered passphrases do not match")
