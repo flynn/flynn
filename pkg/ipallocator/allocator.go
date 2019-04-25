@@ -1,5 +1,5 @@
-// Package ipallocator defines the default IP allocator. It will move out of libnetwork as an external IPAM plugin.
-// This has been imported unchanged from Docker, besides additon of registration logic
+// Copyright 2015 Docker, Inc. Code released under the Apache 2.0 license.
+
 package ipallocator
 
 import (
@@ -7,9 +7,6 @@ import (
 	"math/big"
 	"net"
 	"sync"
-
-	"github.com/Sirupsen/logrus"
-	"github.com/docker/libnetwork/netutils"
 )
 
 // allocatedMap is thread-unsafe set of allocated IP
@@ -21,7 +18,7 @@ type allocatedMap struct {
 }
 
 func newAllocatedMap(network *net.IPNet) *allocatedMap {
-	firstIP, lastIP := netutils.NetworkRange(network)
+	firstIP, lastIP := networkRange(network)
 	begin := big.NewInt(0).Add(ipToBigInt(firstIP), big.NewInt(1))
 	end := big.NewInt(0).Sub(ipToBigInt(lastIP), big.NewInt(1))
 
@@ -73,7 +70,7 @@ func (a *IPAllocator) RegisterSubnet(network *net.IPNet, subnet *net.IPNet) erro
 	}
 
 	// Check that subnet is within network
-	beginIP, endIP := netutils.NetworkRange(subnet)
+	beginIP, endIP := networkRange(subnet)
 	if !(network.Contains(beginIP) && network.Contains(endIP)) {
 		return ErrBadSubnet
 	}
@@ -165,11 +162,37 @@ func ipToBigInt(ip net.IP) *big.Int {
 		return x.SetBytes(ip6)
 	}
 
-	logrus.Errorf("ipToBigInt: Wrong IP length! %s", ip)
 	return nil
 }
 
 // Converts 128 bit integer into a 4 bytes IP address
 func bigIntToIP(v *big.Int) net.IP {
 	return net.IP(v.Bytes())
+}
+
+// getIPCopy returns a copy of the passed IP address
+func getIPCopy(from net.IP) net.IP {
+	to := make(net.IP, len(from))
+	copy(to, from)
+	return to
+}
+
+// networkRange calculates the first and last IP addresses in an IPNet
+func networkRange(network *net.IPNet) (net.IP, net.IP) {
+	if network == nil {
+		return nil, nil
+	}
+
+	firstIP := network.IP.Mask(network.Mask)
+	lastIP := getIPCopy(firstIP)
+	for i := 0; i < len(firstIP); i++ {
+		lastIP[i] = firstIP[i] | ^network.Mask[i]
+	}
+
+	if network.IP.To4() != nil {
+		firstIP = firstIP.To4()
+		lastIP = lastIP.To4()
+	}
+
+	return firstIP, lastIP
 }

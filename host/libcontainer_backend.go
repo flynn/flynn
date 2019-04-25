@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
-	"github.com/docker/libnetwork/ipallocator"
 	"github.com/docker/libnetwork/netutils"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/containerinit"
@@ -34,6 +33,7 @@ import (
 	logutils "github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/dialer"
+	"github.com/flynn/flynn/pkg/ipallocator"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
