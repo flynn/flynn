@@ -24,7 +24,6 @@ type ansiWriter struct {
 // NewAnsiWriter returns an io.Writer that provides VT100 terminal emulation on top of a
 // Windows console output handle.
 func NewAnsiWriter(nFile int) io.Writer {
-	initLogger()
 	file, fd := winterm.GetStdFile(nFile)
 	info, err := winterm.GetConsoleScreenBufferInfo(fd)
 	if err != nil {
@@ -32,7 +31,6 @@ func NewAnsiWriter(nFile int) io.Writer {
 	}
 
 	parser := ansiterm.CreateParser("Ground", winterm.CreateWinEventHandler(fd, file))
-	logger.Infof("newAnsiWriter: parser %p", parser)
 
 	aw := &ansiWriter{
 		file:           file,
@@ -42,9 +40,6 @@ func NewAnsiWriter(nFile int) io.Writer {
 		escapeSequence: []byte(ansiterm.KEY_ESC_CSI),
 		parser:         parser,
 	}
-
-	logger.Infof("newAnsiWriter: aw.parser %p", aw.parser)
-	logger.Infof("newAnsiWriter: %v", aw)
 	return aw
 }
 
@@ -57,8 +52,5 @@ func (aw *ansiWriter) Write(p []byte) (total int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-
-	logger.Infof("Write: % x", p)
-	logger.Infof("Write: %s", string(p))
 	return aw.parser.Parse(p)
 }
