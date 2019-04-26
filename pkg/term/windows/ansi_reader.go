@@ -31,7 +31,6 @@ type ansiReader struct {
 // NewAnsiReader returns an io.ReadCloser that provides VT100 terminal emulation on top of a
 // Windows console input handle.
 func NewAnsiReader(nFile int) io.ReadCloser {
-	initLogger()
 	file, fd := winterm.GetStdFile(nFile)
 	return &ansiReader{
 		file:    file,
@@ -59,8 +58,6 @@ func (ar *ansiReader) Read(p []byte) (int, error) {
 
 	// Previously read bytes exist, read as much as we can and return
 	if len(ar.buffer) > 0 {
-		logger.Debugf("Reading previously cached bytes")
-
 		originalLength := len(ar.buffer)
 		copiedLength := copy(p, ar.buffer)
 
@@ -70,7 +67,6 @@ func (ar *ansiReader) Read(p []byte) (int, error) {
 			ar.buffer = ar.buffer[copiedLength:]
 		}
 
-		logger.Debugf("Read from cache p[%d]: % x", copiedLength, p)
 		return copiedLength, nil
 	}
 
@@ -79,7 +75,6 @@ func (ar *ansiReader) Read(p []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	} else if len(events) == 0 {
-		logger.Debug("No input events detected")
 		return 0, nil
 	}
 
@@ -87,11 +82,9 @@ func (ar *ansiReader) Read(p []byte) (int, error) {
 
 	// Save excess bytes and right-size keyBytes
 	if len(keyBytes) > len(p) {
-		logger.Debugf("Received %d keyBytes, only room for %d bytes", len(keyBytes), len(p))
 		ar.buffer = keyBytes[len(p):]
 		keyBytes = keyBytes[:len(p)]
 	} else if len(keyBytes) == 0 {
-		logger.Debug("No key bytes returned from the translator")
 		return 0, nil
 	}
 
@@ -100,8 +93,6 @@ func (ar *ansiReader) Read(p []byte) (int, error) {
 		return 0, errors.New("unexpected copy length encountered")
 	}
 
-	logger.Debugf("Read        p[%d]: % x", copiedLength, p)
-	logger.Debugf("Read keyBytes[%d]: % x", copiedLength, keyBytes)
 	return copiedLength, nil
 }
 
@@ -118,7 +109,6 @@ func readInputEvents(fd uintptr, maxBytes int) ([]winterm.INPUT_RECORD, error) {
 	} else if countRecords == 0 {
 		countRecords = 1
 	}
-	logger.Debugf("[windows] readInputEvents: Reading %v records (buffer size %v, record size %v)", countRecords, maxBytes, recordSize)
 
 	// Wait for and read input events
 	events := make([]winterm.INPUT_RECORD, countRecords)
@@ -136,7 +126,6 @@ func readInputEvents(fd uintptr, maxBytes int) ([]winterm.INPUT_RECORD, error) {
 	}
 
 	// Return a slice restricted to the number of returned records
-	logger.Debugf("[windows] readInputEvents: Read %v events", nEvents)
 	return events[:nEvents], nil
 }
 
