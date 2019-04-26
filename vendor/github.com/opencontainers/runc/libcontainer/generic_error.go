@@ -9,20 +9,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/stacktrace"
 )
 
-type syncType uint8
-
-const (
-	procReady syncType = iota
-	procError
-	procRun
-	procHooks
-	procResume
-)
-
-type syncT struct {
-	Type syncType `json:"type"`
-}
-
 var errorTemplate = template.Must(template.New("error").Parse(`Timestamp: {{.Timestamp}}
 Code: {{.ECode}}
 {{if .Message }}
@@ -67,9 +53,6 @@ func newSystemErrorWithCause(err error, cause string) Error {
 // stack frames skipped. This is only to be called by the other functions for
 // formatting the error.
 func createSystemError(err error, cause string) Error {
-	if le, ok := err.(Error); ok {
-		return le
-	}
 	gerr := &genericError{
 		Timestamp: time.Now(),
 		Err:       err,

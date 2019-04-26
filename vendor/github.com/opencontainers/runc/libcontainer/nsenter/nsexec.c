@@ -1,471 +1,1006 @@
+
 #define _GNU_SOURCE
 #include <endian.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <linux/limits.h>
-#include <sys/socket.h>
-#include <linux/netlink.h>
+#include <grp.h>
 #include <sched.h>
 #include <setjmp.h>
 #include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <sys/prctl.h>
 #include <unistd.h>
-#include <grp.h>
 
+#include <sys/ioctl.h>
+#include <sys/prctl.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include <linux/limits.h>
+#include <linux/netlink.h>
 #include <linux/types.h>
 
-// All arguments should be above the stack because it grows down
-struct clone_arg {
+/* Get all of the CLONE_NEW* flags. */
+#include "namespace.h"
+
+/* Synchronisation values. */
+enum sync_t {
+	SYNC_USERMAP_PLS = 0x40,	/* Request parent to map our users. */
+	SYNC_USERMAP_ACK = 0x41,	/* Mapping finished by the parent. */
+	SYNC_RECVPID_PLS = 0x42,	/* Tell parent we're sending the PID. */
+	SYNC_RECVPID_ACK = 0x43,	/* PID was correctly received by parent. */
+	SYNC_GRANDCHILD = 0x44,	/* The grandchild is ready to run. */
+	SYNC_CHILD_READY = 0x45,	/* The child or grandchild is ready to return. */
+
+	/* XXX: This doesn't help with segfaults and other such issues. */
+	SYNC_ERR = 0xFF,	/* Fatal error, no turning back. The error code follows. */
+};
+
+/*
+ * Synchronisation value for cgroup namespace setup.
+ * The same constant is defined in process_linux.go as "createCgroupns".
+ */
+#define CREATECGROUPNS 0x80
+
+/* longjmp() arguments. */
+#define JUMP_PARENT 0x00
+#define JUMP_CHILD  0xA0
+#define JUMP_INIT   0xA1
+
+/* JSON buffer. */
+#define JSON_MAX 4096
+
+/* Assume the stack grows down, so arguments should be above it. */
+struct clone_t {
 	/*
 	 * Reserve some space for clone() to locate arguments
 	 * and retcode in this place
 	 */
-	char     stack[4096] __attribute__((aligned(16)));
-	char     stack_ptr[0];
+	char stack[4096] __attribute__ ((aligned(16)));
+	char stack_ptr[0];
+
+	/* There's two children. This is used to execute the different code. */
 	jmp_buf *env;
+	int jmpval;
 };
 
-struct nsenter_config {
+struct nlconfig_t {
+	char *data;
+
+	/* Process settings. */
 	uint32_t cloneflags;
-	char     *uidmap;
-	int      uidmap_len;
-	char     *gidmap;
-	int      gidmap_len;
-	uint8_t  is_setgroup;
-	int      consolefd;
+	char *oom_score_adj;
+	size_t oom_score_adj_len;
+
+	/* User namespace settings. */
+	char *uidmap;
+	size_t uidmap_len;
+	char *gidmap;
+	size_t gidmap_len;
+	char *namespaces;
+	size_t namespaces_len;
+	uint8_t is_setgroup;
+
+	/* Rootless container settings. */
+	uint8_t is_rootless_euid;	/* boolean */
+	char *uidmappath;
+	size_t uidmappath_len;
+	char *gidmappath;
+	size_t gidmappath_len;
 };
 
-// list of known message types we want to send to bootstrap program
-// These are defined in libcontainer/message_linux.go
-#define INIT_MSG	    62000
-#define CLONE_FLAGS_ATTR    27281
-#define CONSOLE_PATH_ATTR   27282
-#define NS_PATHS_ATTR	    27283
-#define UIDMAP_ATTR	    27284
-#define GIDMAP_ATTR	    27285
-#define SETGROUP_ATTR	    27286
+/*
+ * List of netlink message types sent to us as part of bootstrapping the init.
+ * These constants are defined in libcontainer/message_linux.go.
+ */
+#define INIT_MSG			62000
+#define CLONE_FLAGS_ATTR	27281
+#define NS_PATHS_ATTR		27282
+#define UIDMAP_ATTR			27283
+#define GIDMAP_ATTR			27284
+#define SETGROUP_ATTR		27285
+#define OOM_SCORE_ADJ_ATTR	27286
+#define ROOTLESS_EUID_ATTR	27287
+#define UIDMAPPATH_ATTR	    27288
+#define GIDMAPPATH_ATTR	    27289
 
-// Use raw setns syscall for versions of glibc that don't include it
-// (namely glibc-2.12)
+/*
+ * Use the raw syscall for versions of glibc which don't include a function for
+ * it, namely (glibc 2.12).
+ */
 #if __GLIBC__ == 2 && __GLIBC_MINOR__ < 14
-    #define _GNU_SOURCE
-    #include "syscall.h"
-    #if defined(__NR_setns) && !defined(SYS_setns)
-	#define SYS_setns __NR_setns
-    #endif
+#	define _GNU_SOURCE
+#	include "syscall.h"
+#	if !defined(SYS_setns) && defined(__NR_setns)
+#		define SYS_setns __NR_setns
+#	endif
 
-    #ifdef SYS_setns
-	int setns(int fd, int nstype)
-	{
-	    return syscall(SYS_setns, fd, nstype);
-	}
-    #endif
+#ifndef SYS_setns
+#	error "setns(2) syscall not supported by glibc version"
 #endif
 
-#define pr_perror(fmt, ...)                                                    \
-	fprintf(stderr, "nsenter: " fmt ": %m\n", ##__VA_ARGS__)
-
-static int child_func(void *_arg)
+int setns(int fd, int nstype)
 {
-    struct clone_arg *arg = (struct clone_arg *)_arg;
-    longjmp(*arg->env, 1);
+	return syscall(SYS_setns, fd, nstype);
 }
+#endif
 
-static int clone_parent(jmp_buf *env, int flags) __attribute__((noinline));
-static int clone_parent(jmp_buf *env, int flags)
+/* XXX: This is ugly. */
+static int syncfd = -1;
+
+/* TODO(cyphar): Fix this so it correctly deals with syncT. */
+#define bail(fmt, ...)								\
+	do {									\
+		int ret = __COUNTER__ + 1;					\
+		fprintf(stderr, "nsenter: " fmt ": %m\n", ##__VA_ARGS__);	\
+		if (syncfd >= 0) {						\
+			enum sync_t s = SYNC_ERR;				\
+			if (write(syncfd, &s, sizeof(s)) != sizeof(s))		\
+				fprintf(stderr, "nsenter: failed: write(s)");	\
+			if (write(syncfd, &ret, sizeof(ret)) != sizeof(ret))	\
+				fprintf(stderr, "nsenter: failed: write(ret)");	\
+		}								\
+		exit(ret);							\
+	} while(0)
+
+static int write_file(char *data, size_t data_len, char *pathfmt, ...)
 {
-	struct clone_arg ca;
-	int		 child;
+	int fd, len, ret = 0;
+	char path[PATH_MAX];
 
-	ca.env = env;
-	child  = clone(child_func, ca.stack_ptr, CLONE_PARENT | SIGCHLD | flags,
-		      &ca);
-	// On old kernels, CLONE_PARENT cannot work with CLONE_NEWPID,
-	// unshare before clone to workaround this.
-	if (child == -1 && errno == EINVAL) {
-		if (unshare(flags)) {
-			pr_perror("Unable to unshare namespaces");
-			return -1;
-		}
-		child  = clone(child_func, ca.stack_ptr, SIGCHLD | CLONE_PARENT,
-			      &ca);
-	}
-	return child;
-}
+	va_list ap;
+	va_start(ap, pathfmt);
+	len = vsnprintf(path, PATH_MAX, pathfmt, ap);
+	va_end(ap);
+	if (len < 0)
+		return -1;
 
-// get init pipe from the parent. It's used to read bootstrap data, and to
-// write pid to after nsexec finishes setting up the environment.
-static int get_init_pipe()
-{
-	char	buf[PATH_MAX];
-	char	*initpipe;
-	int	pipenum = -1;
-
-	initpipe = getenv("_LIBCONTAINER_INITPIPE");
-	if (initpipe == NULL) {
+	fd = open(path, O_RDWR);
+	if (fd < 0) {
 		return -1;
 	}
 
-	pipenum = atoi(initpipe);
-	snprintf(buf, sizeof(buf), "%d", pipenum);
-	if (strcmp(initpipe, buf)) {
-		pr_perror("Unable to parse _LIBCONTAINER_INITPIPE");
-		exit(1);
+	len = write(fd, data, data_len);
+	if (len != data_len) {
+		ret = -1;
+		goto out;
 	}
+
+ out:
+	close(fd);
+	return ret;
+}
+
+enum policy_t {
+	SETGROUPS_DEFAULT = 0,
+	SETGROUPS_ALLOW,
+	SETGROUPS_DENY,
+};
+
+/* This *must* be called before we touch gid_map. */
+static void update_setgroups(int pid, enum policy_t setgroup)
+{
+	char *policy;
+
+	switch (setgroup) {
+	case SETGROUPS_ALLOW:
+		policy = "allow";
+		break;
+	case SETGROUPS_DENY:
+		policy = "deny";
+		break;
+	case SETGROUPS_DEFAULT:
+	default:
+		/* Nothing to do. */
+		return;
+	}
+
+	if (write_file(policy, strlen(policy), "/proc/%d/setgroups", pid) < 0) {
+		/*
+		 * If the kernel is too old to support /proc/pid/setgroups,
+		 * open(2) or write(2) will return ENOENT. This is fine.
+		 */
+		if (errno != ENOENT)
+			bail("failed to write '%s' to /proc/%d/setgroups", policy, pid);
+	}
+}
+
+static int try_mapping_tool(const char *app, int pid, char *map, size_t map_len)
+{
+	int child;
+
+	/*
+	 * If @app is NULL, execve will segfault. Just check it here and bail (if
+	 * we're in this path, the caller is already getting desperate and there
+	 * isn't a backup to this failing). This usually would be a configuration
+	 * or programming issue.
+	 */
+	if (!app)
+		bail("mapping tool not present");
+
+	child = fork();
+	if (child < 0)
+		bail("failed to fork");
+
+	if (!child) {
+#define MAX_ARGV 20
+		char *argv[MAX_ARGV];
+		char *envp[] = { NULL };
+		char pid_fmt[16];
+		int argc = 0;
+		char *next;
+
+		snprintf(pid_fmt, 16, "%d", pid);
+
+		argv[argc++] = (char *)app;
+		argv[argc++] = pid_fmt;
+		/*
+		 * Convert the map string into a list of argument that
+		 * newuidmap/newgidmap can understand.
+		 */
+
+		while (argc < MAX_ARGV) {
+			if (*map == '\0') {
+				argv[argc++] = NULL;
+				break;
+			}
+			argv[argc++] = map;
+			next = strpbrk(map, "\n ");
+			if (next == NULL)
+				break;
+			*next++ = '\0';
+			map = next + strspn(next, "\n ");
+		}
+
+		execve(app, argv, envp);
+		bail("failed to execv");
+	} else {
+		int status;
+
+		while (true) {
+			if (waitpid(child, &status, 0) < 0) {
+				if (errno == EINTR)
+					continue;
+				bail("failed to waitpid");
+			}
+			if (WIFEXITED(status) || WIFSIGNALED(status))
+				return WEXITSTATUS(status);
+		}
+	}
+
+	return -1;
+}
+
+static void update_uidmap(const char *path, int pid, char *map, size_t map_len)
+{
+	if (map == NULL || map_len <= 0)
+		return;
+
+	if (write_file(map, map_len, "/proc/%d/uid_map", pid) < 0) {
+		if (errno != EPERM)
+			bail("failed to update /proc/%d/uid_map", pid);
+		if (try_mapping_tool(path, pid, map, map_len))
+			bail("failed to use newuid map on %d", pid);
+	}
+}
+
+static void update_gidmap(const char *path, int pid, char *map, size_t map_len)
+{
+	if (map == NULL || map_len <= 0)
+		return;
+
+	if (write_file(map, map_len, "/proc/%d/gid_map", pid) < 0) {
+		if (errno != EPERM)
+			bail("failed to update /proc/%d/gid_map", pid);
+		if (try_mapping_tool(path, pid, map, map_len))
+			bail("failed to use newgid map on %d", pid);
+	}
+}
+
+static void update_oom_score_adj(char *data, size_t len)
+{
+	if (data == NULL || len <= 0)
+		return;
+
+	if (write_file(data, len, "/proc/self/oom_score_adj") < 0)
+		bail("failed to update /proc/self/oom_score_adj");
+}
+
+/* A dummy function that just jumps to the given jumpval. */
+static int child_func(void *arg) __attribute__ ((noinline));
+static int child_func(void *arg)
+{
+	struct clone_t *ca = (struct clone_t *)arg;
+	longjmp(*ca->env, ca->jmpval);
+}
+
+static int clone_parent(jmp_buf *env, int jmpval) __attribute__ ((noinline));
+static int clone_parent(jmp_buf *env, int jmpval)
+{
+	struct clone_t ca = {
+		.env = env,
+		.jmpval = jmpval,
+	};
+
+	return clone(child_func, ca.stack_ptr, CLONE_PARENT | SIGCHLD, &ca);
+}
+
+/*
+ * Gets the init pipe fd from the environment, which is used to read the
+ * bootstrap data and tell the parent what the new pid is after we finish
+ * setting up the environment.
+ */
+static int initpipe(void)
+{
+	int pipenum;
+	char *initpipe, *endptr;
+
+	initpipe = getenv("_LIBCONTAINER_INITPIPE");
+	if (initpipe == NULL || *initpipe == '\0')
+		return -1;
+
+	pipenum = strtol(initpipe, &endptr, 10);
+	if (*endptr != '\0')
+		bail("unable to parse _LIBCONTAINER_INITPIPE");
 
 	return pipenum;
 }
 
-// num_namespaces returns the number of additional namespaces to setns. The
-// argument is a comma-separated string of namespace paths.
-static int num_namespaces(char *nspaths)
+/* Returns the clone(2) flag for a namespace, given the name of a namespace. */
+static int nsflag(char *name)
 {
-	int i;
-	int size = 0;
+	if (!strcmp(name, "cgroup"))
+		return CLONE_NEWCGROUP;
+	else if (!strcmp(name, "ipc"))
+		return CLONE_NEWIPC;
+	else if (!strcmp(name, "mnt"))
+		return CLONE_NEWNS;
+	else if (!strcmp(name, "net"))
+		return CLONE_NEWNET;
+	else if (!strcmp(name, "pid"))
+		return CLONE_NEWPID;
+	else if (!strcmp(name, "user"))
+		return CLONE_NEWUSER;
+	else if (!strcmp(name, "uts"))
+		return CLONE_NEWUTS;
 
-	for (i = 0; nspaths[i]; i++) {
-		if (nspaths[i] == ',') {
-			size += 1;
-		}
-	}
-
-	return size + 1;
+	/* If we don't recognise a name, fallback to 0. */
+	return 0;
 }
 
 static uint32_t readint32(char *buf)
 {
-    return *(uint32_t *)buf;
+	return *(uint32_t *) buf;
 }
 
 static uint8_t readint8(char *buf)
 {
-    return *(uint8_t *)buf;
+	return *(uint8_t *) buf;
 }
 
-static void update_process_idmap(char *pathfmt, int pid, char *map, int map_len)
+static void nl_parse(int fd, struct nlconfig_t *config)
 {
-	char    buf[PATH_MAX];
-	int	len;
-	int	fd;
+	size_t len, size;
+	struct nlmsghdr hdr;
+	char *data, *current;
 
-	len = snprintf(buf, sizeof(buf), pathfmt, pid);
-	if (len < 0) {
-		pr_perror("failed to construct '%s' for %d", pathfmt, pid);
-		exit(1);
-	}
+	/* Retrieve the netlink header. */
+	len = read(fd, &hdr, NLMSG_HDRLEN);
+	if (len != NLMSG_HDRLEN)
+		bail("invalid netlink header length %zu", len);
 
-	fd = open(buf, O_RDWR);
-	if (fd == -1) {
-		pr_perror("failed to open %s", buf);
-		exit(1);
-	}
+	if (hdr.nlmsg_type == NLMSG_ERROR)
+		bail("failed to read netlink message");
 
-	len = write(fd, map, map_len);
-	if (len == -1) {
-		pr_perror("failed to write to %s", buf);
-		close(fd);
-		exit(1);
-	} else if (len != map_len) {
-		pr_perror("Failed to write data to %s (%d/%d)",
-			buf, len, map_len);
-		close(fd);
-		exit(1);
-	}
+	if (hdr.nlmsg_type != INIT_MSG)
+		bail("unexpected msg type %d", hdr.nlmsg_type);
 
-	close(fd);
-}
+	/* Retrieve data. */
+	size = NLMSG_PAYLOAD(&hdr, 0);
+	current = data = malloc(size);
+	if (!data)
+		bail("failed to allocate %zu bytes of memory for nl_payload", size);
 
-static void update_process_uidmap(int pid, char *map, int map_len)
-{
-	if ((map == NULL) || (map_len <= 0)) {
-		return;
-	}
+	len = read(fd, data, size);
+	if (len != size)
+		bail("failed to read netlink payload, %zu != %zu", len, size);
 
-	update_process_idmap("/proc/%d/uid_map", pid, map, map_len);
-}
+	/* Parse the netlink payload. */
+	config->data = data;
+	while (current < data + size) {
+		struct nlattr *nlattr = (struct nlattr *)current;
+		size_t payload_len = nlattr->nla_len - NLA_HDRLEN;
 
-static void update_process_gidmap(int pid, uint8_t is_setgroup, char *map, int map_len)
-{
-	if ((map == NULL) || (map_len <= 0)) {
-		return;
-	}
+		/* Advance to payload. */
+		current += NLA_HDRLEN;
 
-	if (is_setgroup == 1) {
-		int	fd;
-		int	len;
-		char	buf[PATH_MAX];
-
-		len = snprintf(buf, sizeof(buf), "/proc/%d/setgroups", pid);
-		if (len < 0) {
-			pr_perror("failed to get setgroups path for %d", pid);
-			exit(1);
+		/* Handle payload. */
+		switch (nlattr->nla_type) {
+		case CLONE_FLAGS_ATTR:
+			config->cloneflags = readint32(current);
+			break;
+		case ROOTLESS_EUID_ATTR:
+			config->is_rootless_euid = readint8(current);	/* boolean */
+			break;
+		case OOM_SCORE_ADJ_ATTR:
+			config->oom_score_adj = current;
+			config->oom_score_adj_len = payload_len;
+			break;
+		case NS_PATHS_ATTR:
+			config->namespaces = current;
+			config->namespaces_len = payload_len;
+			break;
+		case UIDMAP_ATTR:
+			config->uidmap = current;
+			config->uidmap_len = payload_len;
+			break;
+		case GIDMAP_ATTR:
+			config->gidmap = current;
+			config->gidmap_len = payload_len;
+			break;
+		case UIDMAPPATH_ATTR:
+			config->uidmappath = current;
+			config->uidmappath_len = payload_len;
+			break;
+		case GIDMAPPATH_ATTR:
+			config->gidmappath = current;
+			config->gidmappath_len = payload_len;
+			break;
+		case SETGROUP_ATTR:
+			config->is_setgroup = readint8(current);
+			break;
+		default:
+			bail("unknown netlink message type %d", nlattr->nla_type);
 		}
 
-		fd = open(buf, O_RDWR);
-		if (fd == -1) {
-			pr_perror("failed to open %s", buf);
-			exit(1);
-		}
-		if (write(fd, "allow", 5) != 5) {
-			// If the kernel is too old to support
-			// /proc/PID/setgroups, write will return
-			// ENOENT; this is OK.
-			if (errno != ENOENT) {
-				pr_perror("failed to write allow to %s", buf);
-				close(fd);
-				exit(1);
-			}
-		}
-		close(fd);
+		current += NLA_ALIGN(payload_len);
 	}
-
-	update_process_idmap("/proc/%d/gid_map", pid, map, map_len);
 }
 
-
-static void start_child(int pipenum, jmp_buf *env, int syncpipe[2],
-		 struct nsenter_config *config)
+void nl_free(struct nlconfig_t *config)
 {
-	int     len;
-	int     childpid;
-	char    buf[PATH_MAX];
-	uint8_t syncbyte = 1;
-
-	// We must fork to actually enter the PID namespace, use CLONE_PARENT
-	// so the child can have the right parent, and we don't need to forward
-	// the child's exit code or resend its death signal.
-	childpid = clone_parent(env, config->cloneflags);
-	if (childpid < 0) {
-		pr_perror("Unable to fork");
-		exit(1);
-	}
-
-	// update uid_map and gid_map for the child process if they
-	// were provided
-	update_process_uidmap(childpid, config->uidmap, config->uidmap_len);
-	update_process_gidmap(childpid, config->is_setgroup, config->gidmap, config->gidmap_len);
-
-	// Send the sync signal to the child
-	close(syncpipe[0]);
-	syncbyte = 1;
-	if (write(syncpipe[1], &syncbyte, 1) != 1) {
-		pr_perror("failed to write sync byte to child");
-		exit(1);
-	}
-
-	// Send the child pid back to our parent
-	len = snprintf(buf, sizeof(buf), "{ \"pid\" : %d }\n", childpid);
-	if ((len < 0) || (write(pipenum, buf, len) != len)) {
-		pr_perror("Unable to send a child pid");
-		kill(childpid, SIGKILL);
-		exit(1);
-	}
-
-	exit(0);
+	free(config->data);
 }
 
-static struct nsenter_config process_nl_attributes(int pipenum, char *data, int data_size)
+void join_namespaces(char *nslist)
 {
-	struct nsenter_config	config	    = {0};
-	struct nlattr		*nlattr;
-	int			payload_len;
-	int			start       = 0;
+	int num = 0, i;
+	char *saveptr = NULL;
+	char *namespace = strtok_r(nslist, ",", &saveptr);
+	struct namespace_t {
+		int fd;
+		int ns;
+		char type[PATH_MAX];
+		char path[PATH_MAX];
+	} *namespaces = NULL;
 
-	config.consolefd = -1;
-	while (start < data_size) {
-		nlattr = (struct nlattr *)(data + start);
-		start += NLA_HDRLEN;
-		payload_len = nlattr->nla_len - NLA_HDRLEN;
+	if (!namespace || !strlen(namespace) || !strlen(nslist))
+		bail("ns paths are empty");
 
-		if (nlattr->nla_type == CLONE_FLAGS_ATTR) {
-			config.cloneflags = readint32(data + start);
-		} else if (nlattr->nla_type == CONSOLE_PATH_ATTR) {
-			// get the console path before setns because it may
-			// change mnt namespace
-			config.consolefd = open(data + start, O_RDWR);
-			if (config.consolefd < 0) {
-				pr_perror("Failed to open console %s",
-					  data + start);
-				exit(1);
-			}
-		} else if (nlattr->nla_type == NS_PATHS_ATTR) {
-			// if custom namespaces are required, open all
-			// descriptors and perform setns on them
-			int	i, j;
-			int	nslen = num_namespaces(data + start);
-			int	fds[nslen];
-			char	*nslist[nslen];
-			char	*ns;
-			char	*saveptr = NULL;
+	/*
+	 * We have to open the file descriptors first, since after
+	 * we join the mnt namespace we might no longer be able to
+	 * access the paths.
+	 */
+	do {
+		int fd;
+		char *path;
+		struct namespace_t *ns;
 
-			for (i = 0; i < nslen; i++) {
-				char *str = NULL;
+		/* Resize the namespace array. */
+		namespaces = realloc(namespaces, ++num * sizeof(struct namespace_t));
+		if (!namespaces)
+			bail("failed to reallocate namespace array");
+		ns = &namespaces[num - 1];
 
-				if (i == 0) {
-					str = data + start;
-				}
-				ns = strtok_r(str, ",", &saveptr);
-				if (ns == NULL) {
-					break;
-				}
-				fds[i] = open(ns, O_RDONLY);
-				if (fds[i] == -1) {
-					for (j = 0; j < i; j++) {
-						close(fds[j]);
-					}
-					pr_perror("Failed to open %s", ns);
-					exit(1);
-				}
-				nslist[i] = ns;
-			}
+		/* Split 'ns:path'. */
+		path = strstr(namespace, ":");
+		if (!path)
+			bail("failed to parse %s", namespace);
+		*path++ = '\0';
 
-			for (i = 0; i < nslen; i++) {
-				if (setns(fds[i], 0) != 0) {
-					pr_perror("Failed to setns to %s", nslist[i]);
-					exit(1);
-				}
-				close(fds[i]);
-			}
-		} else if (nlattr->nla_type == UIDMAP_ATTR) {
-			config.uidmap     = data + start;
-			config.uidmap_len = payload_len;
-		} else if (nlattr->nla_type == GIDMAP_ATTR) {
-			config.gidmap     = data + start;
-			config.gidmap_len = payload_len;
-		} else if (nlattr->nla_type == SETGROUP_ATTR) {
-			config.is_setgroup = readint8(data + start);
-		} else {
-			pr_perror("Unknown netlink message type %d",
-				  nlattr->nla_type);
-			exit(1);
-		}
+		fd = open(path, O_RDONLY);
+		if (fd < 0)
+			bail("failed to open %s", path);
 
-		start += NLA_ALIGN(payload_len);
+		ns->fd = fd;
+		ns->ns = nsflag(namespace);
+		strncpy(ns->path, path, PATH_MAX - 1);
+		ns->path[PATH_MAX - 1] = '\0';
+	} while ((namespace = strtok_r(NULL, ",", &saveptr)) != NULL);
+
+	/*
+	 * The ordering in which we join namespaces is important. We should
+	 * always join the user namespace *first*. This is all guaranteed
+	 * from the container_linux.go side of this, so we're just going to
+	 * follow the order given to us.
+	 */
+
+	for (i = 0; i < num; i++) {
+		struct namespace_t ns = namespaces[i];
+
+		if (setns(ns.fd, ns.ns) < 0)
+			bail("failed to setns to %s", ns.path);
+
+		close(ns.fd);
 	}
 
-	return config;
+	free(namespaces);
 }
+
+/* Defined in cloned_binary.c. */
+extern int ensure_cloned_binary(void);
 
 void nsexec(void)
 {
 	int pipenum;
+	jmp_buf env;
+	int sync_child_pipe[2], sync_grandchild_pipe[2];
+	struct nlconfig_t config = { 0 };
 
-	// If we don't have init pipe, then just return to the go routine,
-	// we'll only have init pipe for start or exec
-	pipenum = get_init_pipe();
-	if (pipenum == -1) {
+	/*
+	 * If we don't have an init pipe, just return to the go routine.
+	 * We'll only get an init pipe for start or exec.
+	 */
+	pipenum = initpipe();
+	if (pipenum == -1)
 		return;
+
+	/*
+	 * We need to re-exec if we are not in a cloned binary. This is necessary
+	 * to ensure that containers won't be able to access the host binary
+	 * through /proc/self/exe. See CVE-2019-5736.
+	 */
+	if (ensure_cloned_binary() < 0)
+		bail("could not ensure we are a cloned binary");
+
+	/* Parse all of the netlink configuration. */
+	nl_parse(pipenum, &config);
+
+	/* Set oom_score_adj. This has to be done before !dumpable because
+	 * /proc/self/oom_score_adj is not writeable unless you're an privileged
+	 * user (if !dumpable is set). All children inherit their parent's
+	 * oom_score_adj value on fork(2) so this will always be propagated
+	 * properly.
+	 */
+	update_oom_score_adj(config.oom_score_adj, config.oom_score_adj_len);
+
+	/*
+	 * Make the process non-dumpable, to avoid various race conditions that
+	 * could cause processes in namespaces we're joining to access host
+	 * resources (or potentially execute code).
+	 *
+	 * However, if the number of namespaces we are joining is 0, we are not
+	 * going to be switching to a different security context. Thus setting
+	 * ourselves to be non-dumpable only breaks things (like rootless
+	 * containers), which is the recommendation from the kernel folks.
+	 */
+	if (config.namespaces) {
+		if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) < 0)
+			bail("failed to set process as non-dumpable");
 	}
 
-	// Retrieve the netlink header
-	struct nlmsghdr nl_msg_hdr;
-	int		len;
+	/* Pipe so we can tell the child when we've finished setting up. */
+	if (socketpair(AF_LOCAL, SOCK_STREAM, 0, sync_child_pipe) < 0)
+		bail("failed to setup sync pipe between parent and child");
 
-	if ((len = read(pipenum, &nl_msg_hdr, NLMSG_HDRLEN)) != NLMSG_HDRLEN) {
-		pr_perror("Invalid netlink header length %d", len);
-		exit(1);
-	}
+	/*
+	 * We need a new socketpair to sync with grandchild so we don't have
+	 * race condition with child.
+	 */
+	if (socketpair(AF_LOCAL, SOCK_STREAM, 0, sync_grandchild_pipe) < 0)
+		bail("failed to setup sync pipe between parent and grandchild");
 
-	if (nl_msg_hdr.nlmsg_type == NLMSG_ERROR) {
-		pr_perror("Failed to read netlink message");
-		exit(1);
-	}
+	/* TODO: Currently we aren't dealing with child deaths properly. */
 
-	if (nl_msg_hdr.nlmsg_type != INIT_MSG) {
-		pr_perror("Unexpected msg type %d", nl_msg_hdr.nlmsg_type);
-		exit(1);
-	}
+	/*
+	 * Okay, so this is quite annoying.
+	 *
+	 * In order for this unsharing code to be more extensible we need to split
+	 * up unshare(CLONE_NEWUSER) and clone() in various ways. The ideal case
+	 * would be if we did clone(CLONE_NEWUSER) and the other namespaces
+	 * separately, but because of SELinux issues we cannot really do that. But
+	 * we cannot just dump the namespace flags into clone(...) because several
+	 * usecases (such as rootless containers) require more granularity around
+	 * the namespace setup. In addition, some older kernels had issues where
+	 * CLONE_NEWUSER wasn't handled before other namespaces (but we cannot
+	 * handle this while also dealing with SELinux so we choose SELinux support
+	 * over broken kernel support).
+	 *
+	 * However, if we unshare(2) the user namespace *before* we clone(2), then
+	 * all hell breaks loose.
+	 *
+	 * The parent no longer has permissions to do many things (unshare(2) drops
+	 * all capabilities in your old namespace), and the container cannot be set
+	 * up to have more than one {uid,gid} mapping. This is obviously less than
+	 * ideal. In order to fix this, we have to first clone(2) and then unshare.
+	 *
+	 * Unfortunately, it's not as simple as that. We have to fork to enter the
+	 * PID namespace (the PID namespace only applies to children). Since we'll
+	 * have to double-fork, this clone_parent() call won't be able to get the
+	 * PID of the _actual_ init process (without doing more synchronisation than
+	 * I can deal with at the moment). So we'll just get the parent to send it
+	 * for us, the only job of this process is to update
+	 * /proc/pid/{setgroups,uid_map,gid_map}.
+	 *
+	 * And as a result of the above, we also need to setns(2) in the first child
+	 * because if we join a PID namespace in the topmost parent then our child
+	 * will be in that namespace (and it will not be able to give us a PID value
+	 * that makes sense without resorting to sending things with cmsg).
+	 *
+	 * This also deals with an older issue caused by dumping cloneflags into
+	 * clone(2): On old kernels, CLONE_PARENT didn't work with CLONE_NEWPID, so
+	 * we have to unshare(2) before clone(2) in order to do this. This was fixed
+	 * in upstream commit 1f7f4dde5c945f41a7abc2285be43d918029ecc5, and was
+	 * introduced by 40a0d32d1eaffe6aac7324ca92604b6b3977eb0e. As far as we're
+	 * aware, the last mainline kernel which had this bug was Linux 3.12.
+	 * However, we cannot comment on which kernels the broken patch was
+	 * backported to.
+	 *
+	 * -- Aleksa "what has my life come to?" Sarai
+	 */
 
-	// Retrieve data
-	int  nl_total_size = NLMSG_PAYLOAD(&nl_msg_hdr, 0);
-	char data[nl_total_size];
+	switch (setjmp(env)) {
+		/*
+		 * Stage 0: We're in the parent. Our job is just to create a new child
+		 *          (stage 1: JUMP_CHILD) process and write its uid_map and
+		 *          gid_map. That process will go on to create a new process, then
+		 *          it will send us its PID which we will send to the bootstrap
+		 *          process.
+		 */
+	case JUMP_PARENT:{
+			int len;
+			pid_t child, first_child = -1;
+			bool ready = false;
 
-	if ((len = read(pipenum, data, nl_total_size)) != nl_total_size) {
-		pr_perror("Failed to read netlink payload, %d != %d", len,
-			  nl_total_size);
-		exit(1);
-	}
+			/* For debugging. */
+			prctl(PR_SET_NAME, (unsigned long)"runc:[0:PARENT]", 0, 0, 0);
 
-	jmp_buf	env;
-	int	syncpipe[2] = {-1, -1};
-	struct	nsenter_config config = process_nl_attributes(pipenum,
-						data, nl_total_size);
+			/* Start the process of getting a container. */
+			child = clone_parent(&env, JUMP_CHILD);
+			if (child < 0)
+				bail("unable to fork: child_func");
 
-	// required clone_flags to be passed
-	if (config.cloneflags == -1) {
-		pr_perror("Missing clone_flags");
-		exit(1);
-	}
-	// prepare sync pipe between parent and child. We need this to let the
-	// child know that the parent has finished setting up
-	if (pipe(syncpipe) != 0) {
-		pr_perror("Failed to setup sync pipe between parent and child");
-		exit(1);
-	}
+			/*
+			 * State machine for synchronisation with the children.
+			 *
+			 * Father only return when both child and grandchild are
+			 * ready, so we can receive all possible error codes
+			 * generated by children.
+			 */
+			while (!ready) {
+				enum sync_t s;
+				int ret;
 
-	if (setjmp(env) == 1) {
-		// Child
-		uint8_t s = 0;
-		int	consolefd = config.consolefd;
+				syncfd = sync_child_pipe[1];
+				close(sync_child_pipe[0]);
 
-		// close the writing side of pipe
-		close(syncpipe[1]);
+				if (read(syncfd, &s, sizeof(s)) != sizeof(s))
+					bail("failed to sync with child: next state");
 
-		// sync with parent
-		if ((read(syncpipe[0], &s, 1) != 1) || (s != 1)) {
-			pr_perror("Failed to read sync byte from parent");
-			exit(1);
-		}
+				switch (s) {
+				case SYNC_ERR:
+					/* We have to mirror the error code of the child. */
+					if (read(syncfd, &ret, sizeof(ret)) != sizeof(ret))
+						bail("failed to sync with child: read(error code)");
 
-		if (setsid() == -1) {
-			pr_perror("setsid failed");
-			exit(1);
-		}
+					exit(ret);
+				case SYNC_USERMAP_PLS:
+					/*
+					 * Enable setgroups(2) if we've been asked to. But we also
+					 * have to explicitly disable setgroups(2) if we're
+					 * creating a rootless container for single-entry mapping.
+					 * i.e. config.is_setgroup == false.
+					 * (this is required since Linux 3.19).
+					 *
+					 * For rootless multi-entry mapping, config.is_setgroup shall be true and
+					 * newuidmap/newgidmap shall be used.
+					 */
 
-		if (setuid(0) == -1) {
-			pr_perror("setuid failed");
-			exit(1);
-		}
+					if (config.is_rootless_euid && !config.is_setgroup)
+						update_setgroups(child, SETGROUPS_DENY);
 
-		if (setgid(0) == -1) {
-			pr_perror("setgid failed");
-			exit(1);
-		}
-    
-		if (setgroups(0, NULL) == -1) {
-			pr_perror("setgroups failed");
-			exit(1);
-		}
+					/* Set up mappings. */
+					update_uidmap(config.uidmappath, child, config.uidmap, config.uidmap_len);
+					update_gidmap(config.gidmappath, child, config.gidmap, config.gidmap_len);
 
-		if (consolefd != -1) {
-			if (ioctl(consolefd, TIOCSCTTY, 0) == -1) {
-				pr_perror("ioctl TIOCSCTTY failed");
-				exit(1);
+					s = SYNC_USERMAP_ACK;
+					if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
+						kill(child, SIGKILL);
+						bail("failed to sync with child: write(SYNC_USERMAP_ACK)");
+					}
+					break;
+				case SYNC_RECVPID_PLS:{
+						first_child = child;
+
+						/* Get the init_func pid. */
+						if (read(syncfd, &child, sizeof(child)) != sizeof(child)) {
+							kill(first_child, SIGKILL);
+							bail("failed to sync with child: read(childpid)");
+						}
+
+						/* Send ACK. */
+						s = SYNC_RECVPID_ACK;
+						if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
+							kill(first_child, SIGKILL);
+							kill(child, SIGKILL);
+							bail("failed to sync with child: write(SYNC_RECVPID_ACK)");
+						}
+
+						/* Send the init_func pid back to our parent.
+						 *
+						 * Send the init_func pid and the pid of the first child back to our parent.
+						 * We need to send both back because we can't reap the first child we created (CLONE_PARENT).
+						 * It becomes the responsibility of our parent to reap the first child.
+						 */
+						len = dprintf(pipenum, "{\"pid\": %d, \"pid_first\": %d}\n", child, first_child);
+						if (len < 0) {
+							kill(child, SIGKILL);
+							bail("unable to generate JSON for child pid");
+						}
+					}
+					break;
+				case SYNC_CHILD_READY:
+					ready = true;
+					break;
+				default:
+					bail("unexpected sync value: %u", s);
+				}
 			}
-			if (dup3(consolefd, STDIN_FILENO, 0) != STDIN_FILENO) {
-				pr_perror("Failed to dup stdin");
-				exit(1);
+
+			/* Now sync with grandchild. */
+
+			ready = false;
+			while (!ready) {
+				enum sync_t s;
+				int ret;
+
+				syncfd = sync_grandchild_pipe[1];
+				close(sync_grandchild_pipe[0]);
+
+				s = SYNC_GRANDCHILD;
+				if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
+					kill(child, SIGKILL);
+					bail("failed to sync with child: write(SYNC_GRANDCHILD)");
+				}
+
+				if (read(syncfd, &s, sizeof(s)) != sizeof(s))
+					bail("failed to sync with child: next state");
+
+				switch (s) {
+				case SYNC_ERR:
+					/* We have to mirror the error code of the child. */
+					if (read(syncfd, &ret, sizeof(ret)) != sizeof(ret))
+						bail("failed to sync with child: read(error code)");
+
+					exit(ret);
+				case SYNC_CHILD_READY:
+					ready = true;
+					break;
+				default:
+					bail("unexpected sync value: %u", s);
+				}
 			}
-			if (dup3(consolefd, STDOUT_FILENO, 0) != STDOUT_FILENO) {
-				pr_perror("Failed to dup stdout");
-				exit(1);
-			}
-			if (dup3(consolefd, STDERR_FILENO, 0) != STDERR_FILENO) {
-				pr_perror("Failed to dup stderr");
-				exit(1);
-			}
+			exit(0);
 		}
 
-		// Finish executing, let the Go runtime take over.
-		return;
+		/*
+		 * Stage 1: We're in the first child process. Our job is to join any
+		 *          provided namespaces in the netlink payload and unshare all
+		 *          of the requested namespaces. If we've been asked to
+		 *          CLONE_NEWUSER, we will ask our parent (stage 0) to set up
+		 *          our user mappings for us. Then, we create a new child
+		 *          (stage 2: JUMP_INIT) for PID namespace. We then send the
+		 *          child's PID to our parent (stage 0).
+		 */
+	case JUMP_CHILD:{
+			pid_t child;
+			enum sync_t s;
+
+			/* We're in a child and thus need to tell the parent if we die. */
+			syncfd = sync_child_pipe[0];
+			close(sync_child_pipe[1]);
+
+			/* For debugging. */
+			prctl(PR_SET_NAME, (unsigned long)"runc:[1:CHILD]", 0, 0, 0);
+
+			/*
+			 * We need to setns first. We cannot do this earlier (in stage 0)
+			 * because of the fact that we forked to get here (the PID of
+			 * [stage 2: JUMP_INIT]) would be meaningless). We could send it
+			 * using cmsg(3) but that's just annoying.
+			 */
+			if (config.namespaces)
+				join_namespaces(config.namespaces);
+
+			/*
+			 * Deal with user namespaces first. They are quite special, as they
+			 * affect our ability to unshare other namespaces and are used as
+			 * context for privilege checks.
+			 *
+			 * We don't unshare all namespaces in one go. The reason for this
+			 * is that, while the kernel documentation may claim otherwise,
+			 * there are certain cases where unsharing all namespaces at once
+			 * will result in namespace objects being owned incorrectly.
+			 * Ideally we should just fix these kernel bugs, but it's better to
+			 * be safe than sorry, and fix them separately.
+			 *
+			 * A specific case of this is that the SELinux label of the
+			 * internal kern-mount that mqueue uses will be incorrect if the
+			 * UTS namespace is cloned before the USER namespace is mapped.
+			 * I've also heard of similar problems with the network namespace
+			 * in some scenarios. This also mirrors how LXC deals with this
+			 * problem.
+			 */
+			if (config.cloneflags & CLONE_NEWUSER) {
+				if (unshare(CLONE_NEWUSER) < 0)
+					bail("failed to unshare user namespace");
+				config.cloneflags &= ~CLONE_NEWUSER;
+
+				/*
+				 * We don't have the privileges to do any mapping here (see the
+				 * clone_parent rant). So signal our parent to hook us up.
+				 */
+
+				/* Switching is only necessary if we joined namespaces. */
+				if (config.namespaces) {
+					if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0) < 0)
+						bail("failed to set process as dumpable");
+				}
+				s = SYNC_USERMAP_PLS;
+				if (write(syncfd, &s, sizeof(s)) != sizeof(s))
+					bail("failed to sync with parent: write(SYNC_USERMAP_PLS)");
+
+				/* ... wait for mapping ... */
+
+				if (read(syncfd, &s, sizeof(s)) != sizeof(s))
+					bail("failed to sync with parent: read(SYNC_USERMAP_ACK)");
+				if (s != SYNC_USERMAP_ACK)
+					bail("failed to sync with parent: SYNC_USERMAP_ACK: got %u", s);
+				/* Switching is only necessary if we joined namespaces. */
+				if (config.namespaces) {
+					if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) < 0)
+						bail("failed to set process as dumpable");
+				}
+
+				/* Become root in the namespace proper. */
+				if (setresuid(0, 0, 0) < 0)
+					bail("failed to become root in user namespace");
+			}
+			/*
+			 * Unshare all of the namespaces. Now, it should be noted that this
+			 * ordering might break in the future (especially with rootless
+			 * containers). But for now, it's not possible to split this into
+			 * CLONE_NEWUSER + [the rest] because of some RHEL SELinux issues.
+			 *
+			 * Note that we don't merge this with clone() because there were
+			 * some old kernel versions where clone(CLONE_PARENT | CLONE_NEWPID)
+			 * was broken, so we'll just do it the long way anyway.
+			 */
+			if (unshare(config.cloneflags & ~CLONE_NEWCGROUP) < 0)
+				bail("failed to unshare namespaces");
+
+			/*
+			 * TODO: What about non-namespace clone flags that we're dropping here?
+			 *
+			 * We fork again because of PID namespace, setns(2) or unshare(2) don't
+			 * change the PID namespace of the calling process, because doing so
+			 * would change the caller's idea of its own PID (as reported by getpid()),
+			 * which would break many applications and libraries, so we must fork
+			 * to actually enter the new PID namespace.
+			 */
+			child = clone_parent(&env, JUMP_INIT);
+			if (child < 0)
+				bail("unable to fork: init_func");
+
+			/* Send the child to our parent, which knows what it's doing. */
+			s = SYNC_RECVPID_PLS;
+			if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
+				kill(child, SIGKILL);
+				bail("failed to sync with parent: write(SYNC_RECVPID_PLS)");
+			}
+			if (write(syncfd, &child, sizeof(child)) != sizeof(child)) {
+				kill(child, SIGKILL);
+				bail("failed to sync with parent: write(childpid)");
+			}
+
+			/* ... wait for parent to get the pid ... */
+
+			if (read(syncfd, &s, sizeof(s)) != sizeof(s)) {
+				kill(child, SIGKILL);
+				bail("failed to sync with parent: read(SYNC_RECVPID_ACK)");
+			}
+			if (s != SYNC_RECVPID_ACK) {
+				kill(child, SIGKILL);
+				bail("failed to sync with parent: SYNC_RECVPID_ACK: got %u", s);
+			}
+
+			s = SYNC_CHILD_READY;
+			if (write(syncfd, &s, sizeof(s)) != sizeof(s)) {
+				kill(child, SIGKILL);
+				bail("failed to sync with parent: write(SYNC_CHILD_READY)");
+			}
+
+			/* Our work is done. [Stage 2: JUMP_INIT] is doing the rest of the work. */
+			exit(0);
+		}
+
+		/*
+		 * Stage 2: We're the final child process, and the only process that will
+		 *          actually return to the Go runtime. Our job is to just do the
+		 *          final cleanup steps and then return to the Go runtime to allow
+		 *          init_linux.go to run.
+		 */
+	case JUMP_INIT:{
+			/*
+			 * We're inside the child now, having jumped from the
+			 * start_child() code after forking in the parent.
+			 */
+			enum sync_t s;
+
+			/* We're in a child and thus need to tell the parent if we die. */
+			syncfd = sync_grandchild_pipe[0];
+			close(sync_grandchild_pipe[1]);
+			close(sync_child_pipe[0]);
+			close(sync_child_pipe[1]);
+
+			/* For debugging. */
+			prctl(PR_SET_NAME, (unsigned long)"runc:[2:INIT]", 0, 0, 0);
+
+			if (read(syncfd, &s, sizeof(s)) != sizeof(s))
+				bail("failed to sync with parent: read(SYNC_GRANDCHILD)");
+			if (s != SYNC_GRANDCHILD)
+				bail("failed to sync with parent: SYNC_GRANDCHILD: got %u", s);
+
+			if (setsid() < 0)
+				bail("setsid failed");
+
+			if (setuid(0) < 0)
+				bail("setuid failed");
+
+			if (setgid(0) < 0)
+				bail("setgid failed");
+
+			if (!config.is_rootless_euid && config.is_setgroup) {
+				if (setgroups(0, NULL) < 0)
+					bail("setgroups failed");
+			}
+
+			/* ... wait until our topmost parent has finished cgroup setup in p.manager.Apply() ... */
+			if (config.cloneflags & CLONE_NEWCGROUP) {
+				uint8_t value;
+				if (read(pipenum, &value, sizeof(value)) != sizeof(value))
+					bail("read synchronisation value failed");
+				if (value == CREATECGROUPNS) {
+					if (unshare(CLONE_NEWCGROUP) < 0)
+						bail("failed to unshare cgroup namespace");
+				} else
+					bail("received unknown synchronisation value");
+			}
+
+			s = SYNC_CHILD_READY;
+			if (write(syncfd, &s, sizeof(s)) != sizeof(s))
+				bail("failed to sync with patent: write(SYNC_CHILD_READY)");
+
+			/* Close sync pipes. */
+			close(sync_grandchild_pipe[0]);
+
+			/* Free netlink data. */
+			nl_free(&config);
+
+			/* Finish executing, let the Go runtime take over. */
+			return;
+		}
+	default:
+		bail("unexpected jump value");
 	}
 
-	// Parent
-	start_child(pipenum, &env, syncpipe, &config);
+	/* Should never be reached. */
+	bail("should never be reached");
 }

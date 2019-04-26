@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -257,11 +257,18 @@ func (client *syncClient) syncDataInterval(file FileIoProcessor, dataInterval In
 		}
 
 		serverNeedData := true
+
+		// read data either for checksum, sending, or both
+		dataBuffer, err := ReadDataInterval(file, batchInterval)
+		if err != nil {
+			log.Errorf("ReadDataInterval for batchInterval: %s failed, err: %s", batchInterval, err)
+			return err
+		}
 		if len(serverCheckSum) != 0 {
 			// calculate local checksum for the data batch interval
-			localCheckSum, err := HashDataInterval(file, batchInterval)
+			localCheckSum, err := HashData(dataBuffer)
 			if err != nil {
-				log.Errorf("HashDataInterval locally: %s failed, err: %s", batchInterval, err)
+				log.Errorf("HashData locally: %s failed, err: %s", batchInterval, err)
 				return err
 			}
 
@@ -269,12 +276,6 @@ func (client *syncClient) syncDataInterval(file FileIoProcessor, dataInterval In
 			serverNeedData = !bytes.Equal(serverCheckSum, localCheckSum)
 		}
 		if serverNeedData {
-			dataBuffer, err := ReadDataInterval(file, batchInterval)
-			if err != nil {
-				log.Errorf("ReadDataInterval for batchInterval: %s failed, err: %s", batchInterval, err)
-				return err
-			}
-
 			// send data buffer
 			log.Debugf("sending dataBuffer size: %d", len(dataBuffer))
 			err = client.writeData(batchInterval, dataBuffer)

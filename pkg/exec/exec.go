@@ -10,11 +10,10 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/schedutil"
 	"github.com/flynn/flynn/pkg/stream"
-	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 type Cmd struct {
@@ -45,7 +44,7 @@ type Cmd struct {
 	TermHeight, TermWidth uint16
 
 	LinuxCapabilities []string
-	AllowedDevices    []*configs.Device
+	AllowedDevices    []*host.Device
 	Profiles          []host.JobProfile
 
 	// cluster is used to communicate with the layer 0 cluster
