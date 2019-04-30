@@ -137,7 +137,6 @@ main() {
   extract_bin "cli-linux-amd64"   "/bin/flynn-linux-amd64"
   extract_bin "cli-linux-386"     "/bin/flynn-linux-386"
   extract_bin "cli-darwin-amd64"  "/bin/flynn-darwin-amd64"
-  extract_bin "cli-freebsd-amd64" "/bin/flynn-freebsd-amd64"
   extract_bin "cli-windows-amd64" "/bin/flynn-windows-amd64"
   extract_bin "cli-windows-386"   "/bin/flynn-windows-386"
   extract_bin "release"           "/bin/flynn-release"

@@ -592,12 +592,6 @@
       "template": "cli"
     },
     {
-      "id": "cli-freebsd-amd64",
-      "base": "busybox",
-      "env": { "GOOS": "freebsd", "GOARCH": "amd64"},
-      "template": "cli"
-    },
-    {
       "id": "cli-windows-amd64",
       "base": "busybox",
       "env": { "GOOS": "windows", "GOARCH": "amd64"},
