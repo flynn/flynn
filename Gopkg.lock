@@ -131,14 +131,8 @@
 [[projects]]
   name = "github.com/docker/docker"
   packages = [
-    "pkg/archive",
-    "pkg/fileutils",
-    "pkg/idtools",
-    "pkg/ioutils",
     "pkg/longpath",
     "pkg/mount",
-    "pkg/pools",
-    "pkg/promise",
     "pkg/symlink",
     "pkg/system",
     "pkg/units"
@@ -736,6 +730,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a886a45c6cdbf4a8e51a697bf50e3462aceb9cc2ff9653ada948c53dfd1b63bf"
+  inputs-digest = "e0f537a9c4b7c7b446cb68b7d6bd4889aa4d1bd6a1a84c72a6f12b136fcd5c84"
   solver-name = "gps-cdcl"
   solver-version = 1
