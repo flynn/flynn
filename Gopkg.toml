@@ -19,10 +19,6 @@ required = [
   name = "github.com/cupcake/jsonschema"
 
 [[constraint]]
-  version = "=v1.9.1"
-  name = "github.com/docker/docker"
-
-[[constraint]]
   name = "github.com/docker/go-units"
   version = "0.3.0"
 

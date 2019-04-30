@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/cheggaaa/pb"
-	"github.com/docker/docker/pkg/archive"
 	cfg "github.com/flynn/flynn/cli/config"
 	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	host "github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/archive"
 	"github.com/flynn/flynn/pkg/backup"
 	"github.com/flynn/flynn/pkg/term"
 	"github.com/flynn/flynn/pkg/version"
@@ -469,7 +469,7 @@ func runDockerPushTar(args *docopt.Args, client controller.Client) error {
 			defer bar.Finish()
 			src = io.TeeReader(src, bar)
 		}
-		return archive.Untar(src, tmpDir, &archive.TarOptions{NoLchown: true})
+		return archive.Unpack(src, tmpDir, false)
 	}(); err != nil {
 		return fmt.Errorf("error extracting docker save output: %s", err)
 	}

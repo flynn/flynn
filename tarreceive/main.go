@@ -16,12 +16,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-	"syscall"
 
-	"github.com/docker/docker/pkg/archive"
 	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/archive"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/tarreceive/utils"
@@ -141,55 +139,8 @@ func (s *server) handleCreateLayer(w http.ResponseWriter, r *http.Request, p htt
 		if err := os.MkdirAll(extractDir, 0755); err != nil {
 			return nil, err
 		}
-		if err := archive.Untar(tarFile, extractDir, &archive.TarOptions{}); err != nil {
+		if err := archive.Unpack(tarFile, extractDir, true); err != nil {
 			return nil, err
-		}
-
-		// convert Docker AUFS whiteouts to overlay whiteouts.
-		//
-		// See the "whiteouts and opaque directories" section of the
-		// OverlayFS documentation for a description of the whiteout
-		// file formats:
-		// https://www.kernel.org/doc/Documentation/filesystems/overlayfs.txt
-		if err := filepath.Walk(extractDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.Mode().IsRegular() {
-				return nil
-			}
-
-			base := filepath.Base(path)
-			dir := filepath.Dir(path)
-
-			if base == archive.WhiteoutOpaqueDir {
-				if err := syscall.Setxattr(dir, "trusted.overlay.opaque", []byte{'y'}, 0); err != nil {
-					return err
-				}
-				return os.Remove(path)
-			}
-
-			if !strings.HasPrefix(base, archive.WhiteoutPrefix) {
-				return nil
-			}
-
-			// replace the file which the AUFS whiteout is hiding
-			// with an overlay whiteout file, and remove the AUFS
-			// whiteout
-			name := filepath.Join(extractDir, strings.TrimPrefix(base, archive.WhiteoutPrefix))
-			if err := os.RemoveAll(name); err != nil {
-				return err
-			}
-			if err := syscall.Mknod(name, syscall.S_IFCHR, 0); err != nil {
-				return err
-			}
-			stat := info.Sys().(*syscall.Stat_t)
-			if err := os.Chown(name, int(stat.Uid), int(stat.Gid)); err != nil {
-				return err
-			}
-			return os.Remove(path)
-		}); err != nil {
-			return nil, fmt.Errorf("error converting AUFS whiteouts: %s", err)
 		}
 
 		// create squashfs layer
