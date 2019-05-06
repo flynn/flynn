@@ -1,35 +1,23 @@
 // +build linux
 
-package keyctl
+package keys
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
-	"syscall"
-	"unsafe"
-)
 
-const KEYCTL_JOIN_SESSION_KEYRING = 1
-const KEYCTL_SETPERM = 5
-const KEYCTL_DESCRIBE = 6
+	"github.com/pkg/errors"
+
+	"golang.org/x/sys/unix"
+)
 
 type KeySerial uint32
 
 func JoinSessionKeyring(name string) (KeySerial, error) {
-	var _name *byte
-	var err error
-
-	if len(name) > 0 {
-		_name, err = syscall.BytePtrFromString(name)
-		if err != nil {
-			return KeySerial(0), err
-		}
-	}
-
-	sessKeyId, _, errn := syscall.Syscall(syscall.SYS_KEYCTL, KEYCTL_JOIN_SESSION_KEYRING, uintptr(unsafe.Pointer(_name)), 0)
-	if errn != 0 {
-		return 0, fmt.Errorf("could not create session key: %v", errn)
+	sessKeyId, err := unix.KeyctlJoinSessionKeyring(name)
+	if err != nil {
+		return 0, errors.Wrap(err, "create session key")
 	}
 	return KeySerial(sessKeyId), nil
 }
@@ -38,14 +26,12 @@ func JoinSessionKeyring(name string) (KeySerial, error) {
 // anding the bits with the given mask (clearing permissions) and setting
 // additional permission bits
 func ModKeyringPerm(ringId KeySerial, mask, setbits uint32) error {
-	dest := make([]byte, 1024)
-	destBytes := unsafe.Pointer(&dest[0])
-
-	if _, _, err := syscall.Syscall6(syscall.SYS_KEYCTL, uintptr(KEYCTL_DESCRIBE), uintptr(ringId), uintptr(destBytes), uintptr(len(dest)), 0, 0); err != 0 {
+	dest, err := unix.KeyctlString(unix.KEYCTL_DESCRIBE, int(ringId))
+	if err != nil {
 		return err
 	}
 
-	res := strings.Split(string(dest), ";")
+	res := strings.Split(dest, ";")
 	if len(res) < 5 {
 		return fmt.Errorf("Destination buffer for key description is too small")
 	}
@@ -58,9 +44,5 @@ func ModKeyringPerm(ringId KeySerial, mask, setbits uint32) error {
 
 	perm := (uint32(perm64) & mask) | setbits
 
-	if _, _, err := syscall.Syscall(syscall.SYS_KEYCTL, uintptr(KEYCTL_SETPERM), uintptr(ringId), uintptr(perm)); err != 0 {
-		return err
-	}
-
-	return nil
+	return unix.KeyctlSetperm(int(ringId), perm)
 }

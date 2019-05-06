@@ -2,10 +2,10 @@ package host
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"github.com/flynn/flynn/host/resource"
-	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 // TagPrefix is the prefix added to tags in discoverd instance metadata
@@ -97,25 +97,54 @@ type JobResources struct {
 	Memory int `json:"memory,omitempty"` // in KiB
 }
 
+type Device struct {
+	// Device type, block, char, etc.
+	Type rune `json:"type"`
+
+	// Path to the device.
+	Path string `json:"path"`
+
+	// Major is the device's major number.
+	Major int64 `json:"major"`
+
+	// Minor is the device's minor number.
+	Minor int64 `json:"minor"`
+
+	// Cgroup permissions format, rwm.
+	Permissions string `json:"permissions"`
+
+	// FileMode permission bits for the device.
+	FileMode os.FileMode `json:"file_mode"`
+
+	// Uid of the device.
+	Uid uint32 `json:"uid"`
+
+	// Gid of the device.
+	Gid uint32 `json:"gid"`
+
+	// Write the file to the allowed list
+	Allow bool `json:"allow"`
+}
+
 type ContainerConfig struct {
-	Args               []string           `json:"args,omitempty"`
-	TTY                bool               `json:"tty,omitempty"`
-	Stdin              bool               `json:"stdin,omitempty"`
-	Data               bool               `json:"data,omitempty"`
-	Env                map[string]string  `json:"env,omitempty"`
-	Mounts             []Mount            `json:"mounts,omitempty"`
-	Volumes            []VolumeBinding    `json:"volumes,omitempty"`
-	Ports              []Port             `json:"ports,omitempty"`
-	WorkingDir         string             `json:"working_dir,omitempty"`
-	Uid                *uint32            `json:"uid,omitempty"`
-	Gid                *uint32            `json:"gid,omitempty"`
-	HostNetwork        bool               `json:"host_network,omitempty"`
-	HostPIDNamespace   bool               `json:"host_pid_namespace,omitempty"`
-	DisableLog         bool               `json:"disable_log,omitempty"`
-	LinuxCapabilities  *[]string          `json:"linux_capabilities,omitempty"`
-	AllowedDevices     *[]*configs.Device `json:"allowed_devices,omitempty"`
-	AutoCreatedDevices *[]*configs.Device `json:"auto_created_devices,omitempty"`
-	WriteableCgroups   bool               `json:"writeable_cgroups,omitempty"`
+	Args               []string          `json:"args,omitempty"`
+	TTY                bool              `json:"tty,omitempty"`
+	Stdin              bool              `json:"stdin,omitempty"`
+	Data               bool              `json:"data,omitempty"`
+	Env                map[string]string `json:"env,omitempty"`
+	Mounts             []Mount           `json:"mounts,omitempty"`
+	Volumes            []VolumeBinding   `json:"volumes,omitempty"`
+	Ports              []Port            `json:"ports,omitempty"`
+	WorkingDir         string            `json:"working_dir,omitempty"`
+	Uid                *uint32           `json:"uid,omitempty"`
+	Gid                *uint32           `json:"gid,omitempty"`
+	HostNetwork        bool              `json:"host_network,omitempty"`
+	HostPIDNamespace   bool              `json:"host_pid_namespace,omitempty"`
+	DisableLog         bool              `json:"disable_log,omitempty"`
+	LinuxCapabilities  *[]string         `json:"linux_capabilities,omitempty"`
+	AllowedDevices     *[]*Device        `json:"allowed_devices,omitempty"`
+	AutoCreatedDevices *[]*Device        `json:"auto_created_devices,omitempty"`
+	WriteableCgroups   bool              `json:"writeable_cgroups,omitempty"`
 }
 
 // Apply 'y' to 'x', returning a new structure.  'y' trumps.

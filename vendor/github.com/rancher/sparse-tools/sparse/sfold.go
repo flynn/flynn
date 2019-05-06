@@ -4,7 +4,7 @@ import (
 	"os"
 	"syscall"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -54,44 +54,41 @@ func coalesce(parentFileIo FileIoProcessor, childFileIo FileIoProcessor) error {
 	if err != nil {
 		panic("can't get FS block size, error: " + err.Error())
 	}
-	var data, hole int64
-	for {
-		data, _ = childFileIo.Seek(hole, seekData)
-		if data < hole {
-			break
-		}
-		hole, err = childFileIo.Seek(data, seekHole)
-		if err != nil {
-			log.Error("Failed to syscall.Seek SEEK_HOLE")
-			return err
-		}
+	exts, err := GetFiemapExtents(childFileIo)
+	if err != nil {
+		log.Errorf("Failed to GetFiemapExtents of childFile filename: %s, err: %v", childFileIo.Name(), err)
+		return err
+	}
+	for _, e := range exts {
+		dataBegin := int64(e.Logical)
+		dataEnd := int64(e.Logical + e.Length)
 
 		// now we have a data start offset and length(hole - data)
 		// let's read from child and write to parent file. We read/write up to
 		// 32 blocks in a batch
-		_, err = parentFileIo.Seek(data, os.SEEK_SET)
+		_, err = parentFileIo.Seek(dataBegin, os.SEEK_SET)
 		if err != nil {
-			log.Error("Failed to os.Seek os.SEEK_SET")
+			log.Errorf("Failed to os.Seek os.SEEK_SET parentFile filename: %v, at: %v", parentFileIo.Name(), dataBegin)
 			return err
 		}
 
 		batch := batchBlockCount * blockSize
 		buffer := AllocateAligned(batch)
-		for offset := data; offset < hole; {
+		for offset := dataBegin; offset < dataEnd; {
 			size := batch
-			if offset+int64(size) > hole {
-				size = int(hole - offset)
+			if offset+int64(size) > dataEnd {
+				size = int(dataEnd - offset)
 			}
 			// read a batch from child
 			n, err := childFileIo.ReadAt(buffer[:size], offset)
 			if err != nil {
-				log.Error("Failed to read from childFile")
+				log.Errorf("Failed to read childFile filename: %v, size: %v, at: %v", childFileIo.Name(), size, offset)
 				return err
 			}
 			// write a batch to parent
 			n, err = parentFileIo.WriteAt(buffer[:size], offset)
 			if err != nil {
-				log.Error("Failed to write to parentFile")
+				log.Errorf("Failed to write to parentFile filename: %v, size: %v, at: %v", parentFileIo.Name(), size, offset)
 				return err
 			}
 			offset += int64(n)

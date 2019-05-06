@@ -5,7 +5,6 @@ package fs
 import (
 	"bufio"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,7 +12,11 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libcontainer/system"
+)
+
+const (
+	cgroupMemorySwapLimit = "memory.memsw.limit_in_bytes"
+	cgroupMemoryLimit     = "memory.limit_in_bytes"
 )
 
 type MemoryGroup struct {
@@ -27,20 +30,23 @@ func (s *MemoryGroup) Apply(d *cgroupData) (err error) {
 	path, err := d.path("memory")
 	if err != nil && !cgroups.IsNotFound(err) {
 		return err
+	} else if path == "" {
+		return nil
 	}
 	if memoryAssigned(d.config) {
-		if path != "" {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
 			if err := os.MkdirAll(path, 0755); err != nil {
 				return err
 			}
-		}
-		// We have to set kernel memory here, as we can't change it once
-		// processes have been attached to the cgroup.
-		if err := s.SetKernelMemory(path, d.config); err != nil {
-			return err
+			// Only enable kernel memory accouting when this cgroup
+			// is created by libcontainer, otherwise we might get
+			// error when people use `cgroupsPath` to join an existed
+			// cgroup whose kernel memory is not initialized.
+			if err := EnableKernelMemoryAccounting(path); err != nil {
+				return err
+			}
 		}
 	}
-
 	defer func() {
 		if err != nil {
 			os.RemoveAll(path)
@@ -56,47 +62,19 @@ func (s *MemoryGroup) Apply(d *cgroupData) (err error) {
 	return nil
 }
 
-func (s *MemoryGroup) SetKernelMemory(path string, cgroup *configs.Cgroup) error {
-	// This has to be done separately because it has special
-	// constraints (it can only be initialized before setting up a
-	// hierarchy or adding a task to the cgroups. However, if
-	// sucessfully initialized, it can be updated anytime afterwards)
-	if cgroup.Resources.KernelMemory != 0 {
-		kmemInitialized := false
-		// Is kmem.limit_in_bytes already set?
-		kmemValue, err := getCgroupParamUint(path, "memory.kmem.limit_in_bytes")
-		if err != nil {
-			return err
-		}
-		switch system.GetLongBit() {
-		case 32:
-			kmemInitialized = uint32(kmemValue) != uint32(math.MaxUint32)
-		case 64:
-			kmemInitialized = kmemValue != uint64(math.MaxUint64)
-		}
-
-		if !kmemInitialized {
-			// If there's already tasks in the cgroup, we can't change the limit either
-			tasks, err := getCgroupParamString(path, "tasks")
-			if err != nil {
-				return err
-			}
-			if tasks != "" {
-				return fmt.Errorf("cannot set kmem.limit_in_bytes after task have joined this cgroup")
-			}
-		}
-
-		if err := writeFile(path, "memory.kmem.limit_in_bytes", strconv.FormatInt(cgroup.Resources.KernelMemory, 10)); err != nil {
-			return err
+func setMemoryAndSwap(path string, cgroup *configs.Cgroup) error {
+	// If the memory update is set to -1 we should also
+	// set swap to -1, it means unlimited memory.
+	if cgroup.Resources.Memory == -1 {
+		// Only set swap if it's enabled in kernel
+		if cgroups.PathExists(filepath.Join(path, cgroupMemorySwapLimit)) {
+			cgroup.Resources.MemorySwap = -1
 		}
 	}
-	return nil
-}
 
-func setMemoryAndSwap(path string, cgroup *configs.Cgroup) error {
 	// When memory and swap memory are both set, we need to handle the cases
 	// for updating container.
-	if cgroup.Resources.Memory != 0 && cgroup.Resources.MemorySwap > 0 {
+	if cgroup.Resources.Memory != 0 && cgroup.Resources.MemorySwap != 0 {
 		memoryUsage, err := getMemoryData(path, "")
 		if err != nil {
 			return err
@@ -105,29 +83,29 @@ func setMemoryAndSwap(path string, cgroup *configs.Cgroup) error {
 		// When update memory limit, we should adapt the write sequence
 		// for memory and swap memory, so it won't fail because the new
 		// value and the old value don't fit kernel's validation.
-		if memoryUsage.Limit < uint64(cgroup.Resources.MemorySwap) {
-			if err := writeFile(path, "memory.memsw.limit_in_bytes", strconv.FormatInt(cgroup.Resources.MemorySwap, 10)); err != nil {
+		if cgroup.Resources.MemorySwap == -1 || memoryUsage.Limit < uint64(cgroup.Resources.MemorySwap) {
+			if err := writeFile(path, cgroupMemorySwapLimit, strconv.FormatInt(cgroup.Resources.MemorySwap, 10)); err != nil {
 				return err
 			}
-			if err := writeFile(path, "memory.limit_in_bytes", strconv.FormatInt(cgroup.Resources.Memory, 10)); err != nil {
+			if err := writeFile(path, cgroupMemoryLimit, strconv.FormatInt(cgroup.Resources.Memory, 10)); err != nil {
 				return err
 			}
 		} else {
-			if err := writeFile(path, "memory.limit_in_bytes", strconv.FormatInt(cgroup.Resources.Memory, 10)); err != nil {
+			if err := writeFile(path, cgroupMemoryLimit, strconv.FormatInt(cgroup.Resources.Memory, 10)); err != nil {
 				return err
 			}
-			if err := writeFile(path, "memory.memsw.limit_in_bytes", strconv.FormatInt(cgroup.Resources.MemorySwap, 10)); err != nil {
+			if err := writeFile(path, cgroupMemorySwapLimit, strconv.FormatInt(cgroup.Resources.MemorySwap, 10)); err != nil {
 				return err
 			}
 		}
 	} else {
 		if cgroup.Resources.Memory != 0 {
-			if err := writeFile(path, "memory.limit_in_bytes", strconv.FormatInt(cgroup.Resources.Memory, 10)); err != nil {
+			if err := writeFile(path, cgroupMemoryLimit, strconv.FormatInt(cgroup.Resources.Memory, 10)); err != nil {
 				return err
 			}
 		}
-		if cgroup.Resources.MemorySwap > 0 {
-			if err := writeFile(path, "memory.memsw.limit_in_bytes", strconv.FormatInt(cgroup.Resources.MemorySwap, 10)); err != nil {
+		if cgroup.Resources.MemorySwap != 0 {
+			if err := writeFile(path, cgroupMemorySwapLimit, strconv.FormatInt(cgroup.Resources.MemorySwap, 10)); err != nil {
 				return err
 			}
 		}
@@ -141,8 +119,10 @@ func (s *MemoryGroup) Set(path string, cgroup *configs.Cgroup) error {
 		return err
 	}
 
-	if err := s.SetKernelMemory(path, cgroup); err != nil {
-		return err
+	if cgroup.Resources.KernelMemory != 0 {
+		if err := setKernelMemory(path, cgroup.Resources.KernelMemory); err != nil {
+			return err
+		}
 	}
 
 	if cgroup.Resources.MemoryReservation != 0 {
@@ -150,6 +130,7 @@ func (s *MemoryGroup) Set(path string, cgroup *configs.Cgroup) error {
 			return err
 		}
 	}
+
 	if cgroup.Resources.KernelMemoryTCP != 0 {
 		if err := writeFile(path, "memory.kmem.tcp.limit_in_bytes", strconv.FormatInt(cgroup.Resources.KernelMemoryTCP, 10)); err != nil {
 			return err
@@ -162,12 +143,12 @@ func (s *MemoryGroup) Set(path string, cgroup *configs.Cgroup) error {
 	}
 	if cgroup.Resources.MemorySwappiness == nil || int64(*cgroup.Resources.MemorySwappiness) == -1 {
 		return nil
-	} else if int64(*cgroup.Resources.MemorySwappiness) >= 0 && int64(*cgroup.Resources.MemorySwappiness) <= 100 {
-		if err := writeFile(path, "memory.swappiness", strconv.FormatInt(*cgroup.Resources.MemorySwappiness, 10)); err != nil {
+	} else if *cgroup.Resources.MemorySwappiness <= 100 {
+		if err := writeFile(path, "memory.swappiness", strconv.FormatUint(*cgroup.Resources.MemorySwappiness, 10)); err != nil {
 			return err
 		}
 	} else {
-		return fmt.Errorf("invalid value:%d. valid memory swappiness range is 0-100", int64(*cgroup.Resources.MemorySwappiness))
+		return fmt.Errorf("invalid value:%d. valid memory swappiness range is 0-100", *cgroup.Resources.MemorySwappiness)
 	}
 
 	return nil
@@ -219,6 +200,14 @@ func (s *MemoryGroup) GetStats(path string, stats *cgroups.Stats) error {
 	}
 	stats.MemoryStats.KernelTCPUsage = kernelTCPUsage
 
+	useHierarchy := strings.Join([]string{"memory", "use_hierarchy"}, ".")
+	value, err := getCgroupParamUint(path, useHierarchy)
+	if err != nil {
+		return err
+	}
+	if value == 1 {
+		stats.MemoryStats.UseHierarchy = true
+	}
 	return nil
 }
 
@@ -229,7 +218,7 @@ func memoryAssigned(cgroup *configs.Cgroup) bool {
 		cgroup.Resources.KernelMemory > 0 ||
 		cgroup.Resources.KernelMemoryTCP > 0 ||
 		cgroup.Resources.OomKillDisable ||
-		(cgroup.Resources.MemorySwappiness != nil && *cgroup.Resources.MemorySwappiness != -1)
+		(cgroup.Resources.MemorySwappiness != nil && int64(*cgroup.Resources.MemorySwappiness) != -1)
 }
 
 func getMemoryData(path, name string) (cgroups.MemoryData, error) {

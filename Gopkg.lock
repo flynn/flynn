@@ -43,12 +43,6 @@
   version = "v1.12.0"
 
 [[projects]]
-  name = "github.com/Sirupsen/logrus"
-  packages = ["."]
-  revision = "5701be89e7d3cdcbc48504241b9c66ef085f759d"
-  version = "v0.8.6"
-
-[[projects]]
   name = "github.com/armon/go-metrics"
   packages = ["."]
   revision = "b2d95e5291cdbc26997d1301a5e467ecbb240e25"
@@ -99,9 +93,21 @@
   version = "v1.3.1"
 
 [[projects]]
+  name = "github.com/checkpoint-restore/go-criu"
+  packages = ["rpc"]
+  revision = "17b0214f6c48980c45dc47ecb0cfd6d9e02df723"
+  version = "v3.11"
+
+[[projects]]
   name = "github.com/cheggaaa/pb"
   packages = ["."]
   revision = "0464652af750701d218b6dd035f0217e407caf2d"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/containerd/console"
+  packages = ["."]
+  revision = "0650fd9eeb50bab4fc99dceb9f2e14cf58f36e7f"
 
 [[projects]]
   name = "github.com/coreos/go-systemd"
@@ -124,21 +130,15 @@
   revision = "51bf6945446b931e0f902e65a74e8bae7f794d95"
 
 [[projects]]
+  name = "github.com/cyphar/filepath-securejoin"
+  packages = ["."]
+  revision = "a261ee33d7a517f054effbf451841abaafe3e0fd"
+  version = "v0.2.2"
+
+[[projects]]
   name = "github.com/dgryski/go-skip32"
   packages = ["."]
   revision = "6cc5a8b574de3ed084314996231c03b5dd21d8c6"
-
-[[projects]]
-  name = "github.com/docker/docker"
-  packages = [
-    "pkg/longpath",
-    "pkg/mount",
-    "pkg/symlink",
-    "pkg/system",
-    "pkg/units"
-  ]
-  revision = "a34a1d598c6096ed8b5ce5219e77d68e5cd85462"
-  version = "v1.9.1"
 
 [[projects]]
   name = "github.com/docker/go-units"
@@ -376,6 +376,12 @@
   revision = "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 
 [[projects]]
+  name = "github.com/konsorten/go-windows-terminal-sequences"
+  packages = ["."]
+  revision = "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e"
+  version = "v1.0.2"
+
+[[projects]]
   name = "github.com/kr/binarydist"
   packages = ["."]
   revision = "9955b0ab8708602d411341e55fffd7e0700f86bd"
@@ -440,6 +446,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/mrunalp/fileutils"
+  packages = ["."]
+  revision = "7d4729fb36185a7c1719923406c9d40e54fb93c7"
+
+[[projects]]
+  branch = "master"
   name = "github.com/nightlyone/lockfile"
   packages = ["."]
   revision = "6a197d5ea61168f2ac821de2b7f011b250904900"
@@ -450,6 +462,7 @@
   revision = "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8"
 
 [[projects]]
+  branch = "master"
   name = "github.com/opencontainers/runc"
   packages = [
     "libcontainer",
@@ -459,19 +472,33 @@
     "libcontainer/cgroups/systemd",
     "libcontainer/configs",
     "libcontainer/configs/validate",
-    "libcontainer/criurpc",
+    "libcontainer/intelrdt",
     "libcontainer/keys",
-    "libcontainer/label",
+    "libcontainer/mount",
     "libcontainer/nsenter",
     "libcontainer/seccomp",
-    "libcontainer/selinux",
     "libcontainer/stacktrace",
     "libcontainer/system",
     "libcontainer/user",
     "libcontainer/utils"
   ]
-  revision = "04f275d4601ca7e5ff9460cec7f65e8dd15443ec"
-  version = "v1.0.0-rc1"
+  revision = "278116a7cc486a7d68cd8d5370f19a2322db3706"
+  source = "https://github.com/flynn/runc"
+
+[[projects]]
+  name = "github.com/opencontainers/runtime-spec"
+  packages = ["specs-go"]
+  revision = "4e3b9264a330d094b0386c3703c5f379119711e8"
+  version = "v1.0.1"
+
+[[projects]]
+  name = "github.com/opencontainers/selinux"
+  packages = [
+    "go-selinux",
+    "go-selinux/label"
+  ]
+  revision = "3a1f366feb7aecbf7a0e71ac4cea88b31597de9e"
+  version = "v1.2.2"
 
 [[projects]]
   name = "github.com/pelletier/go-toml"
@@ -486,9 +513,10 @@
   version = "v0.8.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/rancher/sparse-tools"
   packages = ["sparse"]
-  revision = "9cac891ad8a2029146df905ae09622eb1de8b19c"
+  revision = "666f9b3bde21fd0fcf2700ec85c929219e910025"
 
 [[projects]]
   branch = "master"
@@ -514,6 +542,12 @@
   revision = "b202ee861e254aef9d2f53bc31cb9a2b0c7f1e4a"
 
 [[projects]]
+  name = "github.com/sirupsen/logrus"
+  packages = ["."]
+  revision = "8bdbc7bcc01dcbb8ec23dc8a28e332258d25251f"
+  version = "v1.4.1"
+
+[[projects]]
   name = "github.com/stevvooe/resumable"
   packages = [
     ".",
@@ -522,9 +556,10 @@
   revision = "51ad44105773cafcbe91927f70ac68e1bf78f8b4"
 
 [[projects]]
+  branch = "master"
   name = "github.com/syndtr/gocapability"
   packages = ["capability"]
-  revision = "2c00daeb6c3b45114c80ac44119e7b8801fdd852"
+  revision = "d98352740cb2c55f81556b63d4a1ec64c5a319c2"
 
 [[projects]]
   branch = "master"
@@ -615,8 +650,11 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
-  packages = ["unix"]
-  revision = "11551d06cbcc94edc80a0facaccbda56473c19c1"
+  packages = [
+    "unix",
+    "windows"
+  ]
+  revision = "d89cdac9e8725f2aefce25fcbfef41134c9ad412"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -730,6 +768,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e0f537a9c4b7c7b446cb68b7d6bd4889aa4d1bd6a1a84c72a6f12b136fcd5c84"
+  inputs-digest = "12a514224f49f81ec9e10f1f4f4e434e46f560576c4206a4e17f8b5d74b058f9"
   solver-name = "gps-cdcl"
   solver-version = 1

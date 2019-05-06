@@ -502,8 +502,14 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	}
 
 	config := &configs.Config{
-		Rootfs:       rootPath,
-		Capabilities: *job.Config.LinuxCapabilities,
+		Rootfs: rootPath,
+		Capabilities: &configs.Capabilities{
+			Bounding:    *job.Config.LinuxCapabilities,
+			Inheritable: *job.Config.LinuxCapabilities,
+			Effective:   *job.Config.LinuxCapabilities,
+			Permitted:   *job.Config.LinuxCapabilities,
+			Ambient:     *job.Config.LinuxCapabilities,
+		},
 		Namespaces: configs.Namespaces([]configs.Namespace{
 			{Type: configs.NEWNS},
 			{Type: configs.NEWUTS},
@@ -512,7 +518,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		Cgroups: &configs.Cgroup{
 			Path: filepath.Join("/flynn", job.Partition, job.ID),
 			Resources: &configs.Resources{
-				AllowedDevices: *job.Config.AllowedDevices,
+				AllowedDevices: host.ConfigDevices(*job.Config.AllowedDevices),
 				Memory:         defaultMemory,
 			},
 		},
@@ -522,7 +528,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		ReadonlyPaths: []string{
 			"/proc/sys", "/proc/sysrq-trigger", "/proc/irq", "/proc/bus",
 		},
-		Devices: *job.Config.AutoCreatedDevices,
+		Devices: host.ConfigDevices(*job.Config.AutoCreatedDevices),
 		Mounts: append([]*configs.Mount{rootMount}, []*configs.Mount{
 			{
 				Source:      "proc",
@@ -716,7 +722,11 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 
 	if job.Config.HostNetwork {
 		// allow host network jobs to configure the network
-		config.Capabilities = append(config.Capabilities, "CAP_NET_ADMIN")
+		config.Capabilities.Bounding = append(config.Capabilities.Bounding, "CAP_NET_ADMIN")
+		config.Capabilities.Inheritable = append(config.Capabilities.Inheritable, "CAP_NET_ADMIN")
+		config.Capabilities.Effective = append(config.Capabilities.Effective, "CAP_NET_ADMIN")
+		config.Capabilities.Permitted = append(config.Capabilities.Permitted, "CAP_NET_ADMIN")
+		config.Capabilities.Ambient = append(config.Capabilities.Ambient, "CAP_NET_ADMIN")
 	} else {
 		ifaceName, err := ifname.Generate("veth", 4)
 		if err != nil {
@@ -746,7 +756,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 		config.Cgroups.Resources.Memory = *spec.Limit
 	}
 	if spec, ok := job.Resources[resource.TypeCPU]; ok && spec.Limit != nil {
-		config.Cgroups.Resources.CpuShares = milliCPUToShares(*spec.Limit)
+		config.Cgroups.Resources.CpuShares = milliCPUToShares(uint64(*spec.Limit))
 	}
 
 	c, err := l.factory.Create(job.ID, config)
@@ -755,6 +765,7 @@ func (l *LibcontainerBackend) Run(job *host.Job, runConfig *RunConfig, rateLimit
 	}
 
 	process := &libcontainer.Process{
+		Init: true,
 		Args: []string{"/.containerinit", job.ID},
 		User: "root",
 	}
@@ -1596,7 +1607,7 @@ func bindMount(src, dest string, writeable bool) *configs.Mount {
 
 // Taken from Kubernetes:
 // https://github.com/kubernetes/kubernetes/blob/d66ae29587e746c40390d61a1253a1bfa7aebd8a/pkg/kubelet/dockertools/docker.go#L323-L336
-func milliCPUToShares(milliCPU int64) int64 {
+func milliCPUToShares(milliCPU uint64) uint64 {
 	// Taken from lmctfy https://github.com/google/lmctfy/blob/master/lmctfy/controllers/cpu_controller.cc
 	const (
 		minShares     = 2
@@ -1627,7 +1638,7 @@ func setupCGroups(partitions map[string]int64) error {
 	}
 
 	for _, subsystem := range subsystems {
-		if _, err := cgroups.FindCgroupMountpoint(subsystem); err == nil {
+		if _, err := cgroups.FindCgroupMountpoint("", subsystem); err == nil {
 			// subsystem already mounted
 			continue
 		}

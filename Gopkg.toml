@@ -18,6 +18,10 @@ required = [
   branch = "master"
   name = "github.com/cupcake/jsonschema"
 
+[[override]]
+  name = "github.com/docker/docker"
+  branch = "master"
+
 [[constraint]]
   name = "github.com/docker/go-units"
   version = "0.3.0"
@@ -59,8 +63,9 @@ required = [
   version = "1.0.0"
 
 [[constraint]]
+  branch = "master"
   name = "github.com/opencontainers/runc"
-  version = "1.0.0-rc1"
+  source = "https://github.com/flynn/runc"
 
 [[constraint]]
   branch = "master"
