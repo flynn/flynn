@@ -146,6 +146,7 @@ main() {
     --start \
     --background \
     --no-close \
+    --make-pidfile \
     --pidfile "${pidfile}" \
     --exec "${flynn_host}" \
     -- \

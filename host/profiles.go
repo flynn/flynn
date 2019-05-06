@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"golang.org/x/sys/unix"
 )
@@ -29,7 +29,7 @@ func jobProfileZFS(job *host.Job) error {
 	}
 
 	// allow the /dev/zfs and /dev/zd* zvol devices
-	allowedDevices := append(*job.Config.AllowedDevices, []*configs.Device{
+	allowedDevices := append(*job.Config.AllowedDevices, []*host.Device{
 		{
 			Path:        "/dev/zfs",
 			Type:        'c',
@@ -47,7 +47,7 @@ func jobProfileZFS(job *host.Job) error {
 	job.Config.AllowedDevices = &allowedDevices
 
 	// auto create /dev/zfs
-	autoCreatedDevices := append(*job.Config.AutoCreatedDevices, &configs.Device{
+	autoCreatedDevices := append(*job.Config.AutoCreatedDevices, &host.Device{
 		Path:        "/dev/zfs",
 		Type:        'c',
 		Major:       zfsDev.major,
@@ -76,7 +76,7 @@ func jobProfileKVM(job *host.Job) error {
 	}
 
 	// allow the /dev/kvm and /dev/net/tun devices
-	allowedDevices := append(*job.Config.AllowedDevices, []*configs.Device{
+	allowedDevices := append(*job.Config.AllowedDevices, []*host.Device{
 		{
 			Path:        "/dev/kvm",
 			Type:        'c',
@@ -95,7 +95,7 @@ func jobProfileKVM(job *host.Job) error {
 	job.Config.AllowedDevices = &allowedDevices
 
 	// auto create /dev/kvm and /dev/net/tun
-	autoCreatedDevices := append(*job.Config.AutoCreatedDevices, []*configs.Device{
+	autoCreatedDevices := append(*job.Config.AutoCreatedDevices, []*host.Device{
 		{
 			Path:        "/dev/kvm",
 			Type:        'c',
@@ -141,7 +141,7 @@ func jobProfileLoop(job *host.Job) error {
 	}
 
 	// allow the loop device as /dev/loop0
-	allowedDevices := append(*job.Config.AllowedDevices, []*configs.Device{
+	allowedDevices := append(*job.Config.AllowedDevices, []*host.Device{
 		{
 			Path:        "/dev/loop0",
 			Type:        'b',
@@ -153,7 +153,7 @@ func jobProfileLoop(job *host.Job) error {
 	job.Config.AllowedDevices = &allowedDevices
 
 	// auto create /dev/loop0
-	autoCreatedDevices := append(*job.Config.AutoCreatedDevices, &configs.Device{
+	autoCreatedDevices := append(*job.Config.AutoCreatedDevices, &host.Device{
 		Path:        "/dev/loop0",
 		Type:        'b',
 		Major:       loopDev.major,

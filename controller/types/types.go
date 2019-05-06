@@ -11,13 +11,12 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/tlscert"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/jtacoma/uritemplates"
-	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/tent/canonical-json-go"
+	cjson "github.com/tent/canonical-json-go"
 )
 
 const RouteParentRefPrefix = "controller/apps/"
@@ -112,7 +111,7 @@ type ProcessType struct {
 	Mounts            []host.Mount       `json:"mounts,omitempty"`
 	Profiles          []host.JobProfile  `json:"profiles,omitempty"`
 	LinuxCapabilities []string           `json:"linux_capabilities,omitempty"`
-	AllowedDevices    []*configs.Device  `json:"allowed_devices,omitempty"`
+	AllowedDevices    []*host.Device     `json:"allowed_devices,omitempty"`
 	WriteableCgroups  bool               `json:"writeable_cgroups,omitempty"`
 
 	// Entrypoint and Cmd are DEPRECATED: use Args instead
