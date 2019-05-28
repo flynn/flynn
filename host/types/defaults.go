@@ -6,10 +6,12 @@ import "github.com/opencontainers/runc/libcontainer/configs"
 
 // DefaultCapabilities is the default list of capabilities which are set inside
 // a container, taken from:
-// https://github.com/opencontainers/runc/blob/v1.0.0-rc1/libcontainer/SPEC.md#security
+// https://github.com/opencontainers/runc/blob/v1.0.0-rc8/libcontainer/SPEC.md#security
 var DefaultCapabilities = []string{
 	"CAP_NET_RAW",
 	"CAP_NET_BIND_SERVICE",
+	"CAP_AUDIT_READ",
+	"CAP_AUDIT_WRITE",
 	"CAP_DAC_OVERRIDE",
 	"CAP_SETFCAP",
 	"CAP_SETPCAP",
