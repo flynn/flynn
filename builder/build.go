@@ -55,7 +55,7 @@ Build Flynn images using builder/manifest.json.
 
 type Builder struct {
 	// baseLayer is used when building an image which has no
-	// dependencies (e.g. the ubuntu-trusty image)
+	// dependencies (e.g. the ubuntu-bionic image)
 	baseLayer *host.Mountspec
 
 	// artifacts is a map of built artifacts and is written to

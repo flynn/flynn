@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/flynn/flynn/appliance/postgresql"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -64,7 +64,7 @@ func main() {
 		ID:           id,
 		Singleton:    singleton,
 		DataDir:      filepath.Join(dataDir, "db"),
-		BinDir:       "/usr/lib/postgresql/10/bin/",
+		BinDir:       "/usr/lib/postgresql/11/bin/",
 		Password:     password,
 		Logger:       log.New("component", "postgres"),
 		TimescaleDB:  true,

@@ -2,8 +2,10 @@
 #
 # A script to setup an Ubuntu cloud image to be container image friendly.
 #
-# Taken from Docker:
+# Adapted from Docker:
 # https://github.com/tianon/docker-brew-ubuntu-core/blob/cf9d7a2ee20c8a4706a05d1d7f1a1e25ae32ed39/trusty/Dockerfile
+
+ln -s -f /bin/true /usr/bin/chfn
 
 echo '#!/bin/sh' > /usr/sbin/policy-rc.d
 echo 'exit 101' >> /usr/sbin/policy-rc.d
@@ -25,8 +27,14 @@ echo 'Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";' > /
 # https://github.com/docker/docker/blob/9a9fc01af8fb5d98b8eec0740716226fadb3735c/contrib/mkimage/debootstrap#L134-L151
 echo 'Apt::AutoRemove::SuggestsImportant "false";' > /etc/apt/apt.conf.d/docker-autoremove-suggests
 
+export DEBIAN_FRONTEND=noninteractive                                                                                                         
+
+# update packages
+apt-get update
+apt-get dist-upgrade --yes
+
 # install common Flynn image tools
-apt-get install --yes squashfs-tools curl
+apt-get install --yes squashfs-tools curl gnupg
 
 # delete all the apt list files since they're big and get stale quickly
 rm -rf /var/lib/apt/lists/*

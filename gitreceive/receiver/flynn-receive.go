@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -73,16 +73,6 @@ Options:
 		return err
 	}
 
-	slugBuilder, err := client.GetArtifact(os.Getenv("SLUGBUILDER_IMAGE_ID"))
-	if err != nil {
-		return fmt.Errorf("Error getting slugbuilder image: %s", err)
-	}
-
-	slugRunnerID := os.Getenv("SLUGRUNNER_IMAGE_ID")
-	if _, err := client.GetArtifact(slugRunnerID); err != nil {
-		return fmt.Errorf("Error getting slugrunner image: %s", err)
-	}
-
 	app, err := client.GetApp(appName)
 	if err == controller.ErrNotFound {
 		return fmt.Errorf("Unknown app %q", appName)
@@ -96,6 +86,36 @@ Options:
 		return fmt.Errorf("Error getting current app release: %s", err)
 	}
 
+	slugbuilderImageID := os.Getenv("SLUGBUILDER_18_IMAGE_ID")
+	slugrunnerImageID := os.Getenv("SLUGRUNNER_18_IMAGE_ID")
+	stackName := "heroku-18"
+	cfStackName := "cflinuxfs3"
+
+	if stack := prevRelease.Env["FLYNN_STACK"]; stack != "" {
+		switch stack {
+		case "heroku-18":
+		case "cedar-14":
+			fmt.Printf("WARNING: The cedar-14 stack is deprecated and does not receive security updates.")
+			fmt.Printf("WARNING: Unset FLYNN_STACK to use the default stack.")
+			slugbuilderImageID = os.Getenv("SLUGBUILDER_14_IMAGE_ID")
+			slugrunnerImageID = os.Getenv("SLUGRUNNER_14_IMAGE_ID")
+			stackName = "cedar-14"
+			cfStackName = "cflinuxfs2"
+		default:
+			return fmt.Errorf("Unknown FLYNN_STACK: %q", stack)
+		}
+	}
+
+	slugBuilder, err := client.GetArtifact(slugbuilderImageID)
+	if err != nil {
+		return fmt.Errorf("Error getting slugbuilder image: %s", err)
+	}
+
+	slugRunnerID := slugrunnerImageID
+	if _, err := client.GetArtifact(slugRunnerID); err != nil {
+		return fmt.Errorf("Error getting slugrunner image: %s", err)
+	}
+
 	fmt.Printf("-----> Building %s...\n", app.Name)
 
 	slugImageID := random.UUID()
@@ -104,6 +124,8 @@ Options:
 		"CONTROLLER_KEY":  os.Getenv("CONTROLLER_KEY"),
 		"SLUG_IMAGE_ID":   slugImageID,
 		"SOURCE_VERSION":  args.String["<rev>"],
+		"STACK":           stackName,
+		"CF_STACK":        cfStackName,
 	}
 	if buildpackURL, ok := env["BUILDPACK_URL"]; ok {
 		jobEnv["BUILDPACK_URL"] = buildpackURL
@@ -197,6 +219,8 @@ Options:
 	for k, v := range meta {
 		release.Meta[k] = v
 	}
+	release.Meta["slugrunner.stack"] = stackName
+
 	procs := make(map[string]ct.ProcessType)
 	for _, t := range processTypes {
 		proc := prevRelease.Processes[t]

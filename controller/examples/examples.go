@@ -13,16 +13,16 @@ import (
 	"time"
 
 	cc "github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/controller/client/v1"
+	v1controller "github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	g "github.com/flynn/flynn/pkg/examplegenerator"
 	"github.com/flynn/flynn/pkg/httprecorder"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/typeconv"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 )
 
 type generator struct {
@@ -179,8 +179,8 @@ func (e *generator) getInitialAppRelease() {
 	if err != nil {
 		return
 	}
-	if artifact, err := e.client.GetArtifact(appRelease.Env["SLUGRUNNER_IMAGE_ID"]); err == nil {
-		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = artifact.URI
+	if artifact, err := e.client.GetArtifact(appRelease.Env["SLUGRUNNER_18_IMAGE_ID"]); err == nil {
+		e.resourceIds["SLUGRUNNER_18_IMAGE_URI"] = artifact.URI
 	}
 }
 
@@ -325,7 +325,7 @@ func (e *generator) createArtifact() {
 	}
 	artifact := &ct.Artifact{
 		Type:             ct.ArtifactTypeFlynn,
-		URI:              e.resourceIds["SLUGRUNNER_IMAGE_URI"],
+		URI:              e.resourceIds["SLUGRUNNER_18_IMAGE_URI"],
 		RawManifest:      manifest.RawManifest(),
 		Hashes:           manifest.Hashes(),
 		Size:             int64(len(manifest.RawManifest())),

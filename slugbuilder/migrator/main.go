@@ -76,7 +76,7 @@ func migrate() error {
 func getSlugbuilderArtifact(db *postgres.DB) (*ct.Artifact, error) {
 	sql := `
 SELECT manifest, layer_url_template FROM artifacts
-WHERE meta->>'flynn.component' = 'slugbuilder'
+WHERE meta->>'flynn.component' = 'slugbuilder-14'
 ORDER BY created_at DESC LIMIT 1
 `
 	artifact := &ct.Artifact{

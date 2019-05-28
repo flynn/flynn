@@ -2,8 +2,8 @@
 
 TMP="$(mktemp --directory)"
 
-URL="https://partner-images.canonical.com/core/xenial/20161213/ubuntu-xenial-core-cloudimg-amd64-root.tar.gz"
-SHA="2dd71032b37fbe1f14b3db10fd2737ac2f533d69f09232516e335fc3b4e291ed"
+URL="https://partner-images.canonical.com/core/bionic/20190621/ubuntu-bionic-core-cloudimg-amd64-root.tar.gz"
+SHA="ed1753585d70724010e9ca26cf47337201ecc5c65c7251ca7a97b5d1c0ed6365"
 curl -fSLo "${TMP}/ubuntu.tar.gz" "${URL}"
 echo "${SHA}  ${TMP}/ubuntu.tar.gz" | sha256sum -c -
 
@@ -11,9 +11,7 @@ mkdir -p "${TMP}/root"
 tar xf "${TMP}/ubuntu.tar.gz" -C "${TMP}/root"
 
 cp "/etc/resolv.conf" "${TMP}/root/etc/resolv.conf"
-mount --bind "/dev/pts" "${TMP}/root/dev/pts"
 cleanup() {
-  umount "${TMP}/root/dev/pts"
   >"${TMP}/root/etc/resolv.conf"
 }
 trap cleanup EXIT

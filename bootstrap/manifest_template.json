@@ -279,14 +279,24 @@
     }
   },
   {
-    "id": "slugbuilder-image",
+    "id": "slugbuilder-18-image",
     "action": "create-artifact",
-    "artifact": $image_artifact[slugbuilder]
+    "artifact": $image_artifact[slugbuilder-18]
   },
   {
-    "id": "slugrunner-image",
+    "id": "slugbuilder-14-image",
     "action": "create-artifact",
-    "artifact": $image_artifact[slugrunner]
+    "artifact": $image_artifact[slugbuilder-14]
+  },
+  {
+    "id": "slugrunner-18-image",
+    "action": "create-artifact",
+    "artifact": $image_artifact[slugrunner-18]
+  },
+  {
+    "id": "slugrunner-14-image",
+    "action": "create-artifact",
+    "artifact": $image_artifact[slugrunner-14]
   },
   {
     "id": "redis-image",
@@ -486,8 +496,10 @@
     "release": {
       "env": {
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "SLUGBUILDER_IMAGE_ID": "{{ (index .StepData \"slugbuilder-image\").ID }}",
-        "SLUGRUNNER_IMAGE_ID": "{{ (index .StepData \"slugrunner-image\").ID }}"
+        "SLUGBUILDER_18_IMAGE_ID": "{{ (index .StepData \"slugbuilder-18-image\").ID }}",
+        "SLUGBUILDER_14_IMAGE_ID": "{{ (index .StepData \"slugbuilder-14-image\").ID }}",
+        "SLUGRUNNER_18_IMAGE_ID": "{{ (index .StepData \"slugrunner-18-image\").ID }}",
+        "SLUGRUNNER_14_IMAGE_ID": "{{ (index .StepData \"slugrunner-14-image\").ID }}"
       },
       "processes": {
         "app": {
@@ -637,8 +649,10 @@
     "release": {
       "env": {
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "SLUGBUILDER_IMAGE_ID": "{{ (index .StepData \"slugbuilder-image\").ID }}",
-        "SLUGRUNNER_IMAGE_ID": "{{ (index .StepData \"slugrunner-image\").ID }}"
+        "SLUGBUILDER_18_IMAGE_ID": "{{ (index .StepData \"slugbuilder-18-image\").ID }}",
+        "SLUGBUILDER_14_IMAGE_ID": "{{ (index .StepData \"slugbuilder-14-image\").ID }}",
+        "SLUGRUNNER_18_IMAGE_ID": "{{ (index .StepData \"slugrunner-18-image\").ID }}",
+        "SLUGRUNNER_14_IMAGE_ID": "{{ (index .StepData \"slugrunner-14-image\").ID }}"
       }
     }
   },

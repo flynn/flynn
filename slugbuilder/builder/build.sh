@@ -107,8 +107,6 @@ chown -R "${USER}:${USER}" \
 export APP_DIR="${app_dir}"
 export HOME="${app_dir}"
 export REQUEST_ID="flynn-build"
-export STACK=cedar-14
-export CF_STACK=cflinuxfs2
 
 # If there is a SSH private key available in the environment, save it so that it can be used
 if [[ -n "${SSH_CLIENT_KEY}" ]]; then

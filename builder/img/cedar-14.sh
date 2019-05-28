@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Derived from https://github.com/heroku/stack-images/blob/master/bin/cedar-14.sh
+# Copyright (c) 2015, Heroku, Inc.
 
 echo 'deb http://archive.ubuntu.com/ubuntu trusty main restricted' >/etc/apt/sources.list
 echo 'deb http://archive.ubuntu.com/ubuntu trusty-updates main restricted' >>/etc/apt/sources.list
