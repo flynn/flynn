@@ -186,8 +186,7 @@
         {
           "name": "postgres-packages",
           "script": "appliance/postgresql/img/packages.sh",
-          "limits": { "temp_disk": "4G" },
-          "linux_capabilities": ["CAP_AUDIT_WRITE"]
+          "limits": { "temp_disk": "4G" }
         },
         {
           "name": "postgres-binaries",
@@ -213,8 +212,7 @@
         {
           "name": "mariadb-packages",
           "script": "appliance/mariadb/img/packages.sh",
-          "limits": { "temp_disk": "4G" },
-          "linux_capabilities": ["CAP_AUDIT_WRITE"]
+          "limits": { "temp_disk": "4G" }
         },
         {
           "name": "mariadb-binaries",
@@ -240,8 +238,7 @@
         {
           "name": "mongodb-packages",
           "script": "appliance/mongodb/img/packages.sh",
-          "limits": { "temp_disk": "4G" },
-          "linux_capabilities": ["CAP_AUDIT_WRITE"]
+          "limits": { "temp_disk": "4G" }
         },
         {
           "name": "mongodb-binaries",
@@ -269,8 +266,7 @@
         {
           "name": "redis-packages",
           "script": "appliance/redis/img/packages.sh",
-          "limits": { "temp_disk": "4G" },
-          "linux_capabilities": ["CAP_AUDIT_WRITE"]
+          "limits": { "temp_disk": "4G" }
         },
         {
           "name": "redis-binaries",
@@ -421,8 +417,7 @@
       "base": "ubuntu-bionic",
       "layers": [{
         "script": "builder/img/heroku-18.sh",
-        "limits": { "temp_disk": "2G" },
-        "linux_capabilities": ["CAP_AUDIT_WRITE"]
+        "limits": { "temp_disk": "2G" }
       }]
     },
     {
@@ -430,8 +425,7 @@
       "base": "heroku-18",
       "layers": [{
         "script": "builder/img/heroku-18-build.sh",
-        "limits": { "temp_disk": "2G" },
-        "linux_capabilities": ["CAP_AUDIT_WRITE"]
+        "limits": { "temp_disk": "2G" }
       }]
     },
     {
@@ -439,8 +433,7 @@
       "base": "ubuntu-trusty",
       "layers": [{
         "script": "builder/img/cedar-14.sh",
-        "limits": { "temp_disk": "2G" },
-        "linux_capabilities": ["CAP_AUDIT_WRITE"]
+        "limits": { "temp_disk": "2G" }
       }]
     },
     {
