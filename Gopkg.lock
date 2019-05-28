@@ -366,9 +366,10 @@
   revision = "46807412fe50aaceb73bb57061c2230fd26a1640"
 
 [[projects]]
+  branch = "master"
   name = "github.com/jvatic/asset-matrix-go"
   packages = ["."]
-  revision = "2cb2227cdc3d81cfae144cfc1c5b50e0e407da8f"
+  revision = "550750b01e757004d2b274a289f400a511cf1d4c"
 
 [[projects]]
   name = "github.com/kardianos/osext"
@@ -768,6 +769,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "12a514224f49f81ec9e10f1f4f4e434e46f560576c4206a4e17f8b5d74b058f9"
+  inputs-digest = "27e729240fe433cb8fad1110ed94a02c1209757b4d3120dafa39a09a91cba9db"
   solver-name = "gps-cdcl"
   solver-version = 1

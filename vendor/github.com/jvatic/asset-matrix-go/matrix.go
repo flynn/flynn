@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/inconshreveable/log15"
 )
 
 type Config struct {
@@ -33,6 +34,7 @@ type Matrix struct {
 	erbRBPath         string
 	prevManifest      *Manifest
 	Manifest          *Manifest
+	Log               log.Logger
 }
 
 type Manifest struct {
@@ -45,9 +47,11 @@ func New(config *Config) *Matrix {
 	if cacheDir == "" {
 		cacheDir = filepath.Join(config.OutputDir, ".cache")
 	}
+	l := log.New("component", "asset-matrix")
 	m := &Matrix{
+		Log:    l,
 		config: config,
-		cache:  &Cache{Dir: cacheDir},
+		cache:  &Cache{Dir: cacheDir, l: l.New("type", "cache")},
 	}
 	for _, r := range config.Paths {
 		r.findAsset = m.findAsset
@@ -71,7 +75,7 @@ func (m *Matrix) Build() error {
 		Assets: make(map[string]string, 0),
 	}
 
-	log.Println("Installing dependencies...")
+	m.Log.Info("Installing dependencies...")
 	if err := m.installDeps(); err != nil {
 		return err
 	}
@@ -84,7 +88,7 @@ func (m *Matrix) Build() error {
 		r.erbRBPath = m.erbRBPath
 	}
 
-	log.Println("Cloning external repos...")
+	m.Log.Info("Cloning external repos...")
 	for _, r := range m.config.Paths {
 		if r.GitRepo != "" {
 			if err := r.CloneRepo(); err != nil {
@@ -93,24 +97,24 @@ func (m *Matrix) Build() error {
 		}
 	}
 
-	log.Println("Validating asset roots...")
+	m.Log.Info("Validating asset roots...")
 	for _, r := range m.config.Paths {
 		if _, err := os.Stat(r.Path); err != nil {
 			return err
 		}
 	}
 
-	log.Println("Enumerating assets...")
+	m.Log.Info("Enumerating assets...")
 	if err := m.enumerateAssets(); err != nil {
 		return err
 	}
-	log.Println("Building output trees...")
+	m.Log.Info("Building output trees...")
 	trees, err := m.buildOutputTrees()
 	if err != nil {
 		return err
 	}
 	if len(m.config.Outputs) != 0 {
-		log.Println("Filtering output trees...")
+		m.Log.Info("Filtering output trees...")
 		matchers := make([]*regexp.Regexp, 0, len(m.config.Outputs))
 		for _, pattern := range m.config.Outputs {
 			pattern = "^" + strings.Replace(strings.Replace(pattern, ".", "\\.", -1), "*", ".*", -1) + "$"
@@ -125,7 +129,7 @@ func (m *Matrix) Build() error {
 			}
 			for _, r := range matchers {
 				if r.MatchString(name) {
-					log.Println(name)
+					m.Log.Info(name)
 					filteredTrees = append(filteredTrees, t)
 					break
 				}
@@ -133,12 +137,12 @@ func (m *Matrix) Build() error {
 		}
 		trees = filteredTrees
 	}
-	log.Println("Compiling output trees...")
+	m.Log.Info("Compiling output trees...")
 	if err := m.compileTrees(trees); err != nil {
 		return err
 	}
 
-	log.Println("Writing manifest.json...")
+	m.Log.Info("Writing manifest.json...")
 	manifestJSONPath := filepath.Join(m.config.OutputDir, "manifest.json")
 	f, err := os.Create(manifestJSONPath)
 	defer f.Close()
@@ -150,13 +154,13 @@ func (m *Matrix) Build() error {
 		return err
 	}
 
-	log.Println("Cleaning up cache dir...")
+	m.Log.Info("Cleaning up cache dir...")
 	if err := m.cache.CleanupCacheDir(); err != nil {
 		return err
 	}
 
 	duration := time.Since(startedAt)
-	log.Printf("Completed in %s", duration)
+	m.Log.Info("Completed", "duration", duration)
 	return nil
 }
 
@@ -174,7 +178,7 @@ func (m *Matrix) parsePrevManifest() *Manifest {
 }
 
 func (m *Matrix) RemoveOldAssets() {
-	log.Println("Removing old assets...")
+	m.Log.Info("Removing old assets...")
 	for logicalPath, path := range m.prevManifest.Assets {
 		if m.Manifest.Assets[logicalPath] == path {
 			continue
@@ -203,8 +207,9 @@ func (m *Matrix) installDeps() error {
 	return installNpmPackages([]string{
 		"recast@0.10.30",
 		"es6-promise@3.0.2",
-		"node-sass@3.2.0",
-		"react-tools@0.13.3",
+		"node-sass@4.12.0",
+		"babel-cli@6.11.4",
+		"babel-plugin-transform-react-jsx@6.8",
 		"eslint@1.6.0",
 		"eslint-plugin-react@3.5.1",
 	})
@@ -254,6 +259,7 @@ func (m *Matrix) enumerateAssets() error {
 	}
 	for _, r := range m.config.Paths {
 		r.SetCacheBreaker(m.cacheBreaker)
+		r.Log = m.Log
 		go enumerateAssets(r)
 	}
 	for _ = range m.config.Paths {
@@ -311,11 +317,16 @@ var AssetNotFoundError = errors.New("Asset not found")
 
 func (m *Matrix) findAsset(key string) (Asset, error) {
 	for _, r := range m.config.Paths {
-		if a, ok := r.assetIndex[key]; ok {
+		k := key
+		rootBasePath, _ := filepath.Abs(r.Path)
+		if relPath, err := filepath.Rel(rootBasePath, key); err == nil {
+			k = relPath
+		}
+		if a, ok := r.assetIndex[k]; ok {
 			return a, nil
 		}
 	}
-	log.Printf("Asset not found: %#v", key)
+	m.Log.Info("Asset not found", "key", key)
 	return nil, AssetNotFoundError
 }
 
@@ -367,7 +378,7 @@ func (m *Matrix) compileTree(tree []Asset) error {
 	m.Manifest.mtx.Lock()
 	m.Manifest.Assets[manifestKey] = manifestVal
 	m.Manifest.mtx.Unlock()
-	log.Printf("Writing %s", outputPath)
+	m.Log.Info("Writing output", "path", outputPath)
 	defer file.Close()
 	var offset int64
 	for i, r := range readers {
