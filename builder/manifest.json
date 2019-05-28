@@ -18,15 +18,16 @@
       "layers": [{
         "script": "builder/img/ubuntu-trusty.sh",
         "inputs": ["builder/ubuntu-setup.sh"],
-        "limits": { "temp_disk": "1G" }
+        "limits": { "temp_disk": "2GB" },
+        "linux_capabilities": ["CAP_SYS_ADMIN"]
       }]
     },
     {
-      "id": "ubuntu-xenial",
+      "id": "ubuntu-bionic",
       "layers": [{
-        "script": "builder/img/ubuntu-xenial.sh",
+        "script": "builder/img/ubuntu-bionic.sh",
         "inputs": ["builder/ubuntu-setup.sh"],
-        "limits": { "temp_disk": "1G" },
+        "limits": { "temp_disk": "2GB" },
         "linux_capabilities": ["CAP_SYS_ADMIN"]
       }]
     },
@@ -39,7 +40,7 @@
     },
     {
       "id": "go",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [{
         "script": "builder/img/go.sh",
         "inputs": ["builder/go-wrapper.sh"],
@@ -100,12 +101,12 @@
     },
     {
       "id": "host",
-      "base": "ubuntu-xenial",
+      "base": "ubuntu-bionic",
       "layers": [
         {
           "name": "host-packages",
           "script": "host/img/packages.sh",
-          "limits": { "temp_disk": "1G" }
+          "limits": { "temp_disk": "4G" }
         },
         {
           "name": "host-binaries",
@@ -180,12 +181,12 @@
     },
     {
       "id": "postgres",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [
         {
           "name": "postgres-packages",
           "script": "appliance/postgresql/img/packages.sh",
-          "limits": { "temp_disk": "1G" },
+          "limits": { "temp_disk": "4G" },
           "linux_capabilities": ["CAP_AUDIT_WRITE"]
         },
         {
@@ -207,12 +208,12 @@
     },
     {
       "id": "mariadb",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [
         {
           "name": "mariadb-packages",
           "script": "appliance/mariadb/img/packages.sh",
-          "limits": { "temp_disk": "1G" },
+          "limits": { "temp_disk": "4G" },
           "linux_capabilities": ["CAP_AUDIT_WRITE"]
         },
         {
@@ -234,12 +235,12 @@
     },
     {
       "id": "mongodb",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [
         {
           "name": "mongodb-packages",
           "script": "appliance/mongodb/img/packages.sh",
-          "limits": { "temp_disk": "1G" },
+          "limits": { "temp_disk": "4G" },
           "linux_capabilities": ["CAP_AUDIT_WRITE"]
         },
         {
@@ -263,12 +264,12 @@
     },
     {
       "id": "redis",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [
         {
           "name": "redis-packages",
           "script": "appliance/redis/img/packages.sh",
-          "limits": { "temp_disk": "1G" },
+          "limits": { "temp_disk": "4G" },
           "linux_capabilities": ["CAP_AUDIT_WRITE"]
         },
         {
@@ -292,7 +293,7 @@
     },
     {
       "id": "blobstore",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [{
         "gobuild": {
           "blobstore": "/bin/flynn-blobstore"
@@ -340,11 +341,12 @@
     },
     {
       "id": "gitreceive",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [
         {
           "name": "gitreceive-packages",
-          "script": "gitreceive/img/packages.sh"
+          "script": "gitreceive/img/packages.sh",
+          "limits": { "temp_disk": "4G" }
         },
         {
           "name": "gitreceive-binaries",
@@ -365,7 +367,7 @@
     },
     {
       "id": "tarreceive",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [{
         "gobuild": {
           "tarreceive": "/bin/tarreceive"
@@ -393,11 +395,12 @@
     },
     {
       "id": "taffy",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [
         {
           "name": "taffy-packages",
-          "script": "gitreceive/img/packages.sh"
+          "script": "gitreceive/img/packages.sh",
+          "limits": { "temp_disk": "4G" }
         },
         {
           "name": "taffy-binaries",
@@ -414,17 +417,35 @@
       }
     },
     {
-      "id": "cedarish",
-      "base": "ubuntu-trusty",
+      "id": "heroku-18",
+      "base": "ubuntu-bionic",
       "layers": [{
-        "script": "util/cedarish/img/build.sh",
+        "script": "builder/img/heroku-18.sh",
         "limits": { "temp_disk": "2G" },
         "linux_capabilities": ["CAP_AUDIT_WRITE"]
       }]
     },
     {
-      "id": "slugbuilder",
-      "base": "cedarish",
+      "id": "heroku-18-build",
+      "base": "heroku-18",
+      "layers": [{
+        "script": "builder/img/heroku-18-build.sh",
+        "limits": { "temp_disk": "2G" },
+        "linux_capabilities": ["CAP_AUDIT_WRITE"]
+      }]
+    },
+    {
+      "id": "cedar-14",
+      "base": "ubuntu-trusty",
+      "layers": [{
+        "script": "builder/img/cedar-14.sh",
+        "limits": { "temp_disk": "2G" },
+        "linux_capabilities": ["CAP_AUDIT_WRITE"]
+      }]
+    },
+    {
+      "id": "slugbuilder-18",
+      "base": "heroku-18-build",
       "layers": [
         {
           "name": "slugbuilder-packages",
@@ -455,8 +476,54 @@
       }
     },
     {
-      "id": "slugrunner",
-      "base": "cedarish",
+      "id": "slugbuilder-14",
+      "base": "cedar-14",
+      "layers": [
+        {
+          "name": "slugbuilder-packages",
+          "script": "slugbuilder/img/packages.sh",
+          "inputs": [
+            "slugbuilder/builder/buildpacks.txt",
+            "slugbuilder/builder/install-buildpack"
+          ],
+          "limits": { "temp_disk": "1G" }
+        },
+        {
+          "name": "slugbuilder-binaries",
+          "gobuild": {
+            "slugbuilder/artifact": "/bin/create-artifact",
+            "slugbuilder/migrator": "/bin/slug-migrator"
+          },
+          "copy": {
+            "slugbuilder/convert-legacy-slug.sh": "/bin/convert-legacy-slug.sh",
+            "slugbuilder/builder/build.sh":       "/builder/build.sh",
+            "slugbuilder/builder/create-user.sh": "/builder/create-user.sh"
+          }
+        }
+      ],
+      "entrypoint": {
+        "args": [
+          "/builder/build.sh"
+        ]
+      }
+    },
+    {
+      "id": "slugrunner-18",
+      "base": "heroku-18",
+      "layers": [{
+        "copy": {
+          "slugrunner/runner/init": "/runner/init"
+        }
+      }],
+      "entrypoint": {
+        "args": [
+          "/runner/init"
+        ]
+      }
+    },
+    {
+      "id": "slugrunner-14",
+      "base": "cedar-14",
       "layers": [{
         "copy": {
           "slugrunner/runner/init": "/runner/init"
@@ -605,12 +672,12 @@
     },
     {
       "id": "test",
-      "base": "ubuntu-trusty",
+      "base": "ubuntu-bionic",
       "layers": [
         {
           "name": "test-packages",
           "script": "test/img/packages.sh",
-          "limits": { "temp_disk": "1G" }
+          "limits": { "temp_disk": "4G" }
         },
         {
           "name": "test-binaries",
@@ -648,9 +715,10 @@
       "base": "busybox",
       "layers": [
         {
-          "build_with": "ubuntu-trusty",
+          "build_with": "ubuntu-bionic",
           "name": "test-apps-minio",
-          "script": "test/apps/minio.sh"
+          "script": "test/apps/minio.sh",
+          "limits": { "temp_disk": "1G" }
         },
         {
           "name": "test-apps-binaries",

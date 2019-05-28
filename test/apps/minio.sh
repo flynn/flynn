@@ -2,8 +2,11 @@
 
 set -e
 
-URL="https://dl.minio.io/server/minio/release/linux-amd64/archive/minio.RELEASE.2017-03-16T21-50-32Z"
-SHA="c7952571e1640dbd3106dd05a977dbd17b82028c47401ed07b8c2278c2130967"
+apt-get update
+apt-get install -y perl # for shasum
+
+URL="https://dl.minio.io/server/minio/release/linux-amd64/archive/minio.RELEASE.2019-05-23T00-29-34Z"                                         
+SHA="6d791cba42ef3e9b8c807715b5b4d3bc8cecf40bcec93be5b50f89429fedc457" 
 
 TMP="$(mktemp --directory)"
 trap "rm -rf ${TMP}" EXIT

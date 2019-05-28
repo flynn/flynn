@@ -674,43 +674,42 @@ UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s',
 );`, artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, jsonb(artifact.Meta), step.ID))
 	}
 
-	// create the slugbuilder artifact if gitreceive still references it by
-	// URI (in which case there is no slugbuilder artifact in the database)
-	slugBuilder := artifacts["slugbuilder-image"]
-	sqlBuf.WriteString(fmt.Sprintf(`
+	// create the slugbuilder/slugrunner-18 artifacts if they don't exist
+	for _, name := range []string{"slugbuilder", "slugrunner"} {
+		artifact := artifacts[name+"-18-image"]
+		sqlBuf.WriteString(fmt.Sprintf(`
 DO $$
   BEGIN
-    IF (SELECT env->>'SLUGBUILDER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL)) IS NULL THEN
+    IF (SELECT env->>'%s_18_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL)) IS NULL THEN
       INSERT INTO artifacts (artifact_id, type, uri, manifest, hashes, size, layer_url_template, meta) VALUES ('%s', 'flynn', '%s', '%s', '%s', %d, '%s', '%s');
     END IF;
   END;
-$$;`, random.UUID(), slugBuilder.URI, jsonb(&slugBuilder.RawManifest), jsonb(slugBuilder.Hashes), slugBuilder.Size, slugBuilder.LayerURLTemplate, jsonb(slugBuilder.Meta)))
+$$;`, strings.ToUpper(name), random.UUID(), artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, jsonb(artifact.Meta)))
 
-	// create the slugrunner artifact if it doesn't exist (which can be the
-	// case if no apps were deployed with git push in older clusters where
-	// it was created lazily)
-	slugRunner := artifacts["slugrunner-image"]
-	sqlBuf.WriteString(fmt.Sprintf(`
-DO $$
-  BEGIN
-    IF (SELECT env->>'SLUGRUNNER_IMAGE_ID' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL)) IS NULL THEN
-      IF NOT EXISTS (SELECT 1 FROM artifacts WHERE uri = (SELECT env->>'SLUGRUNNER_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL))) THEN
-        INSERT INTO artifacts (artifact_id, type, uri, manifest, hashes, size, layer_url_template, meta) VALUES ('%s', 'flynn', '%s', '%s', '%s', %d, '%s', '%s');
-      END IF;
-    END IF;
-  END;
-$$;`, random.UUID(), slugRunner.URI, jsonb(&slugRunner.RawManifest), jsonb(slugRunner.Hashes), slugRunner.Size, slugRunner.LayerURLTemplate, jsonb(slugRunner.Meta)))
-
-	// update slug artifacts currently being referenced by gitreceive
-	// (which will also update all current user releases to use the
-	// latest slugrunner)
-	for _, name := range []string{"slugbuilder", "slugrunner"} {
-		artifact := artifacts[name+"-image"]
+		// update pre-slugrunner/slugbuilder-18 artifacts currently being referenced by gitreceive
+		// (which will also update all current user releases to use slugrunner-14)
+		artifact = artifacts[name+"-14-image"]
 		sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE artifacts SET uri = '%[1]s', type = 'flynn', manifest = '%[2]s', hashes = '%[3]s', size = %[4]d, layer_url_template = '%[5]s', meta = '%[6]s'
 WHERE artifact_id = (SELECT (env->>'%[7]s_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL))
 OR uri = (SELECT env->>'%[7]s_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL));`,
 			artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, jsonb(artifact.Meta), strings.ToUpper(name)))
+	}
+
+	// update pre-slugbuilder-18 releases with a stack tag
+	sqlBuf.WriteString(`UPDATE releases SET meta = jsonb_set(meta, '{slugrunner.stack}', '"cedar-14"') WHERE meta->>'slugrunner.stack' IS NULL and meta->>'git' = 'true';`)
+
+	// update slug artifacts currently being referenced by gitreceive
+	// (which will also update all current user releases to use the
+	// latest slugrunner images)
+	for _, name := range []string{"slugbuilder", "slugrunner"} {
+		for _, version := range []string{"14", "18"} {
+			artifact := artifacts[fmt.Sprintf("%s-%s-image", name, version)]
+			sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE artifacts SET uri = '%s', type = 'flynn', manifest = '%s', hashes = '%s', size = %d, layer_url_template = '%s', meta = '%s'
+WHERE artifact_id = (SELECT (env->>'%s_%s_IMAGE_ID')::uuid FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive' AND deleted_at IS NULL));`,
+				artifact.URI, jsonb(&artifact.RawManifest), jsonb(artifact.Hashes), artifact.Size, artifact.LayerURLTemplate, jsonb(artifact.Meta), strings.ToUpper(name), version))
+		}
 	}
 
 	// update the URI of redis artifacts currently being referenced by
@@ -723,13 +722,26 @@ WHERE artifact_id = (SELECT (env->>'REDIS_IMAGE_ID')::uuid FROM releases WHERE r
 OR uri = (SELECT env->>'REDIS_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'redis' AND deleted_at IS NULL));`,
 		redisImage.URI, jsonb(&redisImage.RawManifest), jsonb(redisImage.Hashes), redisImage.Size, redisImage.LayerURLTemplate, jsonb(redisImage.Meta)))
 
-	// ensure the image ID environment variables are set for legacy apps
-	// which use image URI variables
-	for _, name := range []string{"redis", "slugbuilder", "slugrunner"} {
+	// ensure the image ID environment variables are set for legacy redis app
+	// with image URI variable
+	sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE releases SET env = jsonb_set(env, '{REDIS_IMAGE_ID}', ('"' || (SELECT artifact_id::text FROM artifacts WHERE uri = '%s') || '"')::jsonb, true)
+WHERE env->>'REDIS_IMAGE_URI' IS NOT NULL;`,
+		artifacts["redis-image"].URI))
+
+	// ensure recent SLUGBUILDER/SLUGRUNNER_18/14_IMAGE_ID variables are set on the appropriate releases
+	for _, name := range []string{"slugbuilder", "slugrunner"} {
+		for _, version := range []string{"18", "14"} {
+			artifact := artifacts[fmt.Sprintf("%s-%s-image", name, version)]
+			sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE releases SET env = jsonb_set(env, '{%[1]s_%[2]s_IMAGE_ID}', ('"' || (SELECT artifact_id::text FROM artifacts WHERE uri = '%[3]s') || '"')::jsonb, true)
+WHERE env->>'%[1]s_IMAGE_ID' IS NOT NULL OR env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
+				strings.ToUpper(name), version, artifact.URI))
+		}
 		sqlBuf.WriteString(fmt.Sprintf(`
-UPDATE releases SET env = jsonb_set(env, '{%[1]s_IMAGE_ID}', ('"' || (SELECT artifact_id::text FROM artifacts WHERE uri = '%[2]s') || '"')::jsonb, true)
-WHERE env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
-			strings.ToUpper(name), artifacts[name+"-image"].URI))
+		UPDATE releases SET env = env - '{%[1]s_IMAGE_ID,%[1]s_IMAGE_URI}'::text[]
+WHERE env->>'%[1]s_IMAGE_ID' IS NOT NULL OR env->>'%[1]s_IMAGE_URI' IS NOT NULL;`,
+			strings.ToUpper(name)))
 	}
 
 	// remove job and volume records created by previous clusters
@@ -834,7 +846,7 @@ WARN:
 	}
 
 	if migrateSlugs {
-		cmd = exec.JobUsingHost(state.Hosts[0], artifacts["slugbuilder-image"], nil)
+		cmd = exec.JobUsingHost(state.Hosts[0], artifacts["slugbuilder-14-image"], nil)
 		cmd.Args = []string{"/bin/slug-migrator"}
 		cmd.Env = map[string]string{
 			"CONTROLLER_KEY": data.Controller.Release.Env["AUTH_KEY"],

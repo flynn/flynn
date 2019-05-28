@@ -597,11 +597,17 @@ func runImport(args *docopt.Args, client controller.Client) error {
 				return nil
 			}
 
-			slugBuilderID, ok := gitreceiveRelease.Env["SLUGBUILDER_IMAGE_ID"]
+			slugBuilderID, ok := gitreceiveRelease.Env["SLUGBUILDER_14_IMAGE_ID"]
+			if !ok {
+				slugBuilderID, ok = gitreceiveRelease.Env["SLUGBUILDER_IMAGE_ID"]
+			}
 			if !ok {
 				return fmt.Errorf("gitreceive env missing slugbuilder image")
 			}
-			slugRunnerID, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_ID"]
+			slugRunnerID, ok := gitreceiveRelease.Env["SLUGRUNNER_14_IMAGE_ID"]
+			if !ok {
+				slugRunnerID, ok = gitreceiveRelease.Env["SLUGRUNNER_IMAGE_ID"]
+			}
 			if !ok {
 				return fmt.Errorf("gitreceive env missing slugrunner image")
 			}
@@ -734,9 +740,21 @@ func runImport(args *docopt.Args, client controller.Client) error {
 			if err != nil {
 				return fmt.Errorf("unable to retrieve gitreceive release: %s", err)
 			}
-			slugRunnerID, ok := gitreceiveRelease.Env["SLUGRUNNER_IMAGE_ID"]
-			if !ok {
-				return fmt.Errorf("gitreceive env missing slugrunner image")
+			var slugRunnerID string
+			stack := release.Meta["slugrunner.stack"]
+			switch stack {
+			case "heroku-18":
+				slugRunnerID = gitreceiveRelease.Env["SLUGRUNNER_18_IMAGE_ID"]
+			case "cedar-14", "":
+				slugRunnerID = gitreceiveRelease.Env["SLUGRUNNER_14_IMAGE_ID"]
+				if slugRunnerID == "" {
+					slugRunnerID = gitreceiveRelease.Env["SLUGRUNNER_IMAGE_ID"]
+				}
+			default:
+				return fmt.Errorf("unknown slugrunner stack %q", stack)
+			}
+			if slugRunnerID == "" {
+				return fmt.Errorf("gitreceive env missing slugrunner image for stack %q", stack)
 			}
 			release.ArtifactIDs[0] = slugRunnerID
 		}

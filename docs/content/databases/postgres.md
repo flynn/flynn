@@ -5,7 +5,7 @@ layout: docs
 
 # PostgreSQL
 
-The Flynn Postgres appliance provides PostgreSQL 10 in a highly-available
+The Flynn Postgres appliance provides PostgreSQL 11 in a highly-available
 configuration with automatic provisioning. It automatically fails over to
 a synchronous replica with no loss of data if the primary server goes down.
 

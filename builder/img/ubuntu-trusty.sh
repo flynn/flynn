@@ -2,8 +2,8 @@
 
 TMP="$(mktemp --directory)"
 
-URL="https://partner-images.canonical.com/core/trusty/20161215/ubuntu-trusty-core-cloudimg-amd64-root.tar.gz"
-SHA="3c5c465ca5c2da880e58c5e11ebf27c5e0df3c9de8e279091a86fe30f7cd8495"
+URL="https://partner-images.canonical.com/core/trusty/20190502/ubuntu-trusty-core-cloudimg-amd64-root.tar.gz"
+SHA="2b1d09d5ba303e924bb8abf402620a6519bc5b8ef7b52c9179c5e958bd2e4e3f"
 curl -fSLo "${TMP}/ubuntu.tar.gz" "${URL}"
 echo "${SHA}  ${TMP}/ubuntu.tar.gz" | sha256sum -c -
 

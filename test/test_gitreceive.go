@@ -119,7 +119,8 @@ func (s *GitreceiveSuite) TestGitReleaseMeta(t *c.C) {
 	commit := strings.TrimSpace(r.git("rev-parse", "HEAD").Output)
 	t.Assert(commit, c.Not(c.Equals), "")
 	t.Assert(release.Meta, c.DeepEquals, map[string]string{
-		"git":        "true",
-		"git.commit": commit,
+		"git":              "true",
+		"git.commit":       commit,
+		"slugrunner.stack": "heroku-18",
 	})
 }

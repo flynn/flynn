@@ -18,10 +18,6 @@ required = [
   branch = "master"
   name = "github.com/cupcake/jsonschema"
 
-[[override]]
-  name = "github.com/docker/docker"
-  branch = "master"
-
 [[constraint]]
   name = "github.com/docker/go-units"
   version = "0.3.0"
