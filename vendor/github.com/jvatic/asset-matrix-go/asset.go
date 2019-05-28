@@ -56,6 +56,7 @@ func NewESLintAsset(r *AssetRoot, input Asset, p string) Asset {
 		input: input,
 		r:     r,
 		p:     p,
+		l:     r.Log.New("type", "eslint", "path", p),
 	}
 }
 
@@ -65,6 +66,7 @@ func NewJavaScriptAsset(r *AssetRoot, input Asset, p string) Asset {
 		r:                 r,
 		p:                 p,
 		transformerJSPath: r.transformerJSPath,
+		l:                 r.Log.New("type", "js", "path", p),
 	}
 }
 
@@ -73,6 +75,7 @@ func NewJSXAsset(r *AssetRoot, input Asset, p string) Asset {
 		input: input,
 		r:     r,
 		p:     p,
+		l:     r.Log.New("type", "jsx", "path", p),
 	}
 }
 
@@ -83,6 +86,7 @@ func NewERBAsset(r *AssetRoot, input Asset, p string) Asset {
 		p:            p,
 		cacheBreaker: r.cacheBreaker,
 		erbRBPath:    r.erbRBPath,
+		l:            r.Log.New("type", "erb", "path", p),
 	}
 }
 
@@ -94,5 +98,6 @@ func NewSCSSAsset(r *AssetRoot, input Asset, p string) Asset {
 		findAsset:      r.findAsset,
 		scssJSPath:     r.scssJSPath,
 		assetURLPrefix: r.assetURLPrefix,
+		l:              r.Log.New("type", "scss", "path", p),
 	}
 }

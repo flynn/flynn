@@ -82,3 +82,7 @@ required = [
 [[constraint]]
   branch = "v0"
   name = "gopkg.in/inconshreveable/go-update.v0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/jvatic/asset-matrix-go"
