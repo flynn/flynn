@@ -24,7 +24,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/archiver"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -296,6 +296,8 @@ func (w writeFlusher) Write(p []byte) (int, error) {
 
 var prereceiveHook = []byte(`#!/bin/bash
 set -eo pipefail;
+
+unset GIT_QUARANTINE_PATH
 
 git-archive-all() {
 	GIT_DIR="$(pwd)"
