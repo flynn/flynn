@@ -98,10 +98,6 @@ func (s *GitDeploySuite) TestClojureBuildpack(t *c.C) {
 	s.runBuildpackTest(t, "clojure-flynn-example", nil)
 }
 
-func (s *GitDeploySuite) TestPlayBuildpack(t *c.C) {
-	s.runBuildpackTest(t, "play-flynn-example", nil)
-}
-
 func (s *GitDeploySuite) TestPythonBuildpack(t *c.C) {
 	s.runBuildpackTest(t, "python-flynn-example", nil)
 }
