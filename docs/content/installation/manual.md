@@ -5,7 +5,7 @@ layout: docs
 
 # Manual Installation
 
-Flynn can be installed using our install script on **Ubuntu 16.04** and **14.04** amd64.
+Flynn can be installed using our install script on **Ubuntu 18.04** and **16.04** amd64.
 
 We recommend starting with a clean Ubuntu installation on machines with at least
 2GB of RAM, 40GB of storage, and two CPU cores each. It's possible to run Flynn
@@ -46,7 +46,7 @@ Running the installer script will:
 1. Install Flynn's runtime dependencies
 2. Download, verify and install the `flynn-host` binary
 3. Download and verify filesystem images for each of the Flynn components
-4. Install an Upstart job for controlling the `flynn-host` daemon
+4. Install a systemd unit for controlling the `flynn-host` daemon
 
 Some of the filesystem images are quite large (several hundred megabytes) so step 3 could take a while depending on
 your Internet connection.
@@ -94,15 +94,6 @@ $ sudo flynn-host init --discovery https://discovery.flynn.io/clusters/53e8402e-
 ## Start Flynn
 
 Now, start the daemon and check that it has started:
-
-**Ubuntu 14.04**
-
-```
-$ sudo start flynn-host
-$ sudo status flynn-host
-```
-
-**Ubuntu 16.04**
 
 ```
 $ sudo systemctl start flynn-host

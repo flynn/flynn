@@ -8,7 +8,7 @@ usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
-A script to install Flynn on Ubuntu 14.04 or 16.04.
+A script to install Flynn on Ubuntu 16.04 and 18.04.
 See https://flynn.io/docs/installation/manual for further information.
 
 OPTIONS:
@@ -44,8 +44,8 @@ main() {
     fail "this script must be executed as the root user"
   fi
 
-  if ! is_ubuntu_xenial && ! is_ubuntu_trusty; then
-    fail "this script is only compatible with Ubuntu 16.04 or 14.04"
+  if ! is_ubuntu_xenial && ! is_ubuntu_bionic; then
+    fail "this script is only compatible with Ubuntu 16.04 and 18.04"
   fi
 
   if ! check_overlayfs; then
@@ -148,26 +148,7 @@ main() {
 
   repo_url="${repo_url:="https://dl.flynn.io"}"
 
-  local packages=("iptables")
-
-  info "installing ZFS"
-  if is_ubuntu_xenial; then
-    run apt-get update
-    packages+=("zfsutils-linux")
-  elif is_ubuntu_trusty; then
-    info "adding zfs-native APT PPA"
-    run apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
-    mkdir -p "/etc/apt/sources.list.d"
-    echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
-    run apt-get update
-
-    # install linux-headers explicitly before ubuntu-zfs to avoid skipping
-    # building kernel modules due to absent kernel headers.
-    info "installing linux-headers"
-    run apt-get install -y "linux-headers-$(uname -r)"
-
-    packages+=("ubuntu-zfs")
-  fi
+  local packages=("iptables" "zfsutils-linux")
 
   if $install_ntp; then
     packages+=(
@@ -212,11 +193,7 @@ main() {
     --config-dir "/etc/flynn" \
     --bin-dir    "/usr/local/bin"
 
-  if is_ubuntu_xenial; then
-    install_systemd_unit
-  elif is_ubuntu_trusty; then
-    install_upstart_job
-  fi
+  install_systemd_unit
 
   info "installation complete!"
 }
@@ -225,8 +202,8 @@ is_root() {
   [[ $(id -u) -eq 0 ]]
 }
 
-is_ubuntu_trusty() {
-  grep -qF "Ubuntu 14.04" /etc/os-release &>/dev/null
+is_ubuntu_bionic() {
+  grep -qF "Ubuntu 18.04" /etc/os-release &>/dev/null
 }
 
 is_ubuntu_xenial() {
@@ -260,23 +237,6 @@ EOF
   systemctl enable flynn-host.service
 }
 
-install_upstart_job() {
-  info "installing Upstart job"
-
-  cat > /etc/init/flynn-host.conf <<EOF
-description "Flynn host daemon"
-
-start on runlevel [2345]
-stop on runlevel [!2345]
-respawn
-respawn limit 100 60
-
-exec /usr/local/bin/flynn-host daemon
-EOF
-
-  initctl reload-configuration
-}
-
 do_remove() {
   local assume_yes=$1
 
@@ -299,15 +259,8 @@ do_remove() {
   fi
 
   info "stopping flynn-host daemon"
-  if is_ubuntu_xenial; then
-    systemctl stop flynn-host
-    systemctl disable flynn-host
-  elif is_ubuntu_trusty; then
-    local status="$(status flynn-host)"
-    if [[ "${status:0:16}" = "flynn-host start" ]]; then
-      run stop flynn-host
-    fi
-  fi
+  systemctl stop flynn-host
+  systemctl disable flynn-host
 
   info "killing old containers"
   sudo start-stop-daemon \
