@@ -13,12 +13,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/router/schema"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/inconshreveable/log15"
 )
 
@@ -103,6 +103,11 @@ func main() {
 	proxyProtocol := os.Getenv("PROXY_PROTOCOL") == "true"
 	legacyTLS := os.Getenv("LEGACY_TLS") == "true"
 
+	if !legacyTLS {
+		// Enable TLS 1.3
+		os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
+	}
+
 	httpPort := flag.Int("http-port", 8080, "default http listen port")
 	httpsPort := flag.Int("https-port", 4433, "default https listen port")
 	tcpIP := flag.String("tcp-ip", os.Getenv("LISTEN_IP"), "tcp router listen ip")
@@ -132,6 +137,7 @@ func main() {
 			shutdown.Fatal("Cannot disable HTTPS access (DEFAULT_HTTPS_PORT=0)")
 		} else {
 			httpsPorts[0] = port
+
 		}
 	}
 	defaultPorts := append(httpPorts, httpsPorts...)
