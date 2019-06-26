@@ -18,22 +18,6 @@ type BackupSuite struct {
 
 var _ = c.ConcurrentSuite(&BackupSuite{})
 
-func (s *BackupSuite) Test_v20160309_0_nodejs_redis(t *c.C) {
-	s.testClusterBackup(t, "v20160309.0-nodejs-redis.tar")
-}
-
-func (s *BackupSuite) Test_v20160423_0_nodejs_redis(t *c.C) {
-	s.testClusterBackup(t, "v20160423.0-nodejs-redis.tar")
-}
-
-func (s *BackupSuite) Test_v20160624_1_nodejs_redis(t *c.C) {
-	s.testClusterBackup(t, "v20160624.1-nodejs-redis.tar")
-}
-
-func (s *BackupSuite) Test_v20160721_2_nodejs_redis(t *c.C) {
-	s.testClusterBackup(t, "v20160721.2-nodejs-redis.tar")
-}
-
 func (s *BackupSuite) Test_v20160814_0_nodejs_mongodb(t *c.C) {
 	s.testClusterBackup(t, "v20160814.0-nodejs-mongodb.tar")
 }
