@@ -597,11 +597,14 @@
   revision = "54f0e4339ce73702a0607f49922aaa1e749b418d"
 
 [[projects]]
+  branch = "master"
   name = "golang.org/x/crypto"
   packages = [
     "curve25519",
     "ed25519",
     "ed25519/internal/edwards25519",
+    "internal/chacha20",
+    "internal/subtle",
     "nacl/secretbox",
     "pbkdf2",
     "poly1305",
@@ -610,14 +613,16 @@
     "ssh",
     "ssh/terminal"
   ]
-  revision = "81372b2fc2f10bef2a7f338da115c315a56b2726"
+  revision = "cc06ce4a13d484c0101a9e92913248488a75786d"
 
 [[projects]]
+  branch = "master"
   name = "golang.org/x/net"
   packages = [
     "bpf",
     "context",
     "context/ctxhttp",
+    "http/httpguts",
     "http2",
     "http2/hpack",
     "idna",
@@ -625,13 +630,13 @@
     "internal/socket",
     "internal/timeseries",
     "ipv4",
-    "lex/httplex",
     "trace",
     "websocket"
   ]
-  revision = "1c05540f6879653db88113bc4a2b70aec4bd491f"
+  revision = "3b0461eec859c4b73bb64fdc8285971fd33e3938"
 
 [[projects]]
+  branch = "master"
   name = "golang.org/x/oauth2"
   packages = [
     ".",
@@ -640,7 +645,7 @@
     "jws",
     "jwt"
   ]
-  revision = "1e695b1c8febf17aad3bfa7bf0a819ef94b98ad5"
+  revision = "0f29369cfe4552d0e4bcddc57cc75f4d7e672a33"
 
 [[projects]]
   branch = "master"
@@ -652,10 +657,11 @@
   branch = "master"
   name = "golang.org/x/sys"
   packages = [
+    "cpu",
     "unix",
     "windows"
   ]
-  revision = "d89cdac9e8725f2aefce25fcbfef41134c9ad412"
+  revision = "e07cf5db2756114766d998ec31e7135ff8c427ed"
 
 [[projects]]
   name = "golang.org/x/text"
