@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
+	discoverd "github.com/flynn/flynn/discoverd/client"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	hh "github.com/flynn/flynn/pkg/httphelper"
@@ -256,6 +256,7 @@ func bootCluster(c *BootConfig, cluster *Cluster, manifest io.Reader, log log15.
 		"TLS_CA":          cert.CACert,
 		"TLS_KEY":         cert.PrivateKey,
 		"TLS_CERT":        cert.Cert,
+		"DEBUG":           "1",
 	}
 	cmd.HostNetwork = true
 	cmd.Stdin = manifest
