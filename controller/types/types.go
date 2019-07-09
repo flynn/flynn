@@ -705,8 +705,9 @@ type Sink struct {
 type SyslogFormat string
 
 const (
-	SyslogFormatRFC6587 SyslogFormat = "rfc6587"
-	SyslogFormatNewline SyslogFormat = "newline"
+	SyslogFormatRFC6587         SyslogFormat = "rfc6587"
+	SyslogFormatNewline         SyslogFormat = "newline"
+	SyslogFormatPrefixedNewline SyslogFormat = "prefixed_newline"
 )
 
 type SyslogSinkConfig struct {

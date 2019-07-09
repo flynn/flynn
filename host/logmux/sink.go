@@ -18,8 +18,8 @@ import (
 
 	"github.com/boltdb/bolt"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
+	discoverd "github.com/flynn/flynn/discoverd/client"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/dialer"
@@ -634,7 +634,7 @@ func (s *SyslogSink) Write(m message) error {
 	}
 
 	// If the generated/cached prefix isn't 0 length then modify the message body
-	if len(prefix) != 0 {
+	if len(prefix) != 0 && s.format != ct.SyslogFormatPrefixedNewline {
 		msg.Msg = bytes.Join([][]byte{prefix, m.Message.Msg}, msgSep)
 	}
 
@@ -650,6 +650,8 @@ func (s *SyslogSink) Write(m message) error {
 		data = rfc6587.Bytes(msg)
 	case ct.SyslogFormatNewline:
 		data = append(msg.Bytes(), '\n')
+	case ct.SyslogFormatPrefixedNewline:
+		data = bytes.Join([][]byte{prefix, []byte{' '}, msg.Bytes(), []byte{'\n'}}, nil)
 	}
 	s.conn.SetWriteDeadline(time.Now().Add(time.Second))
 	_, err := s.conn.Write(data)
