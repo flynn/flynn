@@ -85,7 +85,7 @@ Commands:
         options:
             --use-ids          Use app IDs instead of app names in the syslog APP-NAME field.
             --insecure         Don't verify servers certificate chain or hostname. Should only be used for testing.
-            --format=<format>  One of rfc6587 or newline, defaults to rfc6587.
+            --format=<format>  One of rfc6587, newline, or prefixed_newline. Defaults to rfc6587.
 
         examples:
             $ flynn cluster log-sink add syslog syslog+tls://rsyslog.host:514/
@@ -498,6 +498,8 @@ func runLogSinkAddSyslog(args *docopt.Args, client controller.Client) error {
 	switch args.String["--format"] {
 	case "newline":
 		format = ct.SyslogFormatNewline
+	case "prefixed_newline":
+		format = ct.SyslogFormatPrefixedNewline
 	case "rfc6587", "":
 		format = ct.SyslogFormatRFC6587
 	default:
