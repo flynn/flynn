@@ -288,6 +288,8 @@ func (m *Mux) Follow(r io.ReadCloser, buffer string, msgID logagg.MsgID, config 
 		Hostname: []byte(config.HostID),
 		AppName:  []byte(config.AppID),
 		MsgID:    []byte(msgID),
+		Severity: 6,  // Info
+		Facility: 23, // local7
 	}
 	if config.JobType != "" {
 		hdr.ProcID = []byte(config.JobType + "." + config.JobID)
