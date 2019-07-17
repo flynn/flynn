@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sync"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
@@ -56,9 +57,6 @@ type Cmd struct {
 	// started is true if Start has been called
 	started bool
 
-	// finished is true if Wait has been called
-	finished bool
-
 	// closeCluster indicates that cluster should be closed after the job
 	// finishes, it is set if the cluster connection was created by Start
 	closeCluster bool
@@ -82,6 +80,9 @@ type Cmd struct {
 
 	// exitStatus is the job's exit status
 	exitStatus int
+
+	// closeMtx protects closeAfterWait and c.close
+	closeMtx sync.Mutex
 
 	// closeAfterWait lists connections that should be closed before Wait returns
 	closeAfterWait []io.Closer
@@ -319,15 +320,17 @@ func (c *Cmd) Wait() error {
 	if !c.started {
 		return errors.New("exec: not started")
 	}
-	if c.finished {
-		return errors.New("exec: Wait was already called")
-	}
-	c.finished = true
 
 	<-c.done
 
-	for _, wc := range c.closeAfterWait {
+	c.closeMtx.Lock()
+	defer c.closeMtx.Unlock()
+	for i, wc := range c.closeAfterWait {
+		if wc == nil {
+			continue
+		}
 		wc.Close()
+		c.closeAfterWait[i] = nil
 	}
 
 	var err error
