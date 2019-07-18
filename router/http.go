@@ -15,14 +15,14 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/cache"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/proxyproto"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 )
@@ -400,6 +400,11 @@ func (h *httpSyncHandler) Remove(id string) error {
 	return nil
 }
 
+const (
+	httpIdleTimeout   = 5 * time.Minute
+	httpHeaderTimeout = 1 * time.Minute
+)
+
 func (s *HTTPListener) listenAndServe() error {
 	for _, listener := range s.listeners {
 		listener.Close()
@@ -422,6 +427,8 @@ func (s *HTTPListener) listenAndServe() error {
 				Proto:   "http",
 				Port:    mustPortFromAddr(listener.Addr().String()),
 			},
+			IdleTimeout:       httpIdleTimeout,
+			ReadHeaderTimeout: httpHeaderTimeout,
 		}
 
 		// TODO: log error
@@ -473,7 +480,9 @@ func (s *HTTPListener) listenAndServeTLS() error {
 			Port:    mustPortFromAddr(listener.Addr().String()),
 		}
 
-		http2Server := &http2.Server{}
+		http2Server := &http2.Server{
+			IdleTimeout: httpIdleTimeout,
+		}
 		http2Handler := func(hs *http.Server, c *tls.Conn, h http.Handler) {
 			http2Server.ServeConn(c, &http2.ServeConnOpts{
 				Handler:    handler,
