@@ -95,8 +95,8 @@ Options:
 		switch stack {
 		case "heroku-18":
 		case "cedar-14":
-			fmt.Printf("WARNING: The cedar-14 stack is deprecated and does not receive security updates.")
-			fmt.Printf("WARNING: Unset FLYNN_STACK to use the default stack.")
+			fmt.Println("WARNING: The cedar-14 stack is deprecated and does not receive security updates.")
+			fmt.Println("WARNING: Unset FLYNN_STACK to use the default stack.")
 			slugbuilderImageID = os.Getenv("SLUGBUILDER_14_IMAGE_ID")
 			slugrunnerImageID = os.Getenv("SLUGRUNNER_14_IMAGE_ID")
 			stackName = "cedar-14"
