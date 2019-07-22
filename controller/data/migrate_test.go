@@ -1,11 +1,14 @@
-package main
+package data
 
 import (
+	"os"
 	"time"
 
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/testutils/postgres"
+	"github.com/jackc/pgx"
 
 	. "github.com/flynn/go-check"
 )
@@ -23,6 +26,22 @@ type testMigrator struct {
 func (t *testMigrator) migrateTo(id int) {
 	t.c.Assert((*migrations)[t.id:id].Migrate(t.db), IsNil)
 	t.id = id
+}
+
+func setupTestDB(c *C, dbname string) *postgres.DB {
+	if err := pgtestutils.SetupPostgres(dbname); err != nil {
+		c.Fatal(err)
+	}
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     os.Getenv("PGHOST"),
+			Database: dbname,
+		},
+	})
+	if err != nil {
+		c.Fatal(err)
+	}
+	return postgres.New(pgxpool, nil)
 }
 
 // TestMigrateJobStates checks that migrating to ID 9 does not break existing

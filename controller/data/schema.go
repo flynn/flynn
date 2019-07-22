@@ -1,4 +1,4 @@
-package main
+package data
 
 import (
 	"fmt"
@@ -537,9 +537,15 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(32,
 		`INSERT INTO deployment_strategies (name) VALUES ('one-down-one-up')`,
 	)
+	migrations.Add(33,
+		`ALTER TABLE events ADD COLUMN op text`,
+	)
+	migrations.Add(34,
+		`INSERT INTO event_types (name) VALUES ('scale_request_cancelation')`,
+	)
 }
 
-func migrateDB(db *postgres.DB) error {
+func MigrateDB(db *postgres.DB) error {
 	return migrations.Migrate(db)
 }
 

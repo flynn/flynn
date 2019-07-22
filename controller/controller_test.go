@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/controller/schema"
+	"github.com/flynn/flynn/controller/data"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
@@ -65,7 +65,7 @@ func setupTestDB(c *C, dbname string) *postgres.DB {
 func (s *S) SetUpSuite(c *C) {
 	dbname := "controllertest"
 	db := setupTestDB(c, dbname)
-	if err := migrateDB(db); err != nil {
+	if err := data.MigrateDB(db); err != nil {
 		c.Fatal(err)
 	}
 
@@ -76,7 +76,7 @@ func (s *S) SetUpSuite(c *C) {
 			Host:     "/var/run/postgresql",
 			Database: dbname,
 		},
-		AfterConnect: schema.PrepareStatements,
+		AfterConnect: data.PrepareStatements,
 	})
 	if err != nil {
 		c.Fatal(err)

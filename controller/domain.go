@@ -8,40 +8,10 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
-	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/tlscert"
-	"github.com/flynn/que-go"
+	que "github.com/flynn/que-go"
 	"golang.org/x/net/context"
 )
-
-type DomainMigrationRepo struct {
-	db *postgres.DB
-}
-
-func NewDomainMigrationRepo(db *postgres.DB) *DomainMigrationRepo {
-	return &DomainMigrationRepo{db: db}
-}
-
-func (repo *DomainMigrationRepo) Add(dm *ct.DomainMigration) error {
-	tx, err := repo.db.Begin()
-	if err != nil {
-		return err
-	}
-	if err := tx.QueryRow("domain_migration_insert", dm.OldDomain, dm.Domain, dm.OldTLSCert, dm.TLSCert).Scan(&dm.ID, &dm.CreatedAt); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if err := createEvent(tx.Exec, &ct.Event{
-		ObjectID:   dm.ID,
-		ObjectType: ct.EventTypeDomainMigration,
-	}, ct.DomainMigrationEvent{
-		DomainMigration: dm,
-	}); err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit()
-}
 
 func (c *controllerAPI) MigrateDomain(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	var dm *ct.DomainMigration

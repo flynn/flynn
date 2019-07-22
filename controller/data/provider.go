@@ -1,4 +1,4 @@
-package main
+package data
 
 import (
 	"errors"
@@ -34,7 +34,7 @@ func (r *ProviderRepo) Add(data interface{}) error {
 		tx.Rollback()
 		return err
 	}
-	if err := createEvent(tx.Exec, &ct.Event{
+	if err := CreateEvent(tx.Exec, &ct.Event{
 		ObjectID:   p.ID,
 		ObjectType: ct.EventTypeProvider,
 	}, p); err != nil {

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	controller "github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -29,14 +31,14 @@ import (
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 	"github.com/flynn/que-go"
+	"github.com/inconshreveable/log15"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
-	"github.com/inconshreveable/log15"
 )
 
 var logger = log15.New("component", "controller")
 
-var ErrNotFound = errors.New("controller: resource not found")
+var ErrNotFound = controller.ErrNotFound
 var ErrShutdown = errors.New("controller: shutting down")
 
 var schemaRoot = "/etc/flynn-controller/jsonschema"
@@ -58,16 +60,7 @@ func main() {
 		name.SetSeed(s)
 	}
 
-	db := postgres.Wait(nil, nil)
-
-	if err := migrateDB(db); err != nil {
-		shutdown.Fatal(err)
-	}
-
-	// Reconnect, preparing statements now that schema is migrated
-	db.Close()
-	db = postgres.Wait(nil, schema.PrepareStatements)
-
+	db := data.OpenAndMigrateDB(nil)
 	shutdown.BeforeExit(func() { db.Close() })
 
 	lc, err := logaggc.New("")
@@ -157,7 +150,7 @@ func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}
 			io.WriteString(hash, route.CreatedAt.String())
 			io.WriteString(hash, route.UpdatedAt.String())
 			uniqueID := fmt.Sprintf("%x", hash.Sum(nil))
-			if err := createEvent(db.Exec, &ct.Event{
+			if err := data.CreateEvent(db.Exec, &ct.Event{
 				AppID:      appID,
 				ObjectID:   route.ID,
 				ObjectType: eventType,
@@ -206,20 +199,19 @@ func appHandler(c handlerConfig) http.Handler {
 	}
 
 	q := que.NewClient(c.db.ConnPool)
-	domainMigrationRepo := NewDomainMigrationRepo(c.db)
-	providerRepo := NewProviderRepo(c.db)
-	resourceRepo := NewResourceRepo(c.db)
-	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
-	artifactRepo := NewArtifactRepo(c.db)
-	releaseRepo := NewReleaseRepo(c.db, artifactRepo, q)
-	jobRepo := NewJobRepo(c.db)
-	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
-	releaseRepo.formations = formationRepo
-	deploymentRepo := NewDeploymentRepo(c.db)
-	eventRepo := NewEventRepo(c.db)
-	backupRepo := NewBackupRepo(c.db)
-	sinkRepo := NewSinkRepo(c.db)
-	volumeRepo := NewVolumeRepo(c.db)
+	domainMigrationRepo := data.NewDomainMigrationRepo(c.db)
+	providerRepo := data.NewProviderRepo(c.db)
+	resourceRepo := data.NewResourceRepo(c.db)
+	appRepo := data.NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
+	artifactRepo := data.NewArtifactRepo(c.db)
+	releaseRepo := data.NewReleaseRepo(c.db, artifactRepo, q)
+	jobRepo := data.NewJobRepo(c.db)
+	formationRepo := data.NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
+	deploymentRepo := data.NewDeploymentRepo(c.db, appRepo, releaseRepo, formationRepo)
+	eventRepo := data.NewEventRepo(c.db)
+	backupRepo := data.NewBackupRepo(c.db)
+	sinkRepo := data.NewSinkRepo(c.db)
+	volumeRepo := data.NewVolumeRepo(c.db)
 
 	api := controllerAPI{
 		domainMigrationRepo: domainMigrationRepo,
@@ -372,19 +364,19 @@ func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
 }
 
 type controllerAPI struct {
-	domainMigrationRepo *DomainMigrationRepo
-	appRepo             *AppRepo
-	releaseRepo         *ReleaseRepo
-	providerRepo        *ProviderRepo
-	formationRepo       *FormationRepo
-	artifactRepo        *ArtifactRepo
-	jobRepo             *JobRepo
-	resourceRepo        *ResourceRepo
-	deploymentRepo      *DeploymentRepo
-	eventRepo           *EventRepo
-	backupRepo          *BackupRepo
-	sinkRepo            *SinkRepo
-	volumeRepo          *VolumeRepo
+	domainMigrationRepo *data.DomainMigrationRepo
+	appRepo             *data.AppRepo
+	releaseRepo         *data.ReleaseRepo
+	providerRepo        *data.ProviderRepo
+	formationRepo       *data.FormationRepo
+	artifactRepo        *data.ArtifactRepo
+	jobRepo             *data.JobRepo
+	resourceRepo        *data.ResourceRepo
+	deploymentRepo      *data.DeploymentRepo
+	eventRepo           *data.EventRepo
+	backupRepo          *data.BackupRepo
+	sinkRepo            *data.SinkRepo
+	volumeRepo          *data.VolumeRepo
 	clusterClient       utils.ClusterClient
 	logaggc             logClient
 	routerc             routerc.Client
@@ -392,7 +384,7 @@ type controllerAPI struct {
 	caCert              []byte
 	config              handlerConfig
 
-	eventListener    *EventListener
+	eventListener    *data.EventListener
 	eventListenerMtx sync.Mutex
 }
 
@@ -445,35 +437,6 @@ func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
 		return nil, err
 	}
 	return route, err
-}
-
-func createEvent(dbExec func(string, ...interface{}) error, e *ct.Event, data interface{}) error {
-	args := []interface{}{e.ObjectID, string(e.ObjectType), data}
-	fields := []string{"object_id", "object_type", "data"}
-	if e.AppID != "" {
-		fields = append(fields, "app_id")
-		args = append(args, e.AppID)
-	}
-	if e.UniqueID != "" {
-		fields = append(fields, "unique_id")
-		args = append(args, e.UniqueID)
-	}
-	query := "INSERT INTO events ("
-	for i, n := range fields {
-		if i > 0 {
-			query += ","
-		}
-		query += n
-	}
-	query += ") VALUES ("
-	for i := range fields {
-		if i > 0 {
-			query += ","
-		}
-		query += fmt.Sprintf("$%d", i+1)
-	}
-	query += ")"
-	return dbExec(query, args...)
 }
 
 func (c *controllerAPI) GetCACert(_ context.Context, w http.ResponseWriter, _ *http.Request) {
