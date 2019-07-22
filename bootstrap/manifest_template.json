@@ -709,6 +709,52 @@
     "drain_backends": true
   },
   {
+    "id": "controller-grpc",
+    "action": "deploy-app",
+    "app": {
+      "name": "controller-grpc",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "artifacts": [$image_artifact[controller-grpc]],
+    "release": {
+      "env": {
+        "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
+        "DATABASE_URL": "{{ (index (index (index .StepData \"controller\").Resources 0).Env \"DATABASE_URL\") }}",
+        "FLYNN_POSTGRES": "{{ (index (index (index .StepData \"controller\").Resources 0).Env \"FLYNN_POSTGRES\") }}",
+        "PGDATABASE": "{{ (index (index (index .StepData \"controller\").Resources 0).Env \"PGDATABASE\") }}",
+        "PGHOST": "{{ (index (index (index .StepData \"controller\").Resources 0).Env \"PGHOST\") }}",
+        "PGPASSWORD": "{{ (index (index (index .StepData \"controller\").Resources 0).Env \"PGPASSWORD\") }}",
+        "PGUSER": "{{ (index (index (index .StepData \"controller\").Resources 0).Env \"PGUSER\") }}"
+      },
+      "processes": {
+        "web": {
+          "ports": [{
+            "port": 80,
+            "proto": "tcp",
+            "service": {
+              "name": "controller-grpc-web",
+              "create": true
+            }
+          }]
+        }
+      }
+    },
+    "processes": {
+      "web": 2
+    }
+  },
+  {
+    "id": "controller-grpc-route",
+    "action": "add-route",
+    "app_step": "controller-grpc",
+    "cert_step": "controller-cert",
+    "type": "http",
+    "service": "controller-grpc-web",
+    "domain": "controller-grpc.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": true
+  },
+  {
     "id": "status",
     "action": "deploy-app",
     "app": {
