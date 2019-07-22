@@ -33,15 +33,19 @@ require (
 	github.com/godbus/dbus v4.1.0+incompatible // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20160803200408-a6b377e3400b
+	github.com/golang/protobuf v1.3.2
 	github.com/google/go-cmp v0.3.1
 	github.com/gorilla/context v0.0.0-20140604161150-14f550f51af5
 	github.com/gorilla/securecookie v0.0.0-20140409111100-1b0c7f6e9ab3 // indirect
 	github.com/gorilla/sessions v0.0.0-20140613194357-aa5e036e6c44
+	github.com/gorilla/websocket v1.4.1 // indirect
+	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
 	github.com/hashicorp/go-msgpack v0.0.0-20150518234257-fa3f63826f7c // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/hashicorp/raft v0.0.0-20160603202243-4bcac2adb069
 	github.com/hashicorp/raft-boltdb v0.0.0-20150201200839-d1e82c1ec3f1
 	github.com/howeyc/fsnotify v0.0.0-20140711012604-6b1ef893dc11 // indirect
+	github.com/improbable-eng/grpc-web v0.11.0
 	github.com/inconshreveable/log15 v0.0.0-20171019012758-0decfc6c20d9
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgx v0.0.0-20160715195140-558d5550cf5c
@@ -68,12 +72,12 @@ require (
 	github.com/opencontainers/runc v1.0.0-rc8
 	github.com/opencontainers/runtime-spec v1.0.1 // indirect
 	github.com/opencontainers/selinux v1.2.2 // indirect
-	github.com/pkg/errors v0.8.0
+	github.com/pkg/errors v0.8.1
 	github.com/rancher/sparse-tools v0.0.0-20190307223929-666f9b3bde21
 	github.com/rnd42/go-jsonpointer v0.0.0-20140520035338-0480215403db // indirect
+	github.com/rs/cors v1.7.0 // indirect
 	github.com/seccomp/libseccomp-golang v0.0.0-20160531183505-32f571b70023 // indirect
 	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
-	github.com/sirupsen/logrus v1.4.1 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20190710185942-9d28bd7c0945 // indirect
 	github.com/stevvooe/resumable v0.0.0-20150521211217-51ad44105773
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
@@ -86,8 +90,8 @@ require (
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/sys v0.0.0-20190804053845-51ab0e2deafa
 	google.golang.org/api v0.7.0
-	google.golang.org/genproto v0.0.0-20190801165951-fa694d86fc64 // indirect
-	google.golang.org/grpc v1.22.1 // indirect
+	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
+	google.golang.org/grpc v1.22.1
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/inconshreveable/go-update.v0 v0.0.0-20150814200126-d8b0b1d421aa
 	gopkg.in/inconshreveable/log15.v2 v2.0.0-20180818164646-67afb5ed74ec // indirect
@@ -95,7 +99,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0-20151013014448-600ceb4523e5
 	gopkg.in/tomb.v1 v1.0.0-20140529071818-c131134a1947 // indirect
 	gopkg.in/vmihailenco/msgpack.v2 v2.9.1 // indirect
-	gopkg.in/yaml.v2 v2.0.0-20160301204022-a83829b6f129
+	gopkg.in/yaml.v2 v2.2.2
 	gotest.tools v0.0.0-20181223230014-1083505acf35
 	labix.org/v2/mgo v0.0.0-20140701140051-000000000287 // indirect
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
