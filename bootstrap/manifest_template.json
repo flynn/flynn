@@ -712,6 +712,52 @@
     "drain_backends": true
   },
   {
+    "id": "dashboardv2",
+    "action": "deploy-app",
+    "app": {
+      "name": "dashboardv2",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "artifacts": [$image_artifact[dashboardv2]],
+    "release": {
+      "env": {
+        "SESSION_DOMAIN": "dashboardv2.{{ getenv \"CLUSTER_DOMAIN\" }}",
+        "INTERFACE_URL": "https://dashboardv2.{{ getenv \"CLUSTER_DOMAIN\" }}",
+        "CONTROLLER_HOST": "https://controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
+        "CONTROLLER_DOMAIN": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
+        "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
+        "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}"
+      },
+      "processes": {
+        "web": {
+          "ports": [{
+            "port": 80,
+            "proto": "tcp",
+            "service": {
+              "name": "dashboardv2-web",
+              "create": true,
+              "check": {"type": "http"}
+            }
+          }]
+        }
+      }
+    },
+    "processes": {
+      "web": 1
+    }
+  },
+  {
+    "id": "dashboardv2-route",
+    "action": "add-route",
+    "app_step": "dashboard",
+    "cert_step": "controller-cert",
+    "type": "http",
+    "service": "dashboardv2-web",
+    "domain": "dashboardv2.{{ getenv \"CLUSTER_DOMAIN\" }}",
+    "drain_backends": true
+  },
+  {
     "id": "status",
     "action": "deploy-app",
     "app": {
