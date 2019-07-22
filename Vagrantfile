@@ -24,6 +24,14 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.vbguest.auto_update = false
   end
 
+  # This required if you want the dashboardv2 dev server to respond to fs events
+  if Vagrant.has_plugin?("vagrant-notify-forwarder")
+    config.notify_forwarder.enable = true
+  else
+    puts "WARNING: Install vagrant-notify-forwarder for better watch support"
+  end
+
+
   # Override locale settings. Avoids host locale settings being sent via SSH
   ENV['LC_ALL']="en_US.UTF-8"
   ENV['LANG']="en_US.UTF-8"
