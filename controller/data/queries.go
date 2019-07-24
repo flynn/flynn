@@ -8,6 +8,7 @@ import (
 var preparedStatements = map[string]string{
 	"ping":                                  pingQuery,
 	"app_list":                              appListQuery,
+	"app_list_page":                         appListPageQuery,
 	"app_select_by_name":                    appSelectByNameQuery,
 	"app_select_by_name_for_update":         appSelectByNameForUpdateQuery,
 	"app_select_by_name_or_id":              appSelectByNameOrIDQuery,
@@ -21,6 +22,7 @@ var preparedStatements = map[string]string{
 	"app_next_name_id":                      appNextNameIDQuery,
 	"app_get_release":                       appGetReleaseQuery,
 	"release_list":                          releaseListQuery,
+	"release_list_page":                     releaseListPageQuery,
 	"release_select":                        releaseSelectQuery,
 	"release_insert":                        releaseInsertQuery,
 	"release_app_list":                      releaseAppListQuery,
@@ -36,7 +38,9 @@ var preparedStatements = map[string]string{
 	"artifact_release_count":                artifactReleaseCountQuery,
 	"artifact_layer_count":                  artifactLayerCountQuery,
 	"deployment_list":                       deploymentListQuery,
+	"deployment_list_page":                  deploymentListPageQuery,
 	"deployment_select":                     deploymentSelectQuery,
+	"deployment_select_expanded":            deploymentSelectExpandedQuery,
 	"deployment_insert":                     deploymentInsertQuery,
 	"deployment_update_finished_at":         deploymentUpdateFinishedAtQuery,
 	"deployment_update_finished_at_now":     deploymentUpdateFinishedAtNowQuery,
@@ -57,6 +61,7 @@ var preparedStatements = map[string]string{
 	"scale_request_insert":                  scaleRequestInsertQuery,
 	"scale_request_cancel":                  scaleRequestCancelQuery,
 	"scale_request_update":                  scaleRequestUpdateQuery,
+	"scale_request_list":                    scaleRequestListQuery,
 	"job_list":                              jobListQuery,
 	"job_list_active":                       jobListActiveQuery,
 	"job_select":                            jobSelectQuery,
@@ -124,6 +129,24 @@ const (
 	appListQuery = `
 SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC`
+	appListPageQuery = `
+SELECT a.app_id, a.name, a.meta, a.strategy, a.release_id, a.deploy_timeout, a.created_at, a.updated_at
+FROM apps AS a
+LEFT OUTER JOIN (SELECT app_id, created_at FROM apps WHERE app_id = $1 LIMIT 1) AS b ON true
+WHERE a.deleted_at IS NULL
+AND CASE
+	WHEN array_length($2::text[], 1) > 0
+		THEN a.app_id::text = ANY($2::text[])
+	ELSE true
+END
+AND CASE WHEN b IS NULL THEN true
+ELSE
+	a.created_at <= b.created_at
+	AND a.app_id != b.app_id
+END
+ORDER BY a.created_at DESC
+LIMIT $3;
+`
 	appSelectByNameQuery = `
 SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND name = $1`
@@ -170,6 +193,33 @@ SELECT r.release_id, r.app_id,
 	ORDER BY a.index
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC`
+	releaseListPageQuery = `
+SELECT r.release_id, r.app_id,
+  ARRAY(
+		SELECT a.artifact_id
+		FROM release_artifacts a
+		WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
+		ORDER BY a.index
+  ), r.env, r.processes, r.meta, r.created_at
+FROM releases r
+LEFT OUTER JOIN (SELECT release_id, created_at FROM releases WHERE release_id = $3 LIMIT 1) AS before_r ON true
+WHERE CASE
+	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0
+		THEN r.release_id::text = ANY($2::text[]) OR r.app_id::text = ANY($1::text[])
+	WHEN array_length($1::text[], 1) > 0
+		THEN r.app_id::text = ANY($1::text[])
+	WHEN array_length($2::text[], 1) > 0
+		THEN r.release_id::text = ANY($2::text[])
+	ELSE true
+END
+AND CASE WHEN before_r IS NULL THEN true
+ELSE
+	r.created_at <= before_r.created_at
+	AND r.release_id != before_r.release_id
+END
+ORDER BY r.created_at DESC
+LIMIT $4
+`
 	releaseSelectQuery = `
 SELECT r.release_id, r.app_id,
   ARRAY(
@@ -240,6 +290,35 @@ LEFT JOIN deployment_events e1
 LEFT OUTER JOIN deployment_events e2
   ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
 WHERE e2.created_at IS NULL AND d.deployment_id = $1`
+	deploymentSelectExpandedQuery = `
+WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
+SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
+  d.strategy, e1.data->>'status' AS status,
+  d.processes, d.tags, d.deploy_timeout, d.created_at, d.finished_at,
+  ARRAY(
+		SELECT a.artifact_id
+		FROM release_artifacts a
+		WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
+		ORDER BY a.index
+  ), old_r.env, old_r.processes, old_r.meta, old_r.created_at,
+  ARRAY(
+		SELECT a.artifact_id
+		FROM release_artifacts a
+		WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
+		ORDER BY a.index
+  ), new_r.env, new_r.processes, new_r.meta, new_r.created_at
+FROM deployments d
+LEFT JOIN deployment_events e1
+  ON d.deployment_id = e1.object_id::uuid
+LEFT OUTER JOIN deployment_events e2
+  ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
+LEFT OUTER JOIN releases old_r
+	ON d.old_release_id = old_r.release_id
+LEFT OUTER JOIN releases new_r
+	ON d.new_release_id = new_r.release_id
+WHERE e2.created_at IS NULL AND d.deployment_id = $1
+LIMIT 1
+`
 	deploymentListQuery = `
 WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
 SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
@@ -251,6 +330,56 @@ LEFT JOIN deployment_events e1
 LEFT OUTER JOIN deployment_events e2
   ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
 WHERE e2.created_at IS NULL AND d.app_id = $1 ORDER BY d.created_at DESC`
+	deploymentListPageQuery = `
+WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
+SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
+  d.strategy, e1.data->>'status' AS status,
+  d.processes, d.tags, d.deploy_timeout, d.created_at, d.finished_at,
+  ARRAY(
+		SELECT a.artifact_id
+		FROM release_artifacts a
+		WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
+		ORDER BY a.index
+  ), old_r.env, old_r.processes, old_r.meta, old_r.created_at,
+  ARRAY(
+		SELECT a.artifact_id
+		FROM release_artifacts a
+		WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
+		ORDER BY a.index
+  ), new_r.env, new_r.processes, new_r.meta, new_r.created_at
+FROM deployments d
+LEFT JOIN deployment_events e1
+  ON d.deployment_id = e1.object_id::uuid
+LEFT OUTER JOIN deployment_events e2
+  ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
+LEFT OUTER JOIN releases old_r
+	ON d.old_release_id = old_r.release_id
+LEFT OUTER JOIN releases new_r
+	ON d.new_release_id = new_r.release_id
+LEFT OUTER JOIN (SELECT deployment_id, created_at FROM deployments WHERE deployment_id = $4 LIMIT 1) AS before_d ON true
+WHERE e2.created_at IS NULL
+AND CASE
+	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0
+		THEN d.deployment_id::text = ANY($2::text[]) OR d.app_id::text = ANY($1::text[])
+	WHEN array_length($1::text[], 1) > 0
+		THEN d.app_id::text = ANY($1::text[])
+	WHEN array_length($2::text[], 1) > 0
+		THEN d.deployment_id::text = ANY($2::text[])
+	ELSE true
+END
+AND CASE
+	WHEN array_length($3::text[], 1) > 0
+		THEN e1.data->>'status' = ANY($3::text[])
+	ELSE true
+END
+AND CASE WHEN before_d IS NULL THEN true
+ELSE
+	d.created_at <= before_d.created_at
+	AND d.deployment_id != before_d.deployment_id
+END
+ORDER BY d.created_at DESC
+LIMIT $5
+`
 	eventSelectQuery = `
 SELECT event_id, app_id, object_id, object_type, data, op, created_at
 FROM events WHERE event_id = $1`
@@ -377,6 +506,40 @@ ORDER BY created_at DESC`
 	scaleRequestUpdateQuery = `
 UPDATE scale_requests SET state = $2, updated_at = now() WHERE scale_request_id = $1
 RETURNING updated_at`
+	scaleRequestListQuery = `
+SELECT s.scale_request_id, s.app_id, s.release_id, s.state, s.old_processes, s.new_processes, s.old_tags, s.new_tags, s.created_at, s.updated_at
+FROM scale_requests s
+LEFT OUTER JOIN (SELECT scale_request_id, created_at FROM scale_requests WHERE scale_request_id = $5 LIMIT 1) AS before_s ON true
+WHERE CASE
+	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0 AND array_length($3::text[], 1) > 0
+		THEN s.scale_request_id::text = ANY($3::text[]) OR s.release_id::text = ANY($2::text[]) OR s.app_id::text = ANY($1::text[])
+	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0
+		THEN s.release_id::text = ANY($2::text[]) OR s.app_id::text = ANY($1::text[])
+	WHEN array_length($1::text[], 1) > 0 AND array_length($3::text[], 1) > 0
+		THEN s.scale_request_id::text = ANY($3::text[]) OR s.app_id::text = ANY($1::text[])
+	WHEN array_length($2::text[], 1) > 0 AND array_length($3::text[], 1) > 0
+		THEN s.scale_request_id::text = ANY($3::text[]) OR s.release_id::text = ANY($2::text[])
+	WHEN array_length($1::text[], 1) > 0
+		THEN s.app_id::text = ANY($1::text[])
+	WHEN array_length($2::text[], 1) > 0
+		THEN s.release_id::text = ANY($2::text[])
+	WHEN array_length($3::text[], 1) > 0
+		THEN s.scale_request_id::text = ANY($3::text[])
+	ELSE true
+END
+AND CASE
+	WHEN array_length($4::text[], 1) > 0
+		THEN s.state = ANY($4::text[])
+	ELSE true
+END
+AND CASE WHEN before_s IS NULL THEN true
+ELSE
+	s.created_at <= before_s.created_at
+	AND s.scale_request_id != before_s.scale_request_id
+END
+ORDER BY s.created_at DESC
+LIMIT $6
+` // TODO(jvatic): Optimize scaleRequestListQuery
 	jobListQuery = `
 SELECT
   cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta,

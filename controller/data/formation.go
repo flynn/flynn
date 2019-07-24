@@ -418,6 +418,49 @@ func (r *FormationRepo) UpdateScaleRequest(req *ct.ScaleRequest) error {
 	return tx.Commit()
 }
 
+type ListScaleRequestOptions struct {
+	PageToken    PageToken
+	AppIDs       []string
+	ReleaseIDs   []string
+	ScaleIDs     []string
+	StateFilters []ct.ScaleRequestState
+}
+
+func (r *FormationRepo) ListScaleRequests(opts ListScaleRequestOptions) ([]*ct.ScaleRequest, *PageToken, error) {
+	var pageSize int
+	if opts.PageToken.Size > 0 {
+		pageSize = opts.PageToken.Size
+	} else {
+		pageSize = DEFAULT_PAGE_SIZE
+	}
+	stateFilters := make([]string, 0, len(opts.StateFilters))
+	for _, state := range opts.StateFilters {
+		stateFilters = append(stateFilters, string(state))
+	}
+	rows, err := r.db.Query("scale_request_list", opts.AppIDs, opts.ReleaseIDs, opts.ScaleIDs, stateFilters, opts.PageToken.BeforeID, pageSize+1)
+	if err != nil {
+		return nil, nil, err
+	}
+	var scales []*ct.ScaleRequest
+	for rows.Next() {
+		scale, err := scanScaleRequest(rows)
+		if err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		scales = append(scales, scale)
+	}
+	var nextPageToken *PageToken
+	if len(scales) == pageSize+1 {
+		scales = scales[0:pageSize]
+		nextPageToken = &PageToken{
+			BeforeID: &scales[0].ID,
+			Size:     pageSize,
+		}
+	}
+	return scales, nextPageToken, rows.Err()
+}
+
 func scanScaleRequest(s postgres.Scanner) (*ct.ScaleRequest, error) {
 	sr := &ct.ScaleRequest{}
 	err := s.Scan(&sr.ID, &sr.AppID, &sr.ReleaseID, &sr.State, &sr.OldProcesses, &sr.NewProcesses, &sr.OldTags, &sr.NewTags, &sr.CreatedAt, &sr.UpdatedAt)

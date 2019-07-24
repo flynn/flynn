@@ -239,6 +239,49 @@ func (r *AppRepo) List() (interface{}, error) {
 	return apps, rows.Err()
 }
 
+type ListAppOptions struct {
+	PageToken PageToken
+	AppIDs    []string
+}
+
+func (r *AppRepo) ListPage(opts ListAppOptions) ([]*ct.App, *PageToken, error) {
+	var pageSize int
+	if opts.PageToken.Size > 0 {
+		pageSize = opts.PageToken.Size
+	} else {
+		pageSize = DEFAULT_PAGE_SIZE
+	}
+	rows, err := r.db.Query("app_list_page", opts.PageToken.BeforeID, opts.AppIDs, pageSize+1)
+	if err != nil {
+		return nil, nil, err
+	}
+	apps := []*ct.App{}
+	for rows.Next() {
+		app, err := scanApp(rows)
+		if err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		apps = append(apps, app)
+	}
+
+	var lastApp *ct.App
+	var nextPageToken *PageToken
+	if len(apps) == pageSize+1 {
+		// remove the extra app from the list
+		apps = apps[0:pageSize]
+		lastApp = apps[0]
+	}
+	if lastApp != nil {
+		nextPageToken = &PageToken{
+			BeforeID: &lastApp.ID,
+			Size:     pageSize,
+		}
+	}
+
+	return apps, nextPageToken, rows.Err()
+}
+
 func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 	tx, err := r.db.Begin()
 	if err != nil {

@@ -2,17 +2,74 @@ package data
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
-	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/inconshreveable/log15"
 )
 
-var ErrNotFound = controller.ErrNotFound
+var ErrNotFound = ct.ErrNotFound
 var logger = log15.New("component", "controller/data")
+
+const DEFAULT_PAGE_SIZE = 1000
+
+type PageToken struct {
+	BeforeID *string
+	Size     int
+
+	beforeIDInt64 *int64
+}
+
+func ParsePageToken(tokenStr string) (*PageToken, error) {
+	token := &PageToken{}
+	if tokenStr == "" {
+		token.Size = DEFAULT_PAGE_SIZE
+		return token, nil
+	}
+	parts := strings.Split(tokenStr, ":")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("ParsePageToken Error: Invalid number of parts (%d != %d)", len(parts), 2)
+	}
+	if parts[0] != "" {
+		token.BeforeID = &parts[0]
+	}
+	if parts[1] != "" && parts[1] != "0" {
+		token.Size, _ = strconv.Atoi(parts[1])
+	}
+	if token.Size == 0 {
+		token.Size = DEFAULT_PAGE_SIZE
+	}
+	return token, nil
+}
+
+func (t *PageToken) BeforeIDInt64() *int64 {
+	if t.beforeIDInt64 != nil {
+		return t.beforeIDInt64
+	}
+	if t.BeforeID == nil {
+		return nil
+	}
+	beforeID, err := strconv.ParseInt(*t.BeforeID, 10, 64)
+	if err != nil {
+		return nil
+	}
+	t.beforeIDInt64 = &beforeID
+	return t.beforeIDInt64
+}
+
+func (t *PageToken) String() string {
+	if t == nil {
+		return ""
+	}
+	var beforeID string
+	if t.BeforeID != nil {
+		beforeID = *t.BeforeID
+	}
+	return fmt.Sprintf("%s:%d", beforeID, t.Size)
+}
 
 type rowQueryer interface {
 	QueryRow(query string, args ...interface{}) postgres.Scanner
@@ -69,5 +126,9 @@ func split(s string, sep string) []string {
 	if s == "" {
 		return nil
 	}
-	return strings.Split(s, ",")
+	return strings.Split(s, sep)
+}
+
+func splitPGStringArray(artifactIDs string) []string {
+	return split(artifactIDs[1:len(artifactIDs)-1], ",")
 }
