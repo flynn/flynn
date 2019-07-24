@@ -3,7 +3,6 @@ package controller
 
 import (
 	"crypto/tls"
-	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -109,8 +108,7 @@ type Config struct {
 	Domain string
 }
 
-// ErrNotFound is returned when a resource is not found (HTTP status 404).
-var ErrNotFound = errors.New("controller: resource not found")
+var ErrNotFound = ct.ErrNotFound
 
 // newClient creates a generic Client object, additional attributes must
 // be set by the caller

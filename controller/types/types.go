@@ -24,6 +24,9 @@ const RouteParentRefPrefix = "controller/apps/"
 
 var ErrScalingStopped = errors.New("controller: scaling was stopped")
 
+// ErrNotFound is returned when a resource is not found (HTTP status 404).
+var ErrNotFound = errors.New("controller: resource not found")
+
 type ExpandedFormation struct {
 	App                 *App                         `json:"app,omitempty"`
 	Release             *Release                     `json:"release,omitempty"`
@@ -391,6 +394,20 @@ type Deployment struct {
 	DeployBatchSize *int                         `json:"deploy_batch_size,omitempty"`
 	CreatedAt       *time.Time                   `json:"created_at,omitempty"`
 	FinishedAt      *time.Time                   `json:"finished_at,omitempty"`
+}
+
+type ExpandedDeployment struct {
+	ID            string                       `json:"id,omitempty"`
+	AppID         string                       `json:"app,omitempty"`
+	OldRelease    *Release                     `json:"old_release,omitempty"`
+	NewRelease    *Release                     `json:"new_release,omitempty"`
+	Strategy      string                       `json:"strategy,omitempty"`
+	Status        string                       `json:"status,omitempty"`
+	Processes     map[string]int               `json:"processes,omitempty"`
+	Tags          map[string]map[string]string `json:"tags,omitempty"`
+	DeployTimeout int32                        `json:"deploy_timeout,omitempty"`
+	CreatedAt     *time.Time                   `json:"created_at,omitempty"`
+	FinishedAt    *time.Time                   `json:"finished_at,omitempty"`
 }
 
 type DeployID struct {
