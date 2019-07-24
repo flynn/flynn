@@ -1,0 +1,49 @@
+#!/bin/bash
+
+set -e
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [-h|--help] <command>
+
+COMMANDS:
+  generate       Generate protobuf
+
+OPTIONS:
+  -h, --help    Show this message
+USAGE
+}
+
+main() {
+  if [[ "$1" = "-h" ]] || [[ "$1" = "--help" ]]; then
+    usage
+    exit
+  fi
+
+  case "$1" in
+    generate)
+      generate
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+generate() {
+  local flynn_host="${ROOT}/build/bin/flynn-host"
+  local builder_image="${ROOT}/build/image/grpc-go.json"
+
+  "${flynn_host}" run \
+    --bind    "${ROOT}:${ROOT}" \
+    --limits  "temp_disk=1G" \
+    --workdir "${ROOT}/controller-grpc/protobuf" \
+    "${builder_image}" \
+    go generate
+}
+
+main $@
