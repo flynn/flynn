@@ -1,0 +1,455 @@
+syntax = 'proto3';
+package controller;
+option go_package = 'protobuf';
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/field_mask.proto";
+
+service Controller {
+  // read API
+  rpc StreamApps (StreamAppsRequest) returns (stream StreamAppsResponse) {};
+  rpc StreamReleases(StreamReleasesRequest) returns (stream StreamReleasesResponse) {};
+  rpc StreamScales (StreamScalesRequest) returns (stream StreamScalesResponse) {};
+  rpc StreamDeployments(StreamDeploymentsRequest) returns (stream StreamDeploymentsResponse) {};
+
+  // write API
+  rpc UpdateApp (UpdateAppRequest) returns (App) {};
+  rpc CreateScale (CreateScaleRequest) returns (ScaleRequest) {};
+  rpc CreateRelease (CreateReleaseRequest) returns (Release) {};
+  rpc CreateDeployment (CreateDeploymentRequest) returns (stream DeploymentEvent) {};
+}
+
+/*
+   Controller service
+   */
+
+message LabelFilter {
+  message Expression {
+    enum Operator {
+      // OP_IN matches if there is a label entry where the value is in the given
+      // values for the given key
+      OP_IN = 0;
+      // OP_NOT_IN matches if there are no label entries where the value is in
+      // the given values for the given key
+      OP_NOT_IN = 1;
+      // OP_EXISTS matches if there is a label entry with the given key (given
+      // values ignored and have undefined behavior)
+      OP_EXISTS = 2;
+      // OP_NOT_EXISTS matches if there are no label entries for the given key
+      // (given values ignored and have undefined behavior)
+      OP_NOT_EXISTS = 3;
+    }
+
+    string key = 1;
+    Operator op = 2;
+    repeated string values = 3;
+  }
+
+  // expressions are ANDed together.
+  repeated Expression expressions = 1;
+}
+
+// read API
+
+message StreamAppsRequest {
+  // The maximum number of resources to return in the initial page.
+  int32 page_size = 1;
+
+  // Used for pagination. Must be a next_page_token returned from a previous response.
+  string page_token = 2;
+
+  // Specifies an optional list of resource names that should be looked up. The
+  // list length must be smaller than page_size. This can be used to request a
+  // known set of one or more resources and optionally receive updates about
+  // them, and can also be used to retrieve a single resource.
+  repeated string name_filters = 3;
+
+  // filters are ORed
+  repeated LabelFilter label_filters = 4;
+
+  // When true, leaves the stream open and sends any updates to each resource
+  // returned in the initial page until the stream is closed.
+  bool stream_updates = 5;
+
+  // When true, leaves the stream open and sends newly created resources
+  // matching the filters until the stream is closed. page_token must not be
+  // set.
+  bool stream_creates = 6;
+}
+
+message StreamAppsResponse {
+  repeated App apps = 1;
+
+  // Set to true on the last response for the initial page.
+  bool page_complete = 2;
+
+  string next_page_token = 3;
+}
+
+message StreamReleasesRequest {
+  // The maximum number of resources to return in the initial page.
+  int32 page_size = 1;
+
+  // Used for pagination. Must be a next_page_token returned from a previous response.
+  string page_token = 2;
+
+  // Specifies an optional list of resource names that should be looked up. The
+  // list length must be smaller than page_size. This can be used to request a
+  // known set of one or more resources and optionally receive updates about
+  // them, and can also be used to retrieve a single resource. Parent resource
+  // names may also be used to filter resources.
+  repeated string name_filters = 3;
+
+  // filters are ORed
+  repeated LabelFilter label_filters = 4;
+
+  // When true, leaves the stream open and sends any updates (i.e. resource
+  // deletions) to each resource returned in the initial page until the stream
+  // is closed.
+  bool stream_updates = 5;
+
+  // When true, leaves the stream open and sends newly created resources
+  // matching the filters until the stream is closed. page_token must not be
+  // set.
+  bool stream_creates = 6;
+}
+
+message StreamReleasesResponse {
+  repeated Release releases = 1;
+
+  // Set to true on the last response for the initial page.
+  bool page_complete = 2;
+
+  string next_page_token = 3;
+}
+
+message StreamScalesRequest {
+  // The maximum number of resources to return in the initial page.
+  int32 page_size = 1;
+
+  // Used for pagination. Must be a next_page_token returned from a previous response.
+  string page_token = 2;
+
+  // Specifies an optional list of resource names that should be looked up. The
+  // list length must be smaller than page_size. This can be used to request a
+  // known set of one or more resources and optionally receive updates about
+  // them, and can also be used to retrieve a single resource. Parent resource
+  // names may also be used to filter resources.
+  repeated string name_filters = 3;
+
+  // When set, only includes resources having one of the specified states
+  repeated ScaleRequestState state_filters = 4;
+
+  // When true, leaves the stream open and sends any updates to each resource
+  // returned in the initial page until the stream is closed.
+  bool stream_updates = 5;
+
+  // When true, leaves the stream open and sends newly created resources
+  // matching the filters until the stream is closed. page_token must not be
+  // set.
+  bool stream_creates = 6;
+}
+
+message StreamScalesResponse {
+  repeated ScaleRequest scale_requests = 1;
+
+  // Set to true on the last response for the initial page.
+  bool page_complete = 2;
+
+  string next_page_token = 3;
+}
+
+message StreamDeploymentsRequest {
+  // The maximum number of resources to return in the initial page.
+  int32 page_size = 1;
+
+  // Used for pagination. Must be a next_page_token returned from a previous response.
+  string page_token = 2;
+
+  // Specifies an optional list of resource names that should be looked up. The
+  // list length must be smaller than page_size. This can be used to request a
+  // known set of one or more resources and optionally receive updates about
+  // them, and can also be used to retrieve a single resource. Parent resource
+  // names may also be used to filter resources.
+  repeated string name_filters = 3;
+
+  // Specified an optional list of release types. If provided, only resources
+  // with these release types will be returned.
+  repeated ReleaseType type_filters = 4;
+
+  // filters are ORed
+  repeated LabelFilter label_filters = 5;
+
+  // Specifies an optional list of statuses. If provided, only deployments
+  // matching one of the given statuses will be returned.
+  repeated DeploymentStatus status_filters = 6;
+
+  // When true, leaves the stream open and sends any updates to each resource
+  // returned in the initial page until the stream is closed.
+  bool stream_updates = 7;
+
+  // When true, leaves the stream open and sends newly created resources
+  // matching the filters until the stream is closed. page_token must not be
+  // set.
+  bool stream_creates = 8;
+}
+
+message StreamDeploymentsResponse {
+  repeated ExpandedDeployment deployments = 1;
+
+  // Set to true on the last response for the initial page.
+  bool page_complete = 2;
+
+  string next_page_token = 3;
+}
+
+// write API
+
+message UpdateAppRequest {
+  App app = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message CreateScaleRequest {
+  // parent = "apps/APP_ID/releases/RELEASE_ID"
+  string parent = 1;
+  map<string, int32> processes = 2;
+  // profobuf doesn't support maps within maps, so map[string]map[string]string
+  // could not be reproduced
+  map<string, DeploymentProcessTags> tags = 3;
+}
+
+message CreateReleaseRequest {
+  // parent = "apps/APP_ID"
+  string parent = 1;
+  Release release = 2;
+  string request_id = 3;
+}
+
+message CreateDeploymentRequest {
+  // parent = "apps/APP_ID/releases/RELEASE_ID"
+  string parent = 1;
+  // optional scale request
+  CreateScaleRequest scale_request = 2;
+}
+
+/*
+   Controller message types
+   */
+
+message App {
+  // name = "apps/APP_ID"
+  string name = 1;
+  string display_name = 2;
+  map<string, string> labels = 3;
+  int32 deploy_timeout = 4;
+  string strategy = 5;
+  // release = Release.name
+  string release = 6;
+  google.protobuf.Timestamp create_time = 7;
+  google.protobuf.Timestamp update_time = 8;
+  google.protobuf.Timestamp delete_time = 9;
+}
+
+// See github.com/flynn/flynn/host/types Mount
+message HostHealthCheck {
+  // Type is one of tcp, http, https
+  string type = 1;
+  // Interval is the time to wait between checks after the service has been
+  // marked as up. It defaults to two seconds.
+  google.protobuf.Duration interval = 3;
+  // Threshold is the number of consecutive checks of the same status before
+  // a service will be marked as up or down after coming up for the first
+  // time. It defaults to 2.
+  int32 threshold = 4;
+  // If KillDown is true, the job will be killed if the service goes down (or
+  // does not come up)
+  bool kill_down = 5;
+  // StartTimeout is the maximum duration that a service can take to come up
+  // for the first time if KillDown is true. It defaults to ten seconds.
+  google.protobuf.Duration start_timeout = 6;
+
+  // Extra optional config fields for http/https checks
+  string path = 7;
+  string host = 8;
+  string match = 9;
+  int32 status = 10;
+}
+
+// See github.com/flynn/flynn/host/types Mount
+message HostService {
+  string display_name = 1;
+  // Create the service in service discovery
+  bool create = 2;
+  HostHealthCheck check = 3;
+}
+
+message Port {
+  int32 port = 1;
+  string proto = 2;
+  HostService service = 3;
+}
+
+message VolumeReq {
+  string path = 1;
+  bool delete_on_stop = 2;
+}
+
+// See github.com/flynn/flynn/host/resource Spec
+message HostResourceSpec {
+  // Request, if set, is the amount of resource a job expects to consume,
+  // so the job should only be placed on a host with at least this amount
+  // of resource available, and once scheduled this amount of resource
+  // should then be unavailable on the given host.
+  int64 request = 1;
+  // Limit, if set, is an upper limit on the amount of resource a job can
+  // consume, the outcome of hitting this limit being implementation
+  // defined (e.g. a system error, throttling, catchable / uncatchable
+  // signals etc.)
+  int64 limit = 2;
+}
+
+// See github.com/flynn/flynn/host/types Mount
+message HostMount {
+  string location = 1;
+  string target = 2;
+  bool writeable = 3;
+  string device = 4;
+  string data = 5;
+  int32 flags = 6;
+}
+
+// See github.com/opencontainers/runc/libcontainer/configs Device
+message LibContainerDevice {
+  // Device type, block, char, etc.
+  int32 type = 1;
+  // Path to the device.
+  string path = 2;
+  // Major is the device's major number.
+  int64 major = 3;
+  // Minor is the device's minor number.
+  int64 minor = 4;
+  // Cgroup permissions format, rwm.
+  string permissions = 5;
+  // FileMode permission bits for the device.
+  uint32 file_mode = 6;
+  // Uid of the device.
+  uint32 uid = 7;
+  // Gid of the device.
+  uint32 gid = 8;
+  // Write the file to the allowed list
+  bool allow = 9;
+}
+
+message ProcessType {
+  repeated string args = 1;
+  map<string, string> env = 2;
+  repeated Port ports = 3;
+  repeated VolumeReq volumes = 4;
+  bool omni = 5;
+  bool host_network = 6;
+  bool host_pid_namespace = 7;
+  string service = 8;
+  bool resurrect = 9;
+  map<string, HostResourceSpec> resources = 10;
+  repeated HostMount mounts = 11;
+  repeated string linux_capabilities = 12;
+  repeated LibContainerDevice allowed_devices = 13;
+  bool writeable_cgroups = 14;
+}
+
+enum ReleaseType {
+  ANY = 0;
+  CODE = 1;
+  CONFIG = 2;
+}
+
+message Release {
+  // name = "apps/APP_ID/releases/RELEASE_ID"
+  string name = 1;
+  repeated string artifacts = 3;
+  map<string, string> env = 4;
+  map<string, string> labels = 5;
+  map<string, ProcessType> processes = 6;
+  ReleaseType type = 7;
+  google.protobuf.Timestamp create_time = 8;
+  google.protobuf.Timestamp delete_time = 9;
+}
+
+enum ScaleRequestState {
+  SCALE_PENDING = 0;
+  SCALE_CANCELLED = 1;
+  SCALE_COMPLETE = 2;
+}
+
+message ScaleRequest {
+  // parent = "apps/APP_ID/releases/RELEASE_ID"
+  string parent = 1;
+  // name = "apps/APP_ID/releases/RELEASE_ID/scales/SCALE_REQUEST_ID"
+  string name = 2;
+  ScaleRequestState state = 3;
+  map<string, int32> old_processes = 4;
+  map<string, int32> new_processes = 5;
+  // profobuf doesn't support maps within maps, so map[string]map[string]string
+  // could not be reproduced
+  map<string, DeploymentProcessTags> old_tags = 6;
+  map<string, DeploymentProcessTags> new_tags = 7;
+  google.protobuf.Timestamp create_time = 8;
+  google.protobuf.Timestamp update_time = 9;
+}
+
+enum DeploymentStatus {
+  PENDING = 0;
+  FAILED = 1;
+  RUNNING = 2;
+  COMPLETE = 3;
+}
+
+message DeploymentProcessTags {
+  map<string, string> tags = 1;
+}
+
+message ExpandedDeployment {
+  // name = "apps/APP_ID/deployments/DEPLOYMENT_ID"
+  string name = 1;
+  // old_release = Release.name
+  Release old_release = 3;
+  // new_release = Release.name
+  Release new_release = 4;
+  ReleaseType type = 5;
+  string strategy = 6;
+  DeploymentStatus status = 7;
+  map<string, int32> processes = 8;
+  // profobuf doesn't support maps within maps, so map[string]map[string]string
+  // could not be reproduced
+  map<string, DeploymentProcessTags> tags = 9;
+  int32 deploy_timeout = 10;
+  google.protobuf.Timestamp create_time = 11;
+  google.protobuf.Timestamp expire_time = 12;
+  google.protobuf.Timestamp end_time = 13;
+}
+
+message DeploymentEvent {
+  // parent = "apps/APP_ID/deployments/DEPLOYMENT_ID"
+  string parent = 1;
+  string job_type = 2;
+  enum JobState {
+    PENDING = 0;
+    BLOCKED = 1;
+    STARTING = 2;
+    UP = 3;
+    STOPPING = 5;
+    DOWN = 6;
+
+    // CRASHED and FAILURE are no longer valid job states,
+    // but we still need to handle them in case they are set by old
+    // schedulers still using the legacy code.
+    CRASHED = 7;
+    FAILED = 8;
+  }
+  JobState job_state = 3;
+  string Error = 4;
+  google.protobuf.Timestamp create_time = 5;
+}
