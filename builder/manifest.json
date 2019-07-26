@@ -301,7 +301,8 @@
         },
         "copy": {
           "util/ca-certs/ca-certs.pem": "/etc/ssl/certs/ca-certs.pem"
-        }
+        },
+        "limits": { "temp_disk": "2G" }
       }],
       "entrypoint": {
         "args": [
