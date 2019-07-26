@@ -6,6 +6,8 @@ go_version="1.13.1"
 go_shasum="94f874037b82ea5353f4061e543681a0e79657f787437974214629af8407d124"
 protoc_version="3.3.0"
 protoc_shasum="feb112bbc11ea4e2f7ef89a359b5e1c04428ba6cfa5ee628c410eccbfe0b64c3"
+common_protos_version="1_3_1"
+common_protos_shasum="9584b7ac21de5b31832faf827f898671cdcb034bd557a36ea3e7fc07e6571dcb"
 gobin_commit="ef6664e41f0bfe3007869844d318bb2bfa2627f9"
 dir="/usr/local"
 
@@ -32,6 +34,11 @@ unzip -d "${tmpdir}/protoc" "${tmpdir}/protoc.zip"
 rm -rf /opt/protoc /usr/local/bin/protoc
 mv "${tmpdir}/protoc" /opt
 ln -s /opt/protoc/bin/protoc /usr/local/bin/protoc
+
+# install googleapis common protos
+curl -fSLo "${tmpdir}/common-protos.tar.gz" "https://github.com/googleapis/googleapis/archive/common-protos-${common_protos_version}.tar.gz"
+echo "${common_protos_shasum}  ${tmpdir}/common-protos.tar.gz" | shasum -c -
+tar xzf "${tmpdir}/common-protos.tar.gz" -C "/opt/protoc/include" --strip-components=1
 
 cp "builder/go-wrapper.sh" "/usr/local/bin/go"
 cp "builder/go-wrapper.sh" "/usr/local/bin/cgo"
