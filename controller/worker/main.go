@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/controller/schema"
+	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/controller/worker/app_deletion"
 	"github.com/flynn/flynn/controller/worker/app_garbage_collection"
 	"github.com/flynn/flynn/controller/worker/deployment"
@@ -35,7 +35,7 @@ func main() {
 	}
 
 	log.Info("connecting to postgres")
-	db := postgres.Wait(nil, schema.PrepareStatements)
+	db := postgres.Wait(nil, data.PrepareStatements)
 
 	shutdown.BeforeExit(func() { db.Close() })
 

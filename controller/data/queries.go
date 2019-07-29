@@ -1,4 +1,4 @@
-package schema
+package data
 
 import (
 	"github.com/flynn/que-go"
@@ -43,6 +43,7 @@ var preparedStatements = map[string]string{
 	"deployment_delete":                     deploymentDeleteQuery,
 	"event_select":                          eventSelectQuery,
 	"event_insert":                          eventInsertQuery,
+	"event_insert_op":                       eventInsertOpQuery,
 	"event_insert_unique":                   eventInsertUniqueQuery,
 	"formation_list_by_app":                 formationListByAppQuery,
 	"formation_list_by_release":             formationListByReleaseQuery,
@@ -98,10 +99,7 @@ func PrepareStatements(conn *pgx.Conn) error {
 			return err
 		}
 	}
-	if err := que.PrepareStatements(conn); err != nil {
-		return err
-	}
-	return nil
+	return que.PrepareStatements(conn)
 }
 
 const (
@@ -130,7 +128,8 @@ UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1`
 	appUpdateMetaQuery = `
 UPDATE apps SET meta = $2, updated_at = now() WHERE app_id = $1`
 	appUpdateReleaseQuery = `
-UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1`
+UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1
+RETURNING updated_at`
 	appUpdateDeployTimeoutQuery = `
 UPDATE apps SET deploy_timeout = $2, updated_at = now() WHERE app_id = $1`
 	appDeleteQuery = `
@@ -238,11 +237,14 @@ LEFT OUTER JOIN deployment_events e2
   ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
 WHERE e2.created_at IS NULL AND d.app_id = $1 ORDER BY d.created_at DESC`
 	eventSelectQuery = `
-SELECT event_id, app_id, object_id, object_type, data, created_at
+SELECT event_id, app_id, object_id, object_type, data, op, created_at
 FROM events WHERE event_id = $1`
 	eventInsertQuery = `
 INSERT INTO events (app_id, object_id, object_type, data)
 VALUES ($1, $2, $3, $4)`
+	eventInsertOpQuery = `
+INSERT INTO events (app_id, object_id, object_type, data, op)
+VALUES ($1, $2, $3, $4, $5)`
 	eventInsertUniqueQuery = `
 INSERT INTO events (app_id, object_id, unique_id, object_type, data)
 VALUES ($1, $2, $3, $4, $5) ON CONFLICT (unique_id) DO NOTHING`
@@ -350,9 +352,16 @@ INSERT INTO scale_requests (scale_request_id, app_id, release_id, state, old_pro
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING created_at, updated_at`
 	scaleRequestCancelQuery = `
-UPDATE scale_requests SET state = 'cancelled' WHERE app_id = $1 AND release_id = $2`
+WITH updated AS (
+	UPDATE scale_requests SET state = 'cancelled', updated_at = now() WHERE app_id = $1 AND release_id = $2 AND state != 'cancelled'
+	RETURNING *
+)
+SELECT scale_request_id, app_id, release_id, state, old_processes, new_processes, old_tags, new_tags, created_at, updated_at
+FROM updated
+ORDER BY created_at DESC`
 	scaleRequestUpdateQuery = `
-UPDATE scale_requests SET state = $2 WHERE scale_request_id = $1`
+UPDATE scale_requests SET state = $2, updated_at = now() WHERE scale_request_id = $1
+RETURNING updated_at`
 	jobListQuery = `
 SELECT
   cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flynn/flynn/controller/data"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
 	. "github.com/flynn/go-check"
@@ -26,7 +27,7 @@ func (s *S) TestEvents(c *C) {
 		{UUID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
 	}
 
-	listener := newEventListener(&EventRepo{db: s.hc.db})
+	listener := data.NewEventListener(data.NewEventRepo(s.hc.db))
 	c.Assert(listener.Listen(), IsNil)
 
 	// sub1 should receive job events for app1, job1
@@ -48,7 +49,7 @@ func (s *S) TestEvents(c *C) {
 		s.createTestJob(c, job)
 	}
 
-	assertJobEvents := func(sub *EventSubscriber, expected []*ct.Job) {
+	assertJobEvents := func(sub *data.EventSubscriber, expected []*ct.Job) {
 		var index int
 		for {
 			select {

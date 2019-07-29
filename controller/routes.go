@@ -3,21 +3,12 @@ package main
 import (
 	"net/http"
 
-	"github.com/flynn/flynn/controller/schema"
+	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/pkg/httphelper"
-	"github.com/flynn/flynn/pkg/postgres"
 	routerc "github.com/flynn/flynn/router/client"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	"golang.org/x/net/context"
 )
-
-func createRoute(db *postgres.DB, rc routerc.Client, appID string, route *router.Route) error {
-	route.ParentRef = routeParentRef(appID)
-	if err := schema.Validate(route); err != nil {
-		return err
-	}
-	return rc.CreateRoute(route)
-}
 
 func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	var route router.Route
@@ -26,7 +17,7 @@ func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 
-	if err := createRoute(c.appRepo.db, c.routerc, c.getApp(ctx).ID, &route); err != nil {
+	if err := data.CreateRoute(c.config.db, c.routerc, c.getApp(ctx).ID, &route); err != nil {
 		respondWithError(w, err)
 		return
 	}

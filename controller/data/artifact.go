@@ -1,4 +1,4 @@
-package main
+package data
 
 import (
 	"fmt"
@@ -73,7 +73,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 		tx.Rollback()
 		return err
 	}
-	if err := createEvent(tx.Exec, &ct.Event{
+	if err := CreateEvent(tx.Exec, &ct.Event{
 		ObjectID:   a.ID,
 		ObjectType: ct.EventTypeArtifact,
 	}, a); err != nil {

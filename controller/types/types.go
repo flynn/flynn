@@ -439,34 +439,42 @@ type SSELogChunk struct {
 type EventType string
 
 const (
-	EventTypeApp                  EventType = "app"
-	EventTypeAppDeletion          EventType = "app_deletion"
-	EventTypeAppRelease           EventType = "app_release"
-	EventTypeDeployment           EventType = "deployment"
-	EventTypeJob                  EventType = "job"
-	EventTypeScaleRequest         EventType = "scale_request"
-	EventTypeRelease              EventType = "release"
-	EventTypeReleaseDeletion      EventType = "release_deletion"
-	EventTypeArtifact             EventType = "artifact"
-	EventTypeProvider             EventType = "provider"
-	EventTypeResource             EventType = "resource"
-	EventTypeResourceDeletion     EventType = "resource_deletion"
-	EventTypeResourceAppDeletion  EventType = "resource_app_deletion"
-	EventTypeKey                  EventType = "key"
-	EventTypeKeyDeletion          EventType = "key_deletion"
-	EventTypeRoute                EventType = "route"
-	EventTypeRouteDeletion        EventType = "route_deletion"
-	EventTypeDomainMigration      EventType = "domain_migration"
-	EventTypeClusterBackup        EventType = "cluster_backup"
-	EventTypeAppGarbageCollection EventType = "app_garbage_collection"
-	EventTypeSink                 EventType = "sink"
-	EventTypeSinkDeletion         EventType = "sink_deletion"
-	EventTypeVolume               EventType = "volume"
+	EventTypeApp                     EventType = "app"
+	EventTypeAppDeletion             EventType = "app_deletion"
+	EventTypeAppRelease              EventType = "app_release"
+	EventTypeDeployment              EventType = "deployment"
+	EventTypeJob                     EventType = "job"
+	EventTypeScaleRequest            EventType = "scale_request"
+	EventTypeScaleRequestCancelation EventType = "scale_request_cancelation"
+	EventTypeRelease                 EventType = "release"
+	EventTypeReleaseDeletion         EventType = "release_deletion"
+	EventTypeArtifact                EventType = "artifact"
+	EventTypeProvider                EventType = "provider"
+	EventTypeResource                EventType = "resource"
+	EventTypeResourceDeletion        EventType = "resource_deletion"
+	EventTypeResourceAppDeletion     EventType = "resource_app_deletion"
+	EventTypeKey                     EventType = "key"
+	EventTypeKeyDeletion             EventType = "key_deletion"
+	EventTypeRoute                   EventType = "route"
+	EventTypeRouteDeletion           EventType = "route_deletion"
+	EventTypeDomainMigration         EventType = "domain_migration"
+	EventTypeClusterBackup           EventType = "cluster_backup"
+	EventTypeAppGarbageCollection    EventType = "app_garbage_collection"
+	EventTypeSink                    EventType = "sink"
+	EventTypeSinkDeletion            EventType = "sink_deletion"
+	EventTypeVolume                  EventType = "volume"
 
 	// EventTypeDeprecatedScale is a deprecated event which is emitted for
 	// old clients waiting for formations to be scaled (new clients should
 	// create and wait for scale requests)
 	EventTypeDeprecatedScale EventType = "scale"
+)
+
+type EventOp string
+
+const (
+	EventOpCreate EventOp = "op_create"
+	EventOpUpdate EventOp = "op_update"
 )
 
 type Event struct {
@@ -476,6 +484,7 @@ type Event struct {
 	ObjectID   string          `json:"object_id,omitempty"`
 	UniqueID   string          `json:"-"`
 	Data       json.RawMessage `json:"data,omitempty"`
+	Op         EventOp         `json:"-"`
 	CreatedAt  *time.Time      `json:"created_at,omitempty"`
 }
 
