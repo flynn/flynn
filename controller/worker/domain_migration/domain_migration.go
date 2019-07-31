@@ -35,6 +35,40 @@ type migration struct {
 	stop               chan struct{}
 }
 
+func (m *migration) MigrateApp(appName string, newEnv map[string]string) error {
+	log := m.logger.New("app.name", appName)
+	if err := m.waitForDeployment(appName); err != nil {
+		return err
+	}
+	release, err := m.client.GetAppRelease(appName)
+	if err != nil {
+		log.Error("error fetching release", "error", err)
+		return err
+	}
+	newRelease := dupRelease(release)
+	for k, v := range newEnv {
+		if release.Env[k] == v {
+			log.Info("already migrated")
+			return nil
+		}
+		newRelease.Env[k] = v
+	}
+	if err := m.client.CreateRelease(newRelease.AppID, newRelease); err != nil {
+		log.Error("error creating release", "error", err)
+		return err
+	}
+	if err := m.client.DeployAppRelease(newRelease.AppID, newRelease.ID, m.cancelDeploy()); err != nil {
+		log.Error("error deploying release", "error", err)
+		select {
+		case <-m.stop:
+			return worker.ErrStopped
+		default:
+			return err
+		}
+	}
+	return nil
+}
+
 func JobHandler(db *postgres.DB, client controller.Client, logger log15.Logger) func(*que.Job) error {
 	return (&context{db, client, logger}).HandleDomainMigration
 }
@@ -104,22 +138,50 @@ func (m *migration) Run() error {
 		dm.TLSCert = cert
 	}
 
-	if err := m.maybeDeployController(); err != nil {
-		log.Error("error deploying controller", "err", err)
-		m.createEvent(err)
-		return err
+	type AppMigration struct {
+		AppName string
+		NewEnv  map[string]string
 	}
 
-	if err := m.maybeDeployRouter(); err != nil {
-		log.Error("error deploying router", "err", err)
-		m.createEvent(err)
-		return err
+	appMigrations := []*AppMigration{
+		{
+			AppName: "controller",
+			NewEnv: map[string]string{
+				"DEFAULT_ROUTE_DOMAIN": m.dm.Domain,
+				"CA_CERT":              m.dm.TLSCert.CACert,
+			},
+		},
+		{
+			AppName: "router",
+			NewEnv: map[string]string{
+				"TLSCERT": m.dm.TLSCert.Cert,
+				"TLSKEY":  m.dm.TLSCert.PrivateKey,
+			},
+		},
+		{
+			AppName: "router",
+			NewEnv: map[string]string{
+				"TLSCERT": m.dm.TLSCert.Cert,
+				"TLSKEY":  m.dm.TLSCert.PrivateKey,
+			},
+		},
+		{
+			AppName: "dashboard",
+			NewEnv: map[string]string{
+				"CA_CERT":              m.dm.TLSCert.CACert,
+				"DEFAULT_ROUTE_DOMAIN": m.dm.Domain,
+				"CONTROLLER_DOMAIN":    fmt.Sprintf("controller.%s", m.dm.Domain),
+				"URL":                  fmt.Sprintf("https://dashboard.%s", m.dm.Domain),
+			},
+		},
 	}
 
-	if err := m.maybeDeployDashboard(); err != nil {
-		log.Error("error deploying dashboard", "err", err)
-		m.createEvent(err)
-		return err
+	for _, am := range appMigrations {
+		if err := m.MigrateApp(am.AppName, am.NewEnv); err != nil {
+			log.Error(fmt.Sprintf("error deploying %s", am.AppName), "err", err)
+			m.createEvent(err)
+			return err
+		}
 	}
 
 	if err := m.createMissingRoutes(); err != nil {
@@ -214,110 +276,6 @@ func (m *migration) waitForDeployment(app string) error {
 			return worker.ErrStopped
 		}
 	}
-}
-
-func (m *migration) maybeDeployController() error {
-	const appName = "controller"
-	log := m.logger.New("app.name", appName)
-	if err := m.waitForDeployment(appName); err != nil {
-		return err
-	}
-	release, err := m.client.GetAppRelease(appName)
-	if err != nil {
-		log.Error("error fetching release", "error", err)
-		return err
-	}
-	if release.Env["DEFAULT_ROUTE_DOMAIN"] != m.dm.OldDomain {
-		log.Info("already migrated")
-		return nil
-	}
-	release = dupRelease(release)
-	release.Env["DEFAULT_ROUTE_DOMAIN"] = m.dm.Domain
-	release.Env["CA_CERT"] = m.dm.TLSCert.CACert
-	if err := m.client.CreateRelease(release.AppID, release); err != nil {
-		log.Error("error creating release", "error", err)
-		return err
-	}
-	if err := m.client.DeployAppRelease(release.AppID, release.ID, m.cancelDeploy()); err != nil {
-		log.Error("error deploying release", "error", err)
-		select {
-		case <-m.stop:
-			return worker.ErrStopped
-		default:
-			return err
-		}
-	}
-	return nil
-}
-
-func (m *migration) maybeDeployRouter() error {
-	const appName = "router"
-	log := m.logger.New("app.name", appName)
-	if err := m.waitForDeployment(appName); err != nil {
-		return err
-	}
-	release, err := m.client.GetAppRelease(appName)
-	if err != nil {
-		log.Error("error fetching release", "error", err)
-		return err
-	}
-	if release.Env["TLSCERT"] != m.dm.OldTLSCert.Cert {
-		log.Info("already migrated")
-		return nil
-	}
-	release = dupRelease(release)
-	release.Env["TLSCERT"] = m.dm.TLSCert.Cert
-	release.Env["TLSKEY"] = m.dm.TLSCert.PrivateKey
-	if err := m.client.CreateRelease(release.AppID, release); err != nil {
-		log.Error("error creating release", "error", err)
-		return err
-	}
-	if err := m.client.DeployAppRelease(release.AppID, release.ID, m.cancelDeploy()); err != nil {
-		log.Error("error deploying release", "error", err)
-		select {
-		case <-m.stop:
-			return worker.ErrStopped
-		default:
-			return err
-		}
-	}
-	return nil
-}
-
-func (m *migration) maybeDeployDashboard() error {
-	const appName = "dashboard"
-	log := m.logger.New("app.name", appName)
-	if err := m.waitForDeployment(appName); err != nil {
-		return err
-	}
-	release, err := m.client.GetAppRelease(appName)
-	if err != nil {
-		log.Error("error fetching release", "error", err)
-		return err
-	}
-	if release.Env["DEFAULT_ROUTE_DOMAIN"] != m.dm.OldDomain {
-		log.Info("already migrated")
-		return nil
-	}
-	release = dupRelease(release)
-	release.Env["CA_CERT"] = m.dm.TLSCert.CACert
-	release.Env["DEFAULT_ROUTE_DOMAIN"] = m.dm.Domain
-	release.Env["CONTROLLER_DOMAIN"] = fmt.Sprintf("controller.%s", m.dm.Domain)
-	release.Env["URL"] = fmt.Sprintf("https://dashboard.%s", m.dm.Domain)
-	if err := m.client.CreateRelease(release.AppID, release); err != nil {
-		log.Error("error creating release", "error", err)
-		return err
-	}
-	if err := m.client.DeployAppRelease(release.AppID, release.ID, m.cancelDeploy()); err != nil {
-		log.Error("error deploying release", "error", err)
-		select {
-		case <-m.stop:
-			return worker.ErrStopped
-		default:
-			return err
-		}
-	}
-	return nil
 }
 
 func (m *migration) createMissingRoutes() error {
