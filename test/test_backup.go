@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/pkg/attempt"
@@ -27,25 +28,7 @@ func (s *BackupSuite) Test_v20160814_0_nodejs_redis(t *c.C) {
 }
 
 func (s *BackupSuite) Test_v20160814_0_nodejs_mysql(t *c.C) {
-	s.testClusterBackupWithFn(t, "v20160814.0-nodejs-mysql.tar", func(t *c.C, x *Cluster) {
-		// deploy app again, confirm stack is heroku-18
-		r := s.newGitRepo(t, "https://github.com/flynn-examples/nodejs-flynn-example")
-		r.cluster = x
-		t.Assert(r.git("commit", "-m", "second", "--allow-empty"), Succeeds)
-		t.Assert(r.flynn("-a", "nodejs", "remote", "add"), Succeeds)
-		t.Assert(r.git("push", "flynn", "master"), Succeeds)
-		release, err := x.controller.GetAppRelease("nodejs")
-		t.Assert(err, c.IsNil)
-		t.Assert(release.Meta["slugrunner.stack"], c.Equals, "heroku-18")
-
-		// deploy app again with stack set to cedar-14
-		t.Assert(r.git("commit", "-m", "third", "--allow-empty"), Succeeds)
-		t.Assert(r.flynn("env", "set", "FLYNN_STACK=cedar-14"), Succeeds)
-		t.Assert(r.git("push", "flynn", "master"), Succeeds)
-		release, err = x.controller.GetAppRelease("nodejs")
-		t.Assert(err, c.IsNil)
-		t.Assert(release.Meta["slugrunner.stack"], c.Equals, "cedar-14")
-	})
+	s.testClusterBackupWithFn(t, "v20160814.0-nodejs-mysql.tar", s.testStackRedeploy)
 }
 
 func (s *BackupSuite) Test_v20161114_0p1_nodejs_redis(t *c.C) {
@@ -58,6 +41,30 @@ func (s *BackupSuite) Test_v20170719_0_nodejs_redis(t *c.C) {
 
 func (s *BackupSuite) Test_v20170719_0_nodejs_docker(t *c.C) {
 	s.testClusterBackup(t, "v20170719.0-nodejs-docker.tar")
+}
+
+func (s *BackupSuite) Test_v20190730_0_nodejs_redis(t *c.C) {
+	s.testClusterBackupWithFn(t, "v20190730.0-nodejs-redis.tar", s.testStackRedeploy)
+}
+
+func (s *BackupSuite) testStackRedeploy(t *c.C, x *Cluster) {
+	// deploy app again, confirm stack is heroku-18
+	r := s.newGitRepo(t, "https://github.com/flynn-examples/nodejs-flynn-example")
+	r.cluster = x
+	t.Assert(r.git("commit", "-m", "second", "--allow-empty"), Succeeds)
+	t.Assert(r.flynn("-a", "nodejs", "remote", "add"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	release, err := x.controller.GetAppRelease("nodejs")
+	t.Assert(err, c.IsNil)
+	t.Assert(release.Meta["slugrunner.stack"], c.Equals, "heroku-18")
+
+	// deploy app again with stack set to cedar-14
+	t.Assert(r.git("commit", "-m", "third", "--allow-empty"), Succeeds)
+	t.Assert(r.flynn("env", "set", "FLYNN_STACK=cedar-14"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	release, err = x.controller.GetAppRelease("nodejs")
+	t.Assert(err, c.IsNil)
+	t.Assert(release.Meta["slugrunner.stack"], c.Equals, "cedar-14")
 }
 
 func (s *BackupSuite) testClusterBackup(t *c.C, name string) {
@@ -107,7 +114,11 @@ func (s *BackupSuite) testClusterBackupWithFn(t *c.C, name string, fn func(*c.C,
 	debug(t, "getting app release")
 	release, err := x.controller.GetAppRelease("nodejs")
 	t.Assert(err, c.IsNil)
-	t.Assert(release.Meta["slugrunner.stack"], c.Equals, "cedar-14")
+	stack := "heroku-18"
+	if strings.HasPrefix(name, "v2016") || strings.HasPrefix(name, "v2017") {
+		stack = "cedar-14"
+	}
+	t.Assert(release.Meta["slugrunner.stack"], c.Equals, stack)
 
 	flynn := func(cmdArgs ...string) *CmdResult {
 		return x.flynn("/", append([]string{"-a", "nodejs"}, cmdArgs...)...)
