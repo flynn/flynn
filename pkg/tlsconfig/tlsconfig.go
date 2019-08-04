@@ -22,5 +22,11 @@ func SecureCiphers(c *tls.Config) *tls.Config {
 		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 	}
 
+	// These are the only curves that have constant-time ASM implementations on amd64
+	c.CurvePreferences = []tls.CurveID{
+		tls.X25519,
+		tls.CurveP256,
+	}
+
 	return c
 }
