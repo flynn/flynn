@@ -347,6 +347,9 @@ func prepareRepo(cacheKey string) (string, error) {
 	if err := archiver.Untar(path, tar.NewReader(res.Body)); err != nil {
 		return "", err
 	}
+	if err := setGitConfig(path); err != nil {
+		return "", err
+	}
 	if err := writeRepoHook(path); err != nil {
 		return "", err
 	}
@@ -360,11 +363,21 @@ func initRepo(path string) error {
 	if err := cmd.Run(); err != nil {
 		return err
 	}
+	if err := setGitConfig(path); err != nil {
+		return err
+	}
 	return writeRepoHook(path)
 }
 
 func writeRepoHook(path string) error {
 	return ioutil.WriteFile(filepath.Join(path, ".git", "hooks", "pre-receive"), prereceiveHook, 0755)
+}
+
+func setGitConfig(path string) error {
+	// autoDetach defaults to true, which runs git gc --auto in a forked process, corrupting uploads
+	cmd := exec.Command("git", "config", "--bool", "gc.autoDetach", "false")
+	cmd.Dir = path
+	return cmd.Run()
 }
 
 func uploadRepo(path, cacheKey string) error {
