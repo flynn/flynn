@@ -129,7 +129,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 			Artifacts:          release.ArtifactIDs[:1],
 			DeprecatedArtifact: release.ArtifactIDs[0],
 			DisableLog:         true,
-			Args:               []string{"curl", "--include", "--location", "--raw", url},
+			Args:               []string{"curl", "--include", "--http1.1", "--location", "--raw", url},
 			Stdout:             reqW,
 			Stderr:             ioutil.Discard,
 		}
