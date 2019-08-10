@@ -230,6 +230,9 @@ Delegate=yes
 # kill only the flynn-host process, not all processes in the cgroup
 KillMode=process
 
+# every container uses several fds, so make sure there are enough
+LimitNOFILE=10000
+
 [Install]
 WantedBy=multi-user.target
 EOF
