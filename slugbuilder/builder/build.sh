@@ -162,7 +162,7 @@ if [[ -n "${BUILDPACK_URL}" ]]; then
   buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_dir}")
 else
   for buildpack in "${buildpacks[@]}"; do
-    buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_dir}") \
+    buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_dir}" 2>/dev/null) \
       && selected_buildpack="${buildpack}" \
       && break
   done
