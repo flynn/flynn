@@ -633,7 +633,7 @@
     "trace",
     "websocket"
   ]
-  revision = "3b0461eec859c4b73bb64fdc8285971fd33e3938"
+  revision = "74dc4d7220e7acc4e100824340f3e66577424772"
 
 [[projects]]
   branch = "master"
