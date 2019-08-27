@@ -88,7 +88,7 @@ func main() {
 		logger.Debug(fmt.Sprintf("error opening listener on %q...: %v", addr, err))
 		shutdown.Fatalf("failed to create listener: %v", err)
 	}
-	logger.Debug("listener aquired")
+	logger.Debug("listener created")
 	shutdown.BeforeExit(func() { l.Close() })
 	runServer(s, l)
 	logger.Debug("servers stopped")
@@ -527,10 +527,7 @@ func (s *server) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Con
 	maybeSendApp := func(event *ct.Event, app *protobuf.App) {
 		shouldSend := false
 		if (req.StreamCreates && event.Op == ct.EventOpCreate) || (req.StreamUpdates && event.Op == ct.EventOpUpdate) || (req.StreamUpdates && event.ObjectType == ct.EventTypeAppRelease) {
-			shouldSend = true
-		}
-		if !protobuf.MatchLabelFilters(app.Labels, req.GetLabelFilters()) {
-			shouldSend = false
+			shouldSend = protobuf.MatchLabelFilters(app.Labels, req.GetLabelFilters())
 		}
 		if shouldSend {
 			stream.Send(&protobuf.StreamAppsResponse{
@@ -937,9 +934,7 @@ func (s *server) StreamReleases(req *protobuf.StreamReleasesRequest, stream prot
 			return
 		}
 
-		accepted = true
-		release = r
-		return
+		return r, true
 	}
 
 	// stream new events as they are created
