@@ -173,7 +173,7 @@ const ctxKeyFlynnAuthKeyID = "flynn-auth-key-id"
 
 func (c *Config) Authorize(ctx context.Context) (context.Context, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if passwords, ok := md["auth_key"]; ok {
+		if passwords, ok := md["Auth-Key"]; ok {
 			for _, password := range passwords {
 				for i, k := range c.authKeys {
 					if len(password) == len(k) && subtle.ConstantTimeCompare([]byte(password), []byte(k)) == 1 {
@@ -191,10 +191,10 @@ func (c *Config) Authorize(ctx context.Context) (context.Context, error) {
 					}
 				}
 			}
-			return ctx, grpc.Errorf(codes.Unauthenticated, "invalid auth_key")
+			return ctx, grpc.Errorf(codes.Unauthenticated, "invalid Auth-Key")
 		}
 
-		return ctx, grpc.Errorf(codes.Unauthenticated, "no auth_key provided")
+		return ctx, grpc.Errorf(codes.Unauthenticated, "no Auth-Key provided")
 	}
 
 	return ctx, grpc.Errorf(codes.Unauthenticated, "metadata missing")
@@ -338,7 +338,7 @@ func corsHandler(main http.Handler) http.Handler {
 			return true
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
-		AllowHeaders:     []string{"auth_key", "Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match", "X-GRPC-Web"},
+		AllowHeaders:     []string{"Auth-Key", "Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match", "X-GRPC-Web"},
 		ExposeHeaders:    []string{"ETag"},
 		AllowCredentials: true,
 		MaxAge:           time.Hour,
