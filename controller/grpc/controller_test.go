@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	flynnstatus "github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
 	. "github.com/flynn/go-check"
 	que "github.com/flynn/que-go"
@@ -93,14 +95,36 @@ func (s *S) SetUpSuite(c *C) {
 		q:          q,
 		authorizer: utils.NewAuthorizer(authKeys, []string{"test-auth-key"}),
 	})
+	s.conf = conf
 	lis := bufconn.Listen(bufSize)
 	s.tearDownFns = append(s.tearDownFns, func() {
 		lis.Close()
 	})
 	s.srv = NewServer(conf)
 	go runServer(s.srv, conf, lis)
-	time.Sleep(time.Second) // give time for everything to start
-	s.conf = conf
+
+	// Setup up a regular http client
+	t := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
+			return lis.Dial()
+		},
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	s.http = &http.Client{
+		Transport: t,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Timeout: time.Second * 10,
+	}
+
+	if _, err := s.http.Get(fmt.Sprintf("http://%s", path.Join(lis.Addr().String(), flynnstatus.Path))); err != nil { // wait for server to start
+		c.Fatal(err)
+	}
 
 	grpcClient := func(opts ...grpc.DialOption) protobuf.ControllerClient {
 		opts = append(opts, grpc.WithInsecure())
@@ -122,25 +146,6 @@ func (s *S) SetUpSuite(c *C) {
 
 	// Set up an unauthenticated connection to the server
 	s.grpcNoAuth = grpcClient()
-
-	// Setup up a regular http client
-	t := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: func(context.Context, string, string) (net.Conn, error) {
-			return lis.Dial()
-		},
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-	s.http = &http.Client{
-		Transport: t,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-		Timeout: time.Second * 10,
-	}
 }
 
 func (s *S) TearDownSuite(c *C) {
