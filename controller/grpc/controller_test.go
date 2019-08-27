@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/controller-grpc/protobuf"
 	"github.com/flynn/flynn/controller/data"
+	"github.com/flynn/flynn/controller/grpc/protobuf"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
@@ -29,7 +30,7 @@ import (
 const bufSize = 1024 * 1024
 
 func init() {
-	schemaRoot, _ = filepath.Abs(filepath.Join("..", "schema"))
+	schemaRoot, _ = filepath.Abs(filepath.Join("..", "..", "schema"))
 }
 
 // Hook gocheck up to the "go test" runner
@@ -85,19 +86,19 @@ func (s *S) SetUpSuite(c *C) {
 	}
 	db = postgres.New(pgxpool, nil)
 	q := que.NewClient(db.ConnPool)
+	authKeys := []string{"test-3bebef7a2bed81017fb2bfa411a6a0a2"}
 	conf := configureRepos(&Config{
-		logger:   logger,
-		DB:       db,
-		q:        q,
-		authKeys: []string{"test-3bebef7a2bed81017fb2bfa411a6a0a2"},
-		authIDs:  []string{"test-auth-key"},
+		logger:     logger,
+		DB:         db,
+		q:          q,
+		authorizer: utils.NewAuthorizer(authKeys, []string{"test-auth-key"}),
 	})
 	lis := bufconn.Listen(bufSize)
 	s.tearDownFns = append(s.tearDownFns, func() {
 		lis.Close()
 	})
 	s.srv = NewServer(conf)
-	go runServer(s.srv, lis)
+	go runServer(s.srv, conf, lis)
 	time.Sleep(time.Second) // give time for everything to start
 	s.conf = conf
 
@@ -117,7 +118,7 @@ func (s *S) SetUpSuite(c *C) {
 	}
 
 	// Set up an authenticated connection to the server
-	s.grpc = grpcClient(protobuf.WithAuthKey(conf.authKeys[0]))
+	s.grpc = grpcClient(protobuf.WithAuthKey(authKeys[0]))
 
 	// Set up an unauthenticated connection to the server
 	s.grpcNoAuth = grpcClient()
