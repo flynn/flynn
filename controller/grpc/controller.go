@@ -22,6 +22,7 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
+	flynnstatus "github.com/flynn/flynn/pkg/status"
 	routerc "github.com/flynn/flynn/router/client"
 	que "github.com/flynn/que-go"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -109,6 +110,13 @@ func runServer(s *grpc.Server, c *Config, l net.Listener) {
 	grpcListener := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	grpcWebListener := m.Match(cmux.Any())
 
+	statusHandler := flynnstatus.Handler(func() flynnstatus.Status {
+		if err := c.DB.Exec("ping"); err != nil {
+			return flynnstatus.Unhealthy
+		}
+		return flynnstatus.Healthy
+	})
+
 	var wg sync.WaitGroup
 
 	logger.Debug("starting servers...")
@@ -127,7 +135,14 @@ func runServer(s *grpc.Server, c *Config, l net.Listener) {
 			grpcWebListener,
 			httphelper.ContextInjector(
 				"controller/grpc [gRPC-web]",
-				httphelper.NewRequestLogger(corsHandler(http.HandlerFunc(grpcWebServer.ServeHTTP))),
+				httphelper.NewRequestLogger(corsHandler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					if req.URL.Path == flynnstatus.Path {
+						statusHandler.ServeHTTP(w, req)
+						return
+					}
+
+					grpcWebServer.ServeHTTP(w, req)
+				}))),
 			),
 		)
 	}()
