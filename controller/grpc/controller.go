@@ -186,7 +186,7 @@ const ctxKeyFlynnAuthKeyID = "flynn-auth-key-id"
 
 func (c *Config) Authorize(ctx context.Context) (context.Context, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if passwords, ok := md["Auth-Key"]; ok && len(passwords) > 0 {
+		if passwords, ok := md["auth-key"]; ok && len(passwords) > 0 {
 			auth, err := c.authorizer.Authorize(passwords[0])
 			if err != nil {
 				return ctx, grpc.Errorf(codes.Unauthenticated, err.Error())
@@ -201,6 +201,8 @@ func (c *Config) Authorize(ctx context.Context) (context.Context, error) {
 				}
 				ctx = ctxhelper.NewContextLogger(ctx, logger.New("authKeyID", auth.ID))
 			}
+
+			return ctx, nil
 		}
 
 		return ctx, grpc.Errorf(codes.Unauthenticated, "no Auth-Key provided")
