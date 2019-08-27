@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	fmt "fmt"
 	"net"
@@ -16,6 +15,7 @@ import (
 	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -71,11 +71,10 @@ func main() {
 	logger.Debug("initializing server...")
 
 	s := NewServer(configureRepos(&Config{
-		logger:   logger,
-		DB:       db,
-		q:        q,
-		authKeys: strings.Split(os.Getenv("AUTH_KEY"), ","),
-		authIDs:  strings.Split(os.Getenv("AUTH_KEY_IDS"), ","),
+		logger:     logger,
+		DB:         db,
+		q:          q,
+		authorizer: utils.NewAuthorizer(strings.Split(os.Getenv("AUTH_KEY"), ","), strings.Split(os.Getenv("AUTH_KEY_IDS"), ",")),
 	}))
 
 	port := os.Getenv("PORT")
@@ -155,8 +154,7 @@ type Config struct {
 	eventRepo        *data.EventRepo
 	eventListenerMtx sync.Mutex
 	eventListener    *data.EventListener
-	authKeys         []string
-	authIDs          []string
+	authorizer       *utils.Authorizer
 }
 
 func configureRepos(c *Config) *Config {
@@ -173,25 +171,21 @@ const ctxKeyFlynnAuthKeyID = "flynn-auth-key-id"
 
 func (c *Config) Authorize(ctx context.Context) (context.Context, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if passwords, ok := md["Auth-Key"]; ok {
-			for _, password := range passwords {
-				for i, k := range c.authKeys {
-					if len(password) == len(k) && subtle.ConstantTimeCompare([]byte(password), []byte(k)) == 1 {
-						if len(c.authIDs) == len(c.authKeys) {
-							authKeyID := c.authIDs[i]
-							ctx = context.WithValue(ctx, ctxKeyFlynnAuthKeyID, authKeyID)
-
-							logger, ok := ctxhelper.LoggerFromContext(ctx)
-							if !ok {
-								logger = c.logger
-							}
-							ctx = ctxhelper.NewContextLogger(ctx, logger.New("authKeyID", authKeyID))
-						}
-						return ctx, nil
-					}
-				}
+		if passwords, ok := md["Auth-Key"]; ok && len(passwords) > 0 {
+			auth, err := c.authorizer.Authorize(passwords[0])
+			if err != nil {
+				return ctx, grpc.Errorf(codes.Unauthenticated, err.Error())
 			}
-			return ctx, grpc.Errorf(codes.Unauthenticated, "invalid Auth-Key")
+
+			if auth.ID != "" {
+				ctx = context.WithValue(ctx, ctxKeyFlynnAuthKeyID, auth.ID)
+
+				logger, ok := ctxhelper.LoggerFromContext(ctx)
+				if !ok {
+					logger = c.logger
+				}
+				ctx = ctxhelper.NewContextLogger(ctx, logger.New("authKeyID", auth.ID))
+			}
 		}
 
 		return ctx, grpc.Errorf(codes.Unauthenticated, "no Auth-Key provided")
