@@ -152,12 +152,6 @@ func (m *migration) Run() error {
 			},
 		},
 		{
-			AppName: "controller-grpc",
-			NewEnv: map[string]string{
-				"DEFAULT_ROUTE_DOMAIN": m.dm.Domain,
-			},
-		},
-		{
 			AppName: "router",
 			NewEnv: map[string]string{
 				"TLSCERT": m.dm.TLSCert.Cert,

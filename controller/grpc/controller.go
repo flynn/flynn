@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flynn/flynn/controller-grpc/protobuf"
 	"github.com/flynn/flynn/controller/data"
+	"github.com/flynn/flynn/controller/grpc/protobuf"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
@@ -45,7 +45,7 @@ func mustEnv(key string) string {
 	return ""
 }
 
-var logger = log.New("component", "controller-grpc")
+var logger = log.New("component", "controller/grpc")
 
 var schemaRoot = "/etc/flynn-controller/jsonschema"
 
@@ -69,13 +69,13 @@ func main() {
 	q := que.NewClient(db.ConnPool)
 
 	logger.Debug("initializing server...")
-
-	s := NewServer(configureRepos(&Config{
+	config := configureRepos(&Config{
 		logger:     logger,
 		DB:         db,
 		q:          q,
 		authorizer: utils.NewAuthorizer(strings.Split(os.Getenv("AUTH_KEY"), ","), strings.Split(os.Getenv("AUTH_KEY_IDS"), ",")),
-	}))
+	})
+	s := NewServer(config)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -90,11 +90,11 @@ func main() {
 	}
 	logger.Debug("listener created")
 	shutdown.BeforeExit(func() { l.Close() })
-	runServer(s, l)
+	runServer(s, config, l)
 	logger.Debug("servers stopped")
 }
 
-func runServer(s *grpc.Server, l net.Listener) {
+func runServer(s *grpc.Server, c *Config, l net.Listener) {
 	logger.Debug("loading JSON schemas...")
 
 	if err := schema.Load(schemaRoot); err != nil {
@@ -126,7 +126,7 @@ func runServer(s *grpc.Server, l net.Listener) {
 		http.Serve(
 			grpcWebListener,
 			httphelper.ContextInjector(
-				"controller-grpc [gRPC-web]",
+				"controller/grpc [gRPC-web]",
 				httphelper.NewRequestLogger(corsHandler(http.HandlerFunc(grpcWebServer.ServeHTTP))),
 			),
 		)

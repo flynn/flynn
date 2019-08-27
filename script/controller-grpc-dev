@@ -41,7 +41,7 @@ generate() {
   "${flynn_host}" run \
     --bind    "${ROOT}:${ROOT}" \
     --limits  "temp_disk=1G" \
-    --workdir "${ROOT}/controller-grpc/protobuf" \
+    --workdir "${ROOT}/controller/grpc/protobuf" \
     "${builder_image}" \
     go generate
 }
