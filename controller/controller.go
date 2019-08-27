@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -260,6 +259,7 @@ func appHandler(c handlerConfig) http.Handler {
 }
 
 func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
+	authorizer := utils.NewAuthorizer(authKeys, authIDs)
 	return httphelper.CORSAllowAll.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if shutdown.IsActive() {
 			httphelper.ServiceUnavailableError(w, ErrShutdown.Error())
@@ -278,19 +278,13 @@ func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
 		if password == "" && (strings.Contains(r.Header.Get("Accept"), "text/event-stream") || r.URL.Path == "/backup") {
 			password = r.URL.Query().Get("key")
 		}
-		var authed bool
-		for i, k := range authKeys {
-			if len(password) == len(k) && subtle.ConstantTimeCompare([]byte(password), []byte(k)) == 1 {
-				authed = true
-				if len(authIDs) == len(authKeys) {
-					r.Header.Set("Flynn-Auth-Key-ID", authIDs[i])
-				}
-				break
-			}
-		}
-		if !authed {
+		auth, err := authorizer.Authorize(password)
+		if err != nil {
 			w.WriteHeader(401)
 			return
+		}
+		if auth.ID != "" {
+			r.Header.Set("Flynn-Auth-Key-ID", auth.ID)
 		}
 		main.ServeHTTP(w, r)
 	}))
