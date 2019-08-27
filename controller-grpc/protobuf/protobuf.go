@@ -27,7 +27,7 @@ type authKey struct {
 
 func (k *authKey) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	return map[string]string{
-		"auth_key": k.key,
+		"Auth-Key": k.key,
 	}, nil
 }
 
