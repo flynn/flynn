@@ -623,7 +623,7 @@
   {
     "id": "controller-grpc-route",
     "action": "add-route",
-    "app_step": "controller",
+    "app_step": "controller-inception",
     "cert_step": "controller-cert",
     "type": "http",
     "service": "controller-grpc-web",
