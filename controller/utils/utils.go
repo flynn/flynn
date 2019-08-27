@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/subtle"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -345,4 +347,35 @@ func FormationTagsEqual(a, b map[string]map[string]string) bool {
 		}
 	}
 	return true
+}
+
+var ErrAuthKeyInvalid = errors.New("invalid Auth-Key")
+
+type Authorizer struct {
+	authKeys []string
+	authIDs  []string
+}
+
+type Authorization struct {
+	ID string
+}
+
+func NewAuthorizer(authKeys, authIDs []string) *Authorizer {
+	return &Authorizer{
+		authKeys: authKeys,
+		authIDs:  authIDs,
+	}
+}
+
+func (a *Authorizer) Authorize(key string) (*Authorization, error) {
+	for i, k := range a.authKeys {
+		if len(key) == len(k) && subtle.ConstantTimeCompare([]byte(key), []byte(k)) == 1 {
+			authorization := &Authorization{}
+			if len(a.authIDs) == len(a.authKeys) {
+				authorization.ID = a.authIDs[i]
+			}
+			return authorization, nil
+		}
+	}
+	return nil, ErrAuthKeyInvalid
 }
