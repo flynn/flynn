@@ -167,6 +167,15 @@ func (m *migration) Run() error {
 				"URL":                  fmt.Sprintf("https://dashboard.%s", m.dm.Domain),
 			},
 		},
+		{
+			AppName: "dashboardv2",
+			NewEnv: map[string]string{
+				"DEFAULT_ROUTE_DOMAIN": m.dm.Domain,
+				"CONTROLLER_DOMAIN":    fmt.Sprintf("controller-grpc.%s", m.dm.Domain),
+				"CONTROLLER_HOST":      fmt.Sprintf("https://controller-grpc.%s", m.dm.Domain),
+				"INTERFACE_URL":        fmt.Sprintf("https://dashboardv2.%s", m.dm.Domain),
+			},
+		},
 	}
 
 	for _, am := range appMigrations {
