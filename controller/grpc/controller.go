@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/controller/data"
@@ -51,17 +50,6 @@ var logger = log.New("component", "controller/grpc")
 var schemaRoot = "/etc/flynn-controller/jsonschema"
 
 func main() {
-	// Increase resources limitations
-	// See https://github.com/eranyanay/1m-go-websockets/blob/master/2_ws_ulimit/server.go
-	var rLimit syscall.Rlimit
-	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit); err != nil {
-		shutdown.Fatal(err)
-	}
-	rLimit.Cur = rLimit.Max
-	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit); err != nil {
-		shutdown.Fatal(err)
-	}
-
 	logger.Debug("opening database connection...")
 
 	// Open connection to main controller database
