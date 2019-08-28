@@ -188,7 +188,13 @@
           "volumes": [{"path": "/tmp", "delete_on_stop": true}]
         },
         "grpc": {
-          "ports": [{"port": 80, "proto": "tcp"}],
+          "ports": [{
+            "proto": "tcp",
+            "service": {
+              "name": "controller-grpc-web",
+              "create": true
+            }
+          }],
           "args": ["/bin/start-flynn-controller", "controller-grpc"],
           "service": "controller-grpc-web",
           "volumes": [{"path": "/tmp", "delete_on_stop": true}]
@@ -207,7 +213,8 @@
     },
     "artifacts": [$image_artifact[controller]],
     "processes": {
-      "web": 1
+      "web": 1,
+      "grpc": 1
     },
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
   },
