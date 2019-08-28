@@ -34,11 +34,11 @@ message LabelFilter {
       // OP_NOT_IN matches if there are no label entries where the value is in
       // the given values for the given key
       OP_NOT_IN = 1;
-      // OP_EXISTS matches if there is a label entry with the given key (given
-      // values ignored and have undefined behavior)
+      // OP_EXISTS matches if there is a label entry with the given key (it is
+      // an error to provide a value)
       OP_EXISTS = 2;
       // OP_NOT_EXISTS matches if there are no label entries for the given key
-      // (given values ignored and have undefined behavior)
+      // (it is an error to provide a value)
       OP_NOT_EXISTS = 3;
     }
 
@@ -216,8 +216,6 @@ message CreateScaleRequest {
   // parent = "apps/APP_ID/releases/RELEASE_ID"
   string parent = 1;
   map<string, int32> processes = 2;
-  // profobuf doesn't support maps within maps, so map[string]map[string]string
-  // could not be reproduced
   map<string, DeploymentProcessTags> tags = 3;
 }
 
@@ -392,8 +390,6 @@ message ScaleRequest {
   ScaleRequestState state = 3;
   map<string, int32> old_processes = 4;
   map<string, int32> new_processes = 5;
-  // profobuf doesn't support maps within maps, so map[string]map[string]string
-  // could not be reproduced
   map<string, DeploymentProcessTags> old_tags = 6;
   map<string, DeploymentProcessTags> new_tags = 7;
   google.protobuf.Timestamp create_time = 8;
@@ -422,8 +418,6 @@ message ExpandedDeployment {
   string strategy = 6;
   DeploymentStatus status = 7;
   map<string, int32> processes = 8;
-  // profobuf doesn't support maps within maps, so map[string]map[string]string
-  // could not be reproduced
   map<string, DeploymentProcessTags> tags = 9;
   int32 deploy_timeout = 10;
   google.protobuf.Timestamp create_time = 11;
