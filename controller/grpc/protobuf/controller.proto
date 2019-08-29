@@ -179,9 +179,6 @@ message StreamDeploymentsRequest {
   // with these release types will be returned.
   repeated ReleaseType type_filters = 4;
 
-  // filters are ORed
-  repeated LabelFilter label_filters = 5;
-
   // Specifies an optional list of statuses. If provided, only deployments
   // matching one of the given statuses will be returned.
   repeated DeploymentStatus status_filters = 6;
