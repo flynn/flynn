@@ -148,9 +148,10 @@ func (r *ReleaseRepo) List() (interface{}, error) {
 }
 
 type ListReleaseOptions struct {
-	PageToken  PageToken
-	AppIDs     []string
-	ReleaseIDs []string
+	PageToken    PageToken
+	AppIDs       []string
+	ReleaseIDs   []string
+	LabelFilters []ct.LabelFilter
 }
 
 func (r *ReleaseRepo) ListPage(opts ListReleaseOptions) ([]*ct.Release, *PageToken, error) {
@@ -160,7 +161,7 @@ func (r *ReleaseRepo) ListPage(opts ListReleaseOptions) ([]*ct.Release, *PageTok
 	} else {
 		pageSize = DEFAULT_PAGE_SIZE
 	}
-	rows, err := r.db.Query("release_list_page", opts.AppIDs, opts.ReleaseIDs, opts.PageToken.BeforeID, pageSize+1)
+	rows, err := r.db.Query("release_list_page", opts.AppIDs, opts.ReleaseIDs, opts.PageToken.BeforeID, opts.LabelFilters, pageSize+1)
 	if err != nil {
 		return nil, nil, err
 	}

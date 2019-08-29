@@ -838,6 +838,83 @@ CREATE TRIGGER set_tcp_route_port
   BEFORE INSERT ON tcp_routes
   FOR EACH ROW EXECUTE PROCEDURE set_tcp_route_port()`,
 	)
+	migrations.Add(46,
+		`
+		CREATE OR REPLACE FUNCTION jsonb_array_to_text_array(jsonb)
+			RETURNS text[] LANGUAGE sql IMMUTABLE AS
+		'SELECT ARRAY(SELECT jsonb_array_elements_text($1))';
+
+		CREATE FUNCTION match_label_expression(jsonb, jsonb) RETURNS boolean AS $$
+		BEGIN
+			CASE ($1->>'op')::integer
+				WHEN 0 /* OP_IN */
+					THEN IF ARRAY[$2->>($1->>'key'::text)] <@ jsonb_array_to_text_array($1->'values')
+						THEN
+							RETURN TRUE;
+						ELSE
+							RETURN FALSE;
+					END IF;
+				WHEN 1 /* OP_NOT_IN */
+					THEN IF ARRAY[$2->>($1->>'key'::text)] <@ jsonb_array_to_text_array($1->'values')
+						THEN
+							RETURN FALSE;
+						ELSE
+							RETURN TRUE;
+					END IF;
+				WHEN 2 /* OP_EXISTS */
+					THEN IF $2->($1->>'key'::text) IS NOT NULL
+						THEN
+							RETURN TRUE;
+						ELSE
+							RETURN FALSE;
+					END IF;
+				WHEN 3 /* OP_NOT_EXISTS */
+					THEN IF $2->($1->>'key'::text) IS NULL
+						THEN
+							RETURN TRUE;
+						ELSE
+							RETURN FALSE;
+					END IF;
+				ELSE
+					RAISE EXCEPTION 'Invalid label expression --> %', $1->>'op';
+				END CASE;
+		END;
+		$$ LANGUAGE plpgsql;
+
+		CREATE FUNCTION match_label_filter(jsonb, jsonb) RETURNS boolean AS $$
+		DECLARE
+			exp jsonb;
+		BEGIN
+			FOR exp IN SELECT * FROM jsonb_array_elements($1)
+			LOOP
+				IF NOT match_label_expression(exp, $2) THEN
+					RETURN FALSE;
+				END IF;
+			END LOOP;
+			RETURN TRUE;
+		END;
+		$$ LANGUAGE plpgsql;
+
+		CREATE FUNCTION match_label_filters(jsonb, jsonb) RETURNS boolean AS $$
+		DECLARE
+			f jsonb;
+		BEGIN
+			IF (SELECT COUNT(*) FROM jsonb_array_elements($1)) = 0
+			THEN
+				RETURN TRUE;
+			END IF;
+
+			FOR f IN SELECT * FROM jsonb_array_elements($1)
+			LOOP
+				IF match_label_filter(f, $2) THEN
+					RETURN TRUE;
+				END IF;
+			END LOOP;
+			RETURN FALSE;
+		END;
+		$$ LANGUAGE plpgsql;
+		`,
+	)
 }
 
 func MigrateDB(db *postgres.DB) error {

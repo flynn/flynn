@@ -139,13 +139,14 @@ AND CASE
 		THEN a.app_id::text = ANY($2::text[])
 	ELSE true
 END
+AND match_label_filters($3, a.meta)
 AND CASE WHEN b IS NULL THEN true
 ELSE
 	a.created_at <= b.created_at
 	AND a.app_id != b.app_id
 END
 ORDER BY a.created_at DESC
-LIMIT $3;
+LIMIT $4;
 `
 	appSelectByNameQuery = `
 SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
@@ -212,13 +213,14 @@ WHERE CASE
 		THEN r.release_id::text = ANY($2::text[])
 	ELSE true
 END
+AND match_label_filters($4, r.meta)
 AND CASE WHEN before_r IS NULL THEN true
 ELSE
 	r.created_at <= before_r.created_at
 	AND r.release_id != before_r.release_id
 END
 ORDER BY r.created_at DESC
-LIMIT $4
+LIMIT $5
 `
 	releaseSelectQuery = `
 SELECT r.release_id, r.app_id,

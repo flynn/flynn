@@ -142,6 +142,30 @@ func ParseIDFromName(name string, resource string) string {
 	return idMap[resource]
 }
 
+func NewControllerLabelFilters(from []*LabelFilter) []ct.LabelFilter {
+	to := make([]ct.LabelFilter, 0, len(from))
+	for _, f := range from {
+		to = append(to, NewControllerLabelFilter(f))
+	}
+	return to
+}
+
+func NewControllerLabelFilter(from *LabelFilter) ct.LabelFilter {
+	to := make(ct.LabelFilter, 0, len(from.Expressions))
+	for _, e := range from.Expressions {
+		to = append(to, NewControllerLabelFilterExpression(e))
+	}
+	return to
+}
+
+func NewControllerLabelFilterExpression(from *LabelFilter_Expression) *ct.LabelFilterExpression {
+	return &ct.LabelFilterExpression{
+		Op:     ct.LabelFilterExpressionOp(from.Op),
+		Key:    from.Key,
+		Values: from.Values,
+	}
+}
+
 func NewError(err error, message string, args ...interface{}) error {
 	errCode := codes.Unknown
 	if err == controller.ErrNotFound {
