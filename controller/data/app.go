@@ -240,8 +240,9 @@ func (r *AppRepo) List() (interface{}, error) {
 }
 
 type ListAppOptions struct {
-	PageToken PageToken
-	AppIDs    []string
+	PageToken    PageToken
+	AppIDs       []string
+	LabelFilters []ct.LabelFilter
 }
 
 func (r *AppRepo) ListPage(opts ListAppOptions) ([]*ct.App, *PageToken, error) {
@@ -251,7 +252,7 @@ func (r *AppRepo) ListPage(opts ListAppOptions) ([]*ct.App, *PageToken, error) {
 	} else {
 		pageSize = DEFAULT_PAGE_SIZE
 	}
-	rows, err := r.db.Query("app_list_page", opts.PageToken.BeforeID, opts.AppIDs, pageSize+1)
+	rows, err := r.db.Query("app_list_page", opts.PageToken.BeforeID, opts.AppIDs, opts.LabelFilters, pageSize+1)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -772,3 +772,20 @@ type SyslogSinkConfig struct {
 type LogAggregatorSinkConfig struct {
 	Addr string `json:"addr"`
 }
+
+type LabelFilter []*LabelFilterExpression
+
+type LabelFilterExpressionOp int
+
+var (
+	LabelFilterExpressionOpIn        LabelFilterExpressionOp = 0
+	LabelFilterExpressionOpNotIn     LabelFilterExpressionOp = 1
+	LabelFilterExpressionOpExists    LabelFilterExpressionOp = 2
+	LabelFilterExpressionOpNotExists LabelFilterExpressionOp = 3
+)
+
+type LabelFilterExpression struct {
+	Op     LabelFilterExpressionOp `json:"op"`
+	Key    string                  `json:"key"`
+	Values []string                `json:"values"`
+}

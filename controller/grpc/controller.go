@@ -433,8 +433,9 @@ func (s *server) listApps(req *protobuf.StreamAppsRequest) ([]*protobuf.App, *da
 
 	appIDs := protobuf.ParseIDsFromNameFilters(req.GetNameFilters(), "apps")
 	ctApps, nextPageToken, err := s.appRepo.ListPage(data.ListAppOptions{
-		PageToken: *pageToken,
-		AppIDs:    appIDs,
+		PageToken:    *pageToken,
+		AppIDs:       appIDs,
+		LabelFilters: protobuf.NewControllerLabelFilters(req.GetLabelFilters()),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -448,39 +449,15 @@ func (s *server) listApps(req *protobuf.StreamAppsRequest) ([]*protobuf.App, *da
 		appIDs = nil
 	}
 
-	labelFilters := req.GetLabelFilters()
 	apps := make([]*protobuf.App, 0, pageSize)
 	n := 0
-
 	for _, a := range ctApps {
-		if !protobuf.MatchLabelFilters(a.Meta, labelFilters) {
-			continue
-		}
-
 		apps = append(apps, protobuf.NewApp(a))
 		n++
 
 		if n == pageSize {
 			break
 		}
-	}
-
-	// make sure we fill the page if possible
-	if n < pageSize && nextPageToken != nil {
-		// fetch next page and merge with existing one
-		nextApps, npt, err := s.listApps(&protobuf.StreamAppsRequest{
-			PageSize:      req.PageSize,
-			PageToken:     nextPageToken.String(),
-			NameFilters:   req.NameFilters,
-			LabelFilters:  req.LabelFilters,
-			StreamUpdates: req.StreamUpdates,
-			StreamCreates: req.StreamCreates,
-		})
-		if err != nil {
-			return apps, nextPageToken, nil
-		}
-		nextApps = append(nextApps, apps...)
-		return nextApps, npt, nil
 	}
 
 	return apps, nextPageToken, nil
@@ -883,33 +860,24 @@ func (s *server) StreamReleases(req *protobuf.StreamReleasesRequest, stream prot
 	defer sub.Close()
 
 	// get all releases up until now
-	var releases []*protobuf.Release
-	nextPageToken := pageToken
-	for {
-		nextPageToken.Size = pageSize - len(releases)
-		var ctReleases []*ct.Release
-		ctReleases, nextPageToken, err = s.releaseRepo.ListPage(data.ListReleaseOptions{
-			PageToken:  *nextPageToken,
-			AppIDs:     appIDs,
-			ReleaseIDs: releaseIDs,
-		})
-		if err != nil {
-			return protobuf.NewError(err, err.Error())
-		}
-		releasesPage := make([]*protobuf.Release, 0, len(ctReleases))
-		for _, ctRelease := range ctReleases {
-			r := protobuf.NewRelease(ctRelease)
-			if !protobuf.MatchLabelFilters(r.Labels, req.GetLabelFilters()) {
-				continue
-			}
-			releasesPage = append(releasesPage, r)
-		}
-		releases = append(releases, releasesPage...)
-
-		if len(releases) >= pageSize || nextPageToken == nil {
-			break
-		}
+	ctReleases, nextPageToken, err := s.releaseRepo.ListPage(data.ListReleaseOptions{
+		PageToken:    *pageToken,
+		AppIDs:       appIDs,
+		ReleaseIDs:   releaseIDs,
+		LabelFilters: protobuf.NewControllerLabelFilters(req.GetLabelFilters()),
+	})
+	if err != nil {
+		return protobuf.NewError(err, err.Error())
 	}
+	releases := make([]*protobuf.Release, 0, len(ctReleases))
+	for _, ctRelease := range ctReleases {
+		r := protobuf.NewRelease(ctRelease)
+		if !protobuf.MatchLabelFilters(r.Labels, req.GetLabelFilters()) {
+			continue
+		}
+		releases = append(releases, r)
+	}
+
 	stream.Send(&protobuf.StreamReleasesResponse{
 		Releases:      releases,
 		NextPageToken: nextPageToken.String(),
