@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -756,4 +757,84 @@ func (MigrateSuite) TestDrainBackendsCheck(c *C) {
 		r.DrainBackends).Scan(&r.ID)
 	c.Assert(err, Not(IsNil))
 	c.Assert(err.Error(), Matches, ".*cannot create route with drain_backends.*")
+}
+
+func (MigrateSuite) TestMigrateDeploymentType(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_deployment_type")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 46
+	m.migrateTo(46)
+
+	// create an app, and some releases, artifacts, and deployments
+	app := &ct.App{
+		ID:            random.UUID(),
+		Name:          "migrate-deloyment-type-test-app",
+		Meta:          map[string]string{},
+		Strategy:      "all-at-once",
+		DeployTimeout: ct.DefaultDeployTimeout,
+	}
+	c.Assert(db.Exec(`INSERT INTO apps (app_id, name, meta, strategy, deploy_timeout) VALUES ($1, $2, $3, $4, $5) RETURNING created_at, updated_at`, app.ID, app.Name, app.Meta, app.Strategy, app.DeployTimeout), IsNil)
+
+	artifactIDs := []string{random.UUID(), random.UUID(), random.UUID()}
+	for _, artifactID := range artifactIDs {
+		c.Assert(db.Exec(`INSERT INTO artifacts (artifact_id, type, uri, meta, manifest, hashes, size, layer_url_template) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING created_at`, artifactID, "artifact-type", fmt.Sprintf("artifact://%s", artifactID), map[string]string{}, nil, nil, 1, nil), IsNil)
+	}
+
+	insertRelease := func(r *ct.Release) {
+		r.AppID = app.ID
+		c.Assert(db.Exec(`INSERT INTO releases (release_id, app_id, env, processes, meta) VALUES ($1, $2, $3, $4, $5) RETURNING created_at`, r.ID, r.AppID, r.Env, r.Processes, r.Meta), IsNil)
+		for i, artifactID := range r.ArtifactIDs {
+			c.Assert(db.Exec(`INSERT INTO release_artifacts (release_id, artifact_id, index) VALUES ($1, $2, $3)`, r.ID, artifactID, i), IsNil)
+		}
+	}
+
+	deployments := make([]*ct.ExpandedDeployment, 0, 10)
+	var oldReleaseID *string
+	var oldRelease *ct.Release
+	for i := 0; i < 10; i++ {
+		d := &ct.ExpandedDeployment{
+			ID:         random.UUID(),
+			AppID:      app.ID,
+			OldRelease: oldRelease,
+			NewRelease: &ct.Release{
+				ID: random.UUID(),
+			},
+			Strategy:      app.Strategy,
+			Processes:     map[string]int{},
+			Tags:          map[string]map[string]string{},
+			DeployTimeout: app.DeployTimeout,
+		}
+		if i%2 == 0 { // every other release is a code release
+			d.NewRelease.Env = map[string]string{"RELEASE_TYPE": "CODE"}
+			if oldRelease == nil || len(oldRelease.ArtifactIDs) < 3 {
+				d.NewRelease.ArtifactIDs = artifactIDs
+			} else {
+				d.NewRelease.ArtifactIDs = artifactIDs[1:]
+			}
+		} else {
+			d.NewRelease.ArtifactIDs = oldRelease.ArtifactIDs
+			d.NewRelease.Env = map[string]string{"RELEASE_TYPE": "CONFIG"}
+		}
+		insertRelease(d.NewRelease)
+		c.Assert(db.Exec(`INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, tags, deploy_timeout, finished_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now()) RETURNING created_at`, d.ID, d.AppID, oldReleaseID, d.NewRelease.ID, d.Strategy, d.Processes, d.Tags, d.DeployTimeout), IsNil)
+		deployments = append(deployments, d)
+
+		oldRelease = d.NewRelease
+		oldReleaseID = &oldRelease.ID
+	}
+
+	// Run migration to add deployments.type
+	m.migrateTo(47)
+
+	for i := 0; i < 10; i++ {
+		var releaseType *string
+		c.Assert(db.QueryRow(`SELECT type FROM deployments WHERE deployment_id = $1`, deployments[i].ID).Scan(&releaseType), IsNil)
+		c.Assert(releaseType, Not(IsNil))
+		if i%2 == 0 {
+			c.Assert(*releaseType, Equals, "code")
+		} else {
+			c.Assert(*releaseType, Equals, "config")
+		}
+	}
 }

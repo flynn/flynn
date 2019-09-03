@@ -101,6 +101,14 @@ func (a *App) SetDeployBatchSize(size int) {
 	a.Meta["flynn-deploy-batch-size"] = strconv.Itoa(size)
 }
 
+type ReleaseType string
+
+var (
+	ReleaseTypeAny    ReleaseType = "any"
+	ReleaseTypeCode   ReleaseType = "code"
+	ReleaseTypeConfig ReleaseType = "config"
+)
+
 type Release struct {
 	ID          string                 `json:"id,omitempty"`
 	AppID       string                 `json:"app_id,omitempty"`
@@ -401,6 +409,7 @@ type ExpandedDeployment struct {
 	AppID         string                       `json:"app,omitempty"`
 	OldRelease    *Release                     `json:"old_release,omitempty"`
 	NewRelease    *Release                     `json:"new_release,omitempty"`
+	Type          ReleaseType                  `json:"type,omitempty"`
 	Strategy      string                       `json:"strategy,omitempty"`
 	Status        string                       `json:"status,omitempty"`
 	Processes     map[string]int               `json:"processes,omitempty"`

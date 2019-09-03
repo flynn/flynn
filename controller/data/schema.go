@@ -915,6 +915,38 @@ CREATE TRIGGER set_tcp_route_port
 		$$ LANGUAGE plpgsql;
 		`,
 	)
+	migrations.Add(47,
+		// Add a "type" column to deployments to destinguash between code and
+		// config releases (code releases are when the artifacts have changed, all
+		// the rest are config releases)
+		`CREATE TYPE release_type AS ENUM ('code', 'config')`,
+		`ALTER TABLE deployments ADD COLUMN type release_type`,
+		`
+		UPDATE deployments AS target
+				SET type = CASE WHEN d.old_artifact_ids = d.new_artifact_ids THEN 'config'::release_type ELSE 'code'::release_type END
+		FROM (SELECT
+				d.deployment_id,
+				ARRAY(
+					SELECT a.artifact_id
+					FROM release_artifacts a
+					WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
+					ORDER BY a.index
+				) AS old_artifact_ids, old_r.env, old_r.processes, old_r.meta, old_r.created_at,
+				ARRAY(
+					SELECT a.artifact_id
+					FROM release_artifacts a
+					WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
+					ORDER BY a.index
+				) AS new_artifact_ids
+			FROM deployments d
+			LEFT OUTER JOIN releases old_r
+				ON d.old_release_id = old_r.release_id
+			LEFT OUTER JOIN releases new_r
+				ON d.new_release_id = new_r.release_id
+			) AS d
+			WHERE target.deployment_id = d.deployment_id;
+		`,
+	)
 }
 
 func MigrateDB(db *postgres.DB) error {

@@ -961,11 +961,31 @@ func (s *server) listDeployments(req *protobuf.StreamDeploymentsRequest) ([]*pro
 	for _, status := range req.StatusFilters {
 		statusFilters = append(statusFilters, status.ControllerType())
 	}
+	typeFilters := make([]ct.ReleaseType, 0, len(req.TypeFilters))
+	for _, t := range req.TypeFilters {
+		var ctReleaseType ct.ReleaseType
+		switch t {
+		case protobuf.ReleaseType_CODE:
+			ctReleaseType = ct.ReleaseTypeCode
+			break
+		case protobuf.ReleaseType_CONFIG:
+			ctReleaseType = ct.ReleaseTypeConfig
+			break
+		default:
+			ctReleaseType = ct.ReleaseTypeAny
+		}
+		if ctReleaseType == ct.ReleaseTypeAny {
+			typeFilters = []ct.ReleaseType{}
+			break
+		}
+		typeFilters = append(typeFilters, ctReleaseType)
+	}
 	ctExpandedDeployments, nextPageToken, err := s.deploymentRepo.ListPage(data.ListDeploymentOptions{
 		PageToken:     *pageToken,
 		AppIDs:        protobuf.ParseIDsFromNameFilters(req.NameFilters, "apps"),
 		DeploymentIDs: protobuf.ParseIDsFromNameFilters(req.NameFilters, "deployments"),
 		StatusFilters: statusFilters,
+		TypeFilters:   typeFilters,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -975,23 +995,7 @@ func (s *server) listDeployments(req *protobuf.StreamDeploymentsRequest) ([]*pro
 	for _, d := range ctExpandedDeployments {
 		deployments = append(deployments, protobuf.NewExpandedDeployment(d))
 	}
-
-	var filtered []*protobuf.ExpandedDeployment
-	typeMatcher := protobuf.NewReleaseTypeMatcher(req.TypeFilters)
-	if len(req.TypeFilters) == 0 {
-		filtered = deployments
-	} else {
-		filtered = make([]*protobuf.ExpandedDeployment, 0, len(deployments))
-		for _, ed := range deployments {
-			// filter by type of deployment
-			if !typeMatcher.Match(ed.Type) {
-				continue
-			}
-			filtered = append(filtered, ed)
-		}
-	}
-
-	return filtered, nextPageToken, nil
+	return deployments, nextPageToken, nil
 }
 
 func (s *server) StreamDeployments(req *protobuf.StreamDeploymentsRequest, stream protobuf.Controller_StreamDeploymentsServer) error {
