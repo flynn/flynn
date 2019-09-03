@@ -273,8 +273,8 @@ SELECT COUNT(*) FROM (
   WHERE deleted_at IS NULL
 ) AS l WHERE l.layer_id = $1`
 	deploymentInsertQuery = `
-INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, tags, deploy_timeout, deploy_batch_size)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING created_at`
+INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, type, strategy, processes, tags, deploy_timeout, deploy_batch_size)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING created_at`
 	deploymentUpdateFinishedAtQuery = `
 UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1`
 	deploymentUpdateFinishedAtNowQuery = `
@@ -302,13 +302,14 @@ SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
 		FROM release_artifacts a
 		WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
 		ORDER BY a.index
-  ), old_r.env, old_r.processes, old_r.meta, old_r.created_at,
+  ) AS old_artifact_ids, old_r.env, old_r.processes, old_r.meta, old_r.created_at,
   ARRAY(
 		SELECT a.artifact_id
 		FROM release_artifacts a
 		WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
 		ORDER BY a.index
-  ), new_r.env, new_r.processes, new_r.meta, new_r.created_at
+  ) AS new_artifact_ids, new_r.env, new_r.processes, new_r.meta, new_r.created_at,
+	type
 FROM deployments d
 LEFT JOIN deployment_events e1
   ON d.deployment_id = e1.object_id::uuid
@@ -342,13 +343,14 @@ SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
 		FROM release_artifacts a
 		WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
 		ORDER BY a.index
-  ), old_r.env, old_r.processes, old_r.meta, old_r.created_at,
+  ) AS old_artifact_ids, old_r.env, old_r.processes, old_r.meta, old_r.created_at,
   ARRAY(
 		SELECT a.artifact_id
 		FROM release_artifacts a
 		WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
 		ORDER BY a.index
-  ), new_r.env, new_r.processes, new_r.meta, new_r.created_at
+  ) AS new_artifact_ids, new_r.env, new_r.processes, new_r.meta, new_r.created_at,
+	type
 FROM deployments d
 LEFT JOIN deployment_events e1
   ON d.deployment_id = e1.object_id::uuid
@@ -358,7 +360,7 @@ LEFT OUTER JOIN releases old_r
 	ON d.old_release_id = old_r.release_id
 LEFT OUTER JOIN releases new_r
 	ON d.new_release_id = new_r.release_id
-LEFT OUTER JOIN (SELECT deployment_id, created_at FROM deployments WHERE deployment_id = $4 LIMIT 1) AS before_d ON true
+LEFT OUTER JOIN (SELECT deployment_id, created_at FROM deployments WHERE deployment_id = $5 LIMIT 1) AS before_d ON true
 WHERE e2.created_at IS NULL
 AND CASE
 	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0
@@ -374,13 +376,18 @@ AND CASE
 		THEN e1.data->>'status' = ANY($3::text[])
 	ELSE true
 END
+AND CASE
+	WHEN array_length($4::text[], 1) > 0
+		THEN d.type::text = ANY($4::text[])
+	ELSE true
+END
 AND CASE WHEN before_d IS NULL THEN true
 ELSE
 	d.created_at <= before_d.created_at
 	AND d.deployment_id != before_d.deployment_id
 END
 ORDER BY d.created_at DESC
-LIMIT $5
+LIMIT $6
 `
 	eventSelectQuery = `
 SELECT event_id, app_id, object_id, object_type, data, op, created_at
@@ -541,7 +548,7 @@ ELSE
 END
 ORDER BY s.created_at DESC
 LIMIT $6
-` // TODO(jvatic): Optimize scaleRequestListQuery
+`  // TODO(jvatic): Optimize scaleRequestListQuery
 	jobListQuery = `
 SELECT
   cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta,

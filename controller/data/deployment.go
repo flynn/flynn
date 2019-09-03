@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/flynn/flynn/controller/schema"
@@ -101,9 +102,21 @@ func (r *DeploymentRepo) AddExpanded(appID, releaseID string) (*ct.ExpandedDeplo
 		procCount += i
 	}
 
+	releaseType := (func(oldRelease, release *ct.Release) ct.ReleaseType {
+		if oldRelease != nil {
+			if reflect.DeepEqual(oldRelease.ArtifactIDs, release.ArtifactIDs) {
+				return ct.ReleaseTypeConfig
+			}
+		} else if len(release.ArtifactIDs) == 0 {
+			return ct.ReleaseTypeConfig
+		}
+		return ct.ReleaseTypeCode
+	})(oldRelease, release)
+
 	ed := &ct.ExpandedDeployment{
 		AppID:         app.ID,
 		NewRelease:    release,
+		Type:          releaseType,
 		Strategy:      app.Strategy,
 		OldRelease:    oldRelease,
 		Processes:     oldFormation.Processes,
@@ -147,7 +160,7 @@ func (r *DeploymentRepo) AddExpanded(appID, releaseID string) (*ct.ExpandedDeplo
 		d.ID = random.UUID()
 	}
 	ed.ID = d.ID
-	if err := tx.QueryRow("deployment_insert", d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, d.Processes, d.Tags, d.DeployTimeout, d.DeployBatchSize).Scan(&d.CreatedAt); err != nil {
+	if err := tx.QueryRow("deployment_insert", d.ID, d.AppID, oldReleaseID, d.NewReleaseID, string(releaseType), d.Strategy, d.Processes, d.Tags, d.DeployTimeout, d.DeployBatchSize).Scan(&d.CreatedAt); err != nil {
 		tx.Rollback()
 		if postgres.IsUniquenessError(err, "isolate_deploys") {
 			return nil, ct.ValidationError{Message: "Cannot create deploy, there is already one in progress for this app."}
@@ -222,6 +235,7 @@ type ListDeploymentOptions struct {
 	AppIDs        []string
 	DeploymentIDs []string
 	StatusFilters []string
+	TypeFilters   []ct.ReleaseType
 }
 
 func (r *DeploymentRepo) ListPage(opts ListDeploymentOptions) ([]*ct.ExpandedDeployment, *PageToken, error) {
@@ -231,7 +245,15 @@ func (r *DeploymentRepo) ListPage(opts ListDeploymentOptions) ([]*ct.ExpandedDep
 	} else {
 		pageSize = DEFAULT_PAGE_SIZE
 	}
-	rows, err := r.db.Query("deployment_list_page", opts.AppIDs, opts.DeploymentIDs, opts.StatusFilters, opts.PageToken.BeforeID, pageSize+1)
+	typeFilters := make([]string, 0, len(opts.TypeFilters))
+	for _, t := range opts.TypeFilters {
+		if t == ct.ReleaseTypeAny {
+			typeFilters = []string{}
+			break
+		}
+		typeFilters = append(typeFilters, string(t))
+	}
+	rows, err := r.db.Query("deployment_list_page", opts.AppIDs, opts.DeploymentIDs, opts.StatusFilters, typeFilters, opts.PageToken.BeforeID, pageSize+1)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -267,6 +289,7 @@ func scanExpandedDeployment(s postgres.Scanner) (*ct.ExpandedDeployment, error) 
 		&d.ID, &d.AppID, &oldReleaseID, &newRelease.ID, &d.Strategy, &status, &d.Processes, &d.Tags, &d.DeployTimeout, &d.CreatedAt, &d.FinishedAt,
 		&oldArtifactIDs, &oldRelease.Env, &oldRelease.Processes, &oldRelease.Meta, &oldRelease.CreatedAt,
 		&newArtifactIDs, &newRelease.Env, &newRelease.Processes, &newRelease.Meta, &newRelease.CreatedAt,
+		&d.Type,
 	)
 	if err == pgx.ErrNoRows {
 		err = ErrNotFound

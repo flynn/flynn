@@ -6,7 +6,6 @@ import (
 	fmt "fmt"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 	"time"
 
@@ -649,16 +648,15 @@ func (s DeploymentStatus) ControllerType() string {
 }
 
 func NewExpandedDeployment(from *ct.ExpandedDeployment) *ExpandedDeployment {
-	// TODO(jvatic): Make release.type a field returned from the DB
-	calcReleaseType := func(prev, r *Release) ReleaseType {
-		if prev != nil {
-			if reflect.DeepEqual(prev.Artifacts, r.Artifacts) {
-				return ReleaseType_CONFIG
-			}
-		} else if len(r.Artifacts) == 0 {
+	convertReleaseType := func(releaseType ct.ReleaseType) ReleaseType {
+		switch releaseType {
+		case ct.ReleaseTypeConfig:
 			return ReleaseType_CONFIG
+		case ct.ReleaseTypeCode:
+			return ReleaseType_CODE
+		default:
+			return ReleaseType_ANY
 		}
-		return ReleaseType_CODE
 	}
 
 	var oldRelease *Release
@@ -670,7 +668,7 @@ func NewExpandedDeployment(from *ct.ExpandedDeployment) *ExpandedDeployment {
 		Name:          fmt.Sprintf("apps/%s/deployments/%s", from.AppID, from.ID),
 		OldRelease:    oldRelease,
 		NewRelease:    newRelease,
-		Type:          calcReleaseType(oldRelease, newRelease),
+		Type:          convertReleaseType(from.Type),
 		Strategy:      from.Strategy,
 		Status:        NewDeploymentStatus(from.Status),
 		Processes:     NewDeploymentProcesses(from.Processes),
