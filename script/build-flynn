@@ -122,13 +122,11 @@ main() {
   sudo mkdir -p "/var/lib/flynn/layer-cache"
   "${flynn_host}" run \
     --host    "${host}" \
-    --bind    "${ROOT}:${ROOT},/var/lib/flynn/layer-cache:/var/lib/flynn/layer-cache" \
+    --bind    "${ROOT}:/src,/var/lib/flynn/layer-cache:/var/lib/flynn/layer-cache" \
     --limits  "temp_disk=1G" \
-    --workdir "${ROOT}" \
+    --workdir "/src" \
     "${builder_image}" \
-    /usr/bin/env \
-    GOPATH="${GOPATH}" \
-    /bin/flynn-builder build ${args[@]}
+    /src/script/flynn-builder build "${args[@]}"
 
   # extract binaries into build/bin
   extract_bin "host"              "/usr/local/bin/flynn-host"
@@ -143,7 +141,6 @@ main() {
   extract_bin "builder"           "/bin/flynn-builder"
   extract_bin "discoverd"         "/bin/discoverd"
   extract_bin "test"              "/bin/flynn-test-file-server"
-  extract_bin "build-tools"       "/bin/dep"
   extract_bin "build-tools"       "/bin/tuf"
   extract_bin "build-tools"       "/bin/tuf-client"
   ln -nfs "flynn-linux-amd64" "${ROOT}/build/bin/flynn"
@@ -219,4 +216,4 @@ extract_dir() {
   ln -nfs "${dst}.${id}" "${dst}"
 }
 
-main $@
+main "$@"

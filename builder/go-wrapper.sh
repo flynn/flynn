@@ -4,11 +4,26 @@
 # inside the Go image and sets some environment variables and flags
 # before running the go tool.
 
+set -eo pipefail
+
 export GOROOT="/usr/local/go"
 export GOPATH="/go"
+export GO111MODULE=on
+
+if [[ -z "$GOFLAGS" ]]; then
+  # make sure we don't overwrite flags for `go list` run by gobin
+  export GOFLAGS=-mod=vendor
+fi
 
 if [[ $(basename $0) != "cgo" ]]; then
   export CGO_ENABLED=0
+fi
+
+BIN="${GOROOT}/bin/go"
+if [[ $(basename $0) == "gobin" ]]; then
+  export GOPROXY=https://proxy.golang.org
+  export GOFLAGS=-mod=readonly
+  BIN=/usr/local/bin/gobin-noenv
 fi
 
 GO_LDFLAGS="-X github.com/flynn/flynn/pkg/version.version=${FLYNN_VERSION}"
@@ -21,4 +36,8 @@ if [[ -n "${TUF_REPOSITORY}" ]]; then
   GO_LDFLAGS="${GO_LDFLAGS} -X github.com/flynn/flynn/pkg/tufconfig.Repository=${TUF_REPOSITORY}"
 fi
 
-${GOROOT}/bin/go $1 -ldflags "${GO_LDFLAGS}" ${@:2}
+if [[ "$1" = "build" ]]; then
+	${BIN} $1 -ldflags "${GO_LDFLAGS}" ${@:2}
+else
+	${BIN} "$@"
+fi

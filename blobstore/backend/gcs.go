@@ -126,7 +126,7 @@ func (b *gcsBackend) Copy(tx *postgres.DBTx, dst, src FileInfo) error {
 		return err
 	}
 
-	_, err := b.bucket.Object(src.ExternalID).CopyTo(context.Background(), b.bucket.Object(dst.ExternalID), nil)
+	_, err := b.bucket.Object(dst.ExternalID).CopierFrom(b.bucket.Object(src.ExternalID)).Run(context.Background())
 	return err
 }
 

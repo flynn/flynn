@@ -77,7 +77,7 @@ func (conn *Conn) Auth(methods []Auth) error {
 		for _, m := range methods {
 			if name, data, status := m.FirstData(); bytes.Equal(v, name) {
 				var ok bool
-				err = authWriteLine(conn.transport, []byte("AUTH"), []byte(v), data)
+				err = authWriteLine(conn.transport, []byte("AUTH"), v, data)
 				if err != nil {
 					return err
 				}
@@ -116,7 +116,6 @@ func (conn *Conn) Auth(methods []Auth) error {
 						return err
 					}
 					go conn.inWorker()
-					go conn.outWorker()
 					return nil
 				}
 			}
