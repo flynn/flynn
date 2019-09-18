@@ -1,0 +1,44 @@
+dist: bionic
+language: go
+go_import_path: github.com/godbus/dbus
+
+go:
+  - 1.10.x
+  - 1.11.x
+  - 1.12.x
+  - tip
+
+env:
+  global:
+  matrix:
+   - TARGET=amd64
+   - TARGET=arm64
+   - TARGET=arm
+   - TARGET=386
+   - TARGET=ppc64le
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    - go: tip
+  exclude:
+  - go: tip
+    env: TARGET=arm
+  - go: tip
+    env: TARGET=arm64
+  - go: tip
+    env: TARGET=386
+  - go: tip
+    env: TARGET=ppc64le
+
+addons:
+  apt:
+    packages:
+    - dbus
+    - dbus-x11
+
+before_install:
+
+script:
+  - go test -v -race ./...                   # Run all the tests with the race detector enabled
+  - go vet ./...                             # go vet is the official Go static analyzer

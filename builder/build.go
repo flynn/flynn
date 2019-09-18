@@ -135,6 +135,9 @@ type Layer struct {
 	// are then added as inputs.
 	CGoBuild map[string]string `json:"cgobuild,omitempty"`
 
+	// GoBin is a list of binaries to build using 'gobin' and install into `/bin`.
+	GoBin []string `json:"gobin,omitempty"`
+
 	// Copy is a set of inputs to copy into the layer
 	Copy map[string]string `json:"copy,omitempty"`
 
@@ -348,8 +351,11 @@ func (b *Builder) Build(images []*Image) error {
 		}
 		for _, l := range image.Layers {
 			// build Go binaries using the Go image
-			if l.BuildWith == "" && (len(l.GoBuild) > 0 || len(l.CGoBuild) > 0) {
-				l.BuildWith = "go"
+			if len(l.GoBuild) > 0 || len(l.CGoBuild) > 0 || len(l.GoBin) > 0 {
+				if l.BuildWith == "" {
+					l.BuildWith = "go"
+				}
+				l.Inputs = append(l.Inputs, "go.mod", "go.sum")
 			}
 			if l.BuildWith != "" {
 				addDependency(build, l.BuildWith)
@@ -462,6 +468,12 @@ func (b *Builder) BuildImage(image *Image) error {
 			inputs = append(inputs, paths...)
 		}
 
+		if len(l.GoBin) > 0 {
+			for _, bin := range l.GoBin {
+				run = append(run, "GOBIN=/bin GOBIN_CACHE=/tmp/gobin gobin -m "+bin)
+			}
+		}
+
 		// if building Go binaries, load Go inputs for the configured
 		// GOOS / GOARCH and build with 'go build' / 'cgo build'
 		if len(l.GoBuild) > 0 || len(l.CGoBuild) > 0 {
@@ -480,7 +492,7 @@ func (b *Builder) BuildImage(image *Image) error {
 					return err
 				}
 				inputs = append(inputs, i...)
-				run = append(run, fmt.Sprintf("go build -o %s %s", l.GoBuild[dir], filepath.Join("github.com/flynn/flynn", dir)))
+				run = append(run, fmt.Sprintf("go build -o %s %s", l.GoBuild[dir], "./"+dir))
 			}
 			dirs = make([]string, 0, len(l.CGoBuild))
 			for dir := range l.CGoBuild {
@@ -493,7 +505,7 @@ func (b *Builder) BuildImage(image *Image) error {
 					return err
 				}
 				inputs = append(inputs, i...)
-				run = append(run, fmt.Sprintf("cgo build -o %s %s", l.CGoBuild[dir], filepath.Join("github.com/flynn/flynn", dir)))
+				run = append(run, fmt.Sprintf("cgo build -o %s %s", l.CGoBuild[dir], "./"+dir))
 			}
 		}
 
@@ -822,6 +834,12 @@ func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[st
 	linuxCapabilities := append(host.DefaultCapabilities, l.LinuxCapabilities...)
 	job.Config.LinuxCapabilities = &linuxCapabilities
 
+	if l.Limits == nil {
+		l.Limits = make(map[string]string)
+	}
+	if l.Limits["temp_disk"] == "" {
+		l.Limits["temp_disk"] = "1G"
+	}
 	for typ, v := range l.Limits {
 		limit, err := resource.ParseLimit(resource.Type(typ), v)
 		if err != nil {

@@ -1,0 +1,15 @@
+language: go
+go:
+  - 1.12.x
+  - master
+sudo: false
+install: true
+env:
+  - GO111MODULE=on
+script:
+  - go test -race ./...
+
+notifications:
+  email:
+    on_success: never
+    on_failure: always
