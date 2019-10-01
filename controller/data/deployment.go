@@ -3,7 +3,6 @@ package data
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/flynn/flynn/controller/schema"
@@ -104,7 +103,7 @@ func (r *DeploymentRepo) AddExpanded(appID, releaseID string) (*ct.ExpandedDeplo
 
 	releaseType := (func(oldRelease, release *ct.Release) ct.ReleaseType {
 		if oldRelease != nil {
-			if reflect.DeepEqual(oldRelease.ArtifactIDs, release.ArtifactIDs) {
+			if artifactsEqual(oldRelease.ArtifactIDs, release.ArtifactIDs) {
 				return ct.ReleaseTypeConfig
 			}
 		} else if len(release.ArtifactIDs) == 0 {
@@ -343,4 +342,22 @@ func createDeploymentEvent(dbExec func(string, ...interface{}) error, d *ct.Depl
 		ObjectType: ct.EventTypeDeployment,
 		Op:         ct.EventOpCreate,
 	}, e)
+}
+
+func artifactsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	if a == nil && b != nil {
+		return false
+	}
+	if a != nil && b == nil {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
