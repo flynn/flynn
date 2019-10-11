@@ -1197,7 +1197,7 @@ func (c *Container) Stop() error {
 	if err := c.Signal(int(syscall.SIGTERM)); err != nil {
 		return err
 	}
-	if err := c.WaitStop(10 * time.Second); err != nil {
+	if err := c.WaitStop(30 * time.Second); err != nil {
 		return c.Signal(int(syscall.SIGKILL))
 	}
 	return nil
