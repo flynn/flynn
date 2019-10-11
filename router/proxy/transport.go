@@ -78,19 +78,16 @@ func (t *transport) setStickyBackend(res *http.Response, originalStickyBackend s
 	}
 }
 
-func (t *transport) RoundTrip(ctx context.Context, req *http.Request, l log15.Logger) (*http.Response, *RequestTrace, error) {
+func (t *transport) RoundTrip(req *http.Request, l log15.Logger) (*http.Response, *RequestTrace, error) {
 	// http.Transport closes the request body on a failed dial, issue #875
 	req.Body = &fakeCloseReadCloser{req.Body}
 	defer req.Body.(*fakeCloseReadCloser).RealClose()
-
-	// hook up CloseNotify to cancel the request
-	req.Cancel = ctx.Done()
 
 	// trace the request timings (do not use the trace before the request
 	// has been RoundTripped)
 	req, trace := traceRequest(req)
 
-	rt := ctx.Value(ctxKeyRequestTracker).(RequestTracker)
+	rt := req.Context().Value(ctxKeyRequestTracker).(RequestTracker)
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
 	for i, backend := range backends {
@@ -104,7 +101,7 @@ func (t *transport) RoundTrip(ctx context.Context, req *http.Request, l log15.Lo
 		}
 		rt.TrackRequestDone(backend.Addr)
 		if _, ok := err.(dialErr); !ok {
-			l.Error("unretriable request error", "status", "503", "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)
+			l.Error("unretriable request error", "status", httpErrStatus(err), "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)
 			return nil, nil, err
 		}
 		l.Error("retriable dial error", "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)
