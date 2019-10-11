@@ -546,7 +546,7 @@ func fail(w http.ResponseWriter, code int) {
 }
 
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx := context.Background()
+	ctx := req.Context()
 	ctx = ctxhelper.NewContextStartTime(ctx, time.Now())
 	host := req.Host
 	// fwdProtoHandler pushes the "real" port onto the end of X-Forwarded-Port
@@ -558,7 +558,7 @@ func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r.ServeHTTP(ctx, w, req)
+	r.ServeHTTP(w, req.WithContext(ctx))
 }
 
 // A domain served by a listener, associated TLS certs,
@@ -668,12 +668,12 @@ func (s *service) handleBackendEvent(event *discoverd.Event) {
 	}
 }
 
-func (r *httpRoute) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	start, _ := ctxhelper.StartTimeFromContext(ctx)
+func (r *httpRoute) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	start, _ := ctxhelper.StartTimeFromContext(req.Context())
 	req.Header.Set("X-Request-Start", strconv.FormatInt(start.UnixNano()/int64(time.Millisecond), 10))
 	setRequestID(req)
 
-	r.rp.ServeHTTP(ctx, w, req)
+	r.rp.ServeHTTP(w, req)
 }
 
 func mustPortFromAddr(addr string) string {

@@ -7,6 +7,7 @@
 package proxy
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -82,56 +83,24 @@ func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool, rt Re
 }
 
 // ServeHTTP implements http.Handler.
-func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
+func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	transport := p.transport
 	if transport == nil {
 		panic("router: nil transport for proxy")
 	}
 
-	outreq := prepareRequest(req)
-
 	l := p.Logger.New("request_id", req.Header.Get("X-Request-Id"), "client_addr", req.RemoteAddr, "host", req.Host, "path", req.URL.Path, "method", req.Method)
 
 	if isConnectionUpgrade(req.Header) {
-		p.serveUpgrade(rw, l, outreq)
+		p.serveUpgrade(rw, l, prepareRequest(req))
 		return
 	}
 
-	ctx = context.WithValue(ctx, ctxKeyRequestTracker, p.RequestTracker)
+	req = req.WithContext(context.WithValue(req.Context(), ctxKeyRequestTracker, p.RequestTracker))
 
-	// CloseNotify can trigger early with HTTP/1.1 pipelined requests. Since
-	// there is no way to detect if a request is pipelined, we instead check if
-	// the request was made over HTTP/2 or if the method is defined as
-	// idempotent. Pipelining is relatively rare in the wild, the most common
-	// client that uses pipelining is Safari on iOS, which also supports HTTP/2
-	// so this is only relevant when no TLS certificate is configured for the
-	// route. There may be obscure non-browser API clients that use
-	// POST/PUT/DELETE with pipelining. If this issue comes up again, we can add
-	// a route tunable to disable CloseNotify or suggest that the client stop
-	// using pipelining or switch to HTTP/2. The issue presents itself as
-	// request cancellations that result in 503s in response to random pipelined
-	// requests.
-	//
-	// https://golang.org/issue/13165
-	// https://golang.org/pkg/net/http/#CloseNotifier
-	if req.ProtoMajor == 2 || (req.Method != "GET" && req.Method != "HEAD") {
-		clientGone := rw.(http.CloseNotifier).CloseNotify()
-		var cancel func()
-		ctx, cancel = context.WithCancel(ctx)
-		defer cancel() // finish cancellation goroutine
-
-		go func() {
-			select {
-			case <-clientGone:
-				cancel() // client went away, cancel request
-			case <-ctx.Done():
-			}
-		}()
-	}
-
-	res, trace, err := transport.RoundTrip(ctx, outreq, l)
+	res, trace, err := transport.RoundTrip(prepareRequest(req), l)
 	if err != nil {
-		p.serviceUnavailable(rw)
+		p.errResponse(err, rw)
 		return
 	}
 	defer res.Body.Close()
@@ -143,19 +112,23 @@ func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, re
 		l = l.New("location", location)
 	}
 	if !trace.ReusedConn {
-		l = l.New("connect", trace.ConnectDone.Sub(trace.ConnectStart))
+		l = l.New("connect", durationMilliseconds(trace.ConnectDone.Sub(trace.ConnectStart)))
 	}
 	if req.Body != nil {
-		l = l.New("write_req_body", trace.BodyWritten.Sub(trace.HeadersWritten))
+		l = l.New("write_req_body", durationMilliseconds(trace.BodyWritten.Sub(trace.HeadersWritten)))
 	}
 	l.Debug("request complete",
 		"status", res.StatusCode,
 		"job.id", trace.Backend.JobID,
 		"addr", trace.Backend.Addr,
 		"conn_reused", trace.ReusedConn,
-		"write_req_headers", trace.HeadersWritten.Sub(trace.ConnectDone),
-		"read_res_first_byte", trace.FirstByte.Sub(trace.HeadersWritten),
+		"write_req_headers", durationMilliseconds(trace.HeadersWritten.Sub(trace.ConnectDone)),
+		"read_res_first_byte", durationMilliseconds(trace.FirstByte.Sub(trace.HeadersWritten)),
 	)
+}
+
+func durationMilliseconds(d time.Duration) string {
+	return fmt.Sprintf("%.2fms", float64(d)/float64(time.Millisecond))
 }
 
 // ServeConn takes an inbound conn and proxies it to a backend.
@@ -197,7 +170,7 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, l log15.Logger, req 
 
 	res, uconn, err := transport.UpgradeHTTP(req, l)
 	if err != nil {
-		p.serviceUnavailable(rw)
+		p.errResponse(err, rw)
 		return
 	}
 	defer uconn.Close()
@@ -211,8 +184,8 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, l log15.Logger, req 
 
 	dconn, bufrw, err := rw.(http.Hijacker).Hijack()
 	if err != nil {
-		l.Error("error hijacking request", "err", err, "status", "503")
-		p.serviceUnavailable(rw)
+		status := p.errResponse(err, rw)
+		l.Error("error hijacking request", "err", err, "status", status)
 		return
 	}
 	defer dconn.Close()
@@ -224,16 +197,32 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, l log15.Logger, req 
 	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
 }
 
-func (p *ReverseProxy) serviceUnavailable(rw http.ResponseWriter) {
+func (p *ReverseProxy) errResponse(err error, rw http.ResponseWriter) int {
+	if clientError(err) {
+		rw.WriteHeader(499)
+		return 499
+	}
 	if len(p.Error503Page) > 0 {
 		rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 		rw.WriteHeader(http.StatusServiceUnavailable)
 		rw.Write(p.Error503Page)
-		return
+		return 503
 	}
 	rw.WriteHeader(http.StatusServiceUnavailable)
 	rw.Write(serviceUnavailable)
-	return
+	return 503
+}
+
+func clientError(err error) bool {
+	_, ok := err.(requestErr)
+	return ok || err == context.Canceled
+}
+
+func httpErrStatus(err error) int {
+	if clientError(err) {
+		return 499
+	}
+	return 503
 }
 
 func prepareResponseHeaders(res *http.Response) {
@@ -330,8 +319,7 @@ func joinConns(uconn, dconn net.Conn) {
 }
 
 func prepareRequest(req *http.Request) *http.Request {
-	outreq := new(http.Request)
-	*outreq = *req // includes shallow copies of maps, but okay
+	outreq := req.Clone(req.Context())
 
 	// Pass the Request-URI verbatim without any modifications.
 	//
@@ -353,6 +341,10 @@ func prepareRequest(req *http.Request) *http.Request {
 	outreq.ProtoMajor = 1
 	outreq.ProtoMinor = 1
 	outreq.Close = false
+
+	if req.Body != nil {
+		outreq.Body = requestErrWrapReader{req.Body}
+	}
 
 	// Remove hop-by-hop headers to the backend.
 	outreq.Header = make(http.Header)
@@ -424,3 +416,19 @@ func (m *maxLatencyWriter) flushLoop() {
 }
 
 func (m *maxLatencyWriter) stop() { m.done <- true }
+
+type requestErr struct {
+	error
+}
+
+type requestErrWrapReader struct {
+	io.ReadCloser
+}
+
+func (r requestErrWrapReader) Read(p []byte) (int, error) {
+	res, err := r.ReadCloser.Read(p)
+	if err != nil && err != io.EOF {
+		err = requestErr{err}
+	}
+	return res, err
+}
