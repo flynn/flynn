@@ -246,7 +246,7 @@ go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/propagation
 go.opencensus.io/trace/tracestate
-# golang.org/x/crypto v0.0.0-20190911031432-227b76d455e7
+# golang.org/x/crypto v0.0.0-20191107222254-f4817d981bb6
 golang.org/x/crypto/acme
 golang.org/x/crypto/acme/autocert
 golang.org/x/crypto/curve25519
