@@ -14,6 +14,7 @@ image="http://cdimage.ubuntu.com/ubuntu-base/releases/16.04/release/ubuntu-base-
 curl -L ${image} | tar -xzC ${dir}
 
 mount -t proc proc "${dir}/proc"
+cp /etc/resolv.conf "${dir}/etc/resolv.conf"
 chroot ${dir} bash < "${src_dir}/setup.sh"
 
 cp ${dir}/boot/vmlinuz-* ${build_dir}/vmlinuz
