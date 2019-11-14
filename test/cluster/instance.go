@@ -263,8 +263,9 @@ func (i *Instance) dialSSH(stderr io.Writer) error {
 			fmt.Fprintf(stderr, "Attempting to ssh to %s:22...\n", i.IP)
 		}
 		sc, err = ssh.Dial("tcp", i.IP+":22", &ssh.ClientConfig{
-			User: "ubuntu",
-			Auth: []ssh.AuthMethod{ssh.Password("ubuntu")},
+			User:            "ubuntu",
+			Auth:            []ssh.AuthMethod{ssh.Password("ubuntu")},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		})
 		return
 	})
