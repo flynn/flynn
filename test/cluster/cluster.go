@@ -16,7 +16,7 @@ import (
 	units "github.com/docker/go-units"
 	"github.com/flynn/flynn/cli/config"
 	controller "github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/test/buildlog"
 )
@@ -394,6 +394,7 @@ set -e -x
 
 export GOPATH=~/go
 flynn=$GOPATH/src/github.com/flynn/flynn
+export PATH="${flynn}/build/bin:${PATH}"
 cd $flynn
 
 if [[ -f test/scripts/test-unit.sh ]]; then
