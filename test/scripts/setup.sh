@@ -5,22 +5,40 @@ set -e
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 
-APP="ci"
-MEMORY="600G"
+# DEFAULT_CLUSTER is the default Flynn cluster that CI will be setup in (can be
+# overridden by setting FLYNN_CI_CLUSTER)
+DEFAULT_CLUSTER="flynn-ci"
+
+# DEFAULT_APP is the default Flynn app that CI will be setup in (can be
+# overridden by setting FLYNN_CI_APP)
+DEFAULT_APP="ci"
+
+# DEFAULT_MEMORY is the default memory limit for the CI runner job (can be
+# overridden by setting FLYNN_CI_MEMORY)
+DEFAULT_MEMORY="600G"
 
 main() {
+  export FLYNN_CLUSTER="${FLYNN_CI_CLUSTER:-${DEFAULT_CLUSTER}}"
+
+  local app="${FLYNN_CI_APP:-${DEFAULT_APP}}"
+
   info "getting controller key"
   local controller_key="$(flynn -a controller env get AUTH_KEY)"
   if [[ -z "${controller_key}" ]]; then
     fail "failed to get the controller key"
   fi
 
-  info "creating app: ${APP}"
-  flynn create --remote "" "${APP}" || true
-  local app_id="$(controller_get "/apps/${APP}" | jq -r .id)"
+  info "creating app: ${app}"
+  flynn create --remote "" "${app}" || true
+  local app_id="$(controller_get "/apps/${app}" | jq -r .id)"
   if [[ -z "${app_id}" ]]; then
     fail "failed to get app ID"
   fi
+
+  info "uploading image layers"
+  while read layer_id; do
+    upload_layer "${layer_id}" < /dev/null
+  done < <(jq -r '.manifest.rootfs[].layers[].id' "build/image/test.json")
 
   info "creating test image"
   local image_id="$(create_test_image | jq -r .id)"
@@ -28,27 +46,37 @@ main() {
     fail "failed to create test image"
   fi
 
+  # if the app already has a release just update the image and deploy
+  if flynn -a "${app_id}" release show &>/dev/null; then
+    info "updating release image"
+    flynn -a controller pg psql -- -c "UPDATE release_artifacts SET artifact_id = '${image_id}' WHERE release_id = (SELECT release_id FROM apps WHERE app_id = '${app_id}')"
+
+    info "deploying release"
+    flynn -a "${app_id}" env set RESTART=1
+
+    return
+  fi
+
   info "creating test release"
-  local release="$(create_test_release "${app_id}" "${image_id}" | jq -r .)"
-  if [[ -z "${release}" ]]; then
+  local release_id="$(create_test_release "${app_id}" "${image_id}" | jq -r .id)"
+  if [[ -z "${release_id}" ]]; then
     fail "failed to create test release"
   fi
 
   info "setting app release"
-  set_app_release "${app_id}" "${release}" >/dev/null
+  set_app_release "${app_id}" "${release_id}" >/dev/null
 
   info "adding PostgreSQL database"
-  if ! flynn -a "${APP}" resource | grep -q "postgres"; then
-    flynn -a "${APP}" resource add postgres
-  fi
+  flynn -a "${app}" resource add postgres
 
-  info "setting ${MEMORY} memory limit"
-  flynn -a "${APP}" limit set runner "memory=${MEMORY}"
+  local memory="${FLYNN_CI_MEMORY:-${DEFAULT_MEMORY}}"
+  info "setting ${memory} memory limit"
+  flynn -a "${app}" limit set runner "memory=${memory}"
 
   cat <<EOF
 
 The CI app is created, but you need to set the following environment
-variables with 'flynn -a ${APP} env set KEY=VAL':
+variables with 'flynn -c ${FLYNN_CLUSTER} -a ${app} env set KEY=VAL':
 
 * AUTH_KEY
 * BLOBSTORE_S3_CONFIG
@@ -58,14 +86,31 @@ variables with 'flynn -a ${APP} env set KEY=VAL':
 * AWS_ACCESS_KEY_ID
 * AWS_SECRET_ACCESS_KEY
 
-Once set, scale up the 'runner' process with 'flynn -a ${APP} scale runner=1'.
+Once set, scale up the 'runner' process with 'flynn -c ${FLYNN_CLUSTER} -a ${app} scale runner=1'.
 
 EOF
   info "setup finished!"
 }
 
+upload_layer() {
+  local layer_id=$1
+
+  local layer="/var/lib/flynn/layer-cache/${layer_id}.squashfs"
+  if [[ ! -s "${layer}" ]]; then
+    fail "missing layer: ${layer}"
+  fi
+
+  info "uploading layer ${layer_id}"
+  local url="http://blobstore.discoverd/ci/layers/${layer_id}.squashfs"
+  if ! flynn -a blobstore run curl --silent --head "${url}" | grep -qF "HTTP/1.1 200 OK"; then
+    flynn -a blobstore run curl -X PUT --data-binary @- "${url}" < "${layer}"
+  fi
+}
+
 create_test_image() {
-  controller_post "/artifacts" "$(cat build/image/test.json)"
+  controller_post \
+    "/artifacts" \
+    "$(jq '.layer_url_template = "http://blobstore.discoverd/ci/layers/{id}.squashfs"' build/image/test.json)"
 }
 
 create_test_release() {
@@ -77,9 +122,9 @@ create_test_release() {
 
 set_app_release() {
   local app_id=$1
-  local release=$2
+  local release_id=$2
 
-  controller_put "/apps/${app_id}/release" "${release}"
+  controller_put "/apps/${app_id}/release" "$(jq -n --arg id "${release_id}" '{ $id }')"
 }
 
 controller_get() {
