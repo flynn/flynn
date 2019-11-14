@@ -128,11 +128,11 @@ echo "deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu xenial main" >>
 apt-get update
 
 # install packages
-apt-get install -y postgresql-10 postgresql-contrib-10 redis-server mariadb-server percona-xtrabackup mongodb-org sudo net-tools
+apt-get install -y postgresql-11 postgresql-contrib-11 redis-server mariadb-server percona-xtrabackup mongodb-org sudo net-tools
 
-pg_ctlcluster --skip-systemctl-redirect 10-main start
+pg_ctlcluster --skip-systemctl-redirect 11-main start
 sudo -u postgres createuser --superuser ubuntu
-pg_ctlcluster --skip-systemctl-redirect 10-main -m fast stop
+pg_ctlcluster --skip-systemctl-redirect 11-main -m fast stop
 
 systemctl disable postgresql
 systemctl disable mysql
