@@ -809,7 +809,7 @@ DELETE FROM volumes WHERE created_at < '%s';`,
 	}
 
 	if migrateDocker {
-		fmt.Fprintln(os.Stderr, `
+		fmt.Fprint(os.Stderr, `
 WARN:
 WARN: There are some legacy Docker images in the backup that can no longer
 WARN: be imported to new clusters. You will need to boot a cluster with version

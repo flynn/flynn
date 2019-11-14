@@ -206,7 +206,7 @@ func runClusterAdd(args *docopt.Args) error {
 	}
 
 	if s.DockerPushURL != "" {
-		fmt.Fprintln(os.Stderr, "DEPRECATED: Pushing via a Docker registry has been deprecated in favour of pushing via the Flynn image service, set --image-url instead\n")
+		fmt.Fprintln(os.Stderr, "DEPRECATED: Pushing via a Docker registry has been deprecated in favour of pushing via the Flynn image service, set --image-url instead")
 		host, err := s.DockerPushHost()
 		if err != nil {
 			return err
