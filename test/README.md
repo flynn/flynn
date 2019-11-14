@@ -78,43 +78,89 @@ sudo ./flynn-test \
 
 ## CI
 
-### Install the runner
+### Bootstrap a Flynn cluster
 
-Install Git if not already installed, then check out the Flynn git repo and run
-the following to install the runner into `/opt/flynn-test`:
-
-```
-sudo test/scripts/install
-```
-
-Add the following credentials to `/opt/flynn-test/.credentials`:
+Follow the [installation docs](https://flynn.io/docs/installation/manual) to install and
+bootstrap a Flynn cluster with `CLUSTER_DOMAIN=ci.flynn.io` on the CI box:
 
 ```
-export AUTH_KEY=XXXXXXXXXX
-export GITHUB_TOKEN=XXXXXXXXXX
-export AWS_ACCESS_KEY_ID=XXXXXXXXXX
-export AWS_SECRET_ACCESS_KEY=XXXXXXXXXX
+curl -fsSL -o install-flynn https://dl.flynn.io/install-flynn
+sudo bash install-flynn
+sudo systemctl start flynn-host
+CLUSTER_DOMAIN=ci.flynn.io flynn-host bootstrap
+flynn cluster add -p <tls-pin> default ci.flynn.io <controller-key>
 ```
 
-Now start the runner:
+Create a directory to store CI build images (this should be on a fast disk to
+minimise IO wait when building clusters, ideally a large tmpfs):
 
 ```
-sudo start flynn-test
+sudo mkdir -p /opt/flynn-test
 ```
 
-### Updating the runner
+### Create the CI app
 
-If the runner code has been changed, restart the Upstart job to pull in the new changes:
-
-```
-sudo restart flynn-test
-```
-
-If the rootfs needs rebuilding, you will need to remove the existing image before starting
-the runner again:
+In your dev environment, build Flynn:
 
 ```
-sudo stop flynn-test
-sudo rm -rf /opt/flynn-test/build/{rootfs.img,vmlinuz}
-sudo start flynn-test
+make
+```
+
+run the CI setup script:
+
+```
+test/scripts/setup.sh
+```
+
+add the necessary environment variables (assuming the Flynn CI cluster is
+configured as `flynn-ci` in your `~/.flynnrc`):
+
+```
+flynn -c flynn-ci -a ci env set AUTH_KEY=xxxxxxxxxx
+flynn -c flynn-ci -a ci env set BLOBSTORE_S3_CONFIG=xxxxxxxxxx
+flynn -c flynn-ci -a ci env set BLOBSTORE_GCS_CONFIG=xxxxxxxxxx
+flynn -c flynn-ci -a ci env set BLOBSTORE_AZURE_CONFIG=xxxxxxxxxx
+flynn -c flynn-ci -a ci env set GITHUB_TOKEN=xxxxxxxxxx
+flynn -c flynn-ci -a ci env set AWS_ACCESS_KEY_ID=xxxxxxxxxx
+flynn -c flynn-ci -a ci env set AWS_SECRET_ACCESS_KEY=xxxxxxxxxx
+```
+
+scale up the `runner` process:
+
+```
+flynn -c flynn-ci -a ci scale runner=1
+```
+
+add a route with the CI TLS key and certificate:
+
+```
+flynn -c flynn-ci -a ci route add http -s ci-web -c <ci.crt> -k <ci.key> ci.flynn.io
+```
+
+CI should now be up and running at `https://ci.flynn.io`.
+
+### Deploy the CI app
+
+If the CI code has been changed, rebuild Flynn in your dev environment:
+
+```
+make
+```
+
+Then re-run the CI setup script which will upload the built CI image and deploy
+the app:
+
+```
+test/scripts/setup.sh
+```
+
+If the rootfs needs rebuilding, you will need to scale down the `runner`
+process and remove the existing image before deploying and then scaling the
+runner back up:
+
+```
+flynn -c flynn-ci -a ci scale runner=0
+test/scripts/setup.sh
+ssh <ci-box> sudo rm -rf /opt/flynn-test/build/{rootfs.img,vmlinuz}
+flynn -c flynn-ci -a ci scale runner=1
 ```
