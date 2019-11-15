@@ -164,6 +164,7 @@ main() {
     --init-log-level "debug" \
     --tags "host_id=${id}" \
     --max-job-concurrency=100 \
+    --enable-dhcp \
     ${peer_ips} \
     &>"${log}"
 
