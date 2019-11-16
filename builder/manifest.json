@@ -23,6 +23,15 @@
       }]
     },
     {
+      "id": "ubuntu-xenial",
+      "layers": [{
+        "script": "builder/img/ubuntu-xenial.sh",
+        "inputs": ["builder/ubuntu-setup.sh"],
+        "limits": { "temp_disk": "2GB" },
+        "linux_capabilities": ["CAP_SYS_ADMIN"]
+      }]
+    },
+    {
       "id": "ubuntu-bionic",
       "layers": [{
         "script": "builder/img/ubuntu-bionic.sh",
@@ -98,7 +107,7 @@
     },
     {
       "id": "host",
-      "base": "ubuntu-bionic",
+      "base": "ubuntu-xenial",
       "layers": [
         {
           "name": "host-packages",
