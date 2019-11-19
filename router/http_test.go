@@ -19,12 +19,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/tlscert"
+	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/schema"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 	"github.com/jackc/pgx"
 	"golang.org/x/net/http2"
@@ -1884,4 +1885,112 @@ func (s *S) TestLegacyTLSDisallowed(c *C) {
 	err = client.Handshake()
 	c.Assert(err, Not(IsNil))
 	c.Assert(err, ErrorMatches, ".+protocol version not supported")
+}
+
+// httpTestBlockHandler returns a testHTTPBlockHandler using the given ID
+func httpTestBlockHandler(id string) *testHTTPBlockHandler {
+	return &testHTTPBlockHandler{
+		id: id,
+		ch: make(chan struct{}),
+	}
+}
+
+// testHTTPBlockHandler is a HTTP handler that supports making blocking
+// requests and is used to test how the router load balances requests based
+// on the number of in-flight requests (see TestHTTPLoadBalance).
+type testHTTPBlockHandler struct {
+	id string
+	ch chan struct{}
+}
+
+func (t *testHTTPBlockHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	switch req.URL.Path {
+	case "/ping":
+		logger.Info("ping", "id", t.id)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(t.id))
+	case "/block":
+		logger.Info("block", "id", t.id)
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-t.ch
+		w.Write([]byte(t.id))
+	case "/unblock":
+		logger.Info("unblock", "id", t.id)
+		close(t.ch)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(t.id))
+	}
+}
+
+// TestHTTPLoadBalance tests that the router prefers routing to backends with
+// lower numbers of in-flight requests
+func (s *S) TestHTTPLoadBalance(c *C) {
+	// start three HTTP blocker servers
+	srv1 := httptest.NewServer(httpTestBlockHandler("1"))
+	defer srv1.Close()
+	srv2 := httptest.NewServer(httpTestBlockHandler("2"))
+	defer srv2.Close()
+	srv3 := httptest.NewServer(httpTestBlockHandler("3"))
+	defer srv3.Close()
+
+	// start the listener
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	// add a sticky route so we can control which backend is hit by
+	// blocking requests
+	r := addStickyHTTPRoute(c, l)
+
+	// register the three backends
+	discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
+	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
+	discoverdRegisterHTTP(c, l, srv3.Listener.Addr().String())
+
+	get := func(path string, cookies ...*http.Cookie) *http.Response {
+		req := newReq("http://"+l.Addrs[0]+path, r.Domain)
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
+		res, err := http.DefaultClient.Do(req)
+		c.Assert(err, IsNil)
+		c.Assert(res.StatusCode, Equals, http.StatusOK)
+		return res
+	}
+
+	// get a sticky cookie for one of the backends, taking note of its ID
+	res := get("/ping")
+	body, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+	backendID := string(body)
+	var stickyCookie *http.Cookie
+	for _, cookie := range res.Cookies() {
+		if cookie.Name == proxy.StickyCookieName {
+			stickyCookie = cookie
+			break
+		}
+	}
+	c.Assert(stickyCookie, NotNil)
+
+	// put the backend under load by making 10 blocked requests to it using
+	// the sticky cookie
+	defer get("/unblock", stickyCookie)
+	for i := 0; i < 10; i++ {
+		res := get("/block", stickyCookie)
+		go func() {
+			defer res.Body.Close()
+			ioutil.ReadAll(res.Body)
+		}()
+	}
+
+	// check subsequent requests without the sticky cookie are handled by
+	// non-loaded backends
+	for i := 0; i < 10; i++ {
+		res := get("/ping")
+		body, err := ioutil.ReadAll(res.Body)
+		res.Body.Close()
+		c.Assert(err, IsNil)
+		c.Assert(string(body), Not(Equals), backendID)
+	}
 }
