@@ -42,6 +42,10 @@ var (
 	}
 )
 
+// maxBackendAttempts is the maximum number of backends to attempt to proxy
+// a given request to
+const maxBackendAttempts = 4
+
 // BackendListFunc returns a slice of backends
 type BackendListFunc func() []*router.Backend
 
@@ -50,6 +54,109 @@ type transport struct {
 
 	stickyCookieKey   *[32]byte
 	useStickySessions bool
+
+	inFlightMtx      sync.Mutex
+	inFlightRequests map[string]int64
+}
+
+func (t *transport) trackRequestStart(backend *router.Backend) {
+	t.inFlightMtx.Lock()
+	defer t.inFlightMtx.Unlock()
+	t.inFlightRequests[backend.Addr]++
+}
+
+func (t *transport) trackRequestEnd(backend *router.Backend) {
+	t.inFlightMtx.Lock()
+	defer t.inFlightMtx.Unlock()
+	t.inFlightRequests[backend.Addr]--
+	if t.inFlightRequests[backend.Addr] == 0 {
+		delete(t.inFlightRequests, backend.Addr)
+	}
+}
+
+// eachBackend iterates through the given backends and calls the given
+// function, returning early if the function returns nil or if the error
+// returned is not retryable, iterating through no more than
+// maxBackendAttempts.
+//
+// If stickyBackend matches one of the backends then that backend will be tried
+// first.
+//
+// On each iteration, two random backends are picked and the one with the least
+// load is tried, thus implementing the "power of two random choices"
+// algorithm.
+func (t *transport) eachBackend(stickyBackend string, backends []*router.Backend, l log15.Logger, f func(*router.Backend) error) error {
+	// check we have some backends
+	if len(backends) == 0 {
+		return errNoBackends
+	}
+
+	attempt := 0
+
+	// try tries calling f with the backend at the given index, returning
+	// the resulting error and whether or not the request can be retried
+	try := func(index int) (error, bool) {
+		backend := backends[index]
+		t.trackRequestStart(backend)
+		err := f(backend)
+		if err == nil {
+			return nil, false
+		}
+		t.trackRequestEnd(backend)
+		if _, ok := err.(dialErr); !ok {
+			l.Error("unretriable request error", "status", httpErrStatus(err), "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", attempt)
+			return err, false
+		}
+		l.Error("retriable dial error", "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", attempt)
+		// remove the backend now that we've tried it
+		backends = append(backends[:index], backends[index+1:]...)
+		attempt++
+		return err, attempt < maxBackendAttempts
+	}
+
+	// prioritise the sticky backend if it exists
+	if stickyBackend != "" {
+		for index, backend := range backends {
+			if backend.Addr == stickyBackend {
+				if err, shouldRetry := try(index); err == nil || !shouldRetry {
+					return err
+				}
+				break
+			}
+		}
+	}
+
+	// keep picking two random backends and trying the one with the least
+	// number of in flight requests
+	for len(backends) > 0 {
+		// if there is only one backend, try it and return
+		if len(backends) == 1 {
+			err, _ := try(0)
+			return err
+		}
+
+		// pick two distinct random backends
+		n1 := random.Math.Intn(len(backends))
+		n2 := (n1 + 1) % len(backends)
+
+		// determine which one has the least number of in flight
+		// requests
+		t.inFlightMtx.Lock()
+		load1 := t.inFlightRequests[backends[n1].Addr]
+		load2 := t.inFlightRequests[backends[n2].Addr]
+		t.inFlightMtx.Unlock()
+		index := n1
+		if load1 > load2 {
+			index = n2
+		}
+
+		// try the chosen backend
+		if err, shouldRetry := try(index); err == nil || !shouldRetry {
+			return err
+		}
+	}
+	l.Error("request failed", "status", "503", "num_backends", len(backends))
+	return errNoBackends
 }
 
 func (t *transport) getOrderedBackends(stickyBackend string) []*router.Backend {
@@ -89,25 +196,25 @@ func (t *transport) RoundTrip(req *http.Request, l log15.Logger) (*http.Response
 
 	rt := req.Context().Value(ctxKeyRequestTracker).(RequestTracker)
 	stickyBackend := t.getStickyBackend(req)
-	backends := t.getOrderedBackends(stickyBackend)
-	for i, backend := range backends {
+	backends := t.getBackends()
+
+	var res *http.Response
+	err := t.eachBackend(stickyBackend, backends, l, func(backend *router.Backend) (err error) {
 		req.URL.Host = backend.Addr
 		rt.TrackRequestStart(backend.Addr)
-		res, err := httpTransport.RoundTrip(req)
+		res, err = httpTransport.RoundTrip(req)
 		if err == nil {
 			trace.Finalize(backend)
 			t.setStickyBackend(res, stickyBackend)
-			return res, trace, nil
+			return
 		}
 		rt.TrackRequestDone(backend.Addr)
-		if _, ok := err.(dialErr); !ok {
-			l.Error("unretriable request error", "status", httpErrStatus(err), "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)
-			return nil, nil, err
-		}
-		l.Error("retriable dial error", "job.id", backend.JobID, "addr", backend.Addr, "err", err, "attempt", i)
+		return
+	})
+	if err == nil {
+		return res, trace, nil
 	}
-	l.Error("request failed", "status", "503", "num_backends", len(backends))
-	return nil, nil, errNoBackends
+	return nil, nil, err
 }
 
 func (t *transport) Connect(ctx context.Context, l log15.Logger) (net.Conn, error) {
@@ -206,7 +313,7 @@ func swapToFront(backends []*router.Backend, addr string) {
 }
 
 func getStickyCookieBackend(req *http.Request, cookieKey [32]byte) string {
-	cookie, err := req.Cookie(stickyCookie)
+	cookie, err := req.Cookie(StickyCookieName)
 	if err != nil {
 		return ""
 	}
@@ -220,7 +327,7 @@ func getStickyCookieBackend(req *http.Request, cookieKey [32]byte) string {
 
 func setStickyCookieBackend(res *http.Response, backend string, cookieKey [32]byte) {
 	cookie := http.Cookie{
-		Name:  stickyCookie,
+		Name:  StickyCookieName,
 		Value: base64.StdEncoding.EncodeToString(encrypt([]byte(backend), cookieKey)),
 		Path:  "/",
 	}

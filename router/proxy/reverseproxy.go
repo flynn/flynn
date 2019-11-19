@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	stickyCookie         = "_backend"
+	// StickyCookieName is the name of the sticky cookie
+	StickyCookieName     = "_backend"
 	ctxKeyRequestTracker = "_request_tracker"
 )
 
@@ -75,6 +76,7 @@ func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool, rt Re
 			getBackends:       bf,
 			stickyCookieKey:   stickyKey,
 			useStickySessions: sticky,
+			inFlightRequests:  make(map[string]int64),
 		},
 		FlushInterval:  10 * time.Millisecond,
 		RequestTracker: rt,
@@ -105,6 +107,7 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	defer res.Body.Close()
 	defer p.RequestTracker.TrackRequestDone(trace.Backend.Addr)
+	defer transport.trackRequestEnd(trace.Backend)
 
 	prepareResponseHeaders(res)
 	p.writeResponse(rw, res)
