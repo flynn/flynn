@@ -9,11 +9,11 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
 	tc "github.com/flynn/flynn/test/cluster"
-	"github.com/flynn/flynn/updater/types"
+	updater "github.com/flynn/flynn/updater/types"
 	c "github.com/flynn/go-check"
 )
 
@@ -73,7 +73,7 @@ cd "${ROOT}"
   # create a slug for testing slug based app updates
   build/bin/flynn-host run \
     --volume /tmp \
-    build/image/slugbuilder.json \
+    build/image/slugbuilder-18.json \
     /usr/bin/env \
     CONTROLLER_KEY="{{ .ControllerKey }}" \
     SLUG_IMAGE_ID="{{ .SlugImageID }}" \
