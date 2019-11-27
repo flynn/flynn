@@ -127,6 +127,9 @@ type Layer struct {
 	// Script is added as an input and run with 'bash -e'
 	Script string `json:"script,omitempty"`
 
+	// ProtoBuild is a list of directories to compile using 'protoc'.
+	ProtoBuild []string `json:"protobuild,omitempty"`
+
 	// GoBuild is a set of directories to build using 'go build'.
 	//
 	// The go/build package is used to load the required source files which
@@ -354,6 +357,9 @@ func (b *Builder) Build(images []*Image) error {
 			addDependency(build, image.Base)
 		}
 		for _, l := range image.Layers {
+			if len(l.ProtoBuild) > 0 && l.BuildWith == "" {
+				l.BuildWith = "protoc"
+			}
 			// build Go binaries using the Go image
 			if len(l.GoBuild) > 0 || len(l.CGoBuild) > 0 || len(l.GoBin) > 0 {
 				if l.BuildWith == "" {
@@ -475,6 +481,30 @@ func (b *Builder) BuildImage(image *Image) error {
 		if len(l.GoBin) > 0 {
 			for _, bin := range l.GoBin {
 				run = append(run, "GOBIN=/bin GOBIN_CACHE=/tmp/gobin gobin -m "+bin)
+			}
+		}
+
+		// if building protocols, add .proto inputs and build using
+		// 'protoc' into /mnt/out/proto
+		if len(l.ProtoBuild) > 0 {
+			// add the build commands in a predictable order so
+			// the generated layer ID is deterministic
+			dirs := make([]string, 0, len(l.ProtoBuild))
+			for _, dir := range l.ProtoBuild {
+				dirs = append(dirs, dir)
+			}
+			sort.Strings(dirs)
+			for _, dir := range dirs {
+				paths, err := filepath.Glob(filepath.Join(dir, "*.proto"))
+				if err != nil {
+					return err
+				}
+				inputs = append(inputs, paths...)
+				outDir := filepath.Join("/mnt/out/proto", dir)
+				run = append(run,
+					fmt.Sprintf("mkdir -p %s", outDir),
+					fmt.Sprintf("protoc -I /usr/local/include -I %s --go_out=plugins=grpc:%s %s", dir, outDir, strings.Join(paths, " ")),
+				)
 			}
 		}
 
@@ -912,6 +942,38 @@ func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[st
 	if err := cmd.Run(); err != nil {
 		b.log.Error("error running the build job", "name", name, "err", err)
 		return nil, err
+	}
+
+	// extract any generated protocol files back into the source directory
+	// so they can be committed into git
+	protoDir := filepath.Join(dir, "out", "proto")
+	if _, err := os.Stat(protoDir); err == nil {
+		if err := filepath.Walk(protoDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			src, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer src.Close()
+			dstPath, err := filepath.Rel(protoDir, path)
+			if err != nil {
+				return err
+			}
+			dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+			if err != nil {
+				return err
+			}
+			defer dst.Close()
+			_, err = io.CopyN(dst, src, info.Size())
+			return err
+		}); err != nil {
+			return nil, fmt.Errorf("error extracting generated protocol files: %s", err)
+		}
 	}
 
 	// copy the layer to the cache
