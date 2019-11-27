@@ -55,6 +55,16 @@
       }]
     },
     {
+      "id": "protoc",
+      "base": "go",
+      "layers": [{
+        "gobin": [
+          "github.com/golang/protobuf/protoc-gen-go"
+        ],
+        "script": "builder/img/protoc.sh"
+      }]
+    },
+    {
       "id": "builder",
       "base": "go",
       "layers": [{
