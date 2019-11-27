@@ -414,7 +414,6 @@ func unaryInterceptor(c *Config) grpc.UnaryServerInterceptor {
 }
 
 type server struct {
-	protobuf.ControllerServer
 	*Config
 }
 
