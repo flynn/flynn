@@ -5,9 +5,11 @@ option go_package = 'protobuf';
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/field_mask.proto";
+import "google/protobuf/empty.proto";
 
 service Controller {
   // read API
+  rpc Status(google.protobuf.Empty) returns (StatusResponse);
   rpc StreamApps (StreamAppsRequest) returns (stream StreamAppsResponse) {};
   rpc StreamReleases(StreamReleasesRequest) returns (stream StreamReleasesResponse) {};
   rpc StreamScales (StreamScalesRequest) returns (stream StreamScalesResponse) {};
@@ -23,6 +25,17 @@ service Controller {
 /*
    Controller service
    */
+
+message StatusResponse {
+  enum Code {
+    HEALTHY = 0;
+    UNHEALTHY = 1;
+  }
+
+  Code status = 1;
+  bytes detail = 2;
+  string version = 3;
+}
 
 message LabelFilter {
   message Expression {
