@@ -24,6 +24,7 @@ import (
 	flynnstatus "github.com/flynn/flynn/pkg/status"
 	routerc "github.com/flynn/flynn/router/client"
 	que "github.com/flynn/que-go"
+	"github.com/golang/protobuf/ptypes/empty"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	log "github.com/inconshreveable/log15"
@@ -415,6 +416,14 @@ func unaryInterceptor(c *Config) grpc.UnaryServerInterceptor {
 
 type server struct {
 	*Config
+}
+
+func (s *server) Status(context.Context, *empty.Empty) (*protobuf.StatusResponse, error) {
+	healthy := true
+	if err := s.DB.Exec("ping"); err != nil {
+		healthy = false
+	}
+	return protobuf.NewStatusResponse(healthy, nil), nil
 }
 
 func (s *server) listApps(req *protobuf.StreamAppsRequest) ([]*protobuf.App, *data.PageToken, error) {

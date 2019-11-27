@@ -12,12 +12,25 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
 	host "github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/version"
 	"github.com/golang/protobuf/ptypes"
 	durpb "github.com/golang/protobuf/ptypes/duration"
 	tspb "github.com/golang/protobuf/ptypes/timestamp"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 )
+
+func NewStatusResponse(healthy bool, detail []byte) *StatusResponse {
+	res := &StatusResponse{
+		Status:  StatusResponse_HEALTHY,
+		Detail:  detail,
+		Version: version.String(),
+	}
+	if !healthy {
+		res.Status = StatusResponse_UNHEALTHY
+	}
+	return res
+}
 
 type authKey struct {
 	key string
