@@ -98,7 +98,7 @@ func (s *S) SetUpSuite(c *C) {
 		keys:   []string{authKey},
 		caCert: s.caCert,
 	}
-	handler := appHandler(s.hc)
+	handler, _, _ := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)
 	client, err := controller.NewClient(s.srv.URL, authKey)
 	c.Assert(err, IsNil)

@@ -4,31 +4,19 @@ import (
 	"encoding/json"
 	fmt "fmt"
 	"net"
-	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/controller/grpc/protobuf"
-	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
-	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/ctxhelper"
-	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
-	"github.com/flynn/flynn/pkg/shutdown"
-	flynnstatus "github.com/flynn/flynn/pkg/status"
-	routerc "github.com/flynn/flynn/router/client"
-	que "github.com/flynn/que-go"
 	"github.com/golang/protobuf/ptypes/empty"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	log "github.com/inconshreveable/log15"
-	"github.com/soheilhy/cmux"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -38,157 +26,25 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func mustEnv(key string) string {
-	if val, ok := os.LookupEnv(key); ok {
-		return val
-	}
-	shutdown.Fatalf("%s is required", key)
-	return ""
-}
+type grpcAPI struct {
+	*controllerAPI
 
-var logger = log.New("component", "controller/grpc")
-
-var schemaRoot = "/etc/flynn-controller/jsonschema"
-
-func main() {
-	logger.Debug("opening database connection...")
-
-	// Open connection to main controller database
-	db := postgres.Wait(nil, data.PrepareStatements)
-	shutdown.BeforeExit(func() { db.Close() })
-	q := que.NewClient(db.ConnPool)
-
-	logger.Debug("initializing server...")
-	config := configureRepos(&Config{
-		logger:     logger,
-		DB:         db,
-		q:          q,
-		authorizer: utils.NewAuthorizer(strings.Split(os.Getenv("AUTH_KEY"), ","), strings.Split(os.Getenv("AUTH_KEY_IDS"), ",")),
-	})
-	s := NewServer(config)
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3000"
-	}
-	addr := ":" + port
-	logger.Debug(fmt.Sprintf("attempting to listen on %q...", addr))
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		logger.Debug(fmt.Sprintf("error opening listener on %q...: %v", addr, err))
-		shutdown.Fatalf("failed to create listener: %v", err)
-	}
-	logger.Debug("listener created")
-	shutdown.BeforeExit(func() { l.Close() })
-	runServer(s, config, l)
-	logger.Debug("servers stopped")
-}
-
-func runServer(s *grpc.Server, c *Config, l net.Listener) {
-	logger.Debug("loading JSON schemas...")
-
-	if err := schema.Load(schemaRoot); err != nil {
-		shutdown.Fatal(err)
-	}
-
-	logger.Debug("initializing grpc-web server...")
-	grpcWebServer := grpcweb.WrapServer(s)
-
-	logger.Debug("initializing cmux listeners...")
-	m := cmux.New(l)
-	grpcListener := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
-	grpcWebListener := m.Match(cmux.Any())
-
-	statusHandler := flynnstatus.Handler(func() flynnstatus.Status {
-		if err := c.DB.Exec("ping"); err != nil {
-			return flynnstatus.Unhealthy
-		}
-		return flynnstatus.Healthy
-	})
-
-	var wg sync.WaitGroup
-
-	logger.Debug("starting servers...")
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		logger.Debug("starting gRPC server...")
-		s.Serve(grpcListener)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		logger.Debug("starting gRPC-web server...")
-		http.Serve(
-			grpcWebListener,
-			httphelper.ContextInjector(
-				"controller/grpc [gRPC-web]",
-				httphelper.NewRequestLogger(corsHandler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-					if req.URL.Path == flynnstatus.Path {
-						statusHandler.ServeHTTP(w, req)
-						return
-					}
-
-					grpcWebServer.ServeHTTP(w, req)
-				}))),
-			),
-		)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		logger.Debug("starting mux server...")
-		m.Serve()
-	}()
-
-	wg.Wait()
-}
-
-type Config struct {
-	logger           log.Logger
-	DB               *postgres.DB
-	q                *que.Client
-	appRepo          *data.AppRepo
-	artifactRepo     *data.ArtifactRepo
-	releaseRepo      *data.ReleaseRepo
-	formationRepo    *data.FormationRepo
-	deploymentRepo   *data.DeploymentRepo
-	eventRepo        *data.EventRepo
-	eventListenerMtx sync.Mutex
-	eventListener    *data.EventListener
-	authorizer       *utils.Authorizer
-}
-
-func configureRepos(c *Config) *Config {
-	c.appRepo = data.NewAppRepo(c.DB, os.Getenv("DEFAULT_ROUTE_DOMAIN"), routerc.New())
-	c.artifactRepo = data.NewArtifactRepo(c.DB)
-	c.releaseRepo = data.NewReleaseRepo(c.DB, c.artifactRepo, c.q)
-	c.formationRepo = data.NewFormationRepo(c.DB, c.appRepo, c.releaseRepo, c.artifactRepo)
-	c.eventRepo = data.NewEventRepo(c.DB)
-	c.deploymentRepo = data.NewDeploymentRepo(c.DB, c.appRepo, c.releaseRepo, c.formationRepo)
-	return c
+	db *postgres.DB
 }
 
 const ctxKeyFlynnAuthKeyID = "flynn-auth-key-id"
 
-func (c *Config) Authorize(ctx context.Context) (context.Context, error) {
+func (g *grpcAPI) authorize(ctx context.Context) (context.Context, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if passwords, ok := md["auth-key"]; ok && len(passwords) > 0 {
-			auth, err := c.authorizer.Authorize(passwords[0])
+			auth, err := g.authorizer.Authorize(passwords[0])
 			if err != nil {
 				return ctx, grpc.Errorf(codes.Unauthenticated, err.Error())
 			}
 
 			if auth.ID != "" {
 				ctx = context.WithValue(ctx, ctxKeyFlynnAuthKeyID, auth.ID)
-
-				logger, ok := ctxhelper.LoggerFromContext(ctx)
-				if !ok {
-					logger = c.logger
-				}
-				ctx = ctxhelper.NewContextLogger(ctx, logger.New("authKeyID", auth.ID))
+				ctx = ctxhelper.NewContextLogger(ctx, g.logger(ctx).New("authKeyID", auth.ID))
 			}
 
 			return ctx, nil
@@ -200,15 +56,15 @@ func (c *Config) Authorize(ctx context.Context) (context.Context, error) {
 	return ctx, grpc.Errorf(codes.Unauthenticated, "metadata missing")
 }
 
-func (c *Config) Logger(ctx context.Context) log.Logger {
-	logger, ok := ctxhelper.LoggerFromContext(ctx)
+func (g *grpcAPI) logger(ctx context.Context) log.Logger {
+	log, ok := ctxhelper.LoggerFromContext(ctx)
 	if !ok {
-		logger = c.logger
+		log = logger
 	}
-	return logger
+	return log
 }
 
-func (c *Config) LogRequest(ctx context.Context, rpcMethod string) (context.Context, func(context.Context, error)) {
+func (g *grpcAPI) logRequest(ctx context.Context, rpcMethod string) (context.Context, func(context.Context, error)) {
 	startTime := time.Now()
 
 	var clientIP string
@@ -223,7 +79,7 @@ func (c *Config) LogRequest(ctx context.Context, rpcMethod string) (context.Cont
 			reqID = []string{random.UUID()}
 		}
 		ctx = ctxhelper.NewContextRequestID(ctx, reqID[0])
-		ctx = ctxhelper.NewContextLogger(ctx, c.Logger(ctx).New("req_id", reqID[0]))
+		ctx = ctxhelper.NewContextLogger(ctx, g.logger(ctx).New("req_id", reqID[0]))
 
 		xForwardedFor := md.Get("x-forwarded-for")
 		if len(xForwardedFor) > 0 {
@@ -239,35 +95,25 @@ func (c *Config) LogRequest(ctx context.Context, rpcMethod string) (context.Cont
 		}
 	}
 
-	c.Logger(ctx).Info("gRPC request started", "rpcMethod", rpcMethod, "client_ip", clientIP)
+	g.logger(ctx).Info("gRPC request started", "rpcMethod", rpcMethod, "client_ip", clientIP)
 	return ctx, func(ctx context.Context, err error) {
 		duration := time.Since(startTime)
 		if err == nil {
-			c.Logger(ctx).Info("gRPC request ended", "duration", duration)
+			g.logger(ctx).Info("gRPC request ended", "duration", duration)
 		} else {
-			c.Logger(ctx).Info("gRPC request ended", "duration", duration, "error", err)
+			g.logger(ctx).Info("gRPC request ended", "duration", duration, "err", err)
 		}
 	}
 }
 
-func (c *Config) maybeStartEventListener() (*data.EventListener, error) {
-	c.eventListenerMtx.Lock()
-	defer c.eventListenerMtx.Unlock()
-	if c.eventListener != nil && !c.eventListener.IsClosed() {
-		return c.eventListener, nil
-	}
-	c.eventListener = data.NewEventListener(c.eventRepo)
-	return c.eventListener, c.eventListener.Listen()
-}
-
-type EventListener struct {
+type grpcEventListener struct {
 	Events  chan *ct.Event
 	Err     error
 	errOnce sync.Once
 	subs    []*data.EventSubscriber
 }
 
-func (e *EventListener) Close() {
+func (e *grpcEventListener) Close() {
 	for _, sub := range e.subs {
 		sub.Close()
 		if err := sub.Err; err != nil {
@@ -276,13 +122,13 @@ func (e *EventListener) Close() {
 	}
 }
 
-func (c *Config) subscribeEvents(appIDs []string, objectTypes []ct.EventType, objectIDs []string) (*EventListener, error) {
-	dataEventListener, err := c.maybeStartEventListener()
+func (g *grpcAPI) subscribeEvents(appIDs []string, objectTypes []ct.EventType, objectIDs []string) (*grpcEventListener, error) {
+	dataEventListener, err := g.maybeStartEventListener()
 	if err != nil {
 		return nil, protobuf.NewError(err, err.Error())
 	}
 
-	eventListener := &EventListener{
+	eventListener := &grpcEventListener{
 		Events: make(chan *ct.Event),
 	}
 
@@ -332,101 +178,78 @@ func (c *Config) subscribeEvents(appIDs []string, objectTypes []ct.EventType, ob
 	return eventListener, nil
 }
 
-func corsHandler(main http.Handler) http.Handler {
-	return (&cors.Options{
-		ShouldAllowOrigin: func(origin string, req *http.Request) bool {
-			return true
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
-		AllowHeaders:     []string{"Auth-Key", "Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match", "X-GRPC-Web"},
-		ExposeHeaders:    []string{"ETag"},
-		AllowCredentials: true,
-		MaxAge:           time.Hour,
-	}).Handler(main)
-}
-
-func NewServer(c *Config) *grpc.Server {
+func (g *grpcAPI) grpcServer() *grpc.Server {
 	s := grpc.NewServer(
-		grpc.StatsHandler(&statsHandler{}),
-		grpc.StreamInterceptor(streamInterceptor(c)),
-		grpc.UnaryInterceptor(unaryInterceptor(c)),
+		grpc.StatsHandler(&grpcStatsHandler{}),
+		grpc.StreamInterceptor(g.streamInterceptor),
+		grpc.UnaryInterceptor(g.unaryInterceptor),
 	)
-	protobuf.RegisterControllerServer(s, &server{Config: c})
+	protobuf.RegisterControllerServer(s, g)
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
 	return s
 }
 
-type statsHandler struct{}
+type grpcStatsHandler struct{}
 
-func (s *statsHandler) TagRPC(ctx context.Context, rpcTagInfo *stats.RPCTagInfo) context.Context {
+func (g *grpcStatsHandler) TagRPC(ctx context.Context, rpcTagInfo *stats.RPCTagInfo) context.Context {
 	return ctx
 }
 
-func (s *statsHandler) HandleRPC(context.Context, stats.RPCStats) {}
+func (g *grpcStatsHandler) HandleRPC(context.Context, stats.RPCStats) {
+}
 
 const ctxKeyRemoteHost = "remote-host"
 
-func (s *statsHandler) TagConn(ctx context.Context, connTagInfo *stats.ConnTagInfo) context.Context {
+func (g *grpcStatsHandler) TagConn(ctx context.Context, connTagInfo *stats.ConnTagInfo) context.Context {
 	remoteHost, _, _ := net.SplitHostPort(connTagInfo.RemoteAddr.String())
 	ctx = context.WithValue(ctx, ctxKeyRemoteHost, remoteHost)
 	return ctx
 }
 
-func (s *statsHandler) HandleConn(context.Context, stats.ConnStats) {}
+func (g *grpcStatsHandler) HandleConn(context.Context, stats.ConnStats) {
+}
 
-func streamInterceptor(c *Config) grpc.StreamServerInterceptor {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
-		ctx, logRequestEnd := c.LogRequest(stream.Context(), info.FullMethod)
-		defer func() {
-			logRequestEnd(ctx, err)
-		}()
+func (g *grpcAPI) streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+	ctx, logRequestEnd := g.logRequest(stream.Context(), info.FullMethod)
+	defer func() {
+		logRequestEnd(ctx, err)
+	}()
 
-		ctx, err = c.Authorize(stream.Context())
-		if err != nil {
-			return err
-		}
-
-		if l, ok := ctxhelper.LoggerFromContext(ctx); ok {
-			logger = l
-		}
-
-		wrappedStream := middleware.WrapServerStream(stream)
-		wrappedStream.WrappedContext = ctx
-		return handler(srv, wrappedStream)
+	ctx, err = g.authorize(stream.Context())
+	if err != nil {
+		return err
 	}
+
+	wrappedStream := middleware.WrapServerStream(stream)
+	wrappedStream.WrappedContext = ctx
+	return handler(srv, wrappedStream)
 }
 
-func unaryInterceptor(c *Config) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (res interface{}, err error) {
-		var logRequestEnd func(context.Context, error)
-		ctx, logRequestEnd = c.LogRequest(ctx, info.FullMethod)
-		defer func() {
-			logRequestEnd(ctx, err)
-		}()
+func (g *grpcAPI) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (res interface{}, err error) {
+	var logRequestEnd func(context.Context, error)
+	ctx, logRequestEnd = g.logRequest(ctx, info.FullMethod)
+	defer func() {
+		logRequestEnd(ctx, err)
+	}()
 
-		ctx, err = c.Authorize(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		return handler(ctx, req)
+	ctx, err = g.authorize(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	return handler(ctx, req)
 }
 
-type server struct {
-	*Config
-}
-
-func (s *server) Status(context.Context, *empty.Empty) (*protobuf.StatusResponse, error) {
+func (g *grpcAPI) Status(context.Context, *empty.Empty) (*protobuf.StatusResponse, error) {
 	healthy := true
-	if err := s.DB.Exec("ping"); err != nil {
+	if err := g.db.Exec("ping"); err != nil {
 		healthy = false
 	}
 	return protobuf.NewStatusResponse(healthy, nil), nil
 }
 
-func (s *server) listApps(req *protobuf.StreamAppsRequest) ([]*protobuf.App, *data.PageToken, error) {
+func (g *grpcAPI) listApps(req *protobuf.StreamAppsRequest) ([]*protobuf.App, *data.PageToken, error) {
 	pageSize := int(req.GetPageSize())
 	pageToken, err := data.ParsePageToken(req.PageToken)
 	if err != nil {
@@ -440,7 +263,7 @@ func (s *server) listApps(req *protobuf.StreamAppsRequest) ([]*protobuf.App, *da
 	}
 
 	appIDs := protobuf.ParseIDsFromNameFilters(req.GetNameFilters(), "apps")
-	ctApps, nextPageToken, err := s.appRepo.ListPage(data.ListAppOptions{
+	ctApps, nextPageToken, err := g.appRepo.ListPage(data.ListAppOptions{
 		PageToken:    *pageToken,
 		AppIDs:       appIDs,
 		LabelFilters: protobuf.NewControllerLabelFilters(req.GetLabelFilters()),
@@ -471,7 +294,7 @@ func (s *server) listApps(req *protobuf.StreamAppsRequest) ([]*protobuf.App, *da
 	return apps, nextPageToken, nil
 }
 
-func (s *server) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Controller_StreamAppsServer) error {
+func (g *grpcAPI) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Controller_StreamAppsServer) error {
 	unary := !(req.StreamUpdates || req.StreamCreates)
 
 	var apps []*protobuf.App
@@ -481,7 +304,7 @@ func (s *server) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Con
 		appsMtx.Lock()
 		defer appsMtx.Unlock()
 		var err error
-		apps, nextPageToken, err = s.listApps(req)
+		apps, nextPageToken, err = g.listApps(req)
 		return err
 	}
 
@@ -495,11 +318,11 @@ func (s *server) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Con
 		appsMtx.RUnlock()
 	}
 
-	var sub *EventListener
+	var sub *grpcEventListener
 	var err error
 	if !unary {
 		appIDs := protobuf.ParseIDsFromNameFilters(req.GetNameFilters(), "apps")
-		sub, err = s.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeApp, ct.EventTypeAppDeletion, ct.EventTypeAppRelease}, nil)
+		sub, err = g.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeApp, ct.EventTypeAppDeletion, ct.EventTypeAppRelease}, nil)
 		if err != nil {
 			return protobuf.NewError(err, err.Error())
 		}
@@ -539,7 +362,7 @@ func (s *server) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Con
 			case ct.EventTypeApp:
 				var ctApp *ct.App
 				if err := json.Unmarshal(event.Data, &ctApp); err != nil {
-					s.logger.Error("error unmarshalling event", "rpcMethod", "StreamApps", "event_id", event.ID, "error", err)
+					logger.Error("error unmarshalling event", "rpcMethod", "StreamApps", "event_id", event.ID, "error", err)
 					continue
 				}
 				maybeSendApp(event, protobuf.NewApp(ctApp))
@@ -549,7 +372,7 @@ func (s *server) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Con
 				}
 				var ctAppDeletionEvent *ct.AppDeletionEvent
 				if err := json.Unmarshal(event.Data, &ctAppDeletionEvent); err != nil {
-					s.logger.Error("error unmarshalling app deletion event", "rpcMethod", "StreamApps", "event_id", event.ID, "error", err)
+					logger.Error("error unmarshalling app deletion event", "rpcMethod", "StreamApps", "event_id", event.ID, "error", err)
 					continue
 				}
 				if ctAppDeletionEvent.AppDeletion == nil {
@@ -564,9 +387,9 @@ func (s *server) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Con
 				if !req.StreamUpdates {
 					continue
 				}
-				ctApp, err := s.appRepo.Get(event.AppID)
+				ctApp, err := g.appRepo.Get(event.AppID)
 				if err != nil {
-					s.logger.Error("error fetching app", "rpcMethod", "StreamApps", "app_id", event.AppID, "error", err)
+					logger.Error("error fetching app", "rpcMethod", "StreamApps", "app_id", event.AppID, "error", err)
 					continue
 				}
 				maybeSendApp(event, protobuf.NewApp(ctApp.(*ct.App)))
@@ -582,7 +405,7 @@ func (s *server) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Con
 	return nil
 }
 
-func (s *server) UpdateApp(ctx context.Context, req *protobuf.UpdateAppRequest) (*protobuf.App, error) {
+func (g *grpcAPI) UpdateApp(ctx context.Context, req *protobuf.UpdateAppRequest) (*protobuf.App, error) {
 	app := req.App
 	data := map[string]interface{}{
 		"meta": app.Labels,
@@ -611,20 +434,20 @@ func (s *server) UpdateApp(ctx context.Context, req *protobuf.UpdateAppRequest) 
 		}
 	}
 
-	ctApp, err := s.appRepo.Update(protobuf.ParseIDFromName(app.Name, "apps"), data)
+	ctApp, err := g.appRepo.Update(protobuf.ParseIDFromName(app.Name, "apps"), data)
 	if err != nil {
 		return nil, protobuf.NewError(err, err.Error())
 	}
 	return protobuf.NewApp(ctApp.(*ct.App)), nil
 }
 
-func (s *server) createScale(req *protobuf.CreateScaleRequest) (*protobuf.ScaleRequest, error) {
+func (g *grpcAPI) createScale(req *protobuf.CreateScaleRequest) (*protobuf.ScaleRequest, error) {
 	appID := protobuf.ParseIDFromName(req.Parent, "apps")
 	releaseID := protobuf.ParseIDFromName(req.Parent, "releases")
 	processes := parseDeploymentProcesses(req.Processes)
 	tags := parseDeploymentTags(req.Tags)
 
-	sub, err := s.subscribeEvents([]string{appID}, []ct.EventType{ct.EventTypeScaleRequest, ct.EventTypeScaleRequestCancelation}, nil)
+	sub, err := g.subscribeEvents([]string{appID}, []ct.EventType{ct.EventTypeScaleRequest, ct.EventTypeScaleRequestCancelation}, nil)
 	if err != nil {
 		return nil, protobuf.NewError(err, err.Error())
 	}
@@ -641,7 +464,7 @@ func (s *server) createScale(req *protobuf.CreateScaleRequest) (*protobuf.ScaleR
 	if tags != nil {
 		scaleReq.NewTags = &tags
 	}
-	if _, err := s.formationRepo.AddScaleRequest(scaleReq, false); err != nil {
+	if _, err := g.formationRepo.AddScaleRequest(scaleReq, false); err != nil {
 		return nil, protobuf.NewError(err, err.Error())
 	}
 
@@ -681,11 +504,11 @@ outer:
 	return protobuf.NewScaleRequest(scaleReq), nil
 }
 
-func (s *server) CreateScale(ctx context.Context, req *protobuf.CreateScaleRequest) (*protobuf.ScaleRequest, error) {
-	return s.createScale(req)
+func (g *grpcAPI) CreateScale(ctx context.Context, req *protobuf.CreateScaleRequest) (*protobuf.ScaleRequest, error) {
+	return g.createScale(req)
 }
 
-func (s *server) StreamScales(req *protobuf.StreamScalesRequest, stream protobuf.Controller_StreamScalesServer) error {
+func (g *grpcAPI) StreamScales(req *protobuf.StreamScalesRequest, stream protobuf.Controller_StreamScalesServer) error {
 	unary := !(req.StreamUpdates || req.StreamCreates)
 
 	pageSize := int(req.PageSize)
@@ -711,7 +534,7 @@ func (s *server) StreamScales(req *protobuf.StreamScalesRequest, stream protobuf
 		streamAppIDs = nil
 		streamScaleIDs = nil
 	}
-	sub, err := s.subscribeEvents(streamAppIDs, []ct.EventType{ct.EventTypeScaleRequest, ct.EventTypeScaleRequestCancelation}, streamScaleIDs)
+	sub, err := g.subscribeEvents(streamAppIDs, []ct.EventType{ct.EventTypeScaleRequest, ct.EventTypeScaleRequestCancelation}, streamScaleIDs)
 	if err != nil {
 		return protobuf.NewError(err, err.Error())
 	}
@@ -722,7 +545,7 @@ func (s *server) StreamScales(req *protobuf.StreamScalesRequest, stream protobuf
 	for _, state := range req.StateFilters {
 		stateFilters = append(stateFilters, state.ControllerType())
 	}
-	list, nextPageToken, err := s.formationRepo.ListScaleRequests(data.ListScaleRequestOptions{
+	list, nextPageToken, err := g.formationRepo.ListScaleRequests(data.ListScaleRequestOptions{
 		PageToken:    *pageToken,
 		AppIDs:       appIDs,
 		ReleaseIDs:   releaseIDs,
@@ -799,7 +622,7 @@ func (s *server) StreamScales(req *protobuf.StreamScalesRequest, stream protobuf
 
 			scale, err := unmarshalScaleRequest(event)
 			if err != nil {
-				s.logger.Error("error unmarshalling event", "rpcMethod", "StreamScales", "event_id", event.ID, "error", err)
+				logger.Error("error unmarshalling event", "rpcMethod", "StreamScales", "event_id", event.ID, "error", err)
 				continue
 			}
 
@@ -846,7 +669,7 @@ func (s *server) StreamScales(req *protobuf.StreamScalesRequest, stream protobuf
 	return maybeError(sub.Err)
 }
 
-func (s *server) StreamReleases(req *protobuf.StreamReleasesRequest, stream protobuf.Controller_StreamReleasesServer) error {
+func (g *grpcAPI) StreamReleases(req *protobuf.StreamReleasesRequest, stream protobuf.Controller_StreamReleasesServer) error {
 	unary := !(req.StreamUpdates || req.StreamCreates)
 	pageToken, err := data.ParsePageToken(req.PageToken)
 	if err != nil {
@@ -861,14 +684,14 @@ func (s *server) StreamReleases(req *protobuf.StreamReleasesRequest, stream prot
 	appIDs := protobuf.ParseIDsFromNameFilters(req.NameFilters, "apps")
 	releaseIDs := protobuf.ParseIDsFromNameFilters(req.NameFilters, "releases")
 
-	sub, err := s.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeRelease}, releaseIDs)
+	sub, err := g.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeRelease}, releaseIDs)
 	if err != nil {
 		return protobuf.NewError(err, err.Error())
 	}
 	defer sub.Close()
 
 	// get all releases up until now
-	ctReleases, nextPageToken, err := s.releaseRepo.ListPage(data.ListReleaseOptions{
+	ctReleases, nextPageToken, err := g.releaseRepo.ListPage(data.ListReleaseOptions{
 		PageToken:    *pageToken,
 		AppIDs:       appIDs,
 		ReleaseIDs:   releaseIDs,
@@ -907,7 +730,7 @@ func (s *server) StreamReleases(req *protobuf.StreamReleasesRequest, stream prot
 	maybeAcceptRelease := func(event *ct.Event) (release *protobuf.Release, accepted bool) {
 		r, err := unmarshalRelease(event)
 		if err != nil {
-			s.logger.Error("error unmarshalling event", "rpcMethod", "StreamReleases", "event_id", event.ID, "error", err)
+			logger.Error("error unmarshalling event", "rpcMethod", "StreamReleases", "event_id", event.ID, "error", err)
 			return
 		}
 
@@ -948,16 +771,16 @@ func (s *server) StreamReleases(req *protobuf.StreamReleasesRequest, stream prot
 	return maybeError(sub.Err)
 }
 
-func (s *server) CreateRelease(ctx context.Context, req *protobuf.CreateReleaseRequest) (*protobuf.Release, error) {
+func (g *grpcAPI) CreateRelease(ctx context.Context, req *protobuf.CreateReleaseRequest) (*protobuf.Release, error) {
 	ctRelease := req.Release.ControllerType()
 	ctRelease.AppID = protobuf.ParseIDFromName(req.Parent, "apps")
-	if err := s.releaseRepo.Add(ctRelease); err != nil {
+	if err := g.releaseRepo.Add(ctRelease); err != nil {
 		return nil, protobuf.NewError(err, err.Error())
 	}
 	return protobuf.NewRelease(ctRelease), nil
 }
 
-func (s *server) listDeployments(req *protobuf.StreamDeploymentsRequest) ([]*protobuf.ExpandedDeployment, *data.PageToken, error) {
+func (g *grpcAPI) listDeployments(req *protobuf.StreamDeploymentsRequest) ([]*protobuf.ExpandedDeployment, *data.PageToken, error) {
 	pageToken, err := data.ParsePageToken(req.PageToken)
 	if err != nil {
 		return nil, nil, err
@@ -988,7 +811,7 @@ func (s *server) listDeployments(req *protobuf.StreamDeploymentsRequest) ([]*pro
 		}
 		typeFilters = append(typeFilters, ctReleaseType)
 	}
-	ctExpandedDeployments, nextPageToken, err := s.deploymentRepo.ListPage(data.ListDeploymentOptions{
+	ctExpandedDeployments, nextPageToken, err := g.deploymentRepo.ListPage(data.ListDeploymentOptions{
 		PageToken:     *pageToken,
 		AppIDs:        protobuf.ParseIDsFromNameFilters(req.NameFilters, "apps"),
 		DeploymentIDs: protobuf.ParseIDsFromNameFilters(req.NameFilters, "deployments"),
@@ -1006,7 +829,7 @@ func (s *server) listDeployments(req *protobuf.StreamDeploymentsRequest) ([]*pro
 	return deployments, nextPageToken, nil
 }
 
-func (s *server) StreamDeployments(req *protobuf.StreamDeploymentsRequest, stream protobuf.Controller_StreamDeploymentsServer) error {
+func (g *grpcAPI) StreamDeployments(req *protobuf.StreamDeploymentsRequest, stream protobuf.Controller_StreamDeploymentsServer) error {
 	unary := !(req.StreamUpdates || req.StreamCreates)
 
 	appIDs := protobuf.ParseIDsFromNameFilters(req.NameFilters, "apps")
@@ -1019,7 +842,7 @@ func (s *server) StreamDeployments(req *protobuf.StreamDeploymentsRequest, strea
 		deploymentsMtx.Lock()
 		defer deploymentsMtx.Unlock()
 		var err error
-		deployments, nextPageToken, err = s.listDeployments(req)
+		deployments, nextPageToken, err = g.listDeployments(req)
 		return err
 	}
 
@@ -1044,7 +867,7 @@ func (s *server) StreamDeployments(req *protobuf.StreamDeploymentsRequest, strea
 
 	var wg sync.WaitGroup
 
-	sub, err := s.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeDeployment}, deploymentIDs)
+	sub, err := g.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeDeployment}, deploymentIDs)
 	if err != nil {
 		return protobuf.NewError(err, err.Error())
 	}
@@ -1067,12 +890,12 @@ func (s *server) StreamDeployments(req *protobuf.StreamDeploymentsRequest, strea
 
 			var deploymentEvent *ct.DeploymentEvent
 			if err := json.Unmarshal(event.Data, &deploymentEvent); err != nil {
-				s.logger.Error("error unmarshalling event", "rpcMethod", "StreamDeployments", "error", err)
+				logger.Error("error unmarshalling event", "rpcMethod", "StreamDeployments", "error", err)
 				continue
 			}
-			ctd, err := s.deploymentRepo.GetExpanded(event.ObjectID)
+			ctd, err := g.deploymentRepo.GetExpanded(event.ObjectID)
 			if err != nil {
-				s.logger.Error("error fetching deployment for event", "rpcMethod", "StreamDeployments", "deployment_id", event.ObjectID, "error", err)
+				logger.Error("error fetching deployment for event", "rpcMethod", "StreamDeployments", "deployment_id", event.ObjectID, "error", err)
 				continue
 			}
 			ctd.Status = deploymentEvent.Status
@@ -1121,17 +944,17 @@ func parseDeploymentProcesses(from map[string]int32) map[string]int {
 	return to
 }
 
-func (s *server) CreateDeployment(req *protobuf.CreateDeploymentRequest, ds protobuf.Controller_CreateDeploymentServer) error {
+func (g *grpcAPI) CreateDeployment(req *protobuf.CreateDeploymentRequest, ds protobuf.Controller_CreateDeploymentServer) error {
 	appID := protobuf.ParseIDFromName(req.Parent, "apps")
 	releaseID := protobuf.ParseIDFromName(req.Parent, "releases")
-	d, err := s.deploymentRepo.Add(appID, releaseID)
+	d, err := g.deploymentRepo.Add(appID, releaseID)
 	if err != nil {
 		return protobuf.NewError(err, err.Error())
 	}
 
 	// Wait for deployment to complete and perform scale
 
-	sub, err := s.subscribeEvents([]string{appID}, []ct.EventType{ct.EventTypeDeployment}, []string{d.ID})
+	sub, err := g.subscribeEvents([]string{appID}, []ct.EventType{ct.EventTypeDeployment}, []string{d.ID})
 	if err != nil {
 		return protobuf.NewError(err, err.Error())
 	}
@@ -1147,14 +970,14 @@ func (s *server) CreateDeployment(req *protobuf.CreateDeploymentRequest, ds prot
 		}
 		var de *ct.DeploymentEvent
 		if err := json.Unmarshal(event.Data, &de); err != nil {
-			s.logger.Error("failed to unmarshal deployment event", "event_id", event.ID, "deployment_id", event.ObjectID, "error", err)
+			logger.Error("failed to unmarshal deployment event", "event_id", event.ID, "deployment_id", event.ObjectID, "error", err)
 			continue
 		}
 
 		// Scale release to requested processes/tags once deployment is complete
 		if de.Status == "complete" {
 			if sr := req.ScaleRequest; sr != nil {
-				if _, err := s.createScale(&protobuf.CreateScaleRequest{
+				if _, err := g.createScale(&protobuf.CreateScaleRequest{
 					Parent:    fmt.Sprintf("apps/%s/releases/%s", de.AppID, de.ReleaseID),
 					Processes: sr.Processes,
 					Tags:      sr.Tags,
