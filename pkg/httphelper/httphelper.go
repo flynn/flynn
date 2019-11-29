@@ -94,7 +94,7 @@ func IsRetryableError(err error) bool {
 var CORSAllowAll = &cors.Options{
 	AllowAllOrigins:  true,
 	AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
-	AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
+	AllowHeaders:     []string{"Auth-Key", "Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match", "X-GRPC-Web"},
 	ExposeHeaders:    []string{"ETag", "Content-Disposition"},
 	AllowCredentials: true,
 	MaxAge:           time.Hour,

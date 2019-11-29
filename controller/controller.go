@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -26,9 +27,11 @@ import (
 	"github.com/flynn/flynn/pkg/status"
 	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/que-go"
+	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/inconshreveable/log15"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 var logger = log15.New("component", "controller")
@@ -41,11 +44,17 @@ var schemaRoot = "/etc/flynn-controller/jsonschema"
 func main() {
 	defer shutdown.Exit()
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3000"
+	httpPort := os.Getenv("PORT")
+	if httpPort == "" {
+		httpPort = "3000"
 	}
-	addr := ":" + port
+	httpAddr := ":" + httpPort
+
+	grpcPort := os.Getenv("PORT_2")
+	if grpcPort == "" {
+		grpcPort = "3001"
+	}
+	grpcAddr := ":" + grpcPort
 
 	if seed := os.Getenv("NAME_SEED"); seed != "" {
 		s, err := hex.DecodeString(seed)
@@ -69,8 +78,8 @@ func main() {
 	// Listen for database migration, reset connpool on new migration
 	go postgres.ResetOnMigration(db, logger, doneCh)
 
-	hb, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("controller", &discoverd.Instance{
-		Addr:  addr,
+	httpService, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("controller", &discoverd.Instance{
+		Addr:  httpAddr,
 		Proto: "http",
 		Meta: map[string]string{
 			"AUTH_KEY": os.Getenv("AUTH_KEY"),
@@ -79,12 +88,27 @@ func main() {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-
 	shutdown.BeforeExit(func() {
-		hb.Close()
+		httpService.Close()
 	})
 
-	handler := appHandler(handlerConfig{
+	grpcListener, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	shutdown.BeforeExit(func() { grpcListener.Close() })
+	grpcService, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("controller-grpc", &discoverd.Instance{
+		Addr:  grpcAddr,
+		Proto: "tcp",
+	})
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	shutdown.BeforeExit(func() {
+		grpcService.Close()
+	})
+
+	handler, grpcServer, _ := appHandler(handlerConfig{
 		db:     db,
 		cc:     utils.ClusterClientWrapper(cluster.NewClient()),
 		lc:     lc,
@@ -92,7 +116,8 @@ func main() {
 		keyIDs: strings.Split(os.Getenv("AUTH_KEY_IDS"), ","),
 		caCert: []byte(os.Getenv("CA_CERT")),
 	})
-	shutdown.Fatal(http.ListenAndServe(addr, handler))
+	go grpcServer.Serve(grpcListener)
+	shutdown.Fatal(http.ListenAndServe(httpAddr, handler))
 }
 
 type logClient interface {
@@ -122,7 +147,7 @@ func respondWithError(w http.ResponseWriter, err error) {
 	}
 }
 
-func appHandler(c handlerConfig) http.Handler {
+func appHandler(c handlerConfig) (http.Handler, *grpc.Server, *controllerAPI) {
 	err := schema.Load(schemaRoot)
 	if err != nil {
 		shutdown.Fatal(err)
@@ -164,6 +189,7 @@ func appHandler(c handlerConfig) http.Handler {
 		que:                 q,
 		caCert:              c.caCert,
 		config:              c,
+		authorizer:          utils.NewAuthorizer(c.keys, c.keyIDs),
 	}
 
 	shutdown.BeforeExit(api.Shutdown)
@@ -250,16 +276,20 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/sinks/:sink_id", httphelper.WrapHandler(api.GetSink))
 	httpRouter.DELETE("/sinks/:sink_id", httphelper.WrapHandler(api.DeleteSink))
 
+	grpcAPI := &grpcAPI{&api, c.db}
+	grpcSrv := grpcAPI.grpcServer()
+
+	handler := muxHandler(httpRouter, grpcSrv, api.authorizer)
 	if os.Getenv("AUDIT_LOG") == "true" {
-		return httphelper.ContextInjector("controller",
-			httphelper.NewRequestLoggerCustom(muxHandler(httpRouter, c.keyIDs, c.keys), auditLoggerFn))
+		handler = httphelper.NewRequestLoggerCustom(handler, auditLoggerFn)
+	} else {
+		handler = httphelper.NewRequestLogger(handler)
 	}
-	return httphelper.ContextInjector("controller",
-		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keyIDs, c.keys)))
+	return httphelper.ContextInjector("controller", handler), grpcSrv, &api
 }
 
-func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
-	authorizer := utils.NewAuthorizer(authKeys, authIDs)
+func muxHandler(main http.Handler, grpcSrv *grpc.Server, authorizer *utils.Authorizer) http.Handler {
+	grpcWeb := grpcweb.WrapServer(grpcSrv)
 	return httphelper.CORSAllowAll.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if shutdown.IsActive() {
 			httphelper.ServiceUnavailableError(w, ErrShutdown.Error())
@@ -286,6 +316,10 @@ func muxHandler(main http.Handler, authIDs, authKeys []string) http.Handler {
 		if auth.ID != "" {
 			r.Header.Set("Flynn-Auth-Key-ID", auth.ID)
 		}
+		if grpcWeb.IsGrpcWebRequest(r) {
+			grpcWeb.ServeHTTP(w, r)
+			return
+		}
 		main.ServeHTTP(w, r)
 	}))
 }
@@ -310,6 +344,7 @@ type controllerAPI struct {
 	que                 *que.Client
 	caCert              []byte
 	config              handlerConfig
+	authorizer          *utils.Authorizer
 
 	eventListener    *data.EventListener
 	eventListenerMtx sync.Mutex

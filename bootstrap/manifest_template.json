@@ -182,21 +182,12 @@
       },
       "processes": {
         "web": {
-          "ports": [{"port": 80, "proto": "tcp"}],
+          "ports": [
+            {"port": 80, "proto": "tcp"},
+            {"port": 8080, "proto": "tcp"}
+          ],
           "args": ["/bin/start-flynn-controller", "controller"],
           "service": "controller",
-          "volumes": [{"path": "/tmp", "delete_on_stop": true}]
-        },
-        "grpc": {
-          "ports": [{
-            "proto": "tcp",
-            "service": {
-              "name": "controller-grpc-web",
-              "create": true
-            }
-          }],
-          "args": ["/bin/start-flynn-controller", "controller-grpc"],
-          "service": "controller-grpc-web",
           "volumes": [{"path": "/tmp", "delete_on_stop": true}]
         },
         "scheduler": {
@@ -213,8 +204,7 @@
     },
     "artifacts": [$image_artifact[controller]],
     "processes": {
-      "web": 1,
-      "grpc": 1
+      "web": 1
     },
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
   },
@@ -626,16 +616,6 @@
     "url": "http://router-http.discoverd",
     "host": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
     "status": 401
-  },
-  {
-    "id": "controller-grpc-route",
-    "action": "add-route",
-    "app_step": "controller-inception",
-    "cert_step": "controller-cert",
-    "type": "http",
-    "service": "controller-grpc-web",
-    "domain": "controller-grpc.{{ getenv \"CLUSTER_DOMAIN\" }}",
-    "drain_backends": true
   },
   {
     "id": "logaggregator",

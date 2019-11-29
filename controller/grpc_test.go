@@ -1,26 +1,22 @@
 package main
 
 import (
-	fmt "fmt"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"path"
-	"path/filepath"
+	"net/http/httptest"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/controller/grpc/protobuf"
+	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
-	flynnstatus "github.com/flynn/flynn/pkg/status"
-	"github.com/flynn/flynn/pkg/testutils/postgres"
 	. "github.com/flynn/go-check"
-	que "github.com/flynn/que-go"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/jackc/pgx"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -31,45 +27,20 @@ import (
 
 const bufSize = 1024 * 1024
 
-func init() {
-	schemaRoot, _ = filepath.Abs(filepath.Join("..", "..", "schema"))
-}
-
-// Hook gocheck up to the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
-
-type S struct {
-	srv                 *grpc.Server
-	conf                *Config
+type GRPCSuite struct {
+	db                  *postgres.DB
+	api                 *controllerAPI
 	grpc                protobuf.ControllerClient
 	grpcNoAuth          protobuf.ControllerClient
-	http                *http.Client
+	httpSrv             *httptest.Server
 	tearDownFns         []func()
 	scaleRequestNameMap map[string]string
 }
 
-var _ = Suite(&S{})
+var _ = Suite(&GRPCSuite{})
 
-var authKey = "test"
-
-func setupTestDB(c *C, dbname string) *postgres.DB {
-	if err := pgtestutils.SetupPostgres(dbname); err != nil {
-		c.Fatal(err)
-	}
-	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig: pgx.ConnConfig{
-			Host:     "/var/run/postgresql",
-			Database: dbname,
-		},
-	})
-	if err != nil {
-		c.Fatal(err)
-	}
-	return postgres.New(pgxpool, nil)
-}
-
-func (s *S) SetUpSuite(c *C) {
-	dbname := "controllertest"
+func (s *GRPCSuite) SetUpSuite(c *C) {
+	dbname := "controller_grpc_test"
 	db := setupTestDB(c, dbname)
 	if err := data.MigrateDB(db); err != nil {
 		c.Fatal(err)
@@ -86,58 +57,34 @@ func (s *S) SetUpSuite(c *C) {
 	if err != nil {
 		c.Fatal(err)
 	}
-	db = postgres.New(pgxpool, nil)
-	q := que.NewClient(db.ConnPool)
+	s.db = postgres.New(pgxpool, nil)
+
 	authKeys := []string{"test-3bebef7a2bed81017fb2bfa411a6a0a2"}
-	conf := configureRepos(&Config{
-		logger:     logger,
-		DB:         db,
-		q:          q,
-		authorizer: utils.NewAuthorizer(authKeys, []string{"test-auth-key"}),
+	handler, grpcServer, api := appHandler(handlerConfig{
+		db:     s.db,
+		cc:     tu.NewFakeCluster(),
+		lc:     newFakeLogAggregatorClient(),
+		rc:     newFakeRouter(),
+		keys:   authKeys,
+		keyIDs: []string{"test-auth-key"},
 	})
-	s.conf = conf
-	lis := bufconn.Listen(bufSize)
-	s.tearDownFns = append(s.tearDownFns, func() {
-		lis.Close()
-	})
-	s.srv = NewServer(conf)
-	go runServer(s.srv, conf, lis)
-
-	// Setup up a regular http client
-	t := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: func(context.Context, string, string) (net.Conn, error) {
-			return lis.Dial()
-		},
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-	s.http = &http.Client{
-		Transport: t,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-		Timeout: time.Second * 10,
-	}
-
-	if _, err := s.http.Get(fmt.Sprintf("http://%s", path.Join(lis.Addr().String(), flynnstatus.Path))); err != nil { // wait for server to start
-		c.Fatal(err)
-	}
+	s.api = api
+	s.httpSrv = httptest.NewServer(handler)
+	s.onTeardown(func() { s.httpSrv.Close() })
+	grpcListener := bufconn.Listen(bufSize)
+	s.onTeardown(func() { grpcListener.Close() })
+	go grpcServer.Serve(grpcListener)
 
 	grpcClient := func(opts ...grpc.DialOption) protobuf.ControllerClient {
 		opts = append(opts, grpc.WithInsecure())
 		opts = append(opts, grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
-			return lis.Dial()
+			return grpcListener.Dial()
 		}))
-		conn, err := grpc.Dial(lis.Addr().String(), opts...)
+		conn, err := grpc.Dial(grpcListener.Addr().String(), opts...)
 		if err != nil {
 			c.Fatalf("did not connect to server: %v", err)
 		}
-		s.tearDownFns = append(s.tearDownFns, func() {
-			conn.Close()
-		})
+		s.onTeardown(func() { conn.Close() })
 		return protobuf.NewControllerClient(conn)
 	}
 
@@ -146,16 +93,26 @@ func (s *S) SetUpSuite(c *C) {
 
 	// Set up an unauthenticated connection to the server
 	s.grpcNoAuth = grpcClient()
+
+	// Wait for the server to start
+	var req empty.Empty
+	if _, err := s.grpc.Status(context.Background(), &req); err != nil {
+		c.Fatal(err)
+	}
 }
 
-func (s *S) TearDownSuite(c *C) {
+func (s *GRPCSuite) onTeardown(f func()) {
+	s.tearDownFns = append(s.tearDownFns, f)
+}
+
+func (s *GRPCSuite) TearDownSuite(c *C) {
 	for _, fn := range s.tearDownFns {
 		fn()
 	}
 }
 
-func (s *S) SetUpTest(c *C) {
-	c.Assert(s.conf.DB.Exec(`
+func (s *GRPCSuite) SetUpTest(c *C) {
+	c.Assert(s.db.Exec(`
 		TRUNCATE
 			apps, artifacts, deployments, events,
 			formations, releases, scale_requests
@@ -182,49 +139,49 @@ func isErrDeadlineExceeded(err error) bool {
 	return false
 }
 
-func (s *S) createTestApp(c *C, app *protobuf.App) *protobuf.App {
+func (s *GRPCSuite) createTestApp(c *C, app *protobuf.App) *protobuf.App {
 	ctApp := app.ControllerType()
-	err := s.conf.appRepo.Add(ctApp)
+	err := s.api.appRepo.Add(ctApp)
 	c.Assert(err, IsNil)
 	return protobuf.NewApp(ctApp)
 }
 
-func (s *S) updateTestApp(c *C, app *protobuf.App) *protobuf.App {
+func (s *GRPCSuite) updateTestApp(c *C, app *protobuf.App) *protobuf.App {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	app, err := s.grpc.UpdateApp(ctx, &protobuf.UpdateAppRequest{App: app})
 	c.Assert(err, IsNil)
 	return app
 }
 
-func (s *S) setTestAppRelease(c *C, app *protobuf.App, releaseName string) *protobuf.App {
+func (s *GRPCSuite) setTestAppRelease(c *C, app *protobuf.App, releaseName string) *protobuf.App {
 	ctApp := app.ControllerType()
 	releaseID := protobuf.ParseIDFromName(releaseName, "releases")
-	c.Assert(s.conf.appRepo.SetRelease(ctApp, releaseID), IsNil)
+	c.Assert(s.api.appRepo.SetRelease(ctApp, releaseID), IsNil)
 	return protobuf.NewApp(ctApp)
 }
 
-func (s *S) createTestRelease(c *C, parentName string, release *protobuf.Release) *protobuf.Release {
+func (s *GRPCSuite) createTestRelease(c *C, parentName string, release *protobuf.Release) *protobuf.Release {
 	ctRelease := release.ControllerType()
 	ctRelease.AppID = protobuf.ParseIDFromName(parentName, "apps")
-	err := s.conf.releaseRepo.Add(ctRelease)
+	err := s.api.releaseRepo.Add(ctRelease)
 	c.Assert(err, IsNil)
 	return protobuf.NewRelease(ctRelease)
 }
 
-func (s *S) createTestDeployment(c *C, releaseName string) *protobuf.ExpandedDeployment {
+func (s *GRPCSuite) createTestDeployment(c *C, releaseName string) *protobuf.ExpandedDeployment {
 	appID := protobuf.ParseIDFromName(releaseName, "apps")
 	releaseID := protobuf.ParseIDFromName(releaseName, "releases")
-	ctDeployment, err := s.conf.deploymentRepo.AddExpanded(appID, releaseID)
+	ctDeployment, err := s.api.deploymentRepo.AddExpanded(appID, releaseID)
 	c.Assert(err, IsNil)
 	return protobuf.NewExpandedDeployment(ctDeployment)
 }
 
-func (s *S) createTestDeploymentEvent(c *C, d *protobuf.ExpandedDeployment, e *ct.DeploymentEvent) {
+func (s *GRPCSuite) createTestDeploymentEvent(c *C, d *protobuf.ExpandedDeployment, e *ct.DeploymentEvent) {
 	e.AppID = protobuf.ParseIDFromName(d.Name, "apps")
 	e.DeploymentID = protobuf.ParseIDFromName(d.Name, "deployments")
 	e.ReleaseID = protobuf.ParseIDFromName(d.NewRelease.Name, "releases")
 
-	c.Assert(data.CreateEvent(s.conf.DB.Exec, &ct.Event{
+	c.Assert(data.CreateEvent(s.db.Exec, &ct.Event{
 		AppID:      e.AppID,
 		ObjectID:   e.DeploymentID,
 		ObjectType: ct.EventTypeDeployment,
@@ -232,7 +189,7 @@ func (s *S) createTestDeploymentEvent(c *C, d *protobuf.ExpandedDeployment, e *c
 	}, e), IsNil)
 }
 
-func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
+func (s *GRPCSuite) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	if in.Type == "" {
 		in.Type = ct.ArtifactTypeFlynn
 		in.RawManifest = ct.ImageManifest{
@@ -242,32 +199,32 @@ func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	if in.URI == "" {
 		in.URI = fmt.Sprintf("https://example.com/%s", random.String(8))
 	}
-	c.Assert(s.conf.artifactRepo.Add(in), IsNil)
+	c.Assert(s.api.artifactRepo.Add(in), IsNil)
 	return in
 }
 
-func (s *S) createTestScaleRequest(c *C, req *protobuf.CreateScaleRequest) *protobuf.ScaleRequest {
+func (s *GRPCSuite) createTestScaleRequest(c *C, req *protobuf.CreateScaleRequest) *protobuf.ScaleRequest {
 	ctReq := req.ControllerType()
-	ctReq, err := s.conf.formationRepo.AddScaleRequest(ctReq, false)
+	ctReq, err := s.api.formationRepo.AddScaleRequest(ctReq, false)
 	c.Assert(err, IsNil)
 	scale := protobuf.NewScaleRequest(ctReq)
 	s.scaleRequestNameMap[scale.Name] = fmt.Sprintf("testScale%d", len(s.scaleRequestNameMap)+1)
 	return scale
 }
 
-func (s *S) updateTestScaleRequest(c *C, req *protobuf.ScaleRequest) {
+func (s *GRPCSuite) updateTestScaleRequest(c *C, req *protobuf.ScaleRequest) {
 	ctReq := req.ControllerType()
-	c.Assert(s.conf.formationRepo.UpdateScaleRequest(ctReq), IsNil)
+	c.Assert(s.api.formationRepo.UpdateScaleRequest(ctReq), IsNil)
 }
 
-func (s *S) TestOptionsRequest(c *C) { // grpc-web
-	req, err := http.NewRequest("OPTIONS", "http://localhost/grpc-web/fake", nil)
+func (s *GRPCSuite) TestOptionsRequest(c *C) { // grpc-web
+	req, err := http.NewRequest("OPTIONS", s.httpSrv.URL+"/grpc-web/fake", nil)
 	c.Assert(err, IsNil)
 	req.Header.Set("Origin", "http://localhost:3333")
 	req.Header.Set("Access-Control-Request-Method", "POST")
 	allowHeaders := []string{"Content-Type", "X-GRPC-Web"}
 	req.Header.Set("Access-Control-Request-Headers", strings.Join(allowHeaders, ","))
-	res, err := s.http.Do(req)
+	res, err := http.DefaultClient.Do(req)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(res.Header.Get("Access-Control-Allow-Credentials"), Equals, "true")
@@ -279,7 +236,7 @@ func (s *S) TestOptionsRequest(c *C) { // grpc-web
 	c.Assert(res.Header.Get("Access-Control-Allow-Methods"), Matches, ".*POST.*")
 }
 
-func (s *S) TestUnauthenticated(c *C) {
+func (s *GRPCSuite) TestUnauthenticated(c *C) {
 	ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	stream, err := s.grpcNoAuth.StreamApps(ctx, &protobuf.StreamAppsRequest{})
 	c.Assert(err, IsNil)
@@ -289,7 +246,7 @@ func (s *S) TestUnauthenticated(c *C) {
 	c.Assert(errStatus.Code(), Equals, codes.Unauthenticated)
 }
 
-func (s *S) TestStreamApps(c *C) {
+func (s *GRPCSuite) TestStreamApps(c *C) {
 	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
 	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2", Labels: map[string]string{"test.labels-filter": "include"}})
 	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3", Labels: map[string]string{"test.labels-filter": "exclude"}})
@@ -575,7 +532,7 @@ func (s *S) TestStreamApps(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 }
 
-func (s *S) TestStreamReleases(c *C) {
+func (s *GRPCSuite) TestStreamReleases(c *C) {
 	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
 	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2"})
 	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3"})
@@ -852,14 +809,14 @@ func (s *S) TestStreamReleases(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 }
 
-func (s *S) streamScalesWithCancel(c *C, req *protobuf.StreamScalesRequest) (protobuf.Controller_StreamScalesClient, context.CancelFunc) {
+func (s *GRPCSuite) streamScalesWithCancel(c *C, req *protobuf.StreamScalesRequest) (protobuf.Controller_StreamScalesClient, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	stream, err := s.grpc.StreamScales(ctx, req)
 	c.Assert(err, IsNil)
 	return stream, cancel
 }
 
-func (s *S) receiveScalesStream(c *C, stream protobuf.Controller_StreamScalesClient) *protobuf.StreamScalesResponse {
+func (s *GRPCSuite) receiveScalesStream(c *C, stream protobuf.Controller_StreamScalesClient) *protobuf.StreamScalesResponse {
 	res, err := stream.Recv()
 	if err == io.EOF || isErrCanceled(err) || isErrDeadlineExceeded(err) {
 		return nil
@@ -868,7 +825,7 @@ func (s *S) receiveScalesStream(c *C, stream protobuf.Controller_StreamScalesCli
 	return res
 }
 
-func (s *S) TestStreamScales(c *C) {
+func (s *GRPCSuite) TestStreamScales(c *C) {
 	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
 	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2"})
 	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3"})
@@ -1104,7 +1061,7 @@ func (s *S) TestStreamScales(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 }
 
-func (s *S) TestStreamScalesForApp(c *C) {
+func (s *GRPCSuite) TestStreamScalesForApp(c *C) {
 	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
 	testRelease1 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "1"}, Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
 
@@ -1138,7 +1095,7 @@ func (s *S) TestStreamScalesForApp(c *C) {
 	cancel()
 }
 
-func (s *S) TestStreamDeployments(c *C) {
+func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
 	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2"})
 	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3"})
