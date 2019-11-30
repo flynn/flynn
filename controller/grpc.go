@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/controller/data"
-	"github.com/flynn/flynn/controller/grpc/protobuf"
+	"github.com/flynn/flynn/controller/protobuf"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/postgres"
