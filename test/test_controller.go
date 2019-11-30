@@ -18,7 +18,7 @@ import (
 
 	"github.com/cupcake/jsonschema"
 	controller "github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/controller/grpc/protobuf"
+	"github.com/flynn/flynn/controller/protobuf"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"

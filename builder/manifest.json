@@ -157,7 +157,7 @@
       "layers": [
         {
           "protobuild": [
-            "controller/grpc/protobuf"
+            "controller/protobuf"
           ]
         },
         {
