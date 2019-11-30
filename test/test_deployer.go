@@ -4,8 +4,8 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
+	discoverd "github.com/flynn/flynn/discoverd/client"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/stream"
 	c "github.com/flynn/go-check"
@@ -32,7 +32,7 @@ func (t *testDeploy) cleanup() {
 	t.deployStream.Close()
 }
 
-func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App, *ct.Release) {
+func (s *DeployerSuite) createRelease(t *c.C, process, strategy string, scale int) (*ct.App, *ct.Release) {
 	app, release := s.createApp(t)
 	app.Strategy = strategy
 	s.controllerClient(t).UpdateApp(app)
@@ -44,20 +44,20 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App
 	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
-		Processes: map[string]int{process: 2},
+		Processes: map[string]int{process: scale},
 	}), c.IsNil)
 
-	err = watcher.WaitFor(ct.JobEvents{process: {ct.JobStateUp: 2}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{process: {ct.JobStateUp: scale}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 
 	return app, release
 }
 
-func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service string) *testDeploy {
-	app, release := s.createRelease(t, process, strategy)
+func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service string, scale int) *testDeploy {
+	app, release := s.createRelease(t, process, strategy, scale)
 
 	if service != "" {
-		debugf(t, "waiting for 2 %s services", service)
+		debugf(t, "waiting for %d %s services", scale, service)
 		events := make(chan *discoverd.Event)
 		stream, err := s.discoverdClient(t).Service(service).Watch(events)
 		t.Assert(err, c.IsNil)
@@ -77,7 +77,7 @@ func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service stri
 					debugf(t, "got %s service up event", service)
 					count++
 				}
-				if count == 2 {
+				if count == scale {
 					// although the services are up, give them a few more seconds
 					// to make sure the deployer will also see them as up.
 					time.Sleep(5 * time.Second)
@@ -161,6 +161,7 @@ loop:
 			if e.State != ct.JobStateUp && e.State != ct.JobStateDown {
 				continue
 			}
+			debugf(t, "got job event: job.id: %s release.id: %s state: %v", e.ID, e.ReleaseID, e.State)
 			actual = append(actual, e)
 			if len(actual) == len(expected) {
 				break loop
@@ -177,7 +178,7 @@ loop:
 }
 
 func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
-	d := s.createDeployment(t, "printer", "one-by-one", "")
+	d := s.createDeployment(t, "printer", "one-by-one", "", 2)
 	defer d.cleanup()
 	releaseID := d.deployment.NewReleaseID
 	oldReleaseID := d.deployment.OldReleaseID
@@ -191,8 +192,40 @@ func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
 	d.waitForDeploymentStatus("complete")
 }
 
+func (s *DeployerSuite) TestOnePerHostStrategy(t *c.C) {
+	// get the host count
+	hosts, err := s.clusterClient(t).Hosts()
+	t.Assert(err, c.IsNil)
+	if len(hosts) == 1 {
+		t.Skip("not enough hosts for realistic one-per-host test")
+	}
+
+	d := s.createDeployment(t, "printer", "one-per-host", "", len(hosts)*3)
+	defer d.cleanup()
+	releaseID := d.deployment.NewReleaseID
+	oldReleaseID := d.deployment.OldReleaseID
+
+	expectedEvents := make([]*ct.Job, 0, len(hosts)*3)
+	for i := 0; i < 3; i++ {
+		for range hosts {
+			expectedEvents = append(expectedEvents, &ct.Job{
+				ReleaseID: releaseID,
+				State:     ct.JobStateUp,
+			})
+		}
+		for range hosts {
+			expectedEvents = append(expectedEvents, &ct.Job{
+				ReleaseID: oldReleaseID,
+				State:     ct.JobStateDown,
+			})
+		}
+	}
+	d.waitForJobEvents("printer", expectedEvents)
+	d.waitForDeploymentStatus("complete")
+}
+
 func (s *DeployerSuite) TestOneDownOneUpStrategy(t *c.C) {
-	d := s.createDeployment(t, "printer", "one-down-one-up", "")
+	d := s.createDeployment(t, "printer", "one-down-one-up", "", 2)
 	defer d.cleanup()
 	releaseID := d.deployment.NewReleaseID
 	oldReleaseID := d.deployment.OldReleaseID
@@ -207,7 +240,7 @@ func (s *DeployerSuite) TestOneDownOneUpStrategy(t *c.C) {
 }
 
 func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
-	d := s.createDeployment(t, "printer", "all-at-once", "")
+	d := s.createDeployment(t, "printer", "all-at-once", "", 2)
 	defer d.cleanup()
 	releaseID := d.deployment.NewReleaseID
 	oldReleaseID := d.deployment.OldReleaseID
@@ -222,7 +255,7 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 }
 
 func (s *DeployerSuite) TestServiceEvents(t *c.C) {
-	d := s.createDeployment(t, "echoer", "all-at-once", "echo-service")
+	d := s.createDeployment(t, "echoer", "all-at-once", "echo-service", 2)
 	defer d.cleanup()
 	releaseID := d.deployment.NewReleaseID
 	oldReleaseID := d.deployment.OldReleaseID
@@ -254,7 +287,7 @@ func (s *DeployerSuite) assertRolledBack(t *c.C, deployment *ct.Deployment, proc
 
 func (s *DeployerSuite) TestRollbackFailedJob(t *c.C) {
 	// create a running release
-	app, release := s.createRelease(t, "printer", "all-at-once")
+	app, release := s.createRelease(t, "printer", "all-at-once", 2)
 
 	// deploy a release which will fail to start
 	client := s.controllerClient(t)
@@ -279,7 +312,7 @@ func (s *DeployerSuite) TestRollbackFailedJob(t *c.C) {
 
 func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
 	// create a running release
-	app, release := s.createRelease(t, "printer", "all-at-once")
+	app, release := s.createRelease(t, "printer", "all-at-once", 2)
 
 	// deploy a release which will not register the service
 	client := s.controllerClient(t)
