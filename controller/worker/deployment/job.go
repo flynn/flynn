@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/worker/types"
+	worker "github.com/flynn/flynn/controller/worker/types"
 	"github.com/inconshreveable/log15"
 )
 
@@ -33,6 +33,8 @@ func (d *DeployJob) Perform() error {
 		deployFunc = d.deployOneByOne
 	case "one-down-one-up":
 		deployFunc = d.deployOneDownOneUp
+	case "one-per-host":
+		deployFunc = d.deployOnePerHost
 	case "all-at-once":
 		deployFunc = d.deployAllAtOnce
 	case "sirenia":
@@ -158,12 +160,16 @@ func (d *DeployJob) logJobEvent(job *ct.Job) error {
 }
 
 func (d *DeployJob) scaleOneByOne(typ string, log log15.Logger) error {
-	for i := 0; i < d.Processes[typ]; i++ {
-		if err := d.scaleNewFormationUpByOne(typ, log); err != nil {
+	return d.scaleUpDownInBatches(typ, 1, log)
+}
+
+func (d *DeployJob) scaleUpDownInBatches(typ string, batchCount int, log log15.Logger) error {
+	for i := 0; i < d.Processes[typ]; i += batchCount {
+		if err := d.scaleNewFormationUp(typ, batchCount, log); err != nil {
 			return err
 		}
 
-		if err := d.scaleOldFormationDownByOne(typ, log); err != nil {
+		if err := d.scaleOldFormationDown(typ, batchCount, log); err != nil {
 			return err
 		}
 	}
@@ -183,6 +189,10 @@ func (d *DeployJob) scaleOneDownOneUp(typ string, log log15.Logger) error {
 }
 
 func (d *DeployJob) scaleNewFormationUpByOne(typ string, log log15.Logger) error {
+	return d.scaleNewFormationUp(typ, 1, log)
+}
+
+func (d *DeployJob) scaleNewFormationUp(typ string, count int, log log15.Logger) error {
 	// only scale new processes which still exist
 	if _, ok := d.newRelease.Processes[typ]; !ok {
 		return nil
@@ -191,24 +201,36 @@ func (d *DeployJob) scaleNewFormationUpByOne(typ string, log log15.Logger) error
 	if d.newFormation.Processes[typ] == d.Processes[typ] {
 		return nil
 	}
-	log.Info("scaling new formation up by one", "release.id", d.NewReleaseID, "job.type", typ)
-	d.newFormation.Processes[typ]++
+	log.Info("scaling new formation up", "release.id", d.NewReleaseID, "job.type", typ, "count", count)
+	d.newFormation.Processes[typ] += count
+	// don't scale higher than d.Processes
+	if d.newFormation.Processes[typ] > d.Processes[typ] {
+		d.newFormation.Processes[typ] = d.Processes[typ]
+	}
 	if err := d.scaleNewRelease(); err != nil {
-		log.Error("error scaling new formation up by one", "release.id", d.NewReleaseID, "job.type", typ, "err", err)
+		log.Error("error scaling new formation up", "release.id", d.NewReleaseID, "job.type", typ, "count", count, "err", err)
 		return err
 	}
 	return nil
 }
 
 func (d *DeployJob) scaleOldFormationDownByOne(typ string, log log15.Logger) error {
+	return d.scaleOldFormationDown(typ, 1, log)
+}
+
+func (d *DeployJob) scaleOldFormationDown(typ string, count int, log log15.Logger) error {
 	// don't scale lower than zero
 	if d.oldFormation.Processes[typ] == 0 {
 		return nil
 	}
-	log.Info("scaling old formation down by one", "release.id", d.OldReleaseID, "job.type", typ)
-	d.oldFormation.Processes[typ]--
+	log.Info("scaling old formation down", "release.id", d.OldReleaseID, "job.type", typ, "count", count)
+	d.oldFormation.Processes[typ] -= count
+	// don't scale lower than zero
+	if d.oldFormation.Processes[typ] < 0 {
+		d.oldFormation.Processes[typ] = 0
+	}
 	if err := d.scaleOldRelease(true); err != nil {
-		log.Error("error scaling old formation down by one", "release.id", d.OldReleaseID, "job.type", typ, "err", err)
+		log.Error("error scaling old formation down", "release.id", d.OldReleaseID, "job.type", typ, "count", count, "err", err)
 		return err
 	}
 	return nil

@@ -43,7 +43,7 @@
     },
     "strategy": {
       "type": "string",
-      "enum": ["all-at-once", "one-by-one", "sirenia", "discoverd-meta", "one-down-one-up"]
+      "enum": ["all-at-once", "one-by-one", "sirenia", "discoverd-meta", "one-down-one-up", "one-per-host"]
     },
     "meta": {
       "description": "client-specified metadata",

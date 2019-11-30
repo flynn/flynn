@@ -543,6 +543,9 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(34,
 		`INSERT INTO event_types (name) VALUES ('scale_request_cancelation')`,
 	)
+	migrations.Add(35,
+		`INSERT INTO deployment_strategies (name) VALUES ('one-per-host')`,
+	)
 }
 
 func MigrateDB(db *postgres.DB) error {
