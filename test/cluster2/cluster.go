@@ -130,15 +130,13 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		return nil, err
 	}
 
-	var hostEnv map[string]string
-	if c.Size >= 3 {
-		hostEnv = map[string]string{"DISCOVERY_SERVICE": app.Name}
-	}
 	release := &ct.Release{
 		ArtifactIDs: []string{hostImage.ID},
 		Processes: map[string]ct.ProcessType{
 			"host": {
-				Env:      hostEnv,
+				Env: map[string]string{
+					"DISCOVERY_SERVICE": app.Name,
+				},
 				Profiles: []host.JobProfile{host.JobProfileZFS},
 				Mounts: []host.Mount{
 					{
@@ -150,11 +148,6 @@ func Boot(c *BootConfig) (*Cluster, error) {
 				Ports: []ct.Port{{
 					Port:  1113,
 					Proto: "tcp",
-					Service: &host.Service{
-						Name:   app.Name,
-						Create: true,
-						Check:  &host.HealthCheck{Type: "tcp"},
-					},
 				}},
 				LinuxCapabilities: append(host.DefaultCapabilities, []string{
 					"CAP_SYS_ADMIN",

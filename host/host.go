@@ -16,14 +16,14 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/bootstrap/discovery"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/logmux"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
-	"github.com/flynn/flynn/host/volume/api"
-	"github.com/flynn/flynn/host/volume/manager"
+	volumeapi "github.com/flynn/flynn/host/volume/api"
+	volumemanager "github.com/flynn/flynn/host/volume/manager"
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
@@ -503,12 +503,15 @@ func runDaemon(args *docopt.Args) {
 		}
 		log.Info("got cluster peer IPs", "peers", peerIPs)
 	} else if discoveryService != "" {
-		log.Info("getting cluster peers from service discovery", "service", discoveryService)
-		instances, err := discoverd.GetInstances(discoveryService, 30*time.Second)
+		log.Info("registering with service discovery", "service", discoveryService)
+		hb, err := discoverd.Register(discoveryService, net.JoinHostPort(listenIP, httpPort))
 		if err != nil {
-			log.Error("error getting cluster peers from service discovery", "err", err)
+			log.Error("error registering with service discovery", "err", err)
 			shutdown.Fatal(err)
 		}
+		shutdown.BeforeExit(func() { hb.Close() })
+
+		log.Info("determining cluster size", "service", discoveryService)
 		meta, err := discoverd.NewService(discoveryService).GetMeta()
 		if err != nil {
 			log.Error("error getting discovery service metadata", "err", err)
@@ -519,11 +522,20 @@ func runDaemon(args *docopt.Args) {
 			log.Error("error parsing discovery service metadata", "err", err)
 			shutdown.Fatal(err)
 		}
-		if len(instances) >= cluster.Size {
-			peerIPs = make([]string, 0, len(instances))
-			for _, inst := range instances {
-				if ip := inst.Host(); ip != externalIP {
-					peerIPs = append(peerIPs, ip)
+
+		if cluster.Size > 1 {
+			log.Info("getting cluster peers from service discovery", "service", discoveryService)
+			instances, err := discoverd.GetInstances(discoveryService, 30*time.Second)
+			if err != nil {
+				log.Error("error getting cluster peers from service discovery", "err", err)
+				shutdown.Fatal(err)
+			}
+			if len(instances) >= cluster.Size {
+				peerIPs = make([]string, 0, len(instances))
+				for _, inst := range instances {
+					if ip := inst.Host(); ip != externalIP {
+						peerIPs = append(peerIPs, ip)
+					}
 				}
 			}
 		}
