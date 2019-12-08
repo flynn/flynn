@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/go-docopt"
 )
@@ -13,13 +13,16 @@ func init() {
 	register("deployment", runDeployments, `
 usage: flynn deployment
        flynn deployment timeout [<timeout>]
+       flynn deployment batch-size [<size>]
 
-Manage app deployments
+Manage app deployments.
 
 Commands:
     With no arguments, shows a list of deployments
 
-	timeout  gets or sets the number of seconds to wait for each job to start when deploying
+	timeout     gets or sets the number of seconds to wait for each job to start when deploying
+
+	batch-size  gets or sets the batch size for deployments using the in-batches strategy
 
 Examples:
 
@@ -34,6 +37,11 @@ Examples:
 
 	$ flynn deployment timeout
 	150
+
+	$ flynn deployment batch-size 3
+
+	$ flynn deployment batch-size
+	3
 `)
 }
 
@@ -43,6 +51,11 @@ func runDeployments(args *docopt.Args, client controller.Client) error {
 			return runSetDeployTimeout(args, client)
 		}
 		return runGetDeployTimeout(args, client)
+	} else if args.Bool["batch-size"] {
+		if args.String["<size>"] != "" {
+			return runSetDeployBatchSize(args, client)
+		}
+		return runGetDeployBatchSize(args, client)
 	}
 
 	deployments, err := client.DeploymentList(mustApp())
@@ -78,4 +91,28 @@ func runSetDeployTimeout(args *docopt.Args, client controller.Client) error {
 		ID:            mustApp(),
 		DeployTimeout: int32(timeout),
 	})
+}
+
+func runGetDeployBatchSize(args *docopt.Args, client controller.Client) error {
+	app, err := client.GetApp(mustApp())
+	if err != nil {
+		return err
+	}
+	batchSize := app.DeployBatchSize()
+	if batchSize == nil {
+		fmt.Println("not set")
+	} else {
+		fmt.Println(*batchSize)
+	}
+	return nil
+}
+
+func runSetDeployBatchSize(args *docopt.Args, client controller.Client) error {
+	batchSize, err := strconv.Atoi(args.String["<size>"])
+	if err != nil {
+		return fmt.Errorf("error parsing batch-size %q: %s", args.String["<size>"], err)
+	}
+	app := &ct.App{ID: mustApp()}
+	app.SetDeployBatchSize(batchSize)
+	return client.UpdateApp(app)
 }

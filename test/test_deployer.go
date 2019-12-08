@@ -35,7 +35,7 @@ func (t *testDeploy) cleanup() {
 func (s *DeployerSuite) createRelease(t *c.C, process, strategy string, scale int) (*ct.App, *ct.Release) {
 	app, release := s.createApp(t)
 	app.Strategy = strategy
-	s.controllerClient(t).UpdateApp(app)
+	t.Assert(s.controllerClient(t).UpdateApp(app), c.IsNil)
 
 	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name, release.ID)
 	t.Assert(err, c.IsNil)
@@ -55,7 +55,10 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string, scale in
 
 func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service string, scale int) *testDeploy {
 	app, release := s.createRelease(t, process, strategy, scale)
+	return s.createDeploymentWithApp(t, app, release, service, scale)
+}
 
+func (s *DeployerSuite) createDeploymentWithApp(t *c.C, app *ct.App, release *ct.Release, service string, scale int) *testDeploy {
 	if service != "" {
 		debugf(t, "waiting for %d %s services", scale, service)
 		events := make(chan *discoverd.Event)
@@ -192,15 +195,15 @@ func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
 	d.waitForDeploymentStatus("complete")
 }
 
-func (s *DeployerSuite) TestOnePerHostStrategy(t *c.C) {
+// TestInBatchesDefaultStrategy tests that deployments using the in-batches
+// strategy without an explicit batch size set defaults to using the host
+// count as the batch size
+func (s *DeployerSuite) TestInBatchesDefaultStrategy(t *c.C) {
 	// get the host count
 	hosts, err := s.clusterClient(t).Hosts()
 	t.Assert(err, c.IsNil)
-	if len(hosts) == 1 {
-		t.Skip("not enough hosts for realistic one-per-host test")
-	}
 
-	d := s.createDeployment(t, "printer", "one-per-host", "", len(hosts)*3)
+	d := s.createDeployment(t, "printer", "in-batches", "", len(hosts)*3)
 	defer d.cleanup()
 	releaseID := d.deployment.NewReleaseID
 	oldReleaseID := d.deployment.OldReleaseID
@@ -214,6 +217,39 @@ func (s *DeployerSuite) TestOnePerHostStrategy(t *c.C) {
 			})
 		}
 		for range hosts {
+			expectedEvents = append(expectedEvents, &ct.Job{
+				ReleaseID: oldReleaseID,
+				State:     ct.JobStateDown,
+			})
+		}
+	}
+	d.waitForJobEvents("printer", expectedEvents)
+	d.waitForDeploymentStatus("complete")
+}
+
+// TestInBatchesStrategy tests the in-batches deployment strategy with an
+// explicit batch-size
+func (s *DeployerSuite) TestInBatchesStrategy(t *c.C) {
+	batchSize := 4
+	scale := batchSize * 2
+	app, release := s.createRelease(t, "printer", "in-batches", scale)
+	app.SetDeployBatchSize(batchSize)
+	t.Assert(s.controllerClient(t).UpdateApp(app), c.IsNil)
+	d := s.createDeploymentWithApp(t, app, release, "", scale)
+	defer d.cleanup()
+
+	releaseID := d.deployment.NewReleaseID
+	oldReleaseID := d.deployment.OldReleaseID
+
+	expectedEvents := make([]*ct.Job, 0, scale*2)
+	for i := 0; i < 2; i++ {
+		for i := 0; i < batchSize; i++ {
+			expectedEvents = append(expectedEvents, &ct.Job{
+				ReleaseID: releaseID,
+				State:     ct.JobStateUp,
+			})
+		}
+		for i := 0; i < batchSize; i++ {
 			expectedEvents = append(expectedEvents, &ct.Job{
 				ReleaseID: oldReleaseID,
 				State:     ct.JobStateDown,

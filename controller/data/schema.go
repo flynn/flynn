@@ -544,7 +544,8 @@ $$ LANGUAGE plpgsql`,
 		`INSERT INTO event_types (name) VALUES ('scale_request_cancelation')`,
 	)
 	migrations.Add(35,
-		`INSERT INTO deployment_strategies (name) VALUES ('one-per-host')`,
+		`INSERT INTO deployment_strategies (name) VALUES ('in-batches')`,
+		`ALTER TABLE deployments ADD COLUMN batch_size integer`,
 	)
 }
 
