@@ -61,17 +61,17 @@ type transport struct {
 
 func (t *transport) trackRequestStart(backend *router.Backend) {
 	t.inFlightMtx.Lock()
-	defer t.inFlightMtx.Unlock()
 	t.inFlightRequests[backend.Addr]++
+	t.inFlightMtx.Unlock()
 }
 
 func (t *transport) trackRequestEnd(backend *router.Backend) {
 	t.inFlightMtx.Lock()
-	defer t.inFlightMtx.Unlock()
 	t.inFlightRequests[backend.Addr]--
 	if t.inFlightRequests[backend.Addr] == 0 {
 		delete(t.inFlightRequests, backend.Addr)
 	}
+	t.inFlightMtx.Unlock()
 }
 
 // eachBackend iterates through the given backends and calls the given
