@@ -137,7 +137,10 @@ func (t *transport) eachBackend(stickyBackend string, backends []*router.Backend
 
 		// pick two distinct random backends
 		n1 := random.Math.Intn(len(backends))
-		n2 := (n1 + 1) % len(backends)
+		n2 := random.Math.Intn(len(backends))
+		if n2 == n1 {
+			n2 = (n2 + 1) % len(backends)
+		}
 
 		// determine which one has the least number of in flight
 		// requests
