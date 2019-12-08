@@ -84,6 +84,7 @@ func (r *DeploymentRepo) Add(appID, releaseID string) (*ct.Deployment, error) {
 		Processes:     oldFormation.Processes,
 		Tags:          oldFormation.Tags,
 		DeployTimeout: app.DeployTimeout,
+		BatchSize:     app.DeployBatchSize(),
 	}
 	if oldRelease != nil {
 		d.OldReleaseID = oldRelease.ID
@@ -110,7 +111,7 @@ func (r *DeploymentRepo) Add(appID, releaseID string) (*ct.Deployment, error) {
 	if d.ID == "" {
 		d.ID = random.UUID()
 	}
-	if err := tx.QueryRow("deployment_insert", d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, d.Processes, d.Tags, d.DeployTimeout).Scan(&d.CreatedAt); err != nil {
+	if err := tx.QueryRow("deployment_insert", d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, d.Processes, d.Tags, d.DeployTimeout, d.BatchSize).Scan(&d.CreatedAt); err != nil {
 		tx.Rollback()
 		if postgres.IsUniquenessError(err, "isolate_deploys") {
 			return nil, ct.ValidationError{Message: "Cannot create deploy, there is already one in progress for this app."}
@@ -178,7 +179,7 @@ func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	d := &ct.Deployment{}
 	var oldReleaseID *string
 	var status *string
-	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &d.Processes, &d.Tags, &d.DeployTimeout, &d.CreatedAt, &d.FinishedAt)
+	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &d.Processes, &d.Tags, &d.DeployTimeout, &d.BatchSize, &d.CreatedAt, &d.FinishedAt)
 	if err == pgx.ErrNoRows {
 		err = ErrNotFound
 	}

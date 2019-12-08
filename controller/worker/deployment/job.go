@@ -33,8 +33,8 @@ func (d *DeployJob) Perform() error {
 		deployFunc = d.deployOneByOne
 	case "one-down-one-up":
 		deployFunc = d.deployOneDownOneUp
-	case "one-per-host":
-		deployFunc = d.deployOnePerHost
+	case "in-batches":
+		deployFunc = d.deployInBatches
 	case "all-at-once":
 		deployFunc = d.deployAllAtOnce
 	case "sirenia":

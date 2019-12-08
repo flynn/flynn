@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -73,6 +74,28 @@ func (a *App) RedisAppliance() bool {
 func (a *App) Critical() bool {
 	v, ok := a.Meta["flynn-system-critical"]
 	return ok && v == "true"
+}
+
+// DeployBatchSize returns the batch size to use when deploying using the
+// in-batches deployment strategy
+func (a *App) DeployBatchSize() *int {
+	v, ok := a.Meta["flynn-deploy-batch-size"]
+	if !ok {
+		return nil
+	}
+	if i, err := strconv.Atoi(v); err == nil {
+		return &i
+	}
+	return nil
+}
+
+// SetDeployBatchSize sets the batch size to use when deploying using the
+// in-batches deployment strategy
+func (a *App) SetDeployBatchSize(size int) {
+	if a.Meta == nil {
+		a.Meta = make(map[string]string)
+	}
+	a.Meta["flynn-deploy-batch-size"] = strconv.Itoa(size)
 }
 
 type Release struct {
@@ -365,6 +388,7 @@ type Deployment struct {
 	Processes     map[string]int               `json:"processes,omitempty"`
 	Tags          map[string]map[string]string `json:"tags,omitempty"`
 	DeployTimeout int32                        `json:"deploy_timeout,omitempty"`
+	BatchSize     *int                         `json:"batch_size,omitempty"`
 	CreatedAt     *time.Time                   `json:"created_at,omitempty"`
 	FinishedAt    *time.Time                   `json:"finished_at,omitempty"`
 }
