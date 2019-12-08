@@ -121,6 +121,7 @@ main() {
     /usr/bin/env \
     ROOT="/go/src/github.com/flynn/flynn" \
     CLUSTER_ADD_ARGS="${cluster_add:18}" \
+    USE_KVM="$([[ -e /dev/kvm ]] && echo true)" \
     /bin/run-flynn-test.sh \
     ${args[@]}
 }
