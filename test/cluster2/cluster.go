@@ -39,6 +39,7 @@ type BootConfig struct {
 	HostTimeout  *time.Duration
 	Key          string
 	Domain       string
+	UseKVM       bool
 }
 
 type Host struct {
@@ -130,6 +131,11 @@ func Boot(c *BootConfig) (*Cluster, error) {
 		return nil, err
 	}
 
+	profiles := []host.JobProfile{host.JobProfileZFS}
+	if c.UseKVM {
+		profiles[0] = host.JobProfileKVM
+	}
+
 	release := &ct.Release{
 		ArtifactIDs: []string{hostImage.ID},
 		Processes: map[string]ct.ProcessType{
@@ -137,7 +143,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 				Env: map[string]string{
 					"DISCOVERY_SERVICE": app.Name,
 				},
-				Profiles: []host.JobProfile{host.JobProfileZFS},
+				Profiles: profiles,
 				Mounts: []host.Mount{
 					{
 						Location:  "/var/lib/flynn",
@@ -149,6 +155,7 @@ func Boot(c *BootConfig) (*Cluster, error) {
 					Port:  1113,
 					Proto: "tcp",
 				}},
+				Volumes: []ct.VolumeReq{{Path: "/tmp", DeleteOnStop: true}},
 				LinuxCapabilities: append(host.DefaultCapabilities, []string{
 					"CAP_SYS_ADMIN",
 					"CAP_NET_ADMIN",

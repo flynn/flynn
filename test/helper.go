@@ -19,11 +19,11 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/flynn/flynn/cli/config"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/resource"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	flynnexec "github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
@@ -188,6 +188,8 @@ func (h *Helper) bootClusterWithConfig(t *c.C, conf *cluster2.BootConfig) *Clust
 
 	conf.Logger = log15.New()
 	conf.Logger.SetHandler(log15.StreamHandler(debugLogWriter(t), log15.LogfmtFormat()))
+
+	conf.UseKVM = os.Getenv("USE_KVM") == "true"
 
 	s, err := cluster2.Boot(conf)
 	t.Assert(err, c.IsNil)
