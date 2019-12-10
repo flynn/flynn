@@ -2,6 +2,7 @@ package data
 
 import (
 	"os"
+	"testing"
 	"time"
 
 	"github.com/flynn/flynn/pkg/cluster"
@@ -12,6 +13,9 @@ import (
 
 	. "github.com/flynn/go-check"
 )
+
+// Hook gocheck up to the "go test" runner
+func Test(t *testing.T) { TestingT(t) }
 
 type MigrateSuite struct{}
 
