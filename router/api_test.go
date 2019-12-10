@@ -7,7 +7,8 @@ import (
 
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/router/client"
-	"github.com/flynn/flynn/router/types"
+	"github.com/flynn/flynn/router/testutils"
+	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 )
 
@@ -185,7 +186,7 @@ func (s *S) TestAPIListRoutes(c *C) {
 	r2 := router.TCPRoute{Service: "test"}.ToRoute()
 	r3 := router.TCPRoute{Service: "test", ParentRef: "foo"}.ToRoute()
 
-	tlsCert := tlsConfigForDomain("*.bar.example.org")
+	tlsCert := testutils.TLSConfigForDomain("*.bar.example.org")
 	r4 := router.HTTPRoute{
 		Domain:  "1.bar.example.org",
 		Service: "test",
