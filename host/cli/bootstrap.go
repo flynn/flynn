@@ -15,10 +15,12 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/flynn/flynn/bootstrap"
 	controller "github.com/flynn/flynn/controller/client"
+	controllerdata "github.com/flynn/flynn/controller/data"
 	ct "github.com/flynn/flynn/controller/types"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/exec"
@@ -512,6 +514,32 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard' AND del
 		return err
 	}
 	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
+
+	// import the router database into the controller database
+	script, err := routerMigrateScript(data.Controller.Release.Env)
+	if err != nil {
+		return err
+	}
+	cmd = exec.JobUsingHost(state.Hosts[0], artifacts["postgres"], nil)
+	cmd.Args = []string{"bash", "-l", "-s"}
+	cmd.Env = map[string]string{"PGHOST": "leader.postgres.discoverd"}
+	cmd.Stdin = bytes.NewReader(script)
+	meta = bootstrap.StepMeta{ID: "migrate-router-db", Action: "migrate-router-db"}
+	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
+	out, err = cmd.CombinedOutput()
+	if os.Getenv("DEBUG") != "" {
+		fmt.Println(string(out))
+	}
+	if err != nil {
+		ch <- &bootstrap.StepInfo{
+			StepMeta:  meta,
+			State:     "error",
+			Error:     fmt.Sprintf("error migrating router database: %s - %q", err, string(out)),
+			Err:       err,
+			Timestamp: time.Now().UTC(),
+		}
+		return err
+	}
 
 	// start controller API
 	data.Controller.Processes = map[string]int{"web": 1}
@@ -1037,4 +1065,99 @@ func textLogger(si *bootstrap.StepInfo) {
 
 func jsonLogger(si *bootstrap.StepInfo) {
 	json.NewEncoder(os.Stdout).Encode(si)
+}
+
+// routerMigrateScript renders a bash script to migrate the router database
+// over to the controller database
+func routerMigrateScript(controllerEnv map[string]string) ([]byte, error) {
+	tmpl, err := template.New("script").Parse(`
+set -e
+set -o pipefail
+
+main() {
+  # get the controller db version
+  local controller_version="$(controller_psql "COPY (SELECT MAX(id) FROM schema_migrations) TO STDOUT")"
+  if [[ -z "${controller_version}" ]]; then
+    fail "error getting controller db version"
+  fi
+
+  # only proceed if the controller database hasn't run the router
+  # related migrations
+  if [[ $controller_version -ge {{ .RouterMigrationStart }} ]]; then
+    return
+  fi
+
+  # get the router db version
+  local router_version="$(router_psql "COPY (SELECT MAX(id) FROM schema_migrations) TO STDOUT")"
+  if [[ -z "${router_version}" ]]; then
+    fail "error getting router db version"
+  fi
+
+  # dump the router db into the controller db
+  router_dump | controller_restore
+
+  # populate the controller schema_migrations table with the equivalent
+  # migrations we just imported from the router
+  controller_psql "INSERT INTO schema_migrations (id) SELECT generate_series({{ .RouterMigrationStart }}, $(({{ .RouterMigrationStart }} + $router_version - 1)))"
+
+  # update the router to use the controller database
+  for key in PGUSER PGPASSWORD PGDATABASE; do
+    controller_psql "UPDATE releases SET env = jsonb_set(env, '{${key}}', (SELECT env->'${key}' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller' AND deleted_at IS NULL))) WHERE release_id = (SELECT release_id FROM apps WHERE name = 'router' AND deleted_at IS NULL)"
+  done
+}
+
+controller_psql() {
+  local sql=$1
+
+  env {{ .ControllerEnv }} psql -c "${sql}"
+}
+
+controller_restore() {
+  env {{ .ControllerEnv }} pg_restore -d "{{ .ControllerDB }}" -n public --no-owner --no-acl
+}
+
+router_psql() {
+  local sql=$1
+
+  env $(router_env) psql -c "${sql}"
+}
+
+router_dump() {
+  env $(router_env) pg_dump --format=custom --exclude-table schema_migrations --no-owner --no-acl
+}
+
+# router_env pulls the router PG* env vars from the controller db
+router_env() {
+  controller_psql "COPY (SELECT string_agg(key || '=' || (value #>> '{}'), ' ') FROM releases, jsonb_each(env) WHERE release_id = (SELECT release_id FROM apps WHERE name = 'router' AND deleted_at IS NULL) AND key IN ('PGUSER', 'PGPASSWORD', 'PGDATABASE')) TO STDOUT"
+}
+
+fail() {
+  echo $@ >&2
+  exit 1
+}
+
+main "$@"
+	`)
+	if err != nil {
+		return nil, err
+	}
+	data := struct {
+		ControllerDB         string
+		ControllerEnv        string
+		RouterMigrationStart int64
+	}{
+		ControllerDB: controllerEnv["PGDATABASE"],
+		ControllerEnv: fmt.Sprintf(
+			"PGDATABASE=%q PGUSER=%q PGPASSWORD=%q",
+			controllerEnv["PGDATABASE"],
+			controllerEnv["PGUSER"],
+			controllerEnv["PGPASSWORD"],
+		),
+		RouterMigrationStart: controllerdata.RouterMigrationStart,
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, &data); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
