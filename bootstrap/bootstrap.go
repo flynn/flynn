@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/bootstrap/discovery"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -297,8 +297,9 @@ func checkOnlineHosts(expected int, state *State, urls []string, timeout time.Du
 
 func interpolate(s *State, arg string) string {
 	t, err := template.New("arg").Funcs(template.FuncMap{
-		"getenv": os.Getenv,
-		"md5sum": md5sum,
+		"getenv":   os.Getenv,
+		"md5sum":   md5sum,
+		"pgconfig": getPGConfig,
 	}).Parse(arg)
 	if err != nil {
 		log.Printf("Ignoring error parsing %q as template: %s", arg, err)
@@ -315,4 +316,36 @@ func interpolate(s *State, arg string) string {
 func md5sum(s string) string {
 	h := md5.Sum([]byte(s))
 	return hex.EncodeToString(h[:])
+}
+
+type pgConfig struct {
+	ServiceName string
+	Host        string
+	User        string
+	Database    string
+	Password    string
+}
+
+func getPGConfig(stepData map[string]interface{}, step string) (pgConfig, error) {
+	s, ok := stepData[step]
+	if !ok {
+		return pgConfig{}, fmt.Errorf("unknown step: %s", step)
+	}
+	state, ok := s.(*RunAppState)
+	if !ok {
+		return pgConfig{}, fmt.Errorf("expected step %q to be *RunAppState, got %T", s)
+	}
+	for _, r := range state.Resources {
+		if _, ok := r.Env["FLYNN_POSTGRES"]; !ok {
+			continue
+		}
+		return pgConfig{
+			ServiceName: r.Env["FLYNN_POSTGRES"],
+			Host:        r.Env["PGHOST"],
+			User:        r.Env["PGUSER"],
+			Database:    r.Env["PGDATABASE"],
+			Password:    r.Env["PGPASSWORD"],
+		}, nil
+	}
+	return pgConfig{}, nil
 }
