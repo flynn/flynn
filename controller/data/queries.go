@@ -91,6 +91,21 @@ var preparedStatements = map[string]string{
 	"volume_select":                         volumeSelectQuery,
 	"volume_insert":                         volumeInsertQuery,
 	"volume_decommission":                   volumeDecommissionQuery,
+	"http_route_list":                       httpRouteListQuery,
+	"http_route_list_by_parent_ref":         httpRouteListByParentRefQuery,
+	"http_route_insert":                     httpRouteInsertQuery,
+	"http_route_select":                     httpRouteSelectQuery,
+	"http_route_update":                     httpRouteUpdateQuery,
+	"http_route_delete":                     httpRouteDeleteQuery,
+	"tcp_route_list":                        tcpRouteListQuery,
+	"tcp_route_list_by_parent_ref":          tcpRouteListByParentRefQuery,
+	"tcp_route_insert":                      tcpRouteInsertQuery,
+	"tcp_route_select":                      tcpRouteSelectQuery,
+	"tcp_route_update":                      tcpRouteUpdateQuery,
+	"tcp_route_delete":                      tcpRouteDeleteQuery,
+	"certificate_insert":                    certificateInsertQuery,
+	"route_certificate_delete_by_route_id":  routeCertificateDeleteByRouteIDQuery,
+	"route_certificate_insert":              routeCertificateInsertQuery,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
@@ -509,4 +524,64 @@ ON CONFLICT (volume_id) DO UPDATE SET job_id = $7, updated_at = now()
 RETURNING created_at, updated_at`
 	volumeDecommissionQuery = `
 UPDATE volumes SET updated_at = now(), decommissioned_at = now() WHERE app_id = $1 AND volume_id = $2 RETURNING updated_at, decommissioned_at`
+	httpRouteListQuery = `
+SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.created_at, r.updated_at, c.id, c.cert, c.key, c.created_at, c.updated_at FROM http_routes as r
+LEFT OUTER JOIN route_certificates AS rc on r.id = rc.http_route_id
+LEFT OUTER JOIN certificates AS c ON c.id = rc.certificate_id
+WHERE r.deleted_at IS NULL
+ORDER BY r.domain, r.path`
+	httpRouteListByParentRefQuery = `
+SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.created_at, r.updated_at, c.id, c.cert, c.key, c.created_at, c.updated_at FROM http_routes as r
+LEFT OUTER JOIN route_certificates AS rc on r.id = rc.http_route_id
+LEFT OUTER JOIN certificates AS c ON c.id = rc.certificate_id
+WHERE r.parent_ref = $1 AND r.deleted_at IS NULL
+ORDER BY r.domain, r.path`
+	httpRouteInsertQuery = `
+INSERT INTO http_routes (parent_ref, service, port, leader, drain_backends, domain, sticky, path)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, path, created_at, updated_at`
+	httpRouteSelectQuery = `
+SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.created_at, r.updated_at, c.id, c.cert, c.key, c.created_at, c.updated_at FROM http_routes as r
+LEFT OUTER JOIN route_certificates AS rc on r.id = rc.http_route_id
+LEFT OUTER JOIN certificates AS c ON c.id = rc.certificate_id
+WHERE r.id = $1 AND r.deleted_at IS NULL`
+	httpRouteUpdateQuery = `
+UPDATE http_routes as r
+SET parent_ref = $1, service = $2, port = $3, leader = $4, sticky = $5, path = $6
+WHERE id = $7 AND domain = $8 AND deleted_at IS NULL
+RETURNING r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.created_at, r.updated_at`
+	httpRouteDeleteQuery = `
+UPDATE http_routes SET deleted_at = now()
+WHERE id = $1`
+	tcpRouteListQuery = `
+SELECT id, parent_ref, service, port, leader, drain_backends, created_at, updated_at FROM tcp_routes
+WHERE deleted_at IS NULL`
+	tcpRouteListByParentRefQuery = `
+SELECT id, parent_ref, service, port, leader, drain_backends, created_at, updated_at FROM tcp_routes
+WHERE parent_ref = $1 AND deleted_at IS NULL`
+	tcpRouteInsertQuery = `
+INSERT INTO tcp_routes (parent_ref, service, port, leader, drain_backends)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, port, created_at, updated_at`
+	tcpRouteSelectQuery = `
+SELECT id, parent_ref, service, port, leader, drain_backends, created_at, updated_at FROM tcp_routes
+WHERE id = $1 AND deleted_at IS NULL`
+	tcpRouteUpdateQuery = `
+UPDATE tcp_routes SET parent_ref = $1, service = $2, port = $3, leader = $4
+WHERE id = $5 AND deleted_at IS NULL
+RETURNING id, parent_ref, service, port, leader, drain_backends, created_at, updated_at`
+	tcpRouteDeleteQuery = `
+UPDATE tcp_routes SET deleted_at = now()
+WHERE id = $1`
+	certificateInsertQuery = `
+INSERT INTO certificates (cert, key, cert_sha256)
+VALUES ($1, $2, $3)
+ON CONFLICT (cert_sha256) WHERE deleted_at IS NULL DO UPDATE SET cert_sha256 = $3
+RETURNING id, created_at, updated_at`
+	routeCertificateDeleteByRouteIDQuery = `
+DELETE FROM route_certificates
+WHERE http_route_id = $1`
+	routeCertificateInsertQuery = `
+INSERT INTO route_certificates (http_route_id, certificate_id)
+VALUES ($1, $2)`
 )

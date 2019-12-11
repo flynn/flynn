@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/md5"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -13,12 +15,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/flynn/flynn/controller/data"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
-	"github.com/flynn/flynn/router/schema"
-	router "github.com/flynn/flynn/router/types"
 	"github.com/inconshreveable/log15"
 )
 
@@ -34,11 +35,7 @@ func init() {
 type Listener interface {
 	Start() error
 	Close() error
-	AddRoute(*router.Route) error
-	UpdateRoute(*router.Route) error
-	RemoveRoute(id string) error
 	Watcher
-	DataStoreReader
 }
 
 type Router struct {
@@ -206,7 +203,7 @@ func main() {
 	}
 
 	log.Info("connecting to postgres")
-	db := postgres.Wait(nil, schema.PrepareStatements)
+	db := postgres.Wait(nil, data.PrepareStatements)
 
 	shutdown.BeforeExit(func() { db.Close() })
 
@@ -283,4 +280,9 @@ type listenErr struct {
 
 func (e listenErr) Error() string {
 	return fmt.Sprintf("error binding to port (check if another service is listening on %s): %s", e.Addr, e.Err)
+}
+
+func md5sum(data string) string {
+	digest := md5.Sum([]byte(data))
+	return hex.EncodeToString(digest[:])
 }

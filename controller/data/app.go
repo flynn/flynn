@@ -12,20 +12,19 @@ import (
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
-	routerc "github.com/flynn/flynn/router/client"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/jackc/pgx"
 )
 
 type AppRepo struct {
-	router        routerc.Client
+	routes        *RouteRepo
 	defaultDomain string
 
 	db *postgres.DB
 }
 
-func NewAppRepo(db *postgres.DB, defaultDomain string, router routerc.Client) *AppRepo {
-	return &AppRepo{db: db, defaultDomain: defaultDomain, router: router}
+func NewAppRepo(db *postgres.DB, defaultDomain string, routes *RouteRepo) *AppRepo {
+	return &AppRepo{db: db, defaultDomain: defaultDomain, routes: routes}
 }
 
 func (r *AppRepo) Add(data interface{}) error {
@@ -85,11 +84,12 @@ func (r *AppRepo) Add(data interface{}) error {
 
 	if !app.System() && r.defaultDomain != "" {
 		route := (&router.HTTPRoute{
+			ParentRef:     ct.RouteParentRefPrefix + app.ID,
 			Domain:        fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
 			Service:       app.Name + "-web",
 			DrainBackends: true,
 		}).ToRoute()
-		if err := CreateRoute(r.db, r.router, app.ID, route); err != nil {
+		if err := r.routes.Add(route); err != nil {
 			log.Printf("Error creating default route for %s: %s", app.Name, err)
 		}
 	}

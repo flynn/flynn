@@ -7,13 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/worker/types"
+	worker "github.com/flynn/flynn/controller/worker/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/tlscert"
-	routerc "github.com/flynn/flynn/router/client"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/que-go"
 	"github.com/inconshreveable/log15"
 )
@@ -30,7 +29,6 @@ type context struct {
 type migration struct {
 	db                 *postgres.DB
 	client             controller.Client
-	rc                 routerc.Client
 	logger             log15.Logger
 	dm                 *ct.DomainMigration
 	activeRouteUpdates chan struct{}
@@ -69,7 +67,6 @@ func (c *context) HandleDomainMigration(job *que.Job) (err error) {
 	m := &migration{
 		db:                 c.db,
 		client:             c.client,
-		rc:                 routerc.New(),
 		logger:             log,
 		dm:                 dm,
 		activeRouteUpdates: make(chan struct{}, maxActiveRouteUpdates),
@@ -324,33 +321,14 @@ func (m *migration) maybeDeployDashboard() error {
 }
 
 func (m *migration) createMissingRoutes() error {
-	// Get list of all routes from router
-	routes, err := m.rc.ListRoutes("")
-	if err != nil {
-		return err
-	}
-
 	apps, err := m.client.AppList()
 	if err != nil {
 		return err
 	}
 
-	// Index routes by appID
-	appRoutes := make(map[string][]*router.Route, len(apps))
-	for _, r := range routes {
-		if !strings.HasPrefix(r.ParentRef, ct.RouteParentRefPrefix) {
-			continue
-		}
-		appID := strings.TrimPrefix(r.ParentRef, ct.RouteParentRefPrefix)
-		if appRoutes[appID] == nil {
-			appRoutes[appID] = make([]*router.Route, 0, 1)
-		}
-		appRoutes[appID] = append(appRoutes[appID], r)
-	}
-
 	errChan := make(chan error, len(apps))
 	createMissingRoutes := func(app *ct.App) {
-		errChan <- m.appCreateMissingRoutes(app.ID, appRoutes[app.ID])
+		errChan <- m.appCreateMissingRoutes(app.ID)
 	}
 	for _, app := range apps {
 		go createMissingRoutes(app)
@@ -364,8 +342,12 @@ func (m *migration) createMissingRoutes() error {
 	return returnErr
 }
 
-func (m *migration) appCreateMissingRoutes(appID string, routes []*router.Route) error {
-	if routes == nil {
+func (m *migration) appCreateMissingRoutes(appID string) error {
+	routes, err := m.client.RouteList(appID)
+	if err != nil {
+		return err
+	}
+	if len(routes) == 0 {
 		// There are no routes for this app
 		return nil
 	}

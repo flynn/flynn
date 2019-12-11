@@ -327,20 +327,6 @@
       }
     },
     {
-      "id": "router-examples",
-      "base": "busybox",
-      "layers": [{
-        "gobuild": {
-          "router/example-generator": "/bin/flynn-router-examples"
-        }
-      }],
-      "entrypoint": {
-        "args": [
-          "/bin/flynn-router-examples"
-        ]
-      }
-    },
-    {
       "id": "gitreceive",
       "base": "ubuntu-bionic",
       "layers": [

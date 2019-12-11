@@ -822,6 +822,22 @@ $$ LANGUAGE plpgsql`,
 	FOR EACH ROW
 	EXECUTE PROCEDURE check_http_route_drain_backends()`,
 	)
+	migrations.Add(45,
+		`
+CREATE FUNCTION set_tcp_route_port() RETURNS TRIGGER AS $$
+  BEGIN
+    IF NEW.port = 0 THEN
+      SELECT INTO NEW.port * FROM generate_series(3000, 3500) AS port WHERE port NOT IN (SELECT port FROM tcp_routes) LIMIT 1;
+    END IF;
+
+    RETURN NEW;
+  END;
+$$ LANGUAGE plpgsql`,
+		`
+CREATE TRIGGER set_tcp_route_port
+  BEFORE INSERT ON tcp_routes
+  FOR EACH ROW EXECUTE PROCEDURE set_tcp_route_port()`,
+	)
 }
 
 func MigrateDB(db *postgres.DB) error {
