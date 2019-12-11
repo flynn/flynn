@@ -7,9 +7,9 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 )
 
@@ -86,7 +86,7 @@ func (s *S) TestAddTCPRoute(c *C) {
 	l := s.newTCPListener(c)
 	defer l.Close()
 
-	r := addTCPRoute(c, l, portInt)
+	r := s.addTCPRoute(c, l, portInt)
 
 	unregister := discoverdRegisterTCP(c, l, srv1.Addr)
 
@@ -98,7 +98,7 @@ func (s *S) TestAddTCPRoute(c *C) {
 	assertTCPConn(c, addr, "2")
 
 	wait := waitForEvent(c, l, "remove", r.ID)
-	err := l.RemoveRoute(r.ID)
+	err := s.routes.Delete(r.ToRoute())
 	c.Assert(err, IsNil)
 	wait()
 
@@ -114,19 +114,19 @@ func (s *S) TestAddTCPRouteReservedPort(c *C) {
 
 	for _, port := range l.reservedPorts {
 		r := router.TCPRoute{Port: port}.ToRoute()
-		err := l.AddRoute(r)
+		err := s.routes.Add(r)
 		c.Assert(err, NotNil)
-		c.Assert(err.Error(), Equals, "router: cannot bind TCP to a reserved port")
+		c.Assert(err.Error(), Equals, "controller: cannot bind TCP to a reserved port")
 	}
 }
 
-func addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
+func (s *S) addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
 	wait := waitForEvent(c, l, "set", "")
 	r := router.TCPRoute{
 		Service: "test",
 		Port:    port,
 	}.ToRoute()
-	err := l.AddRoute(r)
+	err := s.routes.Add(r)
 	c.Assert(err, IsNil)
 	wait()
 	return r.TCPRoute()
@@ -157,7 +157,7 @@ func (s *S) TestTCPLeaderRouting(c *C) {
 		Port:    portInt,
 		Leader:  true,
 	}.ToRoute()
-	err = l.AddRoute(r)
+	err = s.routes.Add(r)
 	c.Assert(err, IsNil)
 	wait()
 
@@ -175,7 +175,7 @@ func (s *S) TestInitialTCPSync(c *C) {
 	port := allocatePort()
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	l := s.newTCPListener(c)
-	addTCPRoute(c, l, port)
+	s.addTCPRoute(c, l, port)
 	l.Close()
 
 	srv := NewTCPTestServer("1")
@@ -187,33 +187,4 @@ func (s *S) TestInitialTCPSync(c *C) {
 	discoverdRegisterTCP(c, l, srv.Addr)
 
 	assertTCPConn(c, addr, "1")
-}
-
-func (s *S) TestTCPPortAllocation(c *C) {
-	l := s.newTCPListener(c)
-	defer l.Close()
-	for i := 0; i < 2; i++ {
-		ports := make([]string, 0, 10)
-		for j := 0; j < 10; j++ {
-			route := addTCPRoute(c, l, 0)
-			c.Assert(route.Port >= l.startPort && route.Port <= l.endPort, Equals, true)
-
-			port := strconv.Itoa(route.Port)
-			ports = append(ports, route.ID)
-			srv := NewTCPTestServer(port)
-			unregister := discoverdRegisterTCP(c, l, srv.Addr)
-
-			assertTCPConn(c, "127.0.0.1:"+port, port)
-			unregister()
-			srv.Close()
-		}
-		r := router.TCPRoute{Service: "test"}.ToRoute()
-		err := l.AddRoute(r)
-		c.Assert(err, Equals, ErrNoPorts)
-		for _, port := range ports {
-			wait := waitForEvent(c, l, "remove", port)
-			l.RemoveRoute(port)
-			wait()
-		}
-	}
 }

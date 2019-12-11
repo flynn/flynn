@@ -1,9 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
 	"crypto/tls"
-	"encoding/hex"
 	"errors"
 	"log"
 	"net"
@@ -29,7 +27,6 @@ import (
 
 type HTTPListener struct {
 	Watcher
-	DataStoreReader
 
 	Addrs    []string
 	TLSAddrs []string
@@ -101,7 +98,6 @@ func (s *HTTPListener) Start() error {
 	if s.ds == nil {
 		return errors.New("router: http listener missing data store")
 	}
-	s.DataStoreReader = s.ds
 
 	s.routes = make(map[string]*httpRoute)
 	s.domains = make(map[string]*node)
@@ -193,100 +189,6 @@ func (s *HTTPListener) startListen() error {
 }
 
 var ErrClosed = errors.New("router: listener has been closed")
-
-func (s *HTTPListener) AddRoute(r *router.Route) error {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	if s.closed {
-		return ErrClosed
-	}
-	if r.Port == 0 {
-		return s.ds.Add(r)
-	}
-
-	// If not using default ports, check that the port is reserved, first
-	addrs := s.Addrs
-	err := ErrUnreservedHTTP
-	if r.LegacyTLSCert != "" {
-		addrs = s.TLSAddrs
-		err = ErrUnreservedHTTPS
-	}
-	for _, addr := range addrs {
-		_, port, _ := net.SplitHostPort(addr)
-		if port == strconv.Itoa(int(r.Port)) {
-			return s.ds.Add(r)
-		}
-	}
-	return err
-}
-
-func (s *HTTPListener) UpdateRoute(r *router.Route) error {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	if s.closed {
-		return ErrClosed
-	}
-	return s.ds.Update(r)
-}
-
-func md5sum(data string) string {
-	digest := md5.Sum([]byte(data))
-	return hex.EncodeToString(digest[:])
-}
-
-func (s *HTTPListener) RemoveRoute(id string) error {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	if s.closed {
-		return ErrClosed
-	}
-	return s.ds.Remove(id)
-}
-
-func (s *HTTPListener) AddCert(cert *router.Certificate) error {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	if s.closed {
-		return ErrClosed
-	}
-	return s.ds.AddCert(cert)
-}
-
-func (s *HTTPListener) GetCert(id string) (*router.Certificate, error) {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	if s.closed {
-		return nil, ErrClosed
-	}
-	return s.ds.GetCert(id)
-}
-
-func (s *HTTPListener) GetCertRoutes(id string) ([]*router.Route, error) {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	if s.closed {
-		return nil, ErrClosed
-	}
-	return s.ds.ListCertRoutes(id)
-}
-
-func (s *HTTPListener) GetCerts() ([]*router.Certificate, error) {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	if s.closed {
-		return nil, ErrClosed
-	}
-	return s.ds.ListCerts()
-}
-
-func (s *HTTPListener) RemoveCert(id string) error {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	if s.closed {
-		return ErrClosed
-	}
-	return s.ds.RemoveCert(id)
-}
 
 type httpSyncHandler struct {
 	l *HTTPListener

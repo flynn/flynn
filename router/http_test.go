@@ -19,12 +19,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flynn/flynn/controller/data"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/proxy"
-	"github.com/flynn/flynn/router/schema"
 	"github.com/flynn/flynn/router/testutils"
 	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
@@ -132,7 +133,7 @@ func (s *S) TestIssue5381(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
@@ -148,7 +149,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	r := addHTTPRoute(c, l)
+	r := s.addHTTPRoute(c, l)
 
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 
@@ -175,7 +176,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	c.Assert(err, Not(IsNil))
 
 	wait := waitForEvent(c, l, "remove", r.ID)
-	err = l.RemoveRoute(r.ID)
+	err = s.routes.Delete(r)
 	c.Assert(err, IsNil)
 	wait()
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
@@ -194,7 +195,7 @@ func (s *S) TestAddHTTPRouteWithCert(c *C) {
 	defer l.Close()
 
 	domain := "foo.example.org"
-	addHTTPRouteForDomain(domain, c, l)
+	s.addHTTPRouteForDomain(domain, c, l)
 
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 
@@ -213,13 +214,10 @@ func (s *S) TestAddHTTPRouteWithCert(c *C) {
 }
 
 func (s *S) TestAddHTTPRouteWithInvalidCert(c *C) {
-	l := s.newHTTPListener(c)
-	defer l.Close()
-
 	c1, _ := tlscert.Generate([]string{"1.example.com"})
 	c2, _ := tlscert.Generate([]string{"2.example.com"})
 
-	err := l.AddRoute(router.HTTPRoute{
+	err := s.routes.Add(router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
 		Certificate: &router.Certificate{
@@ -242,7 +240,7 @@ func (s *S) TestAddHTTPRouteWithExistingCert(c *C) {
 	tlsCert := testutils.TLSConfigForDomain("*.bar.example.org")
 
 	domain := "1.bar.example.org"
-	r1 := addRoute(c, l, router.HTTPRoute{
+	r1 := s.addRoute(c, l, router.HTTPRoute{
 		Domain:  domain,
 		Service: "test",
 		Certificate: &router.Certificate{
@@ -256,7 +254,7 @@ func (s *S) TestAddHTTPRouteWithExistingCert(c *C) {
 	unregister()
 
 	domain = "2.bar.example.org"
-	r2 := addHTTPRouteForDomain(domain, c, l)
+	r2 := s.addHTTPRouteForDomain(domain, c, l)
 	unregister = discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
 	assertGet(c, "http://"+l.Addrs[0], domain, "2")
 	assertGet(c, "https://"+l.TLSAddrs[0], domain, "2")
@@ -265,10 +263,7 @@ func (s *S) TestAddHTTPRouteWithExistingCert(c *C) {
 	c.Assert(r1.Certificate, DeepEquals, r2.Certificate)
 }
 
-func (s *S) TestAddAndDeleteCert(c *C) {
-	api := s.newTestAPIServer(c)
-	defer api.Close()
-
+func (s *S) TestUpdateCert(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	defer srv1.Close()
 
@@ -276,7 +271,7 @@ func (s *S) TestAddAndDeleteCert(c *C) {
 	defer l.Close()
 
 	domain := "chip.example.org"
-	r := addHTTPRouteForDomain(domain, c, l)
+	r := s.addHTTPRouteForDomain(domain, c, l)
 
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 	defer unregister()
@@ -285,116 +280,18 @@ func (s *S) TestAddAndDeleteCert(c *C) {
 	assertGet(c, "https://"+l.TLSAddrs[0], domain, "1")
 
 	tlsCert := testutils.RefreshTLSConfigForDomain(domain)
-	cert := &router.Certificate{
+	r.Certificate = &router.Certificate{
 		Routes: []string{r.ID},
 		Cert:   tlsCert.Cert,
 		Key:    tlsCert.PrivateKey,
 	}
 	wait := waitForEvent(c, l, "set", "")
-	err := api.CreateCert(cert)
+	err := s.routes.Update(r)
 	c.Assert(err, IsNil)
 	wait()
 
 	assertGet(c, "http://"+l.Addrs[0], domain, "1")
 	assertGet(c, "https://"+l.TLSAddrs[0], domain, "1")
-
-	wait = waitForEvent(c, l, "set", "")
-	err = api.DeleteCert(cert.ID)
-	c.Assert(err, IsNil)
-	wait()
-
-	r, err = api.GetRoute(r.Type, r.ID)
-	c.Assert(err, IsNil)
-	c.Assert(r.Certificate, IsNil)
-}
-
-func (s *S) TestGetCert(c *C) {
-	api := s.newTestAPIServer(c)
-	defer api.Close()
-
-	srv1 := httptest.NewServer(httpTestHandler("1"))
-	defer srv1.Close()
-	l := s.newHTTPListener(c)
-	defer l.Close()
-	domain := "oof.example.org"
-	r := addHTTPRouteForDomain(domain, c, l)
-
-	tlsCert, err := tlscert.Generate([]string{domain})
-	c.Assert(err, IsNil)
-	cert := &router.Certificate{
-		Routes: []string{r.ID},
-		Cert:   tlsCert.Cert,
-		Key:    tlsCert.PrivateKey,
-	}
-	err = api.CreateCert(cert)
-	c.Assert(err, IsNil)
-
-	gotCert, err := api.GetCert(cert.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotCert.ID, Equals, cert.ID)
-	c.Assert(gotCert.Cert, Equals, cert.Cert)
-	c.Assert(gotCert.Key, Equals, cert.Key)
-	c.Assert(gotCert.Routes, DeepEquals, cert.Routes)
-}
-
-func (s *S) TestListCerts(c *C) {
-	api := s.newTestAPIServer(c)
-	defer api.Close()
-
-	srv1 := httptest.NewServer(httpTestHandler("1"))
-	defer srv1.Close()
-	l := s.newHTTPListener(c)
-	defer l.Close()
-	domain := "oof.example.org"
-	r := addHTTPRouteForDomain(domain, c, l)
-
-	tlsCert, err := tlscert.Generate([]string{domain})
-	c.Assert(err, IsNil)
-	cert := &router.Certificate{
-		Routes: []string{r.ID},
-		Cert:   tlsCert.Cert,
-		Key:    tlsCert.PrivateKey,
-	}
-	err = api.CreateCert(cert)
-	c.Assert(err, IsNil)
-
-	gotCerts, err := api.ListCerts()
-	c.Assert(err, IsNil)
-	c.Assert(len(gotCerts), Equals, 2)
-	gotCert := gotCerts[1] // the first cert was created with the route
-	c.Assert(gotCert.ID, Equals, cert.ID)
-	c.Assert(gotCert.Cert, Equals, cert.Cert)
-	c.Assert(gotCert.Key, Equals, cert.Key)
-	c.Assert(gotCert.Routes, DeepEquals, cert.Routes)
-}
-
-func (s *S) TestListCertRoutes(c *C) {
-	api := s.newTestAPIServer(c)
-	defer api.Close()
-
-	srv1 := httptest.NewServer(httpTestHandler("1"))
-	defer srv1.Close()
-	l := s.newHTTPListener(c)
-	defer l.Close()
-	domain := "oof.example.org"
-	r := addHTTPRouteForDomain(domain, c, l)
-
-	tlsCert, err := tlscert.Generate([]string{domain})
-	c.Assert(err, IsNil)
-	cert := &router.Certificate{
-		Routes: []string{r.ID},
-		Cert:   tlsCert.Cert,
-		Key:    tlsCert.PrivateKey,
-	}
-	err = api.CreateCert(cert)
-	c.Assert(err, IsNil)
-
-	gotRoutes, err := api.ListCertRoutes(cert.ID)
-	c.Assert(err, IsNil)
-	c.Assert(len(gotRoutes), Equals, 1)
-	gotRoute := gotRoutes[0]
-	c.Assert(gotRoute.ID, Equals, r.ID)
-	c.Assert(gotRoute.Certificate, IsNil)
 }
 
 func newReq(url, host string) *http.Request {
@@ -425,13 +322,13 @@ func assertGetCookies(c *C, url, host, expected string, cookies []*http.Cookie) 
 	return res.Cookies()
 }
 
-func addHTTPRoute(c *C, l *HTTPListener) *router.Route {
-	return addHTTPRouteForDomain("example.com", c, l)
+func (s *S) addHTTPRoute(c *C, l *HTTPListener) *router.Route {
+	return s.addHTTPRouteForDomain("example.com", c, l)
 }
 
-func addHTTPRouteForDomain(domain string, c *C, l *HTTPListener) *router.Route {
+func (s *S) addHTTPRouteForDomain(domain string, c *C, l *HTTPListener) *router.Route {
 	cert := testutils.TLSConfigForDomain(domain)
-	return addRoute(c, l, router.HTTPRoute{
+	return s.addRoute(c, l, router.HTTPRoute{
 		Domain:  domain,
 		Service: "test",
 		Certificate: &router.Certificate{
@@ -441,12 +338,16 @@ func addHTTPRouteForDomain(domain string, c *C, l *HTTPListener) *router.Route {
 	}.ToRoute())
 }
 
-func removeHTTPRoute(c *C, l *HTTPListener, id string) {
-	removeRoute(c, l, id)
+func (s *S) removeHTTPRoute(c *C, l *HTTPListener, id string) {
+	s.removeRoute(c, l, &router.Route{ID: id, Type: "http"})
 }
 
-func addStickyHTTPRoute(c *C, l *HTTPListener) *router.Route {
-	return addRoute(c, l, router.HTTPRoute{
+func (s *S) removeHTTPRouteAssertErr(c *C, l Listener, id string) error {
+	return s.removeRouteAssertErr(c, l, &router.Route{ID: id, Type: "http"})
+}
+
+func (s *S) addStickyHTTPRoute(c *C, l *HTTPListener) *router.Route {
+	return s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
 		Sticky:  true,
@@ -464,15 +365,15 @@ func (s *S) TestWildcardRouting(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "1",
 	}.ToRoute())
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "*.foo.bar",
 		Service: "2",
 	}.ToRoute())
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "dev.foo.bar",
 		Service: "3",
 	}.ToRoute())
@@ -495,11 +396,11 @@ func (s *S) TestWildcardCatchAllRouting(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "*",
 		Service: "1",
 	}.ToRoute())
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "*.bar",
 		Service: "2",
 	}.ToRoute())
@@ -528,7 +429,7 @@ func (s *S) TestLeaderRouting(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "leader-routing-http",
 		Leader:  true,
@@ -556,17 +457,17 @@ func (s *S) TestPathRouting(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	defRoute := addRoute(c, l, router.HTTPRoute{
+	defRoute := s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "1",
 	}.ToRoute())
-	pathRoute := addRoute(c, l, router.HTTPRoute{
+	pathRoute := s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "2",
 		Path:    "/2/",
 	}.ToRoute())
 	// test that path with no trailing slash will autocorrect
-	pathRoute2 := addRoute(c, l, router.HTTPRoute{
+	pathRoute2 := s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "3",
 		Path:    "/3",
@@ -586,7 +487,7 @@ func (s *S) TestPathRouting(c *C) {
 	// Test that adding a routes with invalid paths error
 	invalidPaths := []string{"noleadingslash/"}
 	for _, p := range invalidPaths {
-		addRouteAssertErr(c, l, router.HTTPRoute{
+		s.addRouteAssertErr(c, l, router.HTTPRoute{
 			Domain:  "foo.bar",
 			Service: "foo",
 			Path:    p,
@@ -594,24 +495,24 @@ func (s *S) TestPathRouting(c *C) {
 	}
 
 	// Test that adding a Path route without default route fails
-	addRouteAssertErr(c, l, router.HTTPRoute{
+	s.addRouteAssertErr(c, l, router.HTTPRoute{
 		Domain:  "foo.bar.baz",
 		Service: "foo",
 		Path:    "/valid/",
 	}.ToRoute())
 
 	// Test that removing the default route while there are still dependent routes fails
-	removeRouteAssertErr(c, l, defRoute.ID)
+	s.removeHTTPRouteAssertErr(c, l, defRoute.ID)
 
 	// However removing them in the appropriate order should succeed
-	removeRoute(c, l, pathRoute.ID)
-	removeRoute(c, l, pathRoute2.ID)
-	removeRoute(c, l, defRoute.ID)
+	s.removeHTTPRoute(c, l, pathRoute.ID)
+	s.removeHTTPRoute(c, l, pathRoute2.ID)
+	s.removeHTTPRoute(c, l, defRoute.ID)
 }
 
 func (s *S) TestHTTPInitialSync(c *C) {
 	l := s.newHTTPListener(c)
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 	l.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))
@@ -635,12 +536,13 @@ func (s *S) TestHTTPResync(c *C) {
 		cmu.Lock()
 		defer cmu.Unlock()
 		connPids = append(connPids, conn.Pid)
-		return schema.PrepareStatements(conn)
+		return data.PrepareStatements(conn)
 	}
 	pgxpool, err := pgx.NewConnPool(poolConfig)
 	if err != nil {
 		c.Fatal(err)
 	}
+	routes := data.NewRouteRepo(&postgres.DB{ConnPool: pgxpool})
 	l := &HTTPListener{
 		Addrs:     []string{"127.0.0.1:0"},
 		ds:        NewPostgresDataStore("http", pgxpool),
@@ -657,7 +559,7 @@ func (s *S) TestHTTPResync(c *C) {
 	defer srv.Close()
 	defer srv2.Close()
 
-	route := addRoute(c, l, router.HTTPRoute{
+	route := addRoute(c, l, routes, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 	}.ToRoute())
@@ -704,7 +606,7 @@ func (s *S) TestHTTPResync(c *C) {
 		if attempts > 5 {
 			c.Fatal(fmt.Errorf("Unable to remove route after disconnecting sync"))
 		}
-		err = l.RemoveRoute(route.ID)
+		err = routes.Delete(route)
 		if e, ok := err.(*net.OpError); ok {
 			if ee, ok := e.Err.(*os.SyscallError); ok && ee.Err == syscall.EPIPE || e.Err == syscall.EPIPE {
 				attempts++
@@ -720,7 +622,7 @@ func (s *S) TestHTTPResync(c *C) {
 	}
 
 	// Also add a new route
-	err = l.AddRoute(router.HTTPRoute{
+	err = routes.Add(router.HTTPRoute{
 		Domain:  "example.org",
 		Service: "example-org",
 	}.ToRoute())
@@ -749,7 +651,7 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
@@ -784,7 +686,7 @@ func (s *S) TestHTTPHeaders(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	port := mustPortFromAddr(l.listeners[0].Addr().String())
 	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1", port))
@@ -798,7 +700,7 @@ func (s *S) TestHTTPHeadersFromClient(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	port := mustPortFromAddr(l.listeners[0].Addr().String())
 	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1", port))
@@ -818,7 +720,7 @@ func (s *S) TestClientProvidedRequestID(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path == "/false" {
@@ -867,7 +769,7 @@ func (s *S) TestHTTPProxyHeadersFromClient(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	tests := []struct {
@@ -902,7 +804,7 @@ func (s *S) TestConnectionCloseHeaderFromClient(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	req := newReq("http://"+l.Addrs[0], "example.com")
@@ -921,7 +823,7 @@ func (s *S) TestConnectionHeaders(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	tests := []struct {
@@ -1050,7 +952,7 @@ func (s *S) TestHTTPWebsocket(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
@@ -1107,7 +1009,7 @@ func (s *S) TestUpgradeHeaderIsCaseInsensitive(c *C) {
 	url := "http://" + l.Addrs[0]
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	values := []string{"upgrade", "Upgrade", "upGradE"}
@@ -1139,7 +1041,7 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addStickyHTTPRoute(c, l)
+	s.addStickyHTTPRoute(c, l)
 
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 
@@ -1181,7 +1083,7 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 	url := "http://" + l.Addrs[0]
 	defer l.Close()
 
-	addStickyHTTPRoute(c, l)
+	s.addStickyHTTPRoute(c, l)
 
 	var unregister func()
 	steps := []struct {
@@ -1248,7 +1150,7 @@ func (s *S) TestNoBackends(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 	}.ToRoute())
@@ -1274,7 +1176,7 @@ func (s *S) TestNoResponsiveBackends(c *C) {
 	srv2 := httptest.NewServer(httpTestHandler("2"))
 	srv2.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 		Sticky:  true,
@@ -1317,7 +1219,7 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 	srv2 := httptest.NewServer(httpTestHandler("2"))
 	defer srv2.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 		Sticky:  true,
@@ -1423,7 +1325,7 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	defer removeHTTPRoute(c, l, addHTTPRoute(c, l).ID)
+	defer s.removeHTTPRoute(c, l, s.addHTTPRoute(c, l).ID)
 
 	discoverdRegisterHTTP(c, l, srv1.Addr().String())
 	discoverdRegisterHTTP(c, l, srv2.Addr().String())
@@ -1454,11 +1356,11 @@ func (s *S) TestKeepaliveHostname(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 	}.ToRoute())
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.org",
 		Service: "example-org",
 	}.ToRoute())
@@ -1481,7 +1383,7 @@ func (s *S) TestRequestURIEscaping(c *C) {
 	}))
 	defer srv.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
@@ -1513,7 +1415,7 @@ func (s *S) TestRequestQueryParams(c *C) {
 	}))
 	defer srv.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	res, err := newHTTPClient("example.com").Do(req)
@@ -1530,11 +1432,11 @@ func (s *S) TestDefaultServerKeypair(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 	}.ToRoute())
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.example.com",
 		Service: "foo-example-com",
 	}.ToRoute())
@@ -1555,7 +1457,7 @@ func (s *S) TestCaseInsensitiveDomain(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "exaMple.com",
 		Service: "example-com",
 	}.ToRoute())
@@ -1575,7 +1477,7 @@ func (s *S) TestHostPortStripping(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 	}.ToRoute())
@@ -1603,7 +1505,7 @@ func (s *S) TestHTTPResponseStreaming(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 	}.ToRoute())
@@ -1653,7 +1555,7 @@ func (s *S) TestHTTPHijackUpgrade(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "127.0.0.1", // TODO: httpclient overrides the Host header
 		Service: "example-com",
 	}.ToRoute())
@@ -1694,7 +1596,7 @@ func (s *S) TestHTTPCloseNotify(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	req := newReq("http://"+l.Addrs[0], "example.com")
@@ -1722,7 +1624,7 @@ func (s *S) TestDoubleSlashPath(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
@@ -1742,7 +1644,7 @@ func (s *S) TestHTTPProxyProtocol(c *C) {
 	l.defaultPorts = getDefaultPortsFromAddrs(l)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
 	req := newReq("http://"+l.Addrs[0], "example.com")
@@ -1780,7 +1682,7 @@ func (s *S) TestLegacyTLSDisallowed(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	s.addHTTPRoute(c, l)
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
@@ -1848,7 +1750,7 @@ func (s *S) TestHTTPLoadBalance(c *C) {
 
 	// add a sticky route so we can control which backend is hit by
 	// blocking requests
-	r := addStickyHTTPRoute(c, l)
+	r := s.addStickyHTTPRoute(c, l)
 
 	// register the three backends
 	discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())

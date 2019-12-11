@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/data"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
@@ -19,11 +19,11 @@ import (
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
-	"github.com/flynn/flynn/pkg/testutils/postgres"
+	pgtestutils "github.com/flynn/flynn/pkg/testutils/postgres"
 	"github.com/flynn/flynn/pkg/typeconv"
 	. "github.com/flynn/go-check"
 	"github.com/jackc/pgx"
-	"github.com/tent/canonical-json-go"
+	cjson "github.com/tent/canonical-json-go"
 )
 
 func init() {
@@ -95,7 +95,6 @@ func (s *S) SetUpSuite(c *C) {
 		db:     db,
 		cc:     s.cc,
 		lc:     s.flac,
-		rc:     newFakeRouter(),
 		keys:   []string{authKey},
 		caCert: s.caCert,
 	}

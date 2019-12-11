@@ -1,11 +1,9 @@
 package main
 
 import (
-	"crypto/md5"
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -19,7 +17,7 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -28,8 +26,7 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
-	routerc "github.com/flynn/flynn/router/client"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/que-go"
 	"github.com/inconshreveable/log15"
 	"github.com/julienschmidt/httprouter"
@@ -67,15 +64,9 @@ func main() {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-	rc := routerc.New()
 
 	doneCh := make(chan struct{})
 	shutdown.BeforeExit(func() { close(doneCh) })
-	go func() {
-		if err := streamRouterEvents(rc, db, doneCh); err != nil {
-			shutdown.Fatal(err)
-		}
-	}()
 
 	// Listen for database migration, reset connpool on new migration
 	go postgres.ResetOnMigration(db, logger, doneCh)
@@ -99,69 +90,11 @@ func main() {
 		db:     db,
 		cc:     utils.ClusterClientWrapper(cluster.NewClient()),
 		lc:     lc,
-		rc:     rc,
 		keys:   strings.Split(os.Getenv("AUTH_KEY"), ","),
 		keyIDs: strings.Split(os.Getenv("AUTH_KEY_IDS"), ","),
 		caCert: []byte(os.Getenv("CA_CERT")),
 	})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
-}
-
-func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}) error {
-	// wait for router to come up
-	{
-		events := make(chan *discoverd.Event)
-		stream, err := discoverd.NewService("router-api").Watch(events)
-		if err != nil {
-			return err
-		}
-		for e := range events {
-			if e.Kind == discoverd.EventKindUp {
-				break
-			}
-		}
-		stream.Close()
-	}
-
-	events := make(chan *router.StreamEvent)
-	s, err := rc.StreamEvents(nil, events)
-	if err != nil {
-		return err
-	}
-	go func() {
-		for {
-			e, ok := <-events
-			if !ok {
-				return
-			}
-			route := e.Route
-			var appID string
-			if strings.HasPrefix(route.ParentRef, ct.RouteParentRefPrefix) {
-				appID = strings.TrimPrefix(route.ParentRef, ct.RouteParentRefPrefix)
-			}
-			eventType := ct.EventTypeRoute
-			if e.Event == "remove" {
-				eventType = ct.EventTypeRouteDeletion
-			}
-			hash := md5.New()
-			io.WriteString(hash, appID)
-			io.WriteString(hash, string(eventType))
-			io.WriteString(hash, route.ID)
-			io.WriteString(hash, route.CreatedAt.String())
-			io.WriteString(hash, route.UpdatedAt.String())
-			uniqueID := fmt.Sprintf("%x", hash.Sum(nil))
-			if err := data.CreateEvent(db.Exec, &ct.Event{
-				AppID:      appID,
-				ObjectID:   route.ID,
-				ObjectType: eventType,
-				UniqueID:   uniqueID,
-			}, route); err != nil {
-				log.Println(err)
-			}
-		}
-	}()
-	_, _ = <-doneCh
-	return s.Close()
 }
 
 type logClient interface {
@@ -172,7 +105,6 @@ type handlerConfig struct {
 	db     *postgres.DB
 	cc     utils.ClusterClient
 	lc     logClient
-	rc     routerc.Client
 	keys   []string
 	keyIDs []string
 	caCert []byte
@@ -202,7 +134,8 @@ func appHandler(c handlerConfig) http.Handler {
 	domainMigrationRepo := data.NewDomainMigrationRepo(c.db)
 	providerRepo := data.NewProviderRepo(c.db)
 	resourceRepo := data.NewResourceRepo(c.db)
-	appRepo := data.NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
+	routeRepo := data.NewRouteRepo(c.db)
+	appRepo := data.NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), routeRepo)
 	artifactRepo := data.NewArtifactRepo(c.db)
 	releaseRepo := data.NewReleaseRepo(c.db, artifactRepo, q)
 	jobRepo := data.NewJobRepo(c.db)
@@ -221,6 +154,7 @@ func appHandler(c handlerConfig) http.Handler {
 		formationRepo:       formationRepo,
 		artifactRepo:        artifactRepo,
 		jobRepo:             jobRepo,
+		routeRepo:           routeRepo,
 		resourceRepo:        resourceRepo,
 		deploymentRepo:      deploymentRepo,
 		eventRepo:           eventRepo,
@@ -229,7 +163,6 @@ func appHandler(c handlerConfig) http.Handler {
 		volumeRepo:          volumeRepo,
 		clusterClient:       c.cc,
 		logaggc:             c.lc,
-		routerc:             c.rc,
 		que:                 q,
 		caCert:              c.caCert,
 		config:              c,
@@ -371,6 +304,7 @@ type controllerAPI struct {
 	formationRepo       *data.FormationRepo
 	artifactRepo        *data.ArtifactRepo
 	jobRepo             *data.JobRepo
+	routeRepo           *data.RouteRepo
 	resourceRepo        *data.ResourceRepo
 	deploymentRepo      *data.DeploymentRepo
 	eventRepo           *data.EventRepo
@@ -379,7 +313,6 @@ type controllerAPI struct {
 	volumeRepo          *data.VolumeRepo
 	clusterClient       utils.ClusterClient
 	logaggc             logClient
-	routerc             routerc.Client
 	que                 *que.Client
 	caCert              []byte
 	config              handlerConfig
@@ -429,8 +362,8 @@ func routeParentRef(appID string) string {
 
 func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
-	route, err := c.routerc.GetRoute(params.ByName("routes_type"), params.ByName("routes_id"))
-	if err == routerc.ErrNotFound || err == nil && route.ParentRef != routeParentRef(c.getApp(ctx).ID) {
+	route, err := c.routeRepo.Get(params.ByName("routes_type"), params.ByName("routes_id"))
+	if err == data.ErrRouteNotFound || err == nil && route.ParentRef != routeParentRef(c.getApp(ctx).ID) {
 		err = ErrNotFound
 	}
 	if err != nil {

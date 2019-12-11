@@ -12,13 +12,12 @@ import (
 	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/pkg/connutil"
 	"github.com/flynn/flynn/router/proxy"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	"golang.org/x/net/context"
 )
 
 type TCPListener struct {
 	Watcher
-	DataStoreReader
 
 	IP string
 
@@ -39,62 +38,6 @@ type TCPListener struct {
 	closed   bool
 }
 
-func (l *TCPListener) AddRoute(route *router.Route) error {
-	r := route.TCPRoute()
-	l.mtx.RLock()
-	defer l.mtx.RUnlock()
-	if l.closed {
-		return ErrClosed
-	}
-	for _, port := range l.reservedPorts {
-		if r.Port == port {
-			return ErrReserved
-		}
-	}
-	if r.Port == 0 {
-		return l.addWithAllocatedPort(route)
-	}
-	return l.ds.Add(route)
-}
-
-func (l *TCPListener) UpdateRoute(route *router.Route) error {
-	r := route.TCPRoute()
-	l.mtx.RLock()
-	defer l.mtx.RUnlock()
-	if l.closed {
-		return ErrClosed
-	}
-	if r.Port == 0 {
-		return errors.New("router: a port number needs to be specified")
-	}
-	return l.ds.Update(route)
-}
-
-var ErrNoPorts = errors.New("router: no ports available")
-
-func (l *TCPListener) addWithAllocatedPort(route *router.Route) error {
-	r := route.TCPRoute()
-	l.mtx.RLock()
-	defer l.mtx.RUnlock()
-	for r.Port = range l.listeners {
-		tempRoute := r.ToRoute()
-		if err := l.ds.Add(tempRoute); err == nil {
-			*route = *tempRoute
-			return nil
-		}
-	}
-	return ErrNoPorts
-}
-
-func (l *TCPListener) RemoveRoute(id string) error {
-	l.mtx.RLock()
-	defer l.mtx.RUnlock()
-	if l.closed {
-		return ErrClosed
-	}
-	return l.ds.Remove(id)
-}
-
 func (l *TCPListener) Start() error {
 	ctx := context.Background() // TODO(benburkert): make this an argument
 	ctx, l.stopSync = context.WithCancel(ctx)
@@ -110,7 +53,6 @@ func (l *TCPListener) Start() error {
 	if l.ds == nil {
 		return errors.New("router: tcp listener missing data store")
 	}
-	l.DataStoreReader = l.ds
 
 	l.services = make(map[string]*service)
 	l.routes = make(map[string]*tcpRoute)

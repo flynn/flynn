@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/discoverd/cache"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/postgres"
-	"github.com/flynn/flynn/pkg/testutils/postgres"
-	"github.com/flynn/flynn/router/schema"
-	"github.com/flynn/flynn/router/types"
+	pgtestutils "github.com/flynn/flynn/pkg/testutils/postgres"
+	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 	"github.com/jackc/pgx"
 )
@@ -67,6 +67,7 @@ type S struct {
 	discoverd *discoverdWrapper
 	cleanup   func()
 	pgx       *pgx.ConnPool
+	routes    *data.RouteRepo
 }
 
 var _ = Suite(&S{})
@@ -86,13 +87,13 @@ func (s *S) SetUpSuite(c *C) {
 	}
 	db := postgres.New(pgxpool, nil)
 
-	if err = migrateDB(db); err != nil {
+	if err = data.MigrateDB(db); err != nil {
 		c.Fatal(err)
 	}
 	db.Close()
 
 	// reconnect with prepared statements
-	pgxConfig.AfterConnect = schema.PrepareStatements
+	pgxConfig.AfterConnect = data.PrepareStatements
 	pgxpool, err = pgx.NewConnPool(pgxConfig)
 	if err != nil {
 		c.Fatal(err)
@@ -101,6 +102,8 @@ func (s *S) SetUpSuite(c *C) {
 
 	s.pgx = db.ConnPool
 	s.pgx.Exec(sqlCreateTruncateTables)
+
+	s.routes = data.NewRouteRepo(db)
 }
 
 func newPgxConnPoolConfig() pgx.ConnPoolConfig {
@@ -246,16 +249,20 @@ func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc *cache.ServiceCa
 	}
 }
 
-func addRoute(c *C, l Listener, r *router.Route) *router.Route {
+func (s *S) addRoute(c *C, l Listener, r *router.Route) *router.Route {
+	return addRoute(c, l, s.routes, r)
+}
+
+func addRoute(c *C, l Listener, routes *data.RouteRepo, r *router.Route) *router.Route {
 	wait := waitForEvent(c, l, "set", "")
-	err := l.AddRoute(r)
+	err := routes.Add(r)
 	c.Assert(err, IsNil)
 	wait()
 	return r
 }
 
-func addRouteAssertErr(c *C, l Listener, r *router.Route) error {
-	err := l.AddRoute(r)
+func (s *S) addRouteAssertErr(c *C, l Listener, r *router.Route) error {
+	err := s.routes.Add(r)
 	c.Assert(err, NotNil)
 	return err
 }
@@ -266,6 +273,7 @@ DECLARE
     statements CURSOR FOR
         SELECT tablename FROM pg_tables
         WHERE tablename != 'schema_migrations'
+	  AND tablename != 'event_types'
           AND tableowner = session_user
           AND schemaname = 'public';
 BEGIN
@@ -276,15 +284,15 @@ END;
 $$ LANGUAGE plpgsql;
 `
 
-func removeRoute(c *C, l Listener, id string) {
+func (s *S) removeRoute(c *C, l Listener, r *router.Route) {
 	wait := waitForEvent(c, l, "remove", "")
-	err := l.RemoveRoute(id)
+	err := s.routes.Delete(r)
 	c.Assert(err, IsNil)
 	wait()
 }
 
-func removeRouteAssertErr(c *C, l Listener, id string) error {
-	err := l.RemoveRoute(id)
+func (s *S) removeRouteAssertErr(c *C, l Listener, r *router.Route) error {
+	err := s.routes.Delete(r)
 	c.Assert(err, NotNil)
 	return err
 }
