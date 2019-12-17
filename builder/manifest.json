@@ -65,6 +65,13 @@
       }]
     },
     {
+      "id": "protocjs",
+      "base": "protoc",
+      "layers": [{
+        "script": "builder/img/protocjs.sh"
+      }]
+    },
+    {
       "id": "builder",
       "base": "go",
       "layers": [{

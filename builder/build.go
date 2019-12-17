@@ -127,8 +127,12 @@ type Layer struct {
 	// Script is added as an input and run with 'bash -e'
 	Script string `json:"script,omitempty"`
 
-	// ProtoBuild is a list of directories to compile using 'protoc'.
+	// ProtoBuild is a list of directories to compile to Golang using 'protoc'.
 	ProtoBuild []string `json:"protobuild,omitempty"`
+
+	// ProtoBuildJs is a list of directories to compile to JavaScript/TypeScript
+	// using 'protocjs'.
+	ProtoBuildJs map[string]string `json:"protobuildjs,omitempty"`
 
 	// GoBuild is a set of directories to build using 'go build'.
 	//
@@ -357,6 +361,9 @@ func (b *Builder) Build(images []*Image) error {
 			addDependency(build, image.Base)
 		}
 		for _, l := range image.Layers {
+			if len(l.ProtoBuildJs) > 0 && l.BuildWith == "" {
+				l.BuildWith = "protocjs"
+			}
 			if len(l.ProtoBuild) > 0 && l.BuildWith == "" {
 				l.BuildWith = "protoc"
 			}
@@ -504,6 +511,37 @@ func (b *Builder) BuildImage(image *Image) error {
 				run = append(run,
 					fmt.Sprintf("mkdir -p %s", outDir),
 					fmt.Sprintf("protoc -I /usr/local/include -I %s --go_out=plugins=grpc:%s %s", dir, outDir, strings.Join(paths, " ")),
+				)
+			}
+		}
+
+		// if building protocols, add .proto inputs and build using
+		// 'protocjs' into /mnt/out/proto
+		if len(l.ProtoBuildJs) > 0 {
+			// add the build commands in a predictable order so
+			// the generated layer ID is deterministic
+			dirs := make([]string, 0, len(l.ProtoBuildJs))
+			for dir := range l.ProtoBuildJs {
+				dirs = append(dirs, dir)
+			}
+			sort.Strings(dirs)
+			for _, dir := range dirs {
+				paths, err := filepath.Glob(filepath.Join(dir, "*.proto"))
+				if err != nil {
+					return err
+				}
+				inputs = append(inputs, paths...)
+				outDir := filepath.Join("/mnt/out/proto", l.ProtoBuildJs[dir])
+				run = append(run,
+					fmt.Sprintf("mkdir -p %s", outDir),
+					fmt.Sprintf(`protoc -I /usr/local/include -I %s \
+						--plugin="protoc-gen-ts=/usr/local/bin/protoc-gen-ts"\
+						--js_out="import_style=commonjs,binary:%s" \
+						--ts_out="service=grpc-web:%s" \
+						/usr/local/include/google/api/annotations.proto \
+						/usr/local/include/google/api/http.proto \
+						%s
+`, dir, outDir, outDir, strings.Join(paths, " ")),
 				)
 			}
 		}
@@ -962,6 +1000,9 @@ func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[st
 			defer src.Close()
 			dstPath, err := filepath.Rel(protoDir, path)
 			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(dstPath), info.Mode()); err != nil {
 				return err
 			}
 			dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
