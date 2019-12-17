@@ -106,6 +106,19 @@ type Image struct {
 	Entrypoint *ct.ImageEntrypoint `json:"entrypoint,omitempty"`
 }
 
+type ProtoBuild struct {
+	Src  string `json:"src"`           // dir where input .proto files are to be found
+	Dst  string `json:"dst,omitempty"` // dir where output should be placed, defaults to Src
+	Lang string `json:"lang"`          // can be "go" or "js"
+}
+
+// ProtoBuildBySrc implements sort.Interface for []ProtoBuild based on the Src field.
+type ProtoBuildBySrc []ProtoBuild
+
+func (a ProtoBuildBySrc) Len() int           { return len(a) }
+func (a ProtoBuildBySrc) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ProtoBuildBySrc) Less(i, j int) bool { return strings.Compare(a[i].Src, a[j].Src) == -1 }
+
 type Layer struct {
 	// Name is the name of the layer used in log output (defaults to the
 	// image's ID)
@@ -127,8 +140,8 @@ type Layer struct {
 	// Script is added as an input and run with 'bash -e'
 	Script string `json:"script,omitempty"`
 
-	// ProtoBuild is a list of directories to compile using 'protoc'.
-	ProtoBuild []string `json:"protobuild,omitempty"`
+	// ProtoBuild is a list of ProtoBuild objects to compile using 'protoc'.
+	ProtoBuild []ProtoBuild `json:"protobuild,omitempty"`
 
 	// GoBuild is a set of directories to build using 'go build'.
 	//
@@ -489,22 +502,38 @@ func (b *Builder) BuildImage(image *Image) error {
 		if len(l.ProtoBuild) > 0 {
 			// add the build commands in a predictable order so
 			// the generated layer ID is deterministic
-			dirs := make([]string, 0, len(l.ProtoBuild))
-			for _, dir := range l.ProtoBuild {
-				dirs = append(dirs, dir)
-			}
-			sort.Strings(dirs)
-			for _, dir := range dirs {
-				paths, err := filepath.Glob(filepath.Join(dir, "*.proto"))
+			sort.Sort(ProtoBuildBySrc(l.ProtoBuild))
+			for _, pb := range l.ProtoBuild {
+				paths, err := filepath.Glob(filepath.Join(pb.Src, "*.proto"))
 				if err != nil {
 					return err
 				}
+				if pb.Dst == "" {
+					pb.Dst = pb.Src
+				}
 				inputs = append(inputs, paths...)
-				outDir := filepath.Join("/mnt/out/proto", dir)
+				outDir := filepath.Join("/mnt/out/proto", pb.Dst)
 				run = append(run,
 					fmt.Sprintf("mkdir -p %s", outDir),
-					fmt.Sprintf("protoc -I /usr/local/include -I %s --go_out=plugins=grpc:%s %s", dir, outDir, strings.Join(paths, " ")),
 				)
+
+				switch pb.Lang {
+				case "go":
+					run = append(run,
+						fmt.Sprintf("protoc -I /usr/local/include -I %s --go_out=plugins=grpc:%s %s", pb.Src, outDir, strings.Join(paths, " ")),
+					)
+				case "js":
+					run = append(run,
+						fmt.Sprintf(`protoc -I /usr/local/include -I %s \
+							--plugin="protoc-gen-ts=/usr/local/bin/protoc-gen-ts"\
+							--js_out="import_style=commonjs,binary:%s" \
+							--ts_out="service=grpc-web:%s" \
+							%s
+	`, pb.Src, outDir, outDir, strings.Join(paths, " ")),
+					)
+				default:
+					return fmt.Errorf("error: invalid ProtoBuild lang (expected either 'go' or 'js'): %q", pb.Lang)
+				}
 			}
 		}
 
@@ -962,6 +991,9 @@ func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[st
 			defer src.Close()
 			dstPath, err := filepath.Rel(protoDir, path)
 			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
 				return err
 			}
 			dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())

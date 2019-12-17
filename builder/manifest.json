@@ -157,7 +157,10 @@
       "layers": [
         {
           "protobuild": [
-            "controller/api"
+            {
+              "src": "controller/api",
+              "lang": "go"
+            }
           ]
         },
         {
