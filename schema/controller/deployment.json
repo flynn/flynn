@@ -45,7 +45,7 @@
     "deploy_timeout": {
       "$ref": "/schema/controller/common#/definitions/deploy_timeout"
     },
-    "batch_size": {
+    "deploy_batch_size": {
       "description": "batch size for in-batches deployments",
       "type": "integer"
     },

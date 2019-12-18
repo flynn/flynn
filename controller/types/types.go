@@ -379,18 +379,18 @@ type NewJob struct {
 const DefaultDeployTimeout = 120 // seconds
 
 type Deployment struct {
-	ID            string                       `json:"id,omitempty"`
-	AppID         string                       `json:"app,omitempty"`
-	OldReleaseID  string                       `json:"old_release,omitempty"`
-	NewReleaseID  string                       `json:"new_release,omitempty"`
-	Strategy      string                       `json:"strategy,omitempty"`
-	Status        string                       `json:"status,omitempty"`
-	Processes     map[string]int               `json:"processes,omitempty"`
-	Tags          map[string]map[string]string `json:"tags,omitempty"`
-	DeployTimeout int32                        `json:"deploy_timeout,omitempty"`
-	BatchSize     *int                         `json:"batch_size,omitempty"`
-	CreatedAt     *time.Time                   `json:"created_at,omitempty"`
-	FinishedAt    *time.Time                   `json:"finished_at,omitempty"`
+	ID              string                       `json:"id,omitempty"`
+	AppID           string                       `json:"app,omitempty"`
+	OldReleaseID    string                       `json:"old_release,omitempty"`
+	NewReleaseID    string                       `json:"new_release,omitempty"`
+	Strategy        string                       `json:"strategy,omitempty"`
+	Status          string                       `json:"status,omitempty"`
+	Processes       map[string]int               `json:"processes,omitempty"`
+	Tags            map[string]map[string]string `json:"tags,omitempty"`
+	DeployTimeout   int32                        `json:"deploy_timeout,omitempty"`
+	DeployBatchSize *int                         `json:"deploy_batch_size,omitempty"`
+	CreatedAt       *time.Time                   `json:"created_at,omitempty"`
+	FinishedAt      *time.Time                   `json:"finished_at,omitempty"`
 }
 
 type DeployID struct {
