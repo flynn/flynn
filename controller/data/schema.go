@@ -545,7 +545,7 @@ $$ LANGUAGE plpgsql`,
 	)
 	migrations.Add(35,
 		`INSERT INTO deployment_strategies (name) VALUES ('in-batches')`,
-		`ALTER TABLE deployments ADD COLUMN batch_size integer`,
+		`ALTER TABLE deployments ADD COLUMN deploy_batch_size integer`,
 	)
 }
 

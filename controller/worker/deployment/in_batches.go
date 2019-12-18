@@ -13,7 +13,7 @@ func (d *DeployJob) deployInBatches() error {
 	log := d.logger.New("fn", "deployInBatches")
 	log.Info("starting in-batches deployment")
 
-	batchSize := d.BatchSize
+	batchSize := d.DeployBatchSize
 	if batchSize == nil {
 		log.Info("batch size not set, using number of hosts")
 		hostCount := 0
