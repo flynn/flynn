@@ -103,7 +103,7 @@ func (s *S) TestUpdateRoute(c *C) {
 	c.Assert(s.c.UpdateRoute(app.ID, route0.FormattedID(), route0), IsNil)
 	c.Assert(s.c.UpdateRoute(app.ID, route1.FormattedID(), route1), IsNil)
 
-	routes, err := s.c.RouteList(app.ID)
+	routes, err := s.c.AppRouteList(app.ID)
 	c.Assert(err, IsNil)
 
 	c.Assert(routes, HasLen, 2)
@@ -136,7 +136,7 @@ func (s *S) TestListRoutes(c *C) {
 	r5 := s.createTestRoute(c, app1.ID, (&router.TCPRoute{Service: "bar"}).ToRoute())
 	r6 := s.createTestRoute(c, app1.ID, (&router.HTTPRoute{Service: "buzz", Domain: "list.example.org"}).ToRoute())
 
-	routes, err := s.c.RouteList(app0.ID)
+	routes, err := s.c.AppRouteList(app0.ID)
 	c.Assert(err, IsNil)
 
 	c.Assert(routes, HasLen, 5)
@@ -150,7 +150,7 @@ func (s *S) TestListRoutes(c *C) {
 	c.Assert(routes[0].Certificate.Cert, Equals, strings.TrimSuffix(tlsCert.Cert, "\n"))
 	c.Assert(routes[0].Certificate.Key, Equals, strings.TrimSuffix(tlsCert.PrivateKey, "\n"))
 
-	routes, err = s.c.RouteList(app1.ID)
+	routes, err = s.c.AppRouteList(app1.ID)
 	c.Assert(err, IsNil)
 
 	c.Assert(routes, HasLen, 2)

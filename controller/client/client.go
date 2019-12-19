@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/flynn/flynn/controller/client/v1"
+	v1controller "github.com/flynn/flynn/controller/client/v1"
 	ct "github.com/flynn/flynn/controller/types"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/httpclient"
@@ -17,7 +17,7 @@ import (
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 )
 
 type Client interface {
@@ -48,7 +48,7 @@ type Client interface {
 	DeleteJob(appID, jobID string) error
 	SetAppRelease(appID, releaseID string) error
 	GetAppRelease(appID string) (*ct.Release, error)
-	RouteList(appID string) ([]*router.Route, error)
+	AppRouteList(appID string) ([]*router.Route, error)
 	GetRoute(appID string, routeID string) (*router.Route, error)
 	CreateRoute(appID string, route *router.Route) error
 	UpdateRoute(appID string, routeID string, route *router.Route) error

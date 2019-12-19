@@ -343,7 +343,7 @@ func (m *migration) createMissingRoutes() error {
 }
 
 func (m *migration) appCreateMissingRoutes(appID string) error {
-	routes, err := m.client.RouteList(appID)
+	routes, err := m.client.AppRouteList(appID)
 	if err != nil {
 		return err
 	}

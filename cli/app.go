@@ -5,7 +5,7 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/go-docopt"
 )
@@ -174,7 +174,7 @@ func runInfo(_ *docopt.Args, client controller.Client) error {
 		return err
 	}
 
-	if routes, err := client.RouteList(appName); err == nil {
+	if routes, err := client.AppRouteList(appName); err == nil {
 		for _, k := range routes {
 			if k.Type == "http" {
 				route := k.HTTPRoute()

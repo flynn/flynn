@@ -94,7 +94,7 @@ func runExport(args *docopt.Args, client controller.Client) error {
 		return fmt.Errorf("error exporting app: %s", err)
 	}
 
-	routes, err := client.RouteList(mustApp())
+	routes, err := client.AppRouteList(mustApp())
 	if err != nil {
 		return fmt.Errorf("error getting routes: %s", err)
 	}

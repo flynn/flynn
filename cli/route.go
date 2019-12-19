@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/router/types"
+	controller "github.com/flynn/flynn/controller/client"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/go-docopt"
 )
 
@@ -79,7 +79,7 @@ func runRoute(args *docopt.Args, client controller.Client) error {
 		return runRouteRemove(args, client)
 	}
 
-	routes, err := client.RouteList(mustApp())
+	routes, err := client.AppRouteList(mustApp())
 	if err != nil {
 		return err
 	}

@@ -269,7 +269,7 @@ func (e *generator) updateRoute() {
 }
 
 func (e *generator) listRoutes() {
-	e.client.RouteList(e.resourceIds["app"])
+	e.client.AppRouteList(e.resourceIds["app"])
 }
 
 func (e *generator) deleteRoute() {

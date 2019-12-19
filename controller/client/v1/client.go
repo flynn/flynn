@@ -20,7 +20,7 @@ import (
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 )
 
 // Client is a client for the v1 of the controller API.
@@ -417,8 +417,8 @@ func (c *Client) GetAppRelease(appID string) (*ct.Release, error) {
 	return release, c.Get(fmt.Sprintf("/apps/%s/release", appID), release)
 }
 
-// RouteList returns all routes for an app.
-func (c *Client) RouteList(appID string) ([]*router.Route, error) {
+// AppRouteList returns all routes for an app.
+func (c *Client) AppRouteList(appID string) ([]*router.Route, error) {
 	var routes []*router.Route
 	return routes, c.Get(fmt.Sprintf("/apps/%s/routes", appID), &routes)
 }
