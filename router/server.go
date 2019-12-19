@@ -15,10 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flynn/flynn/controller/data"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/keepalive"
-	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/inconshreveable/log15"
 )
@@ -202,10 +200,12 @@ func main() {
 		}()
 	}
 
-	log.Info("connecting to postgres")
-	db := postgres.Wait(nil, data.PrepareStatements)
-
-	shutdown.BeforeExit(func() { db.Close() })
+	log.Info("initializing the controller route store")
+	store, err := NewControllerStore()
+	if err != nil {
+		log.Error("error initializing the controller route store", "err", err)
+		shutdown.Fatal(err)
+	}
 
 	var httpAddrs []string
 	var httpsAddrs []string
@@ -223,7 +223,7 @@ func main() {
 			IP:            *tcpIP,
 			startPort:     *tcpRangeStart,
 			endPort:       *tcpRangeEnd,
-			ds:            NewPostgresDataStore("tcp", db.ConnPool),
+			syncer:        NewSyncer(store, "tcp"),
 			discoverd:     discoverd.DefaultClient,
 			reservedPorts: reservedPorts,
 		},
@@ -234,7 +234,7 @@ func main() {
 			defaultPorts:      defaultPorts,
 			cookieKey:         cookieKey,
 			keypair:           keypair,
-			ds:                NewPostgresDataStore("http", db.ConnPool),
+			syncer:            NewSyncer(store, "http"),
 			discoverd:         discoverd.DefaultClient,
 			proxyProtocol:     proxyProtocol,
 			error503Page:      error503Page,

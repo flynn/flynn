@@ -50,7 +50,7 @@ func (s *TCPTestServer) Close() error { return s.l.Close() }
 func (s *S) newTCPListener(t testutil.TestingT) *TCPListener {
 	l := &TCPListener{
 		IP:        "127.0.0.1",
-		ds:        NewPostgresDataStore("tcp", s.pgx),
+		syncer:    NewSyncer(s.store, "tcp"),
 		discoverd: s.discoverd,
 	}
 	l.startPort, l.endPort = allocatePortRange(10)
@@ -98,11 +98,10 @@ func (s *S) TestAddTCPRoute(c *C) {
 	assertTCPConn(c, addr, "2")
 
 	wait := waitForEvent(c, l, "remove", r.ID)
-	err := s.routes.Delete(r.ToRoute())
-	c.Assert(err, IsNil)
+	s.store.delete(r.ToRoute())
 	wait()
 
-	_, err = net.Dial("tcp", addr)
+	_, err := net.Dial("tcp", addr)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -112,8 +111,7 @@ func (s *S) addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
 		Service: "test",
 		Port:    port,
 	}.ToRoute()
-	err := s.routes.Add(r)
-	c.Assert(err, IsNil)
+	s.store.add(r)
 	wait()
 	return r.TCPRoute()
 }
@@ -143,8 +141,7 @@ func (s *S) TestTCPLeaderRouting(c *C) {
 		Port:    portInt,
 		Leader:  true,
 	}.ToRoute()
-	err = s.routes.Add(r)
-	c.Assert(err, IsNil)
+	s.store.add(r)
 	wait()
 
 	discoverdRegisterTCPService(c, l, "leader-routing-tcp", srv1.Addr)

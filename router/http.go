@@ -41,7 +41,7 @@ type HTTPListener struct {
 	services map[string]*service
 
 	discoverd DiscoverdClient
-	ds        DataStore
+	syncer    *Syncer
 	wm        *WatchManager
 	stopSync  func()
 
@@ -95,8 +95,8 @@ func (s *HTTPListener) Start() error {
 	}
 	s.Watcher = s.wm
 
-	if s.ds == nil {
-		return errors.New("router: http listener missing data store")
+	if s.syncer == nil {
+		return errors.New("router: http listener missing syncer")
 	}
 
 	s.routes = make(map[string]*httpRoute)
@@ -161,7 +161,7 @@ func (s *HTTPListener) runSync(ctx context.Context, errc chan error) {
 func (s *HTTPListener) doSync(ctx context.Context, errc chan<- error) <-chan struct{} {
 	startc := make(chan struct{})
 
-	go func() { errc <- s.ds.Sync(ctx, &httpSyncHandler{l: s}, startc) }()
+	go func() { errc <- s.syncer.Sync(ctx, &httpSyncHandler{l: s}, startc) }()
 
 	return startc
 }

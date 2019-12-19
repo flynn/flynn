@@ -469,12 +469,7 @@
         "TLSCERT": "{{ (index .StepData \"controller-cert\").Cert }}",
         "TLSKEY": "{{ (index .StepData \"controller-cert\").PrivateKey }}",
         "COOKIE_KEY": "{{ (index .StepData \"router-sticky-key\").Data }}",
-        "PROXY_PROTOCOL": "{{ getenv \"PROXY_PROTOCOL\" }}",
-        "FLYNN_POSTGRES": "{{ (pgconfig .StepData \"controller\").ServiceName }}",
-        "PGHOST": "{{ (pgconfig .StepData \"controller\").Host }}",
-        "PGUSER": "{{ (pgconfig .StepData \"controller\").User }}",
-        "PGPASSWORD": "{{ (pgconfig .StepData \"controller\").Password }}",
-        "PGDATABASE": "{{ (pgconfig .StepData \"controller\").Database }}"
+        "PROXY_PROTOCOL": "{{ getenv \"PROXY_PROTOCOL\" }}"
       },
       "processes": {
         "app": {
