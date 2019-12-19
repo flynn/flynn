@@ -951,7 +951,7 @@ WARN:
 
 	// deploy tarreceive if it wasn't in the backup
 	if _, err := client.GetApp("tarreceive"); err == controller.ErrNotFound {
-		routes, err := client.RouteList("controller")
+		routes, err := client.AppRouteList("controller")
 		if len(routes) == 0 {
 			err = errors.New("no routes found")
 		}

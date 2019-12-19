@@ -398,7 +398,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	assertRouteContains(routeID, true)
 
 	// ensure sticky and leader flags default to not set
-	routes, err := client.RouteList(app.name)
+	routes, err := client.AppRouteList(app.name)
 	t.Assert(err, c.IsNil)
 	var found bool
 	for _, r := range routes {
@@ -425,7 +425,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	t.Assert(dupRoute.Output, c.Equals, "conflict: Duplicate route\n")
 
 	// ensure sticky and leader flags are set
-	routes, err = client.RouteList(app.name)
+	routes, err = client.AppRouteList(app.name)
 	t.Assert(err, c.IsNil)
 	for _, r := range routes {
 		if fmt.Sprintf("%s/%s", r.Type, r.ID) != routeID {

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/host/types"
+	discoverd "github.com/flynn/flynn/discoverd/client"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/status"
 	c "github.com/flynn/go-check"
 )
@@ -110,7 +110,7 @@ func (s *HealthcheckSuite) TestKillDown(t *c.C) {
 }
 
 func (s *HealthcheckSuite) TestStatus(t *c.C) {
-	routes, err := s.controllerClient(t).RouteList("status")
+	routes, err := s.controllerClient(t).AppRouteList("status")
 	t.Assert(err, c.IsNil)
 	t.Assert(routes, c.HasLen, 1)
 

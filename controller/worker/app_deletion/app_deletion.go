@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/que-go"
@@ -38,7 +38,7 @@ func (c *context) HandleAppDeletion(job *que.Job) (err error) {
 	defer func() { c.createEvent(&a, err) }()
 
 	log.Info("getting app routes")
-	routes, err := c.client.RouteList(app.ID)
+	routes, err := c.client.AppRouteList(app.ID)
 	if err != nil {
 		log.Error("error getting app routes", "err", err)
 		return err

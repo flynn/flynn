@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/cupcake/jsonschema"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
@@ -349,7 +349,7 @@ func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
 			t.Assert(r.flynn("route", "add", "http", route), Succeeds)
 		}
 	}
-	routeList, err := client.RouteList(app)
+	routeList, err := client.AppRouteList(app)
 	t.Assert(err, c.IsNil)
 	numRoutes := len(routes) + 1 // includes default app route
 	t.Assert(routeList, c.HasLen, numRoutes)
@@ -467,7 +467,7 @@ func (s *ControllerSuite) TestRouteEvents(t *c.C) {
 		t.Assert(r.flynn("route", "add", "http", route), Succeeds)
 		assertEventType(ct.EventTypeRoute)
 	}
-	routeList, err := client.RouteList(app)
+	routeList, err := client.AppRouteList(app)
 	t.Assert(err, c.IsNil)
 	numRoutes := len(routes) + 1 // includes default app route
 	t.Assert(routeList, c.HasLen, numRoutes)

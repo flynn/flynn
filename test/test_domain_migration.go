@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/random"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	c "github.com/flynn/go-check"
 )
 
@@ -100,7 +100,7 @@ func (s *DomainMigrationSuite) migrateDomain(t *c.C, client controller.Client, d
 	t.Assert(dashboardRelease.Env["URL"], c.Equals, fmt.Sprintf("https://dashboard.%s", dm.Domain))
 	t.Assert(dashboardRelease.Env["CA_CERT"], c.Equals, cert.CACert)
 
-	routes, err := client.RouteList("controller")
+	routes, err := client.AppRouteList("controller")
 	t.Assert(err, c.IsNil)
 	t.Assert(len(routes), c.Equals, 2) // one for both new and old domain
 	var route *router.Route
@@ -144,7 +144,7 @@ func (s *DomainMigrationSuite) TestDomainMigration(t *c.C) {
 
 	// create app
 	app, _ := s.createAppWithClient(t, cc)
-	appRoutes, err := cc.RouteList(app.ID)
+	appRoutes, err := cc.AppRouteList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(len(appRoutes), c.Equals, 1)
 
@@ -157,7 +157,7 @@ func (s *DomainMigrationSuite) TestDomainMigration(t *c.C) {
 	dm = s.migrateDomain(t, cc, dm)
 
 	// make sure a new route was created for the app
-	appRoutes, err = cc.RouteList(app.ID)
+	appRoutes, err = cc.AppRouteList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(len(appRoutes), c.Equals, 2)
 	t.Assert(strings.HasSuffix(appRoutes[0].Domain, dm.Domain), c.Equals, true)
@@ -170,7 +170,7 @@ func (s *DomainMigrationSuite) TestDomainMigration(t *c.C) {
 	})
 
 	// app should still only have the two routes
-	appRoutes, err = cc.RouteList(app.ID)
+	appRoutes, err = cc.AppRouteList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(len(appRoutes), c.Equals, 2)
 }
