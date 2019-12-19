@@ -106,20 +106,6 @@ func (s *S) TestAddTCPRoute(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
-func (s *S) TestAddTCPRouteReservedPort(c *C) {
-	l := s.newTCPListener(c)
-	defer l.Close()
-
-	l.reservedPorts = []int{80, 443}
-
-	for _, port := range l.reservedPorts {
-		r := router.TCPRoute{Port: port}.ToRoute()
-		err := s.routes.Add(r)
-		c.Assert(err, NotNil)
-		c.Assert(err.Error(), Equals, "controller: cannot bind TCP to a reserved port")
-	}
-}
-
 func (s *S) addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
 	wait := waitForEvent(c, l, "set", "")
 	r := router.TCPRoute{

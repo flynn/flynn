@@ -24,7 +24,6 @@ import (
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/postgres"
-	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/testutils"
 	router "github.com/flynn/flynn/router/types"
@@ -213,21 +212,6 @@ func (s *S) TestAddHTTPRouteWithCert(c *C) {
 	unregister()
 }
 
-func (s *S) TestAddHTTPRouteWithInvalidCert(c *C) {
-	c1, _ := tlscert.Generate([]string{"1.example.com"})
-	c2, _ := tlscert.Generate([]string{"2.example.com"})
-
-	err := s.routes.Add(router.HTTPRoute{
-		Domain:  "example.com",
-		Service: "test",
-		Certificate: &router.Certificate{
-			Cert: c1.Cert,
-			Key:  c2.PrivateKey,
-		},
-	}.ToRoute())
-	c.Assert(err, Not(IsNil))
-}
-
 func (s *S) TestAddHTTPRouteWithExistingCert(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	srv2 := httptest.NewServer(httpTestHandler("2"))
@@ -244,8 +228,8 @@ func (s *S) TestAddHTTPRouteWithExistingCert(c *C) {
 		Domain:  domain,
 		Service: "test",
 		Certificate: &router.Certificate{
-			Cert: "  \n  \n " + tlsCert.Cert + "  \n",
-			Key:  "\n\n" + tlsCert.PrivateKey + "\n   ",
+			Cert: tlsCert.Cert,
+			Key:  tlsCert.PrivateKey,
 		},
 	}.ToRoute())
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
@@ -340,10 +324,6 @@ func (s *S) addHTTPRouteForDomain(domain string, c *C, l *HTTPListener) *router.
 
 func (s *S) removeHTTPRoute(c *C, l *HTTPListener, id string) {
 	s.removeRoute(c, l, &router.Route{ID: id, Type: "http"})
-}
-
-func (s *S) removeHTTPRouteAssertErr(c *C, l Listener, id string) error {
-	return s.removeRouteAssertErr(c, l, &router.Route{ID: id, Type: "http"})
 }
 
 func (s *S) addStickyHTTPRoute(c *C, l *HTTPListener) *router.Route {
@@ -457,17 +437,17 @@ func (s *S) TestPathRouting(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	defRoute := s.addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "1",
 	}.ToRoute())
-	pathRoute := s.addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "2",
 		Path:    "/2/",
 	}.ToRoute())
 	// test that path with no trailing slash will autocorrect
-	pathRoute2 := s.addRoute(c, l, router.HTTPRoute{
+	s.addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "3",
 		Path:    "/3",
@@ -483,31 +463,6 @@ func (s *S) TestPathRouting(c *C) {
 	assertGet(c, "http://"+l.Addrs[0]+"/2", "foo.bar", "2")
 	assertGet(c, "http://"+l.Addrs[0]+"/3", "foo.bar", "3")
 	assertGet(c, "http://"+l.Addrs[0]+"/3/", "foo.bar", "3")
-
-	// Test that adding a routes with invalid paths error
-	invalidPaths := []string{"noleadingslash/"}
-	for _, p := range invalidPaths {
-		s.addRouteAssertErr(c, l, router.HTTPRoute{
-			Domain:  "foo.bar",
-			Service: "foo",
-			Path:    p,
-		}.ToRoute())
-	}
-
-	// Test that adding a Path route without default route fails
-	s.addRouteAssertErr(c, l, router.HTTPRoute{
-		Domain:  "foo.bar.baz",
-		Service: "foo",
-		Path:    "/valid/",
-	}.ToRoute())
-
-	// Test that removing the default route while there are still dependent routes fails
-	s.removeHTTPRouteAssertErr(c, l, defRoute.ID)
-
-	// However removing them in the appropriate order should succeed
-	s.removeHTTPRoute(c, l, pathRoute.ID)
-	s.removeHTTPRoute(c, l, pathRoute2.ID)
-	s.removeHTTPRoute(c, l, defRoute.ID)
 }
 
 func (s *S) TestHTTPInitialSync(c *C) {
