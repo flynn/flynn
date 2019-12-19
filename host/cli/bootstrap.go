@@ -1099,11 +1099,6 @@ main() {
   # populate the controller schema_migrations table with the equivalent
   # migrations we just imported from the router
   controller_psql "INSERT INTO schema_migrations (id) SELECT generate_series({{ .RouterMigrationStart }}, $(({{ .RouterMigrationStart }} + $router_version - 1)))"
-
-  # update the router to use the controller database
-  for key in PGUSER PGPASSWORD PGDATABASE; do
-    controller_psql "UPDATE releases SET env = jsonb_set(env, '{${key}}', (SELECT env->'${key}' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'controller' AND deleted_at IS NULL))) WHERE release_id = (SELECT release_id FROM apps WHERE name = 'router' AND deleted_at IS NULL)"
-  done
 }
 
 controller_psql() {

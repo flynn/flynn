@@ -22,7 +22,7 @@ type TCPListener struct {
 	IP string
 
 	discoverd DiscoverdClient
-	ds        DataStore
+	syncer    *Syncer
 	wm        *WatchManager
 	stopSync  func()
 
@@ -50,8 +50,8 @@ func (l *TCPListener) Start() error {
 	}
 	l.Watcher = l.wm
 
-	if l.ds == nil {
-		return errors.New("router: tcp listener missing data store")
+	if l.syncer == nil {
+		return errors.New("router: tcp listener missing syncer")
 	}
 
 	l.services = make(map[string]*service)
@@ -114,7 +114,7 @@ func (l *TCPListener) runSync(ctx context.Context, errc chan error) {
 func (l *TCPListener) doSync(ctx context.Context, errc chan<- error) <-chan struct{} {
 	startc := make(chan struct{})
 
-	go func() { errc <- l.ds.Sync(ctx, &tcpSyncHandler{l: l}, startc) }()
+	go func() { errc <- l.syncer.Sync(ctx, &tcpSyncHandler{l: l}, startc) }()
 
 	return startc
 }

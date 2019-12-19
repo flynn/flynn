@@ -78,6 +78,16 @@ func (p sortedRoutes) Less(i, j int) bool { return p[i].CreatedAt.After(p[j].Cre
 func (p sortedRoutes) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func (c *controllerAPI) GetRouteList(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	routes, err := c.routeRepo.List("")
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	sort.Sort(sortedRoutes(routes))
+	httphelper.JSON(w, 200, routes)
+}
+
+func (c *controllerAPI) GetAppRouteList(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	routes, err := c.routeRepo.List(routeParentRef(c.getApp(ctx).ID))
 	if err != nil {
 		respondWithError(w, err)

@@ -1,22 +1,21 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"net"
-	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/discoverd/cache"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
-	"github.com/flynn/flynn/pkg/postgres"
-	pgtestutils "github.com/flynn/flynn/pkg/testutils/postgres"
+	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/stream"
 	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
-	"github.com/jackc/pgx"
 )
 
 func init() {
@@ -51,6 +50,119 @@ func (d *discoverdWrapper) Cleanup() {
 	d.hbs = nil
 }
 
+type testStore struct {
+	routesMtx sync.Mutex
+	routes    map[string]*router.Route
+
+	streamsMtx sync.Mutex
+	streams    map[chan *router.Event]*stream.Basic
+}
+
+func newTestStore() *testStore {
+	return &testStore{
+		routes:  make(map[string]*router.Route),
+		streams: make(map[chan *router.Event]*stream.Basic),
+	}
+}
+
+func (t *testStore) List() ([]*router.Route, error) {
+	t.routesMtx.Lock()
+	defer t.routesMtx.Unlock()
+	routes := make([]*router.Route, 0, len(t.routes))
+	for _, r := range t.routes {
+		routes = append(routes, r)
+	}
+	return routes, nil
+}
+
+func (t *testStore) Watch(ch chan *router.Event) (stream.Stream, error) {
+	s := stream.New()
+	t.subscribe(ch, s)
+	go func() {
+		<-s.StopCh
+		t.unsubscribe(ch)
+	}()
+	return s, nil
+}
+
+func (t *testStore) add(r *router.Route) {
+	if r.ID == "" {
+		r.ID = random.UUID()
+	}
+	if r.Path == "" {
+		r.Path = "/"
+	}
+	t.routesMtx.Lock()
+	t.routes[r.ID] = r
+	t.routesMtx.Unlock()
+	t.emit(&router.Event{
+		Event: router.EventTypeRouteSet,
+		ID:    r.ID,
+		Route: r,
+	})
+}
+
+func (t *testStore) update(r *router.Route) {
+	t.routesMtx.Lock()
+	t.routes[r.ID] = r
+	t.routesMtx.Unlock()
+	t.emit(&router.Event{
+		Event: router.EventTypeRouteSet,
+		ID:    r.ID,
+		Route: r,
+	})
+}
+
+func (t *testStore) delete(r *router.Route) {
+	t.routesMtx.Lock()
+	delete(t.routes, r.ID)
+	t.routesMtx.Unlock()
+	t.emit(&router.Event{
+		Event: router.EventTypeRouteRemove,
+		ID:    r.ID,
+		Route: r,
+	})
+}
+
+func (t *testStore) subscribe(ch chan *router.Event, stream *stream.Basic) {
+	t.streamsMtx.Lock()
+	defer t.streamsMtx.Unlock()
+	t.streams[ch] = stream
+}
+
+func (t *testStore) unsubscribe(ch chan *router.Event) {
+	t.streamsMtx.Lock()
+	defer t.streamsMtx.Unlock()
+	delete(t.streams, ch)
+}
+
+func (t *testStore) emit(event *router.Event) {
+	t.streamsMtx.Lock()
+	defer t.streamsMtx.Unlock()
+	for ch, stream := range t.streams {
+		select {
+		case ch <- event:
+		case <-stream.StopCh:
+		}
+	}
+}
+
+func (t *testStore) closeStreams() {
+	t.streamsMtx.Lock()
+	defer t.streamsMtx.Unlock()
+	for ch, stream := range t.streams {
+		stream.Error = errors.New("sync stopped")
+		close(ch)
+	}
+	t.streams = make(map[chan *router.Event]*stream.Basic)
+}
+
+func (t *testStore) cleanup() {
+	t.routesMtx.Lock()
+	defer t.routesMtx.Unlock()
+	t.routes = make(map[string]*router.Route)
+}
+
 func setup(t testutil.TestingT) (*discoverdWrapper, func()) {
 	dc, killDiscoverd := testutil.BootDiscoverd(t, "")
 	dw := &discoverdWrapper{discoverdClient: dc}
@@ -65,54 +177,15 @@ func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
 	discoverd *discoverdWrapper
+	store     *testStore
 	cleanup   func()
-	pgx       *pgx.ConnPool
-	routes    *data.RouteRepo
 }
 
 var _ = Suite(&S{})
 
-const dbname = "routertest"
-
 func (s *S) SetUpSuite(c *C) {
 	s.discoverd, s.cleanup = setup(c)
-
-	if err := pgtestutils.SetupPostgres(dbname); err != nil {
-		c.Fatal(err)
-	}
-	pgxConfig := newPgxConnPoolConfig()
-	pgxpool, err := pgx.NewConnPool(pgxConfig)
-	if err != nil {
-		c.Fatal(err)
-	}
-	db := postgres.New(pgxpool, nil)
-
-	if err = data.MigrateDB(db); err != nil {
-		c.Fatal(err)
-	}
-	db.Close()
-
-	// reconnect with prepared statements
-	pgxConfig.AfterConnect = data.PrepareStatements
-	pgxpool, err = pgx.NewConnPool(pgxConfig)
-	if err != nil {
-		c.Fatal(err)
-	}
-	db = postgres.New(pgxpool, nil)
-
-	s.pgx = db.ConnPool
-	s.pgx.Exec(sqlCreateTruncateTables)
-
-	s.routes = data.NewRouteRepo(db)
-}
-
-func newPgxConnPoolConfig() pgx.ConnPoolConfig {
-	return pgx.ConnPoolConfig{
-		ConnConfig: pgx.ConnConfig{
-			Host:     os.Getenv("PGHOST"),
-			Database: dbname,
-		},
-	}
+	s.store = newTestStore()
 }
 
 func (s *S) TearDownSuite(c *C) {
@@ -121,7 +194,7 @@ func (s *S) TearDownSuite(c *C) {
 
 func (s *S) TearDownTest(c *C) {
 	s.discoverd.Cleanup()
-	s.pgx.Exec("SELECT truncate_tables()")
+	s.store.cleanup()
 }
 
 const waitTimeout = time.Second
@@ -250,51 +323,20 @@ func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc *cache.ServiceCa
 }
 
 func (s *S) addRoute(c *C, l Listener, r *router.Route) *router.Route {
-	return addRoute(c, l, s.routes, r)
+	return addRoute(c, l, s.store, r)
 }
 
-func addRoute(c *C, l Listener, routes *data.RouteRepo, r *router.Route) *router.Route {
+func addRoute(c *C, l Listener, store *testStore, r *router.Route) *router.Route {
 	wait := waitForEvent(c, l, "set", "")
-	err := routes.Add(r)
-	c.Assert(err, IsNil)
+	store.add(r)
 	wait()
 	return r
 }
 
-func (s *S) addRouteAssertErr(c *C, l Listener, r *router.Route) error {
-	err := s.routes.Add(r)
-	c.Assert(err, NotNil)
-	return err
-}
-
-const sqlCreateTruncateTables = `
-CREATE OR REPLACE FUNCTION truncate_tables() RETURNS void AS $$
-DECLARE
-    statements CURSOR FOR
-        SELECT tablename FROM pg_tables
-        WHERE tablename != 'schema_migrations'
-	  AND tablename != 'event_types'
-          AND tableowner = session_user
-          AND schemaname = 'public';
-BEGIN
-    FOR stmt IN statements LOOP
-        EXECUTE 'TRUNCATE TABLE ' || quote_ident(stmt.tablename) || ' CASCADE;';
-    END LOOP;
-END;
-$$ LANGUAGE plpgsql;
-`
-
 func (s *S) removeRoute(c *C, l Listener, r *router.Route) {
 	wait := waitForEvent(c, l, "remove", "")
-	err := s.routes.Delete(r)
-	c.Assert(err, IsNil)
+	s.store.delete(r)
 	wait()
-}
-
-func (s *S) removeRouteAssertErr(c *C, l Listener, r *router.Route) error {
-	err := s.routes.Delete(r)
-	c.Assert(err, NotNil)
-	return err
 }
 
 var portAlloc uint32 = 4500

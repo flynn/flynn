@@ -48,6 +48,7 @@ type Client interface {
 	DeleteJob(appID, jobID string) error
 	SetAppRelease(appID, releaseID string) error
 	GetAppRelease(appID string) (*ct.Release, error)
+	RouteList() ([]*router.Route, error)
 	AppRouteList(appID string) ([]*router.Route, error)
 	GetRoute(appID string, routeID string) (*router.Route, error)
 	CreateRoute(appID string, route *router.Route) error

@@ -417,6 +417,12 @@ func (c *Client) GetAppRelease(appID string) (*ct.Release, error) {
 	return release, c.Get(fmt.Sprintf("/apps/%s/release", appID), release)
 }
 
+// RouteList returns all routes.
+func (c *Client) RouteList() ([]*router.Route, error) {
+	var routes []*router.Route
+	return routes, c.Get("/routes", &routes)
+}
+
 // AppRouteList returns all routes for an app.
 func (c *Client) AppRouteList(appID string) ([]*router.Route, error) {
 	var routes []*router.Route

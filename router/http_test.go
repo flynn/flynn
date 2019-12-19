@@ -15,20 +15,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 
-	"github.com/flynn/flynn/controller/data"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
-	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/testutils"
 	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
-	"github.com/jackc/pgx"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/websocket"
 )
@@ -117,7 +112,7 @@ func (s *S) buildHTTPListener(t testutil.TestingT) *HTTPListener {
 		Addrs:     []string{"127.0.0.1:0"},
 		TLSAddrs:  []string{"127.0.0.1:0"},
 		keypair:   pair,
-		ds:        NewPostgresDataStore("http", s.pgx),
+		syncer:    NewSyncer(s.store, "http"),
 		discoverd: s.discoverd,
 	}
 
@@ -175,8 +170,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	c.Assert(err, Not(IsNil))
 
 	wait := waitForEvent(c, l, "remove", r.ID)
-	err = s.routes.Delete(r)
-	c.Assert(err, IsNil)
+	s.store.delete(r)
 	wait()
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
 
@@ -270,8 +264,7 @@ func (s *S) TestUpdateCert(c *C) {
 		Key:    tlsCert.PrivateKey,
 	}
 	wait := waitForEvent(c, l, "set", "")
-	err := s.routes.Update(r)
-	c.Assert(err, IsNil)
+	s.store.update(r)
 	wait()
 
 	assertGet(c, "http://"+l.Addrs[0], domain, "1")
@@ -483,24 +476,10 @@ func (s *S) TestHTTPInitialSync(c *C) {
 }
 
 func (s *S) TestHTTPResync(c *C) {
-	var connPids []int32
-	var cmu sync.Mutex
-
-	poolConfig := newPgxConnPoolConfig()
-	poolConfig.AfterConnect = func(conn *pgx.Conn) error {
-		cmu.Lock()
-		defer cmu.Unlock()
-		connPids = append(connPids, conn.Pid)
-		return data.PrepareStatements(conn)
-	}
-	pgxpool, err := pgx.NewConnPool(poolConfig)
-	if err != nil {
-		c.Fatal(err)
-	}
-	routes := data.NewRouteRepo(&postgres.DB{ConnPool: pgxpool})
+	store := newTestStore()
 	l := &HTTPListener{
 		Addrs:     []string{"127.0.0.1:0"},
-		ds:        NewPostgresDataStore("http", pgxpool),
+		syncer:    NewSyncer(store, "http"),
 		discoverd: s.discoverd,
 	}
 	if err := l.Start(); err != nil {
@@ -514,7 +493,7 @@ func (s *S) TestHTTPResync(c *C) {
 	defer srv.Close()
 	defer srv2.Close()
 
-	route := addRoute(c, l, routes, router.HTTPRoute{
+	route := addRoute(c, l, store, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 	}.ToRoute())
@@ -533,55 +512,15 @@ func (s *S) TestHTTPResync(c *C) {
 		close(postsyncc)
 	}
 
-	terminateAllPids := func() {
-		cmu.Lock()
-		defer cmu.Unlock()
+	// close the sync streams
+	store.closeStreams()
 
-		// grab a fresh conn
-		conn, err := pgx.Connect(poolConfig.ConnConfig)
-		if err != nil {
-			c.Fatal(err)
-		}
-		defer conn.Close()
-
-		// terminate all conns from the pool
-		for _, pid := range connPids {
-			if _, err := conn.Exec("select pg_terminate_backend($1)", pid); err != nil {
-				c.Fatalf("Unable to kill backend PostgreSQL process: %v", err)
-			}
-		}
-		connPids = connPids[:0]
-	}
-	terminateAllPids()
-
-	// Because we terminated all of the connections some will be dead, others
-	// will become dead when we try to write to them.
-	attempts := 0
-	for {
-		if attempts > 5 {
-			c.Fatal(fmt.Errorf("Unable to remove route after disconnecting sync"))
-		}
-		err = routes.Delete(route)
-		if e, ok := err.(*net.OpError); ok {
-			if ee, ok := e.Err.(*os.SyscallError); ok && ee.Err == syscall.EPIPE || e.Err == syscall.EPIPE {
-				attempts++
-				continue
-			}
-		}
-		if err == pgx.ErrDeadConn {
-			attempts++
-			continue
-		}
-		c.Assert(err, IsNil)
-		break
-	}
-
-	// Also add a new route
-	err = routes.Add(router.HTTPRoute{
+	// make some changes
+	store.delete(route)
+	store.add(router.HTTPRoute{
 		Domain:  "example.org",
 		Service: "example-org",
 	}.ToRoute())
-	c.Assert(err, IsNil)
 
 	// trigger the reconnect
 	close(presyncc)
