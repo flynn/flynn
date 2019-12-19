@@ -7,6 +7,7 @@ import (
 
 	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/testutils"
 	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
@@ -60,6 +61,100 @@ func (s *S) TestCreateHTTPRoute(c *C) {
 	c.Assert(gotRoute, DeepEquals, route)
 }
 
+func (s *S) TestCreateHTTPRouteWithCertificate(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "create-http-route-with-certificate"})
+	tlsCert := testutils.TLSConfigForDomain("tls.example.com")
+	route := s.createTestRoute(c, app.ID, (&router.HTTPRoute{
+		Domain:  "tls.example.com",
+		Service: "foo",
+		Certificate: &router.Certificate{
+			Cert: tlsCert.Cert,
+			Key:  tlsCert.PrivateKey,
+		},
+	}).ToRoute())
+	c.Assert(route.ID, Not(Equals), "")
+	c.Assert(route.Domain, Equals, "tls.example.com")
+	c.Assert(route.Certificate, Not(IsNil))
+	c.Assert(route.Certificate.ID, Not(Equals), "")
+	c.Assert(route.Certificate.Cert, Equals, tlsCert.Cert)
+	c.Assert(route.Certificate.Key, Equals, tlsCert.PrivateKey)
+	c.Assert(route.Certificate.CreatedAt, Not(IsNil))
+	c.Assert(route.Certificate.UpdatedAt, Not(IsNil))
+
+	gotRoute, err := s.c.GetRoute(app.ID, route.FormattedID())
+	c.Assert(err, IsNil)
+	c.Assert(gotRoute.Certificate, Not(IsNil))
+	c.Assert(gotRoute.Certificate, DeepEquals, route.Certificate)
+}
+
+func (s *S) TestCreateHTTPRouteWithInvalidCertificate(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "create-http-route-with-invalid-certificate"})
+	c1, _ := tlscert.Generate([]string{"1.example.com"})
+	c2, _ := tlscert.Generate([]string{"2.example.com"})
+	err := s.c.CreateRoute(app.ID, router.HTTPRoute{
+		Domain:  "tls-invalid.example.com",
+		Service: "foo",
+		Certificate: &router.Certificate{
+			Cert: c1.Cert,
+			Key:  c2.PrivateKey,
+		},
+	}.ToRoute())
+	c.Assert(err, Not(IsNil))
+}
+
+func (s *S) TestCreateHTTPRouteWithPath(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "create-http-route-with-invalid-path"})
+
+	// create a default route
+	route1 := router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "foo",
+	}.ToRoute()
+	c.Assert(s.c.CreateRoute(app.ID, route1), IsNil)
+
+	// Test that adding a route with a path below the default route succeeds
+	route2 := router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "bar",
+		Path:    "/bar/",
+	}.ToRoute()
+	c.Assert(s.c.CreateRoute(app.ID, route2), IsNil)
+
+	// Test that a path with no trailing slash will autocorrect
+	route3 := router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "baz",
+		Path:    "/baz",
+	}.ToRoute()
+	c.Assert(s.c.CreateRoute(app.ID, route3), IsNil)
+	c.Assert(route3.Path, Equals, "/baz/")
+
+	// Test that adding a route with an invalid path errors
+	err := s.c.CreateRoute(app.ID, router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "foo",
+		Path:    "noleadingslash/",
+	}.ToRoute())
+	c.Assert(err, Not(IsNil))
+
+	// Test that adding a Path route without a default route fails
+	err = s.c.CreateRoute(app.ID, router.HTTPRoute{
+		Domain:  "foo.bar.baz",
+		Service: "foo",
+		Path:    "/valid/",
+	}.ToRoute())
+	c.Assert(err, Not(IsNil))
+
+	// Test that removing the default route while there are still dependent routes fails
+	err = s.c.DeleteRoute(app.ID, route1.FormattedID())
+	c.Assert(err, Not(IsNil))
+
+	// However removing them in the appropriate order should succeed
+	c.Assert(s.c.DeleteRoute(app.ID, route2.FormattedID()), IsNil)
+	c.Assert(s.c.DeleteRoute(app.ID, route3.FormattedID()), IsNil)
+	c.Assert(s.c.DeleteRoute(app.ID, route1.FormattedID()), IsNil)
+}
+
 func (s *S) TestCreateDuplicateRoute(c *C) {
 	// first create route
 	app := s.createTestApp(c, &ct.App{Name: "create-duplicate-route"})
@@ -79,6 +174,20 @@ func (s *S) TestCreateDuplicateRoute(c *C) {
 	err := s.c.CreateRoute(app.ID, route)
 	c.Assert(err, Not(IsNil))
 	c.Assert(err.Error(), Equals, "conflict: Duplicate route")
+}
+
+func (s *S) TestCreateTCPRouteReservedPort(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "create-tcp-route-reserved-port"})
+
+	reservedPorts := []int{80, 443}
+
+	for _, port := range reservedPorts {
+		err := s.c.CreateRoute(app.ID, router.TCPRoute{
+			Port: port,
+		}.ToRoute())
+		c.Assert(err, NotNil)
+		c.Assert(err.Error(), Equals, "conflict: Port reserved for HTTP/HTTPS traffic")
+	}
 }
 
 func (s *S) TestDeleteRoute(c *C) {
