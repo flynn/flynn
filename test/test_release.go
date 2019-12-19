@@ -175,7 +175,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(client.CreateApp(slugApp), c.IsNil)
 	gitreceive, err := client.GetAppRelease("gitreceive")
 	t.Assert(err, c.IsNil)
-	imageArtifact, err := client.GetArtifact(gitreceive.Env["SLUGRUNNER_IMAGE_ID"])
+	imageArtifact, err := client.GetArtifact(gitreceive.Env["SLUGRUNNER_18_IMAGE_ID"])
 	t.Assert(err, c.IsNil)
 	slugArtifact, err := client.GetArtifact(slugImageID)
 	t.Assert(err, c.IsNil)
