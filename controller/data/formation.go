@@ -452,11 +452,11 @@ func (r *FormationRepo) ListScaleRequests(opts ListScaleRequestOptions) ([]*ct.S
 	}
 	var nextPageToken *PageToken
 	if len(scales) == pageSize+1 {
-		scales = scales[0:pageSize]
 		nextPageToken = &PageToken{
-			BeforeID: &scales[0].ID,
+			BeforeID: &scales[pageSize].ID,
 			Size:     pageSize,
 		}
+		scales = scales[0:pageSize]
 	}
 	return scales, nextPageToken, rows.Err()
 }

@@ -267,11 +267,11 @@ func (r *DeploymentRepo) ListPage(opts ListDeploymentOptions) ([]*ct.ExpandedDep
 	}
 	var nextPageToken *PageToken
 	if len(deployments) == pageSize+1 {
-		deployments = deployments[0:pageSize]
 		nextPageToken = &PageToken{
-			BeforeID: &deployments[0].ID,
+			BeforeID: &deployments[pageSize].ID,
 			Size:     pageSize,
 		}
+		deployments = deployments[0:pageSize]
 	}
 	return deployments, nextPageToken, rows.Err()
 }

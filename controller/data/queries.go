@@ -143,7 +143,6 @@ AND match_label_filters($3, a.meta)
 AND CASE WHEN b IS NULL THEN true
 ELSE
 	a.created_at <= b.created_at
-	AND a.app_id != b.app_id
 END
 ORDER BY a.created_at DESC
 LIMIT $4;
@@ -217,7 +216,6 @@ AND match_label_filters($4, r.meta)
 AND CASE WHEN before_r IS NULL THEN true
 ELSE
 	r.created_at <= before_r.created_at
-	AND r.release_id != before_r.release_id
 END
 ORDER BY r.created_at DESC
 LIMIT $5
@@ -384,7 +382,6 @@ END
 AND CASE WHEN before_d IS NULL THEN true
 ELSE
 	d.created_at <= before_d.created_at
-	AND d.deployment_id != before_d.deployment_id
 END
 ORDER BY d.created_at DESC
 LIMIT $6
@@ -544,7 +541,6 @@ END
 AND CASE WHEN before_s IS NULL THEN true
 ELSE
 	s.created_at <= before_s.created_at
-	AND s.scale_request_id != before_s.scale_request_id
 END
 ORDER BY s.created_at DESC
 LIMIT $6
