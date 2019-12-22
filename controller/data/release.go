@@ -171,11 +171,11 @@ func (r *ReleaseRepo) ListPage(opts ListReleaseOptions) ([]*ct.Release, *PageTok
 	}
 	var nextPageToken *PageToken
 	if len(releases) == pageSize+1 {
-		releases = releases[0:pageSize]
 		nextPageToken = &PageToken{
-			BeforeID: &releases[0].ID,
+			BeforeID: &releases[pageSize].ID,
 			Size:     pageSize,
 		}
+		releases = releases[0:pageSize]
 	}
 	return releases, nextPageToken, rows.Err()
 }

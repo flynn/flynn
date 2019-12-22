@@ -270,8 +270,8 @@ func (r *AppRepo) ListPage(opts ListAppOptions) ([]*ct.App, *PageToken, error) {
 	var nextPageToken *PageToken
 	if len(apps) == pageSize+1 {
 		// remove the extra app from the list
+		lastApp = apps[pageSize]
 		apps = apps[0:pageSize]
-		lastApp = apps[0]
 	}
 	if lastApp != nil {
 		nextPageToken = &PageToken{
