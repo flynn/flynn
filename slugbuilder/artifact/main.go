@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/docker/go-units"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/typeconv"
@@ -73,11 +73,9 @@ func run(dir string, uid, gid int) error {
 	layerSHA := hex.EncodeToString(h.Sum(nil))
 
 	// upload the layer to the blobstore
-	if _, err := layer.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
+	fmt.Println("-----> Uploading slug to blobstore")
 	layerURL := fmt.Sprintf("http://blobstore.discoverd/slugs/layers/%s.squashfs", layerSHA)
-	if err := upload(layer, layerURL); err != nil {
+	if err := uploadSlug(layer, layerURL); err != nil {
 		return err
 	}
 
@@ -138,6 +136,28 @@ func run(dir string, uid, gid int) error {
 
 	fmt.Printf("-----> Compiled slug size is %s\n", units.BytesSize(float64(length)))
 	return nil
+}
+
+const maxSlugUploadAttempts = 3
+
+func uploadSlug(slugFile *os.File, url string) (err error) {
+	tryUpload := func() error {
+		if _, err := slugFile.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		// use a NopCloser to ensure failed requests don't close
+		// the slug file
+		data := ioutil.NopCloser(slugFile)
+		return upload(data, url)
+	}
+	for attempt := 1; attempt <= maxSlugUploadAttempts; attempt++ {
+		err = tryUpload()
+		if err == nil {
+			return nil
+		}
+		fmt.Printf("WARN: error uploading to blobstore (attempt %d of %d): %s\n", attempt, maxSlugUploadAttempts, err)
+	}
+	return
 }
 
 func upload(data io.Reader, url string) error {
