@@ -267,6 +267,9 @@ func (i *Instance) dialSSH(stderr io.Writer) error {
 			Auth:            []ssh.AuthMethod{ssh.Password("ubuntu")},
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		})
+		if err != nil {
+			fmt.Fprintf(stderr, "Error connecting to %s:22: %s\n", i.IP, err)
+		}
 		return
 	})
 	if sc != nil {
