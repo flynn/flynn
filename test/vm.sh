@@ -38,19 +38,13 @@ main() {
   ip link set dev tap0 master br0
   ip link set dev tap0 up
 
-  # attach to the console if stdout is a tty
-  local append="root=/dev/sda"
-  if [[ -t 1 ]]; then
-    append="${append} console=ttyS0 console=tty0 noembed nomodeset norestore"
-  fi
-
   # run the VM
   exec /usr/bin/qemu-system-x86_64 \
     -enable-kvm \
     -m      "${memory}" \
     -smp    "${cpus}" \
     -kernel "${kernel}" \
-    -append "${append}" \
+    -append "root=/dev/sda console=ttyS0 noembed nomodeset norestore quiet systemd.journald.forward_to_console=1" \
     -drive  "file=${disk},index=0,media=disk" \
     -device "e1000,netdev=net0,mac=${mac}" \
     -netdev "tap,id=net0,ifname=tap0,script=no,downscript=no" \
