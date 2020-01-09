@@ -611,7 +611,6 @@ func (t *testGRPCWebClient) Invoke(method string, in, out proto.Message) error {
 		return err
 	}
 	req.Host = t.host
-	req.SetBasicAuth("", t.key)
 	req.Header.Set("Auth-Key", t.key)
 	req.Header.Set("Content-Type", "application/grpc-web+proto")
 
