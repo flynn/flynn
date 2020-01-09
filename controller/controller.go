@@ -300,6 +300,13 @@ func muxHandler(main http.Handler, grpcSrv *grpc.Server, authorizer *utils.Autho
 			w.WriteHeader(200)
 			return
 		}
+
+		// handle grpcweb requests before auth (grpc does its own auth)
+		if grpcWeb.IsGrpcWebRequest(r) {
+			grpcWeb.ServeHTTP(w, r)
+			return
+		}
+
 		_, password, _ := r.BasicAuth()
 		if password == "" && r.URL.Path == "/ca-cert" {
 			main.ServeHTTP(w, r)
@@ -315,10 +322,6 @@ func muxHandler(main http.Handler, grpcSrv *grpc.Server, authorizer *utils.Autho
 		}
 		if auth.ID != "" {
 			r.Header.Set("Flynn-Auth-Key-ID", auth.ID)
-		}
-		if grpcWeb.IsGrpcWebRequest(r) {
-			grpcWeb.ServeHTTP(w, r)
-			return
 		}
 		main.ServeHTTP(w, r)
 	}))
