@@ -103,7 +103,7 @@ func (r *DeploymentRepo) AddExpanded(appID, releaseID string) (*ct.ExpandedDeplo
 
 	releaseType := ct.ReleaseTypeCode
 	if oldRelease != nil {
-		if artifactsEqual(oldRelease.ArtifactIDs, release.ArtifactIDs) {
+		if artifactIDsEqual(oldRelease.ArtifactIDs, release.ArtifactIDs) {
 			releaseType = ct.ReleaseTypeConfig
 		}
 	} else if len(release.ArtifactIDs) == 0 {
@@ -346,14 +346,8 @@ func createDeploymentEvent(dbExec func(string, ...interface{}) error, d *ct.Depl
 	}, e)
 }
 
-func artifactsEqual(a, b []string) bool {
+func artifactIDsEqual(a, b []string) bool {
 	if len(a) != len(b) {
-		return false
-	}
-	if a == nil && b != nil {
-		return false
-	}
-	if a != nil && b == nil {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
