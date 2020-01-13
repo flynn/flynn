@@ -37,12 +37,6 @@ func (s *S) SetUpSuite(c *C) {
 	s.db = db
 }
 
-func (s *S) TearDownSuite(c *C) {
-}
-
-func (s *S) SetUpTest(c *C) {
-}
-
 func (s *S) matchLabelFilters(c *C, labelFilters []ct.LabelFilter, labels map[string]string) bool {
 	var ret bool
 	c.Assert(s.db.QueryRow("SELECT match_label_filters($1, $2)", labelFilters, labels).Scan(&ret), IsNil)
