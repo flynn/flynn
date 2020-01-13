@@ -175,8 +175,7 @@ func (g *grpcAPI) streamInterceptor(srv interface{}, stream grpc.ServerStream, i
 }
 
 func (g *grpcAPI) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (res interface{}, err error) {
-	var logRequestEnd func(context.Context, error)
-	ctx, logRequestEnd = g.logRequest(ctx, info.FullMethod)
+	ctx, logRequestEnd := g.logRequest(ctx, info.FullMethod)
 	defer func() {
 		logRequestEnd(ctx, err)
 	}()
