@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/inconshreveable/log15"
 )
 
@@ -17,24 +19,24 @@ var logger = log15.New("component", "controller/data")
 const DEFAULT_PAGE_SIZE = 1000
 
 type PageToken struct {
-	BeforeID *string
+	CursorID *string
 	Size     int
 }
 
 // ParsePageToken decodes a PageToken from a string of the format
-// '<beforeID>:<size>'
+// '<cursorID>|<size>'
 func ParsePageToken(tokenStr string) (*PageToken, error) {
 	token := &PageToken{}
 	if tokenStr == "" {
 		token.Size = DEFAULT_PAGE_SIZE
 		return token, nil
 	}
-	parts := strings.SplitN(tokenStr, ":", 2)
+	parts := strings.SplitN(tokenStr, "|", 2)
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("error parsing pageToken %q: expected two colon separated parts, got %d", tokenStr, len(parts))
+		return nil, fmt.Errorf("error parsing pageToken %q: expected two pipe separated parts, got %d", tokenStr, len(parts))
 	}
 	if parts[0] != "" {
-		token.BeforeID = &parts[0]
+		token.CursorID = &parts[0]
 	}
 	if parts[1] != "" && parts[1] != "0" {
 		token.Size, _ = strconv.Atoi(parts[1])
@@ -49,11 +51,20 @@ func (t *PageToken) String() string {
 	if t == nil {
 		return ""
 	}
-	var beforeID string
-	if t.BeforeID != nil {
-		beforeID = *t.BeforeID
+	var cursorID string
+	if t.CursorID != nil {
+		cursorID = *t.CursorID
 	}
-	return fmt.Sprintf("%s:%d", beforeID, t.Size)
+	return fmt.Sprintf("%s|%d", cursorID, t.Size)
+}
+
+const cursorIDTimeFormat = "2006-01-02T15:04:05.999999Z07:00"
+
+func toCursorID(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	return typeconv.StringPtr(t.Format(cursorIDTimeFormat))
 }
 
 type rowQueryer interface {

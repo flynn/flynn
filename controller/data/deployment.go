@@ -248,7 +248,7 @@ func (r *DeploymentRepo) ListPage(opts ListDeploymentOptions) ([]*ct.ExpandedDep
 		}
 		typeFilters = append(typeFilters, string(t))
 	}
-	rows, err := r.db.Query("deployment_list_page", opts.AppIDs, opts.DeploymentIDs, opts.StatusFilters, typeFilters, opts.PageToken.BeforeID, pageSize+1)
+	rows, err := r.db.Query("deployment_list_page", opts.AppIDs, opts.DeploymentIDs, opts.StatusFilters, typeFilters, opts.PageToken.CursorID, pageSize+1)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -267,7 +267,7 @@ func (r *DeploymentRepo) ListPage(opts ListDeploymentOptions) ([]*ct.ExpandedDep
 	var nextPageToken *PageToken
 	if len(deployments) == pageSize+1 {
 		nextPageToken = &PageToken{
-			BeforeID: &deployments[pageSize].ID,
+			CursorID: toCursorID(deployments[pageSize].CreatedAt),
 			Size:     pageSize,
 		}
 		deployments = deployments[0:pageSize]
