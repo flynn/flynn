@@ -85,10 +85,10 @@ func (r *FormationRepo) AddScaleRequest(req *ct.ScaleRequest, deleteFormation bo
 		tx.Rollback()
 		return nil, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		scale, err := scanScaleRequest(rows)
 		if err != nil {
-			rows.Close()
 			tx.Rollback()
 			return nil, err
 		}
@@ -339,6 +339,7 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return scanFormations(rows)
 }
 
@@ -347,6 +348,7 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return r.listExpanded(rows)
 }
 
@@ -355,12 +357,11 @@ func (r *FormationRepo) ListSince(since time.Time) ([]*ct.ExpandedFormation, err
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return r.listExpanded(rows)
 }
 
 func (r *FormationRepo) listExpanded(rows *pgx.Rows) ([]*ct.ExpandedFormation, error) {
-	defer rows.Close()
-
 	var formations []*ct.ExpandedFormation
 
 	// artifactIDs is a list of artifact IDs related to the formation list
@@ -441,14 +442,17 @@ func (r *FormationRepo) ListScaleRequests(opts ListScaleRequestOptions) ([]*ct.S
 	if err != nil {
 		return nil, nil, err
 	}
+	defer rows.Close()
 	var scales []*ct.ScaleRequest
 	for rows.Next() {
 		scale, err := scanScaleRequest(rows)
 		if err != nil {
-			rows.Close()
 			return nil, nil, err
 		}
 		scales = append(scales, scale)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
 	}
 	var nextPageToken *PageToken
 	if len(scales) == pageSize+1 {
@@ -458,7 +462,7 @@ func (r *FormationRepo) ListScaleRequests(opts ListScaleRequestOptions) ([]*ct.S
 		}
 		scales = scales[0:pageSize]
 	}
-	return scales, nextPageToken, rows.Err()
+	return scales, nextPageToken, nil
 }
 
 func scanScaleRequest(s postgres.Scanner) (*ct.ScaleRequest, error) {

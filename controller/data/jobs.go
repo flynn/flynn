@@ -119,16 +119,16 @@ func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	jobs := []*ct.Job{}
+	defer rows.Close()
+	var jobs []*ct.Job
 	for rows.Next() {
 		job, err := scanJob(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		jobs = append(jobs, job)
 	}
-	return jobs, nil
+	return jobs, rows.Err()
 }
 
 func (r *JobRepo) ListActive() ([]*ct.Job, error) {
@@ -136,14 +136,14 @@ func (r *JobRepo) ListActive() ([]*ct.Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	jobs := []*ct.Job{}
+	defer rows.Close()
+	var jobs []*ct.Job
 	for rows.Next() {
 		job, err := scanJob(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		jobs = append(jobs, job)
 	}
-	return jobs, nil
+	return jobs, rows.Err()
 }

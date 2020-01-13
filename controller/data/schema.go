@@ -975,10 +975,10 @@ func migrateProcessArgs(tx *postgres.DBTx) error {
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var release Release
 		if err := rows.Scan(&release.ID, &release.Meta, &release.Processes, &release.AppName, &release.AppMeta); err != nil {
-			rows.Close()
 			return err
 		}
 		releases = append(releases, release)

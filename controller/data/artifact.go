@@ -112,11 +112,11 @@ func (r *ArtifactRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	var artifacts []*ct.Artifact
 	for rows.Next() {
 		artifact, err := scanArtifact(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		artifacts = append(artifacts, artifact)
@@ -132,11 +132,11 @@ func (r *ArtifactRepo) ListIDs(ids ...string) (map[string]*ct.Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	artifacts := make(map[string]*ct.Artifact, len(ids))
 	for rows.Next() {
 		artifact, err := scanArtifact(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		artifacts[artifact.ID] = artifact

@@ -72,16 +72,16 @@ func (r *EventRepo) ListEvents(appID string, objectTypes []string, objectID stri
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	var events []*ct.Event
 	for rows.Next() {
 		event, err := scanEvent(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		events = append(events, event)
 	}
-	return events, nil
+	return events, rows.Err()
 }
 
 func (r *EventRepo) GetEvent(id int64) (*ct.Event, error) {
