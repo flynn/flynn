@@ -101,16 +101,14 @@ func (r *DeploymentRepo) AddExpanded(appID, releaseID string) (*ct.ExpandedDeplo
 		procCount += i
 	}
 
-	releaseType := (func(oldRelease, release *ct.Release) ct.ReleaseType {
-		if oldRelease != nil {
-			if artifactsEqual(oldRelease.ArtifactIDs, release.ArtifactIDs) {
-				return ct.ReleaseTypeConfig
-			}
-		} else if len(release.ArtifactIDs) == 0 {
-			return ct.ReleaseTypeConfig
+	releaseType := ct.ReleaseTypeCode
+	if oldRelease != nil {
+		if artifactsEqual(oldRelease.ArtifactIDs, release.ArtifactIDs) {
+			releaseType = ct.ReleaseTypeConfig
 		}
-		return ct.ReleaseTypeCode
-	})(oldRelease, release)
+	} else if len(release.ArtifactIDs) == 0 {
+		releaseType = ct.ReleaseTypeConfig
+	}
 
 	ed := &ct.ExpandedDeployment{
 		AppID:         app.ID,
