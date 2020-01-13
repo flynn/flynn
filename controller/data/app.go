@@ -246,11 +246,9 @@ type ListAppOptions struct {
 }
 
 func (r *AppRepo) ListPage(opts ListAppOptions) ([]*ct.App, *PageToken, error) {
-	var pageSize int
+	pageSize := DEFAULT_PAGE_SIZE
 	if opts.PageToken.Size > 0 {
 		pageSize = opts.PageToken.Size
-	} else {
-		pageSize = DEFAULT_PAGE_SIZE
 	}
 	rows, err := r.db.Query("app_list_page", opts.PageToken.BeforeID, opts.AppIDs, opts.LabelFilters, pageSize+1)
 	if err != nil {

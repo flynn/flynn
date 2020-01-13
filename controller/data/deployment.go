@@ -238,11 +238,9 @@ type ListDeploymentOptions struct {
 }
 
 func (r *DeploymentRepo) ListPage(opts ListDeploymentOptions) ([]*ct.ExpandedDeployment, *PageToken, error) {
-	var pageSize int
+	pageSize := DEFAULT_PAGE_SIZE
 	if opts.PageToken.Size > 0 {
 		pageSize = opts.PageToken.Size
-	} else {
-		pageSize = DEFAULT_PAGE_SIZE
 	}
 	typeFilters := make([]string, 0, len(opts.TypeFilters))
 	for _, t := range opts.TypeFilters {

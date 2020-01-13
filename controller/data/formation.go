@@ -428,11 +428,9 @@ type ListScaleRequestOptions struct {
 }
 
 func (r *FormationRepo) ListScaleRequests(opts ListScaleRequestOptions) ([]*ct.ScaleRequest, *PageToken, error) {
-	var pageSize int
+	pageSize := DEFAULT_PAGE_SIZE
 	if opts.PageToken.Size > 0 {
 		pageSize = opts.PageToken.Size
-	} else {
-		pageSize = DEFAULT_PAGE_SIZE
 	}
 	stateFilters := make([]string, 0, len(opts.StateFilters))
 	for _, state := range opts.StateFilters {
