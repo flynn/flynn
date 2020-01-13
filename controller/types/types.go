@@ -405,18 +405,19 @@ type Deployment struct {
 }
 
 type ExpandedDeployment struct {
-	ID            string                       `json:"id,omitempty"`
-	AppID         string                       `json:"app,omitempty"`
-	OldRelease    *Release                     `json:"old_release,omitempty"`
-	NewRelease    *Release                     `json:"new_release,omitempty"`
-	Type          ReleaseType                  `json:"type,omitempty"`
-	Strategy      string                       `json:"strategy,omitempty"`
-	Status        string                       `json:"status,omitempty"`
-	Processes     map[string]int               `json:"processes,omitempty"`
-	Tags          map[string]map[string]string `json:"tags,omitempty"`
-	DeployTimeout int32                        `json:"deploy_timeout,omitempty"`
-	CreatedAt     *time.Time                   `json:"created_at,omitempty"`
-	FinishedAt    *time.Time                   `json:"finished_at,omitempty"`
+	ID              string                       `json:"id,omitempty"`
+	AppID           string                       `json:"app,omitempty"`
+	OldRelease      *Release                     `json:"old_release,omitempty"`
+	NewRelease      *Release                     `json:"new_release,omitempty"`
+	Type            ReleaseType                  `json:"type,omitempty"`
+	Strategy        string                       `json:"strategy,omitempty"`
+	Status          string                       `json:"status,omitempty"`
+	Processes       map[string]int               `json:"processes,omitempty"`
+	Tags            map[string]map[string]string `json:"tags,omitempty"`
+	DeployTimeout   int32                        `json:"deploy_timeout,omitempty"`
+	DeployBatchSize *int                         `json:"deploy_batch_size,omitempty"`
+	CreatedAt       *time.Time                   `json:"created_at,omitempty"`
+	FinishedAt      *time.Time                   `json:"finished_at,omitempty"`
 }
 
 type DeployID struct {
