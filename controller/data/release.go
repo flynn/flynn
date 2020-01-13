@@ -131,7 +131,6 @@ func releaseList(rows *pgx.Rows) ([]*ct.Release, error) {
 	for rows.Next() {
 		release, err := scanRelease(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		releases = append(releases, release)
@@ -144,6 +143,7 @@ func (r *ReleaseRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return releaseList(rows)
 }
 
@@ -165,6 +165,7 @@ func (r *ReleaseRepo) ListPage(opts ListReleaseOptions) ([]*ct.Release, *PageTok
 	if err != nil {
 		return nil, nil, err
 	}
+	defer rows.Close()
 	releases, err := releaseList(rows)
 	if err != nil {
 		return nil, nil, err
@@ -177,7 +178,7 @@ func (r *ReleaseRepo) ListPage(opts ListReleaseOptions) ([]*ct.Release, *PageTok
 		}
 		releases = releases[0:pageSize]
 	}
-	return releases, nextPageToken, rows.Err()
+	return releases, nextPageToken, nil
 }
 
 func (r *ReleaseRepo) AppList(appID string) ([]*ct.Release, error) {
@@ -185,6 +186,7 @@ func (r *ReleaseRepo) AppList(appID string) ([]*ct.Release, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return releaseList(rows)
 }
 
@@ -212,6 +214,7 @@ func (r *ReleaseRepo) Delete(app *ct.App, release *ct.Release) error {
 		tx.Rollback()
 		return err
 	}
+	defer rows.Close()
 	formations, err := scanFormations(rows)
 	if err != nil {
 		tx.Rollback()

@@ -53,7 +53,6 @@ func scanSinks(rows *pgx.Rows) ([]*ct.Sink, error) {
 	for rows.Next() {
 		sink, err := scanSink(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		sinks = append(sinks, sink)
@@ -83,6 +82,7 @@ func (r *SinkRepo) List() ([]*ct.Sink, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return scanSinks(rows)
 }
 
@@ -91,6 +91,7 @@ func (r *SinkRepo) ListSince(since time.Time) ([]*ct.Sink, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return scanSinks(rows)
 }
 

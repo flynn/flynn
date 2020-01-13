@@ -227,11 +227,11 @@ func (r *AppRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	apps := []*ct.App{}
+	defer rows.Close()
+	var apps []*ct.App
 	for rows.Next() {
 		app, err := scanApp(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		apps = append(apps, app)
@@ -256,14 +256,17 @@ func (r *AppRepo) ListPage(opts ListAppOptions) ([]*ct.App, *PageToken, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	defer rows.Close()
 	apps := []*ct.App{}
 	for rows.Next() {
 		app, err := scanApp(rows)
 		if err != nil {
-			rows.Close()
 			return nil, nil, err
 		}
 		apps = append(apps, app)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
 	}
 
 	var lastApp *ct.App
@@ -280,7 +283,7 @@ func (r *AppRepo) ListPage(opts ListAppOptions) ([]*ct.App, *PageToken, error) {
 		}
 	}
 
-	return apps, nextPageToken, rows.Err()
+	return apps, nextPageToken, nil
 }
 
 func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {

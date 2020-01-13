@@ -162,6 +162,7 @@ func (r *ResourceRepo) List() ([]*ct.Resource, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return resourceList(rows)
 }
 
@@ -170,6 +171,7 @@ func (r *ResourceRepo) ProviderList(providerID string) ([]*ct.Resource, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return resourceList(rows)
 }
 
@@ -178,7 +180,6 @@ func resourceList(rows *pgx.Rows) ([]*ct.Resource, error) {
 	for rows.Next() {
 		resource, err := scanResource(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		resources = append(resources, resource)
@@ -191,6 +192,7 @@ func (r *ResourceRepo) AppList(appID string) ([]*ct.Resource, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return resourceList(rows)
 }
 

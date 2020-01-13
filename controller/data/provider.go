@@ -68,11 +68,11 @@ func (r *ProviderRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	providers := []*ct.Provider{}
+	defer rows.Close()
+	var providers []*ct.Provider
 	for rows.Next() {
 		provider, err := scanProvider(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		providers = append(providers, provider)

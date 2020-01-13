@@ -217,11 +217,11 @@ func (r *DeploymentRepo) List(appID string) ([]*ct.Deployment, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	var deployments []*ct.Deployment
 	for rows.Next() {
 		deployment, err := scanDeployment(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		deployments = append(deployments, deployment)
@@ -256,14 +256,17 @@ func (r *DeploymentRepo) ListPage(opts ListDeploymentOptions) ([]*ct.ExpandedDep
 	if err != nil {
 		return nil, nil, err
 	}
+	defer rows.Close()
 	var deployments []*ct.ExpandedDeployment
 	for rows.Next() {
 		deployment, err := scanExpandedDeployment(rows)
 		if err != nil {
-			rows.Close()
 			return nil, nil, err
 		}
 		deployments = append(deployments, deployment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
 	}
 	var nextPageToken *PageToken
 	if len(deployments) == pageSize+1 {
@@ -273,7 +276,7 @@ func (r *DeploymentRepo) ListPage(opts ListDeploymentOptions) ([]*ct.ExpandedDep
 		}
 		deployments = deployments[0:pageSize]
 	}
-	return deployments, nextPageToken, rows.Err()
+	return deployments, nextPageToken, nil
 }
 
 func scanExpandedDeployment(s postgres.Scanner) (*ct.ExpandedDeployment, error) {

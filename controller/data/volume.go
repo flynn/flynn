@@ -93,6 +93,7 @@ func (r *VolumeRepo) List() ([]*ct.Volume, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return scanVolumes(rows)
 }
 
@@ -101,6 +102,7 @@ func (r *VolumeRepo) AppList(appID string) ([]*ct.Volume, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return scanVolumes(rows)
 }
 
@@ -109,6 +111,7 @@ func (r *VolumeRepo) ListSince(since time.Time) ([]*ct.Volume, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	return scanVolumes(rows)
 }
 
@@ -117,7 +120,6 @@ func scanVolumes(rows *pgx.Rows) ([]*ct.Volume, error) {
 	for rows.Next() {
 		volume, err := scanVolume(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		volumes = append(volumes, volume)
