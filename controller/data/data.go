@@ -114,6 +114,6 @@ func split(s string, sep string) []string {
 	return strings.Split(s, sep)
 }
 
-func splitPGStringArray(artifactIDs string) []string {
-	return split(artifactIDs[1:len(artifactIDs)-1], ",")
+func splitPGStringArray(s string) []string {
+	return split(s[1:len(s)-1], ",")
 }
