@@ -182,7 +182,7 @@ func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWri
 		return err
 	}
 
-	sub, err := eventListener.Subscribe("", []string{string(ct.EventTypeScaleRequest)}, "")
+	sub, err := eventListener.Subscribe(nil, []string{string(ct.EventTypeScaleRequest)}, nil)
 	if err != nil {
 		return err
 	}

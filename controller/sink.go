@@ -87,7 +87,7 @@ func (c *controllerAPI) streamSinks(ctx context.Context, w http.ResponseWriter, 
 		return err
 	}
 
-	sub, err := eventListener.Subscribe("", []string{string(ct.EventTypeSink), string(ct.EventTypeSinkDeletion)}, "")
+	sub, err := eventListener.Subscribe(nil, []string{string(ct.EventTypeSink), string(ct.EventTypeSinkDeletion)}, nil)
 	if err != nil {
 		return err
 	}

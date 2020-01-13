@@ -31,19 +31,24 @@ func (s *S) TestEvents(c *C) {
 	c.Assert(listener.Listen(), IsNil)
 
 	// sub1 should receive job events for app1, job1
-	sub1, err := listener.Subscribe(app1.ID, []string{string(ct.EventTypeJob)}, jobID1)
+	sub1, err := listener.Subscribe([]string{app1.ID}, []string{string(ct.EventTypeJob)}, []string{jobID1})
 	c.Assert(err, IsNil)
 	defer sub1.Close()
 
 	// sub2 should receive all job events for app1
-	sub2, err := listener.Subscribe(app1.ID, []string{string(ct.EventTypeJob)}, "")
+	sub2, err := listener.Subscribe([]string{app1.ID}, []string{string(ct.EventTypeJob)}, nil)
 	c.Assert(err, IsNil)
 	defer sub2.Close()
 
-	// sub3 should receive all job events for app2
-	sub3, err := listener.Subscribe(app2.ID, []string{}, "")
+	// sub3 should receive all events for app2
+	sub3, err := listener.Subscribe([]string{app2.ID}, []string{}, nil)
 	c.Assert(err, IsNil)
 	defer sub3.Close()
+
+	// sub4 should receive all job events
+	sub4, err := listener.Subscribe(nil, []string{string(ct.EventTypeJob)}, nil)
+	c.Assert(err, IsNil)
+	defer sub4.Close()
 
 	for _, job := range jobs {
 		s.createTestJob(c, job)
@@ -73,6 +78,7 @@ func (s *S) TestEvents(c *C) {
 	assertJobEvents(sub1, jobs[0:2])
 	assertJobEvents(sub2, jobs[0:4])
 	assertJobEvents(sub3, jobs[4:6])
+	assertJobEvents(sub4, jobs[0:6])
 }
 
 func (s *S) TestStreamAppLifeCycleEvents(c *C) {

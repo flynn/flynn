@@ -72,9 +72,9 @@ func (c *controllerAPI) Events(ctx context.Context, w http.ResponseWriter, req *
 }
 
 func listEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, app *ct.App, repo *data.EventRepo) (err error) {
-	var appID string
+	var appIDs []string
 	if app != nil {
-		appID = app.ID
+		appIDs = []string{app.ID}
 	}
 
 	var beforeID *int64
@@ -107,9 +107,12 @@ func listEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, a
 	if len(objectTypes) == 1 && objectTypes[0] == "" {
 		objectTypes = []string{}
 	}
-	objectID := req.FormValue("object_id")
+	var objectIDs []string
+	if id := req.FormValue("object_id"); id != "" {
+		objectIDs = []string{id}
+	}
 
-	list, err := repo.ListEvents(appID, objectTypes, objectID, beforeID, sinceID, count)
+	list, err := repo.ListEvents(appIDs, objectTypes, objectIDs, beforeID, sinceID, count)
 	if err != nil {
 		return err
 	}
@@ -118,9 +121,9 @@ func listEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, a
 }
 
 func streamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, eventListener *data.EventListener, app *ct.App, repo *data.EventRepo) (err error) {
-	var appID string
+	var appIDs []string
 	if app != nil {
-		appID = app.ID
+		appIDs = []string{app.ID}
 	}
 
 	var lastID int64
@@ -143,11 +146,14 @@ func streamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request,
 	if len(objectTypes) == 1 && objectTypes[0] == "" {
 		objectTypes = []string{}
 	}
-	objectID := req.FormValue("object_id")
+	var objectIDs []string
+	if id := req.FormValue("object_id"); id != "" {
+		objectIDs = []string{id}
+	}
 	past := req.FormValue("past")
 
 	l, _ := ctxhelper.LoggerFromContext(ctx)
-	log := l.New("fn", "streamEvents", "object_types", objectTypes, "object_id", objectID)
+	log := l.New("fn", "streamEvents", "object_types", objectTypes, "object_ids", objectIDs)
 	ch := make(chan *ct.Event)
 	s := sse.NewStream(w, ch, log)
 	s.Serve()
@@ -159,7 +165,7 @@ func streamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request,
 		}
 	}()
 
-	sub, err := eventListener.Subscribe(appID, objectTypes, objectID)
+	sub, err := eventListener.Subscribe(appIDs, objectTypes, objectIDs)
 	if err != nil {
 		return err
 	}
@@ -167,7 +173,7 @@ func streamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request,
 
 	var currID int64
 	if past == "true" || lastID > 0 {
-		list, err := repo.ListEvents(appID, objectTypes, objectID, nil, &lastID, count)
+		list, err := repo.ListEvents(appIDs, objectTypes, objectIDs, nil, &lastID, count)
 		if err != nil {
 			return err
 		}
