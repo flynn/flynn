@@ -99,12 +99,14 @@ func (g *grpcAPI) logRequest(ctx context.Context, rpcMethod string) (context.Con
 
 	g.logger(ctx).Info("gRPC request started", "rpcMethod", rpcMethod, "client_ip", clientIP)
 	return ctx, func(ctx context.Context, err error) {
-		duration := time.Since(startTime)
-		if err == nil {
-			g.logger(ctx).Info("gRPC request ended", "duration", duration)
-		} else {
-			g.logger(ctx).Info("gRPC request ended", "duration", duration, "err", err)
+		args := []interface{}{
+			"rpcMethod", rpcMethod,
+			"duration", time.Since(startTime),
 		}
+		if err != nil {
+			args = append(args, "err", err)
+		}
+		g.logger(ctx).Info("gRPC request ended", args...)
 	}
 }
 
