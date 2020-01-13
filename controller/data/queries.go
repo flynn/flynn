@@ -285,7 +285,7 @@ WHERE e2.created_at IS NULL AND d.deployment_id = $1`
 WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
 SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
   d.strategy, e1.data->>'status' AS status,
-  d.processes, d.tags, d.deploy_timeout, d.created_at, d.finished_at,
+  d.processes, d.tags, d.deploy_timeout, d.deploy_batch_size, d.created_at, d.finished_at,
   ARRAY(
 		SELECT a.artifact_id
 		FROM release_artifacts a
@@ -326,7 +326,7 @@ WHERE e2.created_at IS NULL AND d.app_id = $1 ORDER BY d.created_at DESC`
 WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
 SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
   d.strategy, e1.data->>'status' AS status,
-  d.processes, d.tags, d.deploy_timeout, d.created_at, d.finished_at,
+  d.processes, d.tags, d.deploy_timeout, d.deploy_batch_size, d.created_at, d.finished_at,
   ARRAY(
 		SELECT a.artifact_id
 		FROM release_artifacts a
