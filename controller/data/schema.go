@@ -947,6 +947,11 @@ CREATE TRIGGER set_tcp_route_port
 			WHERE target.deployment_id = d.deployment_id;
 		`,
 	)
+	migrations.Add(48, `
+CREATE FUNCTION deployment_status(deployment_id uuid) RETURNS text AS $$
+  SELECT data->>'status' FROM events WHERE object_type = 'deployment' AND object_id::uuid = deployment_id ORDER BY created_at DESC LIMIT 1;
+$$ LANGUAGE SQL;
+	`)
 }
 
 func MigrateDB(db *postgres.DB) error {
