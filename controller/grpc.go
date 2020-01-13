@@ -35,25 +35,27 @@ type grpcAPI struct {
 const ctxKeyFlynnAuthKeyID = "flynn-auth-key-id"
 
 func (g *grpcAPI) authorize(ctx context.Context) (context.Context, error) {
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if passwords, ok := md["auth-key"]; ok && len(passwords) > 0 {
-			auth, err := g.authorizer.Authorize(passwords[0])
-			if err != nil {
-				return ctx, grpc.Errorf(codes.Unauthenticated, err.Error())
-			}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ctx, grpc.Errorf(codes.Unauthenticated, "metadata missing")
+	}
 
-			if auth.ID != "" {
-				ctx = context.WithValue(ctx, ctxKeyFlynnAuthKeyID, auth.ID)
-				ctx = ctxhelper.NewContextLogger(ctx, g.logger(ctx).New("authKeyID", auth.ID))
-			}
-
-			return ctx, nil
-		}
-
+	passwords, ok := md["auth-key"]
+	if !ok || len(passwords) == 0 {
 		return ctx, grpc.Errorf(codes.Unauthenticated, "no Auth-Key provided")
 	}
 
-	return ctx, grpc.Errorf(codes.Unauthenticated, "metadata missing")
+	auth, err := g.authorizer.Authorize(passwords[0])
+	if err != nil {
+		return ctx, grpc.Errorf(codes.Unauthenticated, err.Error())
+	}
+
+	if auth.ID != "" {
+		ctx = context.WithValue(ctx, ctxKeyFlynnAuthKeyID, auth.ID)
+		ctx = ctxhelper.NewContextLogger(ctx, g.logger(ctx).New("authKeyID", auth.ID))
+	}
+
+	return ctx, nil
 }
 
 func (g *grpcAPI) logger(ctx context.Context) log.Logger {
