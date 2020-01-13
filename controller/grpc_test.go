@@ -297,14 +297,14 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	c.Assert(res.Apps[0], DeepEquals, testApp3)
 	c.Assert(receivedEOF, Equals, true)
 
-	// test fetching a singple app by name
+	// test fetching a sinple app by name
 	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{NameFilters: []string{testApp2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 1)
 	c.Assert(res.Apps[0], DeepEquals, testApp2)
 	c.Assert(receivedEOF, Equals, true)
 
-	// test fetching an multiple apps by name
+	// test fetching multiple apps by name
 	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{NameFilters: []string{testApp1.Name, testApp2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 2)
