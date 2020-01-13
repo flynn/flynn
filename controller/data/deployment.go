@@ -289,8 +289,11 @@ func scanExpandedDeployment(s postgres.Scanner) (*ct.ExpandedDeployment, error) 
 		&newArtifactIDs, &newRelease.Env, &newRelease.Processes, &newRelease.Meta, &newRelease.CreatedAt,
 		&d.Type,
 	)
-	if err == pgx.ErrNoRows {
-		err = ErrNotFound
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = ErrNotFound
+		}
+		return nil, err
 	}
 	if oldReleaseID != nil {
 		oldRelease.ID = *oldReleaseID
