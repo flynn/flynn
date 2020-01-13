@@ -155,11 +155,9 @@ type ListReleaseOptions struct {
 }
 
 func (r *ReleaseRepo) ListPage(opts ListReleaseOptions) ([]*ct.Release, *PageToken, error) {
-	var pageSize int
+	pageSize := DEFAULT_PAGE_SIZE
 	if opts.PageToken.Size > 0 {
 		pageSize = opts.PageToken.Size
-	} else {
-		pageSize = DEFAULT_PAGE_SIZE
 	}
 	rows, err := r.db.Query("release_list_page", opts.AppIDs, opts.ReleaseIDs, opts.PageToken.BeforeID, opts.LabelFilters, pageSize+1)
 	if err != nil {
