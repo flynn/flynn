@@ -919,11 +919,12 @@ CREATE TRIGGER set_tcp_route_port
 		// Add a "type" column to deployments to distinguish between code and
 		// config releases (code releases are when the artifacts have changed, all
 		// the rest are config releases)
-		`CREATE TYPE release_type AS ENUM ('code', 'config')`,
-		`ALTER TABLE deployments ADD COLUMN type release_type`,
+		`CREATE TABLE release_types (name text PRIMARY KEY)`,
+		`INSERT INTO release_types (name) VALUES ('code'), ('config')`,
+		`ALTER TABLE deployments ADD COLUMN type text REFERENCES release_types (name)`,
 		`
 		UPDATE deployments AS target
-				SET type = CASE WHEN d.old_artifact_ids = d.new_artifact_ids THEN 'config'::release_type ELSE 'code'::release_type END
+				SET type = CASE WHEN d.old_artifact_ids = d.new_artifact_ids THEN 'config' ELSE 'code' END
 		FROM (SELECT
 				d.deployment_id,
 				ARRAY(
@@ -946,6 +947,7 @@ CREATE TRIGGER set_tcp_route_port
 			) AS d
 			WHERE target.deployment_id = d.deployment_id;
 		`,
+		`ALTER TABLE deployments ALTER COLUMN type SET NOT NULL`,
 	)
 	migrations.Add(48, `
 CREATE FUNCTION deployment_status(deployment_id uuid) RETURNS text AS $$
