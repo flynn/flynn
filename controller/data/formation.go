@@ -436,7 +436,7 @@ func (r *FormationRepo) ListScaleRequests(opts ListScaleRequestOptions) ([]*ct.S
 	for _, state := range opts.StateFilters {
 		stateFilters = append(stateFilters, string(state))
 	}
-	rows, err := r.db.Query("scale_request_list", opts.AppIDs, opts.ReleaseIDs, opts.ScaleIDs, stateFilters, opts.PageToken.BeforeID, pageSize+1)
+	rows, err := r.db.Query("scale_request_list", opts.AppIDs, opts.ReleaseIDs, opts.ScaleIDs, stateFilters, opts.PageToken.CursorID, pageSize+1)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -455,7 +455,7 @@ func (r *FormationRepo) ListScaleRequests(opts ListScaleRequestOptions) ([]*ct.S
 	var nextPageToken *PageToken
 	if len(scales) == pageSize+1 {
 		nextPageToken = &PageToken{
-			BeforeID: &scales[pageSize].ID,
+			CursorID: toCursorID(scales[pageSize].CreatedAt),
 			Size:     pageSize,
 		}
 		scales = scales[0:pageSize]
