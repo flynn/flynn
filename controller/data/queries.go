@@ -133,17 +133,14 @@ FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC`
 SELECT a.app_id, a.name, a.meta, a.strategy, a.release_id, a.deploy_timeout, a.created_at, a.updated_at
 FROM apps AS a
 LEFT OUTER JOIN (SELECT app_id, created_at FROM apps WHERE app_id = $1 LIMIT 1) AS b ON true
-WHERE a.deleted_at IS NULL
-AND CASE
-	WHEN array_length($2::text[], 1) > 0
-		THEN a.app_id::text = ANY($2::text[])
-	ELSE true
-END
-AND match_label_filters($3, a.meta)
-AND CASE WHEN b IS NULL THEN true
-ELSE
-	a.created_at <= b.created_at
-END
+WHERE
+  a.deleted_at IS NULL
+AND
+  CASE WHEN array_length($2::text[], 1) > 0 THEN a.app_id::text = ANY($2::text[]) ELSE true END
+AND
+  match_label_filters($3, a.meta)
+AND
+  CASE WHEN b IS NULL THEN true ELSE a.created_at <= b.created_at END
 ORDER BY a.created_at DESC
 LIMIT $4;
 `
@@ -196,27 +193,21 @@ FROM releases r WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseListPageQuery = `
 SELECT r.release_id, r.app_id,
   ARRAY(
-		SELECT a.artifact_id
-		FROM release_artifacts a
-		WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
-		ORDER BY a.index
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r
 LEFT OUTER JOIN (SELECT release_id, created_at FROM releases WHERE release_id = $3 LIMIT 1) AS before_r ON true
-WHERE CASE
-	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0
-		THEN r.release_id::text = ANY($2::text[]) OR r.app_id::text = ANY($1::text[])
-	WHEN array_length($1::text[], 1) > 0
-		THEN r.app_id::text = ANY($1::text[])
-	WHEN array_length($2::text[], 1) > 0
-		THEN r.release_id::text = ANY($2::text[])
-	ELSE true
-END
-AND match_label_filters($4, r.meta)
-AND CASE WHEN before_r IS NULL THEN true
-ELSE
-	r.created_at <= before_r.created_at
-END
+WHERE
+  CASE WHEN array_length($1::text[], 1) > 0 THEN r.app_id::text = ANY($1::text[]) ELSE true END
+AND
+  CASE WHEN array_length($2::text[], 1) > 0 THEN r.release_id::text = ANY($2::text[]) ELSE true END
+AND
+  match_label_filters($4, r.meta)
+AND
+  CASE WHEN before_r IS NOT NULL THEN r.created_at <= before_r.created_at ELSE true END
 ORDER BY r.created_at DESC
 LIMIT $5
 `
@@ -355,34 +346,22 @@ LEFT JOIN deployment_events e1
 LEFT OUTER JOIN deployment_events e2
   ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
 LEFT OUTER JOIN releases old_r
-	ON d.old_release_id = old_r.release_id
+  ON d.old_release_id = old_r.release_id
 LEFT OUTER JOIN releases new_r
-	ON d.new_release_id = new_r.release_id
+  ON d.new_release_id = new_r.release_id
 LEFT OUTER JOIN (SELECT deployment_id, created_at FROM deployments WHERE deployment_id = $5 LIMIT 1) AS before_d ON true
-WHERE e2.created_at IS NULL
-AND CASE
-	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0
-		THEN d.deployment_id::text = ANY($2::text[]) OR d.app_id::text = ANY($1::text[])
-	WHEN array_length($1::text[], 1) > 0
-		THEN d.app_id::text = ANY($1::text[])
-	WHEN array_length($2::text[], 1) > 0
-		THEN d.deployment_id::text = ANY($2::text[])
-	ELSE true
-END
-AND CASE
-	WHEN array_length($3::text[], 1) > 0
-		THEN e1.data->>'status' = ANY($3::text[])
-	ELSE true
-END
-AND CASE
-	WHEN array_length($4::text[], 1) > 0
-		THEN d.type::text = ANY($4::text[])
-	ELSE true
-END
-AND CASE WHEN before_d IS NULL THEN true
-ELSE
-	d.created_at <= before_d.created_at
-END
+WHERE
+  e2.created_at IS NULL
+AND
+  CASE WHEN array_length($1::text[], 1) > 0 THEN d.app_id::text = ANY($1::text[]) ELSE true END
+AND
+  CASE WHEN array_length($2::text[], 1) > 0 THEN d.deployment_id::text = ANY($2::text[]) ELSE true END
+AND
+  CASE WHEN array_length($3::text[], 1) > 0 THEN e1.data->>'status' = ANY($3::text[]) ELSE true END
+AND
+  CASE WHEN array_length($4::text[], 1) > 0 THEN d.type::text = ANY($4::text[]) ELSE true END
+AND
+  CASE WHEN before_d IS NOT NULL THEN d.created_at <= before_d.created_at ELSE true END
 ORDER BY d.created_at DESC
 LIMIT $6
 `
@@ -516,35 +495,19 @@ RETURNING updated_at`
 SELECT s.scale_request_id, s.app_id, s.release_id, s.state, s.old_processes, s.new_processes, s.old_tags, s.new_tags, s.created_at, s.updated_at
 FROM scale_requests s
 LEFT OUTER JOIN (SELECT scale_request_id, created_at FROM scale_requests WHERE scale_request_id = $5 LIMIT 1) AS before_s ON true
-WHERE CASE
-	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0 AND array_length($3::text[], 1) > 0
-		THEN s.scale_request_id::text = ANY($3::text[]) OR s.release_id::text = ANY($2::text[]) OR s.app_id::text = ANY($1::text[])
-	WHEN array_length($1::text[], 1) > 0 AND array_length($2::text[], 1) > 0
-		THEN s.release_id::text = ANY($2::text[]) OR s.app_id::text = ANY($1::text[])
-	WHEN array_length($1::text[], 1) > 0 AND array_length($3::text[], 1) > 0
-		THEN s.scale_request_id::text = ANY($3::text[]) OR s.app_id::text = ANY($1::text[])
-	WHEN array_length($2::text[], 1) > 0 AND array_length($3::text[], 1) > 0
-		THEN s.scale_request_id::text = ANY($3::text[]) OR s.release_id::text = ANY($2::text[])
-	WHEN array_length($1::text[], 1) > 0
-		THEN s.app_id::text = ANY($1::text[])
-	WHEN array_length($2::text[], 1) > 0
-		THEN s.release_id::text = ANY($2::text[])
-	WHEN array_length($3::text[], 1) > 0
-		THEN s.scale_request_id::text = ANY($3::text[])
-	ELSE true
-END
-AND CASE
-	WHEN array_length($4::text[], 1) > 0
-		THEN s.state = ANY($4::text[])
-	ELSE true
-END
-AND CASE WHEN before_s IS NULL THEN true
-ELSE
-	s.created_at <= before_s.created_at
-END
+WHERE
+  CASE WHEN array_length($1::text[], 1) > 0 THEN s.app_id::text = ANY($1::text[]) ELSE true END
+AND
+  CASE WHEN array_length($2::text[], 1) > 0 THEN s.release_id::text = ANY($2::text[]) ELSE true END
+AND
+  CASE WHEN array_length($3::text[], 1) > 0 THEN s.scale_request_id::text = ANY($3::text[]) ELSE true END
+AND
+  CASE WHEN array_length($4::text[], 1) > 0 THEN s.state = ANY($4::text[]) ELSE true END
+AND
+  CASE WHEN before_s IS NOT NULL THEN s.created_at <= before_s.created_at ELSE true END
 ORDER BY s.created_at DESC
 LIMIT $6
-`  // TODO(jvatic): Optimize scaleRequestListQuery
+`
 	jobListQuery = `
 SELECT
   cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta,
