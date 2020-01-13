@@ -64,7 +64,6 @@ func (s *GRPCSuite) SetUpSuite(c *C) {
 		db:     s.db,
 		cc:     tu.NewFakeCluster(),
 		lc:     newFakeLogAggregatorClient(),
-		rc:     newFakeRouter(),
 		keys:   authKeys,
 		keyIDs: []string{"test-auth-key"},
 	})
