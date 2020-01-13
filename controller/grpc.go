@@ -110,76 +110,20 @@ func (g *grpcAPI) logRequest(ctx context.Context, rpcMethod string) (context.Con
 	}
 }
 
-type grpcEventListener struct {
-	Events  chan *ct.Event
-	Err     error
-	errOnce sync.Once
-	subs    []*data.EventSubscriber
-}
-
-func (e *grpcEventListener) Close() {
-	for _, sub := range e.subs {
-		sub.Close()
-		if err := sub.Err; err != nil {
-			e.errOnce.Do(func() { e.Err = err })
-		}
-	}
-}
-
-func (g *grpcAPI) subscribeEvents(appIDs []string, objectTypes []ct.EventType, objectIDs []string) (*grpcEventListener, error) {
-	dataEventListener, err := g.maybeStartEventListener()
+func (g *grpcAPI) subscribeEvents(appIDs []string, objectTypes []ct.EventType, objectIDs []string) (*data.EventSubscriber, error) {
+	eventListener, err := g.maybeStartEventListener()
 	if err != nil {
 		return nil, protobuf.NewError(err, err.Error())
 	}
-
-	eventListener := &grpcEventListener{
-		Events: make(chan *ct.Event),
-	}
-
 	objectTypeStrings := make([]string, len(objectTypes))
 	for i, t := range objectTypes {
 		objectTypeStrings[i] = string(t)
 	}
-
-	if len(appIDs) == 0 && len(objectIDs) == 0 {
-		// an empty string matches all app ids
-		appIDs = []string{""}
+	sub, err := eventListener.Subscribe(appIDs, objectTypeStrings, objectIDs)
+	if err != nil {
+		return nil, protobuf.NewError(err, err.Error())
 	}
-	subs := make([]*data.EventSubscriber, 0, len(appIDs)+len(objectIDs))
-	for _, appID := range appIDs {
-		sub, err := dataEventListener.Subscribe(appID, objectTypeStrings, "")
-		if err != nil {
-			return nil, protobuf.NewError(err, err.Error())
-		}
-		subs = append(subs, sub)
-		go (func() {
-			for {
-				event, ok := <-sub.Events
-				if !ok {
-					break
-				}
-				eventListener.Events <- event
-			}
-		})()
-	}
-	for _, objectID := range objectIDs {
-		sub, err := dataEventListener.Subscribe("", objectTypeStrings, objectID)
-		if err != nil {
-			return nil, protobuf.NewError(err, err.Error())
-		}
-		subs = append(subs, sub)
-		go (func() {
-			for {
-				event, ok := <-sub.Events
-				if !ok {
-					break
-				}
-				eventListener.Events <- event
-			}
-		})()
-	}
-	eventListener.subs = subs
-	return eventListener, nil
+	return sub, nil
 }
 
 func (g *grpcAPI) grpcServer() *grpc.Server {
@@ -301,31 +245,10 @@ func (g *grpcAPI) listApps(req *protobuf.StreamAppsRequest) ([]*protobuf.App, *d
 func (g *grpcAPI) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Controller_StreamAppsServer) error {
 	unary := !(req.StreamUpdates || req.StreamCreates)
 
-	var apps []*protobuf.App
-	var nextPageToken *data.PageToken
-	var appsMtx sync.RWMutex
-	refreshApps := func() error {
-		appsMtx.Lock()
-		defer appsMtx.Unlock()
-		var err error
-		apps, nextPageToken, err = g.listApps(req)
-		return err
-	}
-
-	sendResponse := func() {
-		appsMtx.RLock()
-		stream.Send(&protobuf.StreamAppsResponse{
-			Apps:          apps,
-			NextPageToken: nextPageToken.String(),
-			PageComplete:  true,
-		})
-		appsMtx.RUnlock()
-	}
-
-	var sub *grpcEventListener
-	var err error
+	var sub *data.EventSubscriber
 	if !unary {
 		appIDs := protobuf.ParseIDsFromNameFilters(req.GetNameFilters(), "apps")
+		var err error
 		sub, err = g.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeApp, ct.EventTypeAppDeletion, ct.EventTypeAppRelease}, nil)
 		if err != nil {
 			return protobuf.NewError(err, err.Error())
@@ -333,11 +256,18 @@ func (g *grpcAPI) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Co
 		defer sub.Close()
 	}
 
-	if err := refreshApps(); err != nil {
+	apps, nextPageToken, err := g.listApps(req)
+	if err != nil {
 		return protobuf.NewError(err, err.Error())
 	}
-	sendResponse()
-	if unary {
+
+	stream.Send(&protobuf.StreamAppsResponse{
+		Apps:          apps,
+		NextPageToken: nextPageToken.String(),
+		PageComplete:  true,
+	})
+
+	if sub == nil {
 		return nil
 	}
 
@@ -353,14 +283,13 @@ func (g *grpcAPI) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Co
 		}
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			event, ok := <-sub.Events
+outer:
+	for {
+		select {
+		case event, ok := <-sub.Events:
 			if !ok {
-				break
+				err = sub.Err
+				break outer
 			}
 			switch event.ObjectType {
 			case ct.EventTypeApp:
@@ -398,15 +327,15 @@ func (g *grpcAPI) StreamApps(req *protobuf.StreamAppsRequest, stream protobuf.Co
 				}
 				maybeSendApp(event, protobuf.NewApp(ctApp.(*ct.App)))
 			}
+		case <-stream.Context().Done():
+			err = stream.Context().Err()
+			break outer
 		}
-	}()
-	wg.Wait()
-
-	if err := sub.Err; err != nil {
-		return protobuf.NewError(err, err.Error())
 	}
-
-	return nil
+	if err != nil {
+		err = protobuf.NewError(err, err.Error())
+	}
+	return err
 }
 
 func (g *grpcAPI) UpdateApp(ctx context.Context, req *protobuf.UpdateAppRequest) (*protobuf.App, error) {

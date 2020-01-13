@@ -21,7 +21,7 @@ func NewEventRepo(db *postgres.DB) *EventRepo {
 	return &EventRepo{db: db}
 }
 
-func (r *EventRepo) ListEvents(appID string, objectTypes []string, objectID string, beforeID *int64, sinceID *int64, count int) ([]*ct.Event, error) {
+func (r *EventRepo) ListEvents(appIDs, objectTypes, objectIDs []string, beforeID *int64, sinceID *int64, count int) ([]*ct.Event, error) {
 	query := "SELECT event_id, app_id, object_id, object_type, data, op, created_at FROM events"
 	var conditions []string
 	var n int
@@ -36,10 +36,10 @@ func (r *EventRepo) ListEvents(appID string, objectTypes []string, objectID stri
 		conditions = append(conditions, fmt.Sprintf("event_id > $%d", n))
 		args = append(args, *sinceID)
 	}
-	if appID != "" {
+	if len(appIDs) > 0 {
 		n++
-		conditions = append(conditions, fmt.Sprintf("app_id = $%d", n))
-		args = append(args, appID)
+		conditions = append(conditions, fmt.Sprintf("app_id::text = ANY($%d::text[])", n))
+		args = append(args, appIDs)
 	}
 	if len(objectTypes) > 0 {
 		c := "("
@@ -54,10 +54,10 @@ func (r *EventRepo) ListEvents(appID string, objectTypes []string, objectID stri
 		c += ")"
 		conditions = append(conditions, c)
 	}
-	if objectID != "" {
+	if len(objectIDs) > 0 {
 		n++
-		conditions = append(conditions, fmt.Sprintf("object_id = $%d", n))
-		args = append(args, objectID)
+		conditions = append(conditions, fmt.Sprintf("object_id = ANY($%d::text[])", n))
+		args = append(args, objectIDs)
 	}
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
@@ -132,31 +132,52 @@ type EventSubscriber struct {
 
 	l           *EventListener
 	queue       chan *ct.Event
-	appID       string
+	appIDs      []string
 	objectTypes []string
-	objectID    string
+	objectIDs   []string
 
 	stop     chan struct{}
 	stopOnce sync.Once
 }
 
-// Notify filters the event based on it's type and objectID and then pushes
-// it to the event queue.
+// Notify filters the event based on it's appID, type and objectID and then
+// pushes it to the event queue.
 func (e *EventSubscriber) Notify(event *ct.Event) {
-	if len(e.objectTypes) > 0 {
-		foundType := false
-		for _, typ := range e.objectTypes {
-			if typ == string(event.ObjectType) {
-				foundType = true
+	if len(e.appIDs) > 0 {
+		matchesApp := false
+		for _, appID := range e.appIDs {
+			if event.AppID == appID {
+				matchesApp = true
 				break
 			}
 		}
-		if !foundType {
+		if !matchesApp {
 			return
 		}
 	}
-	if e.objectID != "" && e.objectID != event.ObjectID {
-		return
+	if len(e.objectTypes) > 0 {
+		matchesType := false
+		for _, typ := range e.objectTypes {
+			if typ == string(event.ObjectType) {
+				matchesType = true
+				break
+			}
+		}
+		if !matchesType {
+			return
+		}
+	}
+	if len(e.objectIDs) > 0 {
+		matchesID := false
+		for _, objectID := range e.objectIDs {
+			if objectID == event.ObjectID {
+				matchesID = true
+				break
+			}
+		}
+		if !matchesID {
+			return
+		}
 	}
 	select {
 	case e.queue <- event:
@@ -194,7 +215,7 @@ func (e *EventSubscriber) CloseWithError(err error) {
 func NewEventListener(r *EventRepo) *EventListener {
 	return &EventListener{
 		eventRepo:   r,
-		subscribers: make(map[string]map[*EventSubscriber]struct{}),
+		subscribers: make(map[*EventSubscriber]struct{}),
 		doneCh:      make(chan struct{}),
 	}
 }
@@ -204,7 +225,7 @@ func NewEventListener(r *EventRepo) *EventListener {
 type EventListener struct {
 	eventRepo *EventRepo
 
-	subscribers map[string]map[*EventSubscriber]struct{}
+	subscribers map[*EventSubscriber]struct{}
 	subMtx      sync.RWMutex
 
 	closed    bool
@@ -212,9 +233,9 @@ type EventListener struct {
 	doneCh    chan struct{}
 }
 
-// Subscribe creates and returns an EventSubscriber for the given app, type and object.
-// Using an empty string for appID subscribes to all apps
-func (e *EventListener) Subscribe(appID string, objectTypes []string, objectID string) (*EventSubscriber, error) {
+// Subscribe creates and returns an EventSubscriber for the given apps, types and objects.
+// An empty appIDs list subscribes to all apps
+func (e *EventListener) Subscribe(appIDs, objectTypes, objectIDs []string) (*EventSubscriber, error) {
 	e.subMtx.Lock()
 	defer e.subMtx.Unlock()
 	if e.IsClosed() {
@@ -225,15 +246,12 @@ func (e *EventListener) Subscribe(appID string, objectTypes []string, objectID s
 		l:           e,
 		queue:       make(chan *ct.Event, eventBufferSize),
 		stop:        make(chan struct{}),
-		appID:       appID,
+		appIDs:      appIDs,
 		objectTypes: objectTypes,
-		objectID:    objectID,
+		objectIDs:   objectIDs,
 	}
 	go s.loop()
-	if _, ok := e.subscribers[appID]; !ok {
-		e.subscribers[appID] = make(map[*EventSubscriber]struct{})
-	}
-	e.subscribers[appID][s] = struct{}{}
+	e.subscribers[s] = struct{}{}
 	return s, nil
 }
 
@@ -241,12 +259,7 @@ func (e *EventListener) Subscribe(appID string, objectTypes []string, objectID s
 func (e *EventListener) Unsubscribe(s *EventSubscriber) {
 	e.subMtx.Lock()
 	defer e.subMtx.Unlock()
-	if subs, ok := e.subscribers[s.appID]; ok {
-		delete(subs, s)
-		if len(subs) == 0 {
-			delete(e.subscribers, s.appID)
-		}
-	}
+	delete(e.subscribers, s)
 }
 
 // Listen creates a postgres listener for events and starts a goroutine to
@@ -295,18 +308,8 @@ func (e *EventListener) Listen() error {
 func (e *EventListener) Notify(event *ct.Event) {
 	e.subMtx.RLock()
 	defer e.subMtx.RUnlock()
-	if subs, ok := e.subscribers[event.AppID]; ok {
-		for sub := range subs {
-			sub.Notify(event)
-		}
-	}
-	if event.AppID != "" {
-		// Ensure subscribers not filtering by app get the event
-		if subs, ok := e.subscribers[""]; ok {
-			for sub := range subs {
-				sub.Notify(event)
-			}
-		}
+	for sub := range e.subscribers {
+		sub.Notify(event)
 	}
 }
 
@@ -330,11 +333,8 @@ func (e *EventListener) CloseWithError(err error) {
 
 	e.subMtx.RLock()
 	defer e.subMtx.RUnlock()
-	subscribers := e.subscribers
-	for _, subs := range subscribers {
-		for sub := range subs {
-			go sub.CloseWithError(err)
-		}
+	for sub := range e.subscribers {
+		go sub.CloseWithError(err)
 	}
 	close(e.doneCh)
 }

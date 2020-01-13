@@ -103,7 +103,7 @@ func (c *controllerAPI) streamVolumes(ctx context.Context, w http.ResponseWriter
 		return err
 	}
 
-	sub, err := eventListener.Subscribe("", []string{string(ct.EventTypeVolume)}, "")
+	sub, err := eventListener.Subscribe(nil, []string{string(ct.EventTypeVolume)}, nil)
 	if err != nil {
 		return err
 	}
