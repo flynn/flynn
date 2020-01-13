@@ -681,13 +681,11 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple releases by a mixture of app name and release name
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{NameFilters: []string{testApp2.Name, testRelease2.Name}})
+	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{NameFilters: []string{testApp1.Name, testRelease2.Name}})
 	c.Assert(res, Not(IsNil))
-	c.Assert(len(res.Releases), Equals, 2)
+	c.Assert(len(res.Releases), Equals, 1)
 	c.Assert(strings.HasPrefix(res.Releases[0].Name, testApp1.Name), Equals, true)
 	c.Assert(res.Releases[0], DeepEquals, testRelease2)
-	c.Assert(strings.HasPrefix(res.Releases[1].Name, testApp2.Name), Equals, true)
-	c.Assert(res.Releases[1], DeepEquals, testRelease1)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_IN]
@@ -1032,13 +1030,10 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple scales by a mixture of app name and release name
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease6.Name}})
+	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease4.Name}})
 	c.Assert(res, Not(IsNil))
-	c.Assert(len(res.ScaleRequests), Equals, 4)
-	c.Assert(res.ScaleRequests[0].Name, Equals, testScale7.Name)
-	c.Assert(res.ScaleRequests[1].Name, Equals, testScale6.Name)
-	c.Assert(res.ScaleRequests[2].Name, Equals, testScale4.Name)
-	c.Assert(res.ScaleRequests[3].Name, Equals, testScale1.Name)
+	c.Assert(len(res.ScaleRequests), Equals, 1)
+	c.Assert(res.ScaleRequests[0].Name, Equals, testScale4.Name)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple scales by state
@@ -1361,12 +1356,10 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple deployments by a mixture of app name and deployment name
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{NameFilters: []string{testDeployment3.Name, testApp1.Name}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{NameFilters: []string{testDeployment2.Name, testApp1.Name}})
 	c.Assert(res, Not(IsNil))
-	c.Assert(len(res.Deployments), Equals, 3)
-	assertDeploymentsEqual(c, res.Deployments[0], testDeployment3)
-	assertDeploymentsEqual(c, res.Deployments[1], testDeployment2)
-	assertDeploymentsEqual(c, res.Deployments[2], testDeployment1)
+	c.Assert(len(res.Deployments), Equals, 1)
+	assertDeploymentsEqual(c, res.Deployments[0], testDeployment2)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple deployments by type [ANY]
