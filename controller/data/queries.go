@@ -271,93 +271,67 @@ UPDATE deployments SET finished_at = now() WHERE deployment_id = $1`
 	deploymentDeleteQuery = `
 DELETE FROM deployments WHERE deployment_id = $1`
 	deploymentSelectQuery = `
-WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
-SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
-  strategy, e1.data->>'status' AS status,
-  processes, tags, deploy_timeout, deploy_batch_size, d.created_at, d.finished_at
-FROM deployments d
-LEFT JOIN deployment_events e1
-  ON d.deployment_id = e1.object_id::uuid
-LEFT OUTER JOIN deployment_events e2
-  ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
-WHERE e2.created_at IS NULL AND d.deployment_id = $1`
+SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, deployment_status(deployment_id),
+  processes, tags, deploy_timeout, deploy_batch_size, created_at, finished_at
+FROM deployments
+WHERE deployment_id = $1`
 	deploymentSelectExpandedQuery = `
-WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
-SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
-  d.strategy, e1.data->>'status' AS status,
+SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id, d.strategy, deployment_status(d.deployment_id),
   d.processes, d.tags, d.deploy_timeout, d.deploy_batch_size, d.created_at, d.finished_at,
   ARRAY(
-		SELECT a.artifact_id
-		FROM release_artifacts a
-		WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
-		ORDER BY a.index
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
   ) AS old_artifact_ids, old_r.env, old_r.processes, old_r.meta, old_r.created_at,
   ARRAY(
-		SELECT a.artifact_id
-		FROM release_artifacts a
-		WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
-		ORDER BY a.index
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
   ) AS new_artifact_ids, new_r.env, new_r.processes, new_r.meta, new_r.created_at,
-	type
+  type
 FROM deployments d
-LEFT JOIN deployment_events e1
-  ON d.deployment_id = e1.object_id::uuid
-LEFT OUTER JOIN deployment_events e2
-  ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
 LEFT OUTER JOIN releases old_r
-	ON d.old_release_id = old_r.release_id
+  ON d.old_release_id = old_r.release_id
 LEFT OUTER JOIN releases new_r
-	ON d.new_release_id = new_r.release_id
-WHERE e2.created_at IS NULL AND d.deployment_id = $1
+  ON d.new_release_id = new_r.release_id
+WHERE d.deployment_id = $1
 LIMIT 1
 `
 	deploymentListQuery = `
-WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
-SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
-  strategy, e1.data->>'status' AS status,
-  processes, tags, deploy_timeout, deploy_batch_size, d.created_at, d.finished_at
-FROM deployments d
-LEFT JOIN deployment_events e1
-  ON d.deployment_id = e1.object_id::uuid
-LEFT OUTER JOIN deployment_events e2
-  ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
-WHERE e2.created_at IS NULL AND d.app_id = $1 ORDER BY d.created_at DESC`
+SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, deployment_status(deployment_id),
+  processes, tags, deploy_timeout, deploy_batch_size, created_at, finished_at
+FROM deployments
+WHERE app_id = $1 ORDER BY created_at DESC`
 	deploymentListPageQuery = `
-WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
-SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
-  d.strategy, e1.data->>'status' AS status,
+SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id, d.strategy, deployment_status(d.deployment_id),
   d.processes, d.tags, d.deploy_timeout, d.deploy_batch_size, d.created_at, d.finished_at,
   ARRAY(
-		SELECT a.artifact_id
-		FROM release_artifacts a
-		WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
-		ORDER BY a.index
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
   ) AS old_artifact_ids, old_r.env, old_r.processes, old_r.meta, old_r.created_at,
   ARRAY(
-		SELECT a.artifact_id
-		FROM release_artifacts a
-		WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
-		ORDER BY a.index
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
   ) AS new_artifact_ids, new_r.env, new_r.processes, new_r.meta, new_r.created_at,
-	type
+  type
 FROM deployments d
-LEFT JOIN deployment_events e1
-  ON d.deployment_id = e1.object_id::uuid
-LEFT OUTER JOIN deployment_events e2
-  ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
 LEFT OUTER JOIN releases old_r
   ON d.old_release_id = old_r.release_id
 LEFT OUTER JOIN releases new_r
   ON d.new_release_id = new_r.release_id
 LEFT OUTER JOIN (SELECT deployment_id, created_at FROM deployments WHERE deployment_id = $5 LIMIT 1) AS before_d ON true
 WHERE
-  e2.created_at IS NULL
-AND
   CASE WHEN array_length($1::text[], 1) > 0 THEN d.app_id::text = ANY($1::text[]) ELSE true END
 AND
   CASE WHEN array_length($2::text[], 1) > 0 THEN d.deployment_id::text = ANY($2::text[]) ELSE true END
 AND
-  CASE WHEN array_length($3::text[], 1) > 0 THEN e1.data->>'status' = ANY($3::text[]) ELSE true END
+  CASE WHEN array_length($3::text[], 1) > 0 THEN deployment_status(d.deployment_id) = ANY($3::text[]) ELSE true END
 AND
   CASE WHEN array_length($4::text[], 1) > 0 THEN d.type::text = ANY($4::text[]) ELSE true END
 AND
