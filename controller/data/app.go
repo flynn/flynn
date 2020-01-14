@@ -250,7 +250,11 @@ func (r *AppRepo) ListPage(opts ListAppOptions) ([]*ct.App, *PageToken, error) {
 	if opts.PageToken.Size > 0 {
 		pageSize = opts.PageToken.Size
 	}
-	rows, err := r.db.Query("app_list_page", opts.PageToken.CursorID, opts.AppIDs, opts.LabelFilters, pageSize+1)
+	cursor, err := opts.PageToken.Cursor()
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := r.db.Query("app_list_page", cursor, opts.AppIDs, opts.LabelFilters, pageSize+1)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -436,7 +436,11 @@ func (r *FormationRepo) ListScaleRequests(opts ListScaleRequestOptions) ([]*ct.S
 	for _, state := range opts.StateFilters {
 		stateFilters = append(stateFilters, string(state))
 	}
-	rows, err := r.db.Query("scale_request_list", opts.AppIDs, opts.ReleaseIDs, opts.ScaleIDs, stateFilters, opts.PageToken.CursorID, pageSize+1)
+	cursor, err := opts.PageToken.Cursor()
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := r.db.Query("scale_request_list", opts.AppIDs, opts.ReleaseIDs, opts.ScaleIDs, stateFilters, cursor, pageSize+1)
 	if err != nil {
 		return nil, nil, err
 	}
