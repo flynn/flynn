@@ -159,7 +159,11 @@ func (r *ReleaseRepo) ListPage(opts ListReleaseOptions) ([]*ct.Release, *PageTok
 	if opts.PageToken.Size > 0 {
 		pageSize = opts.PageToken.Size
 	}
-	rows, err := r.db.Query("release_list_page", opts.AppIDs, opts.ReleaseIDs, opts.PageToken.CursorID, opts.LabelFilters, pageSize+1)
+	cursor, err := opts.PageToken.Cursor()
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := r.db.Query("release_list_page", opts.AppIDs, opts.ReleaseIDs, cursor, opts.LabelFilters, pageSize+1)
 	if err != nil {
 		return nil, nil, err
 	}

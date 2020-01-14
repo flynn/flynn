@@ -24,16 +24,16 @@ type PageToken struct {
 }
 
 // ParsePageToken decodes a PageToken from a string of the format
-// '<cursorID>|<size>'
+// '<cursorID>:<size>'
 func ParsePageToken(tokenStr string) (*PageToken, error) {
 	token := &PageToken{}
 	if tokenStr == "" {
 		token.Size = DEFAULT_PAGE_SIZE
 		return token, nil
 	}
-	parts := strings.SplitN(tokenStr, "|", 2)
+	parts := strings.SplitN(tokenStr, ":", 2)
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("error parsing pageToken %q: expected two pipe separated parts, got %d", tokenStr, len(parts))
+		return nil, fmt.Errorf("error parsing pageToken %q: expected two colon separated parts, got %d", tokenStr, len(parts))
 	}
 	if parts[0] != "" {
 		token.CursorID = &parts[0]
@@ -47,6 +47,20 @@ func ParsePageToken(tokenStr string) (*PageToken, error) {
 	return token, nil
 }
 
+// Cursor converts the microseconds since the unix epoch stored in CursorID to
+// a time.Time
+func (t *PageToken) Cursor() (*time.Time, error) {
+	if t == nil || t.CursorID == nil {
+		return nil, nil
+	}
+	i, err := strconv.ParseInt(*t.CursorID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing cursorID %q: %s", *t.CursorID, err)
+	}
+	return typeconv.TimePtr(time.Unix(i/1000000, i%1000000*1000)), nil
+
+}
+
 func (t *PageToken) String() string {
 	if t == nil {
 		return ""
@@ -55,16 +69,16 @@ func (t *PageToken) String() string {
 	if t.CursorID != nil {
 		cursorID = *t.CursorID
 	}
-	return fmt.Sprintf("%s|%d", cursorID, t.Size)
+	return fmt.Sprintf("%s:%d", cursorID, t.Size)
 }
 
-const cursorIDTimeFormat = "2006-01-02T15:04:05.999999Z07:00"
-
+// toCursorID returns the given time as the number of microseconds since the
+// unix epoch
 func toCursorID(t *time.Time) *string {
 	if t == nil {
 		return nil
 	}
-	return typeconv.StringPtr(t.Format(cursorIDTimeFormat))
+	return typeconv.StringPtr(strconv.FormatInt(t.UnixNano()/1000, 10))
 }
 
 type rowQueryer interface {
