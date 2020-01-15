@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/controller/api"
 	"github.com/flynn/flynn/controller/data"
-	"github.com/flynn/flynn/controller/protobuf"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -30,8 +30,8 @@ const bufSize = 1024 * 1024
 type GRPCSuite struct {
 	db                  *postgres.DB
 	api                 *controllerAPI
-	grpc                protobuf.ControllerClient
-	grpcNoAuth          protobuf.ControllerClient
+	grpc                api.ControllerClient
+	grpcNoAuth          api.ControllerClient
 	httpSrv             *httptest.Server
 	tearDownFns         []func()
 	scaleRequestNameMap map[string]string
@@ -60,21 +60,21 @@ func (s *GRPCSuite) SetUpSuite(c *C) {
 	s.db = postgres.New(pgxpool, nil)
 
 	authKeys := []string{"test-3bebef7a2bed81017fb2bfa411a6a0a2"}
-	handler, grpcServer, api := appHandler(handlerConfig{
+	handler, grpcServer, ctrlAPI := appHandler(handlerConfig{
 		db:     s.db,
 		cc:     tu.NewFakeCluster(),
 		lc:     newFakeLogAggregatorClient(),
 		keys:   authKeys,
 		keyIDs: []string{"test-auth-key"},
 	})
-	s.api = api
+	s.api = ctrlAPI
 	s.httpSrv = httptest.NewServer(handler)
 	s.onTeardown(func() { s.httpSrv.Close() })
 	grpcListener := bufconn.Listen(bufSize)
 	s.onTeardown(func() { grpcListener.Close() })
 	go grpcServer.Serve(grpcListener)
 
-	grpcClient := func(opts ...grpc.DialOption) protobuf.ControllerClient {
+	grpcClient := func(opts ...grpc.DialOption) api.ControllerClient {
 		opts = append(opts, grpc.WithInsecure())
 		opts = append(opts, grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
 			return grpcListener.Dial()
@@ -84,11 +84,11 @@ func (s *GRPCSuite) SetUpSuite(c *C) {
 			c.Fatalf("did not connect to server: %v", err)
 		}
 		s.onTeardown(func() { conn.Close() })
-		return protobuf.NewControllerClient(conn)
+		return api.NewControllerClient(conn)
 	}
 
 	// Set up an authenticated connection to the server
-	s.grpc = grpcClient(protobuf.WithAuthKey(authKeys[0]))
+	s.grpc = grpcClient(api.WithAuthKey(authKeys[0]))
 
 	// Set up an unauthenticated connection to the server
 	s.grpcNoAuth = grpcClient()
@@ -138,47 +138,47 @@ func isErrDeadlineExceeded(err error) bool {
 	return false
 }
 
-func (s *GRPCSuite) createTestApp(c *C, app *protobuf.App) *protobuf.App {
+func (s *GRPCSuite) createTestApp(c *C, app *api.App) *api.App {
 	ctApp := app.ControllerType()
 	err := s.api.appRepo.Add(ctApp)
 	c.Assert(err, IsNil)
-	return protobuf.NewApp(ctApp)
+	return api.NewApp(ctApp)
 }
 
-func (s *GRPCSuite) updateTestApp(c *C, app *protobuf.App) *protobuf.App {
+func (s *GRPCSuite) updateTestApp(c *C, app *api.App) *api.App {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	app, err := s.grpc.UpdateApp(ctx, &protobuf.UpdateAppRequest{App: app})
+	app, err := s.grpc.UpdateApp(ctx, &api.UpdateAppRequest{App: app})
 	c.Assert(err, IsNil)
 	return app
 }
 
-func (s *GRPCSuite) setTestAppRelease(c *C, app *protobuf.App, releaseName string) *protobuf.App {
+func (s *GRPCSuite) setTestAppRelease(c *C, app *api.App, releaseName string) *api.App {
 	ctApp := app.ControllerType()
-	releaseID := protobuf.ParseIDFromName(releaseName, "releases")
+	releaseID := api.ParseIDFromName(releaseName, "releases")
 	c.Assert(s.api.appRepo.SetRelease(ctApp, releaseID), IsNil)
-	return protobuf.NewApp(ctApp)
+	return api.NewApp(ctApp)
 }
 
-func (s *GRPCSuite) createTestRelease(c *C, parentName string, release *protobuf.Release) *protobuf.Release {
+func (s *GRPCSuite) createTestRelease(c *C, parentName string, release *api.Release) *api.Release {
 	ctRelease := release.ControllerType()
-	ctRelease.AppID = protobuf.ParseIDFromName(parentName, "apps")
+	ctRelease.AppID = api.ParseIDFromName(parentName, "apps")
 	err := s.api.releaseRepo.Add(ctRelease)
 	c.Assert(err, IsNil)
-	return protobuf.NewRelease(ctRelease)
+	return api.NewRelease(ctRelease)
 }
 
-func (s *GRPCSuite) createTestDeployment(c *C, releaseName string) *protobuf.ExpandedDeployment {
-	appID := protobuf.ParseIDFromName(releaseName, "apps")
-	releaseID := protobuf.ParseIDFromName(releaseName, "releases")
+func (s *GRPCSuite) createTestDeployment(c *C, releaseName string) *api.ExpandedDeployment {
+	appID := api.ParseIDFromName(releaseName, "apps")
+	releaseID := api.ParseIDFromName(releaseName, "releases")
 	ctDeployment, err := s.api.deploymentRepo.AddExpanded(appID, releaseID)
 	c.Assert(err, IsNil)
-	return protobuf.NewExpandedDeployment(ctDeployment)
+	return api.NewExpandedDeployment(ctDeployment)
 }
 
-func (s *GRPCSuite) createTestDeploymentEvent(c *C, d *protobuf.ExpandedDeployment, e *ct.DeploymentEvent) {
-	e.AppID = protobuf.ParseIDFromName(d.Name, "apps")
-	e.DeploymentID = protobuf.ParseIDFromName(d.Name, "deployments")
-	e.ReleaseID = protobuf.ParseIDFromName(d.NewRelease.Name, "releases")
+func (s *GRPCSuite) createTestDeploymentEvent(c *C, d *api.ExpandedDeployment, e *ct.DeploymentEvent) {
+	e.AppID = api.ParseIDFromName(d.Name, "apps")
+	e.DeploymentID = api.ParseIDFromName(d.Name, "deployments")
+	e.ReleaseID = api.ParseIDFromName(d.NewRelease.Name, "releases")
 
 	c.Assert(data.CreateEvent(s.db.Exec, &ct.Event{
 		AppID:      e.AppID,
@@ -202,16 +202,16 @@ func (s *GRPCSuite) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	return in
 }
 
-func (s *GRPCSuite) createTestScaleRequest(c *C, req *protobuf.CreateScaleRequest) *protobuf.ScaleRequest {
+func (s *GRPCSuite) createTestScaleRequest(c *C, req *api.CreateScaleRequest) *api.ScaleRequest {
 	ctReq := req.ControllerType()
 	ctReq, err := s.api.formationRepo.AddScaleRequest(ctReq, false)
 	c.Assert(err, IsNil)
-	scale := protobuf.NewScaleRequest(ctReq)
+	scale := api.NewScaleRequest(ctReq)
 	s.scaleRequestNameMap[scale.Name] = fmt.Sprintf("testScale%d", len(s.scaleRequestNameMap)+1)
 	return scale
 }
 
-func (s *GRPCSuite) updateTestScaleRequest(c *C, req *protobuf.ScaleRequest) {
+func (s *GRPCSuite) updateTestScaleRequest(c *C, req *api.ScaleRequest) {
 	ctReq := req.ControllerType()
 	c.Assert(s.api.formationRepo.UpdateScaleRequest(ctReq), IsNil)
 }
@@ -237,7 +237,7 @@ func (s *GRPCSuite) TestOptionsRequest(c *C) { // grpc-web
 
 func (s *GRPCSuite) TestUnauthenticated(c *C) {
 	ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	stream, err := s.grpcNoAuth.StreamApps(ctx, &protobuf.StreamAppsRequest{})
+	stream, err := s.grpcNoAuth.StreamApps(ctx, &api.StreamAppsRequest{})
 	c.Assert(err, IsNil)
 	_, err = stream.Recv()
 	c.Assert(err, Not(IsNil))
@@ -245,7 +245,7 @@ func (s *GRPCSuite) TestUnauthenticated(c *C) {
 	c.Assert(errStatus.Code(), Equals, codes.Unauthenticated)
 }
 
-func unaryReceiveApps(s *GRPCSuite, c *C, req *protobuf.StreamAppsRequest) (res *protobuf.StreamAppsResponse, receivedEOF bool) {
+func unaryReceiveApps(s *GRPCSuite, c *C, req *api.StreamAppsRequest) (res *api.StreamAppsResponse, receivedEOF bool) {
 	ctx, ctxCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer func() {
 		if !receivedEOF {
@@ -270,18 +270,18 @@ func unaryReceiveApps(s *GRPCSuite, c *C, req *protobuf.StreamAppsRequest) (res 
 }
 
 func (s *GRPCSuite) TestStreamApps(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
-	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2", Labels: map[string]string{"test.labels-filter": "include"}})
-	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3", Labels: map[string]string{"test.labels-filter": "exclude"}})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testApp2 := s.createTestApp(c, &api.App{DisplayName: "test2", Labels: map[string]string{"test.labels-filter": "include"}})
+	testApp3 := s.createTestApp(c, &api.App{DisplayName: "test3", Labels: map[string]string{"test.labels-filter": "exclude"}})
 
-	streamAppsWithCancel := func(req *protobuf.StreamAppsRequest) (protobuf.Controller_StreamAppsClient, context.CancelFunc) {
+	streamAppsWithCancel := func(req *api.StreamAppsRequest) (api.Controller_StreamAppsClient, context.CancelFunc) {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		stream, err := s.grpc.StreamApps(ctx, req)
 		c.Assert(err, IsNil)
 		return stream, cancel
 	}
 
-	receiveAppsStream := func(stream protobuf.Controller_StreamAppsClient) *protobuf.StreamAppsResponse {
+	receiveAppsStream := func(stream api.Controller_StreamAppsClient) *api.StreamAppsResponse {
 		res, err := stream.Recv()
 		if err == io.EOF || isErrCanceled(err) || isErrDeadlineExceeded(err) {
 			return nil
@@ -291,21 +291,21 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	}
 
 	// test fetching a single app
-	res, receivedEOF := unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{PageSize: 1})
+	res, receivedEOF := unaryReceiveApps(s, c, &api.StreamAppsRequest{PageSize: 1})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 1)
 	c.Assert(res.Apps[0], DeepEquals, testApp3)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a sinple app by name
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{NameFilters: []string{testApp2.Name}})
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{NameFilters: []string{testApp2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 1)
 	c.Assert(res.Apps[0], DeepEquals, testApp2)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple apps by name
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{NameFilters: []string{testApp1.Name, testApp2.Name}})
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{NameFilters: []string{testApp1.Name, testApp2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 2)
 	c.Assert(res.Apps[0], DeepEquals, testApp2)
@@ -313,12 +313,12 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_NOT_IN]
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key:    "test.labels-filter",
-					Op:     protobuf.LabelFilter_Expression_OP_NOT_IN,
+					Op:     api.LabelFilter_Expression_OP_NOT_IN,
 					Values: []string{"exclude"},
 				},
 			},
@@ -332,12 +332,12 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_IN]
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key:    "test.labels-filter",
-					Op:     protobuf.LabelFilter_Expression_OP_IN,
+					Op:     api.LabelFilter_Expression_OP_IN,
 					Values: []string{"include"},
 				},
 			},
@@ -351,12 +351,12 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_EXISTS]
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.labels-filter",
-					Op:  protobuf.LabelFilter_Expression_OP_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_EXISTS,
 				},
 			},
 		},
@@ -369,12 +369,12 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_NOT_EXISTS]
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.labels-filter",
-					Op:  protobuf.LabelFilter_Expression_OP_NOT_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_NOT_EXISTS,
 				},
 			},
 		},
@@ -386,12 +386,12 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels with pagination [OP_NOT_EXISTS]
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{PageSize: 1, LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{PageSize: 1, LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.labels-filter",
-					Op:  protobuf.LabelFilter_Expression_OP_NOT_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_NOT_EXISTS,
 				},
 			},
 		},
@@ -403,11 +403,11 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test streaming updates
-	stream, cancel := streamAppsWithCancel(&protobuf.StreamAppsRequest{NameFilters: []string{testApp1.Name}, StreamUpdates: true})
+	stream, cancel := streamAppsWithCancel(&api.StreamAppsRequest{NameFilters: []string{testApp1.Name}, StreamUpdates: true})
 	res = receiveAppsStream(stream)
 	c.Assert(res, Not(IsNil))
 	c.Assert(res.Apps[0], DeepEquals, testApp1)
-	testApp4 := s.createTestApp(c, &protobuf.App{DisplayName: "test4"}) // through in a create to test that the we get the update and not the create
+	testApp4 := s.createTestApp(c, &api.App{DisplayName: "test4"}) // through in a create to test that the we get the update and not the create
 	testApp1.Labels = map[string]string{"test.one": "1"}
 	updatedTestApp1 := s.updateTestApp(c, testApp1)
 	c.Assert(updatedTestApp1.Labels, DeepEquals, testApp1.Labels)
@@ -418,12 +418,12 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	cancel()
 
 	// test streaming updates that don't match the LabelFilters [OP_EXISTS]
-	stream, cancel = streamAppsWithCancel(&protobuf.StreamAppsRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	stream, cancel = streamAppsWithCancel(&api.StreamAppsRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.labels-filter-update",
-					Op:  protobuf.LabelFilter_Expression_OP_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_EXISTS,
 				},
 			},
 		},
@@ -437,9 +437,9 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	cancel()
 
 	// test streaming updates without filters
-	stream, cancel = streamAppsWithCancel(&protobuf.StreamAppsRequest{StreamUpdates: true})
-	receiveAppsStream(stream)                                           // initial page
-	testApp5 := s.createTestApp(c, &protobuf.App{DisplayName: "test5"}) // through in a create to test that the we get the update and not the create
+	stream, cancel = streamAppsWithCancel(&api.StreamAppsRequest{StreamUpdates: true})
+	receiveAppsStream(stream)                                      // initial page
+	testApp5 := s.createTestApp(c, &api.App{DisplayName: "test5"}) // through in a create to test that the we get the update and not the create
 	testApp1.Labels = map[string]string{"test.two": "2"}
 	updatedTestApp1 = s.updateTestApp(c, testApp1)
 	c.Assert(updatedTestApp1.Labels, DeepEquals, testApp1.Labels)
@@ -450,9 +450,9 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	cancel()
 
 	// test streaming updates (new release)
-	stream, cancel = streamAppsWithCancel(&protobuf.StreamAppsRequest{StreamUpdates: true})
+	stream, cancel = streamAppsWithCancel(&api.StreamAppsRequest{StreamUpdates: true})
 	receiveAppsStream(stream) // initial page
-	testRelease1 := s.createTestRelease(c, testApp5.Name, &protobuf.Release{})
+	testRelease1 := s.createTestRelease(c, testApp5.Name, &api.Release{})
 	testApp5 = s.setTestAppRelease(c, testApp5, testRelease1.Name)
 	fmt.Println(map[string]string{"app": testApp5.Name, "release": testRelease1.Name})
 	res = receiveAppsStream(stream)
@@ -463,11 +463,11 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	cancel()
 
 	// test streaming creates
-	stream, cancel = streamAppsWithCancel(&protobuf.StreamAppsRequest{StreamCreates: true})
+	stream, cancel = streamAppsWithCancel(&api.StreamAppsRequest{StreamCreates: true})
 	receiveAppsStream(stream) // initial page
 	testApp1.Labels = map[string]string{"test.three": "3"}
 	updatedTestApp1 = s.updateTestApp(c, testApp1) // through in a update to test that we get the create and not the update
-	testApp6 := s.createTestApp(c, &protobuf.App{DisplayName: "test6"})
+	testApp6 := s.createTestApp(c, &api.App{DisplayName: "test6"})
 	res = receiveAppsStream(stream)
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 1)
@@ -475,22 +475,22 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	cancel()
 
 	// test streaming creates that don't match the NameFilters
-	stream, cancel = streamAppsWithCancel(&protobuf.StreamAppsRequest{NameFilters: []string{testApp1.Name}, StreamCreates: true})
+	stream, cancel = streamAppsWithCancel(&api.StreamAppsRequest{NameFilters: []string{testApp1.Name}, StreamCreates: true})
 	receiveAppsStream(stream) // initial page
 	testApp1.Labels = map[string]string{"test.four": "4"}
 	updatedTestApp1 = s.updateTestApp(c, testApp1) // through in a update to test that we get the create and not the update
-	testApp7 := s.createTestApp(c, &protobuf.App{DisplayName: "test7"})
+	testApp7 := s.createTestApp(c, &api.App{DisplayName: "test7"})
 	res = receiveAppsStream(stream)
 	c.Assert(res, IsNil)
 	cancel()
 
 	// test streaming creates that don't match the LabelFilters [OP_EXISTS]
-	stream, cancel = streamAppsWithCancel(&protobuf.StreamAppsRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	stream, cancel = streamAppsWithCancel(&api.StreamAppsRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.labels-filter-create",
-					Op:  protobuf.LabelFilter_Expression_OP_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_EXISTS,
 				},
 			},
 		},
@@ -498,22 +498,22 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	receiveAppsStream(stream) // initial page
 	testApp1.Labels = map[string]string{"test.four": "5"}
 	updatedTestApp1 = s.updateTestApp(c, testApp1) // through in a update to test that we get the create and not the update
-	testApp8 := s.createTestApp(c, &protobuf.App{DisplayName: "test8"})
+	testApp8 := s.createTestApp(c, &api.App{DisplayName: "test8"})
 	res = receiveAppsStream(stream)
 	c.Assert(res, IsNil)
 	cancel()
 
 	// test unary pagination
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{PageSize: 1})
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{PageSize: 1})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 1)
 	c.Assert(res.Apps[0].DisplayName, DeepEquals, testApp8.DisplayName)
 	c.Assert(receivedEOF, Equals, true)
 	c.Assert(res.NextPageToken, Not(Equals), "")
 	c.Assert(res.PageComplete, Equals, true)
-	for i, testApp := range []*protobuf.App{testApp7, testApp6, testApp5, testApp4, testApp3} {
+	for i, testApp := range []*api.App{testApp7, testApp6, testApp5, testApp4, testApp3} {
 		comment := Commentf("iteraction %d", i)
-		res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{PageSize: 1, PageToken: res.NextPageToken})
+		res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{PageSize: 1, PageToken: res.NextPageToken})
 		c.Assert(res, Not(IsNil), comment)
 		c.Assert(len(res.Apps), Equals, 1, comment)
 		c.Assert(res.Apps[0].DisplayName, DeepEquals, testApp.DisplayName, comment)
@@ -521,7 +521,7 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 		c.Assert(res.NextPageToken, Not(Equals), "", comment)
 		c.Assert(res.PageComplete, Equals, true, comment)
 	}
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{PageSize: 2, PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{PageSize: 2, PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 2)
 	c.Assert(res.Apps[0], DeepEquals, testApp2)
@@ -532,17 +532,17 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 }
 
 func (s *GRPCSuite) TestStreamAppsUnaryPagination(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
-	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2"})
-	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3"})
-	testApp4 := s.createTestApp(c, &protobuf.App{DisplayName: "test4"})
-	testApp5 := s.createTestApp(c, &protobuf.App{DisplayName: "test5"})
-	testApp6 := s.createTestApp(c, &protobuf.App{DisplayName: "test6"})
-	testApp7 := s.createTestApp(c, &protobuf.App{DisplayName: "test7"})
-	testApp8 := s.createTestApp(c, &protobuf.App{DisplayName: "test8"})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testApp2 := s.createTestApp(c, &api.App{DisplayName: "test2"})
+	testApp3 := s.createTestApp(c, &api.App{DisplayName: "test3"})
+	testApp4 := s.createTestApp(c, &api.App{DisplayName: "test4"})
+	testApp5 := s.createTestApp(c, &api.App{DisplayName: "test5"})
+	testApp6 := s.createTestApp(c, &api.App{DisplayName: "test6"})
+	testApp7 := s.createTestApp(c, &api.App{DisplayName: "test7"})
+	testApp8 := s.createTestApp(c, &api.App{DisplayName: "test8"})
 
 	// page 1
-	res, receivedEOF := unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{PageSize: 3})
+	res, receivedEOF := unaryReceiveApps(s, c, &api.StreamAppsRequest{PageSize: 3})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 3)
 	c.Assert(receivedEOF, Equals, true)
@@ -553,7 +553,7 @@ func (s *GRPCSuite) TestStreamAppsUnaryPagination(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 
 	// page 2
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 3)
 	c.Assert(receivedEOF, Equals, true)
@@ -564,7 +564,7 @@ func (s *GRPCSuite) TestStreamAppsUnaryPagination(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 
 	// page 3 (last)
-	res, receivedEOF = unaryReceiveApps(s, c, &protobuf.StreamAppsRequest{PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveApps(s, c, &api.StreamAppsRequest{PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 2)
 	c.Assert(receivedEOF, Equals, true)
@@ -578,7 +578,7 @@ func (s *GRPCSuite) TestStreamAppsPaginationWithUpdates(c *C) {
 	// TODO(jvatic): test paginating with StreamUpdates set
 }
 
-func unaryReceiveReleases(s *GRPCSuite, c *C, req *protobuf.StreamReleasesRequest) (res *protobuf.StreamReleasesResponse, receivedEOF bool) {
+func unaryReceiveReleases(s *GRPCSuite, c *C, req *api.StreamReleasesRequest) (res *api.StreamReleasesResponse, receivedEOF bool) {
 	ctx, ctxCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer func() {
 		if !receivedEOF {
@@ -603,23 +603,23 @@ func unaryReceiveReleases(s *GRPCSuite, c *C, req *protobuf.StreamReleasesReques
 }
 
 func (s *GRPCSuite) TestStreamReleases(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
-	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2"})
-	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3"})
-	testApp4 := s.createTestApp(c, &protobuf.App{DisplayName: "test4"})
-	testRelease1 := s.createTestRelease(c, testApp2.Name, &protobuf.Release{Env: map[string]string{"ONE": "1"}, Labels: map[string]string{"test.int": "1"}})
-	testRelease2 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"TWO": "2"}, Labels: map[string]string{"test.int": "2"}})
-	testRelease3 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"THREE": "3"}, Labels: map[string]string{"test.string": "foo"}})
-	testRelease4 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Env: map[string]string{"FOUR": "4"}, Labels: map[string]string{"test.string": "bar", "test.int": "4"}})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testApp2 := s.createTestApp(c, &api.App{DisplayName: "test2"})
+	testApp3 := s.createTestApp(c, &api.App{DisplayName: "test3"})
+	testApp4 := s.createTestApp(c, &api.App{DisplayName: "test4"})
+	testRelease1 := s.createTestRelease(c, testApp2.Name, &api.Release{Env: map[string]string{"ONE": "1"}, Labels: map[string]string{"test.int": "1"}})
+	testRelease2 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"TWO": "2"}, Labels: map[string]string{"test.int": "2"}})
+	testRelease3 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"THREE": "3"}, Labels: map[string]string{"test.string": "foo"}})
+	testRelease4 := s.createTestRelease(c, testApp3.Name, &api.Release{Env: map[string]string{"FOUR": "4"}, Labels: map[string]string{"test.string": "bar", "test.int": "4"}})
 
-	streamReleasesWithCancel := func(req *protobuf.StreamReleasesRequest) (protobuf.Controller_StreamReleasesClient, context.CancelFunc) {
+	streamReleasesWithCancel := func(req *api.StreamReleasesRequest) (api.Controller_StreamReleasesClient, context.CancelFunc) {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		stream, err := s.grpc.StreamReleases(ctx, req)
 		c.Assert(err, IsNil)
 		return stream, cancel
 	}
 
-	receiveReleasesStream := func(stream protobuf.Controller_StreamReleasesClient) *protobuf.StreamReleasesResponse {
+	receiveReleasesStream := func(stream api.Controller_StreamReleasesClient) *api.StreamReleasesResponse {
 		res, err := stream.Recv()
 		if err == io.EOF || isErrCanceled(err) || isErrDeadlineExceeded(err) {
 			return nil
@@ -629,7 +629,7 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	}
 
 	// test fetching the latest release
-	res, receivedEOF := unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{PageSize: 1})
+	res, receivedEOF := unaryReceiveReleases(s, c, &api.StreamReleasesRequest{PageSize: 1})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 1)
 	c.Assert(strings.HasPrefix(res.Releases[0].Name, testApp3.Name), Equals, true)
@@ -637,7 +637,7 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a single release by name
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{NameFilters: []string{testRelease2.Name}})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{NameFilters: []string{testRelease2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 1)
 	c.Assert(strings.HasPrefix(res.Releases[0].Name, testApp1.Name), Equals, true)
@@ -645,7 +645,7 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a single release by name with page size set to 1
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{PageSize: 1, NameFilters: []string{testRelease2.Name}})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{PageSize: 1, NameFilters: []string{testRelease2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 1)
 	c.Assert(strings.HasPrefix(res.Releases[0].Name, testApp1.Name), Equals, true)
@@ -653,7 +653,7 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a single release by app name
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{NameFilters: []string{testApp2.Name}})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{NameFilters: []string{testApp2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 1)
 	c.Assert(strings.HasPrefix(res.Releases[0].Name, testApp2.Name), Equals, true)
@@ -661,7 +661,7 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple releases by name
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{NameFilters: []string{testRelease1.Name, testRelease2.Name}})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{NameFilters: []string{testRelease1.Name, testRelease2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 2)
 	c.Assert(strings.HasPrefix(res.Releases[0].Name, testApp1.Name), Equals, true)
@@ -671,7 +671,7 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple releases by app name
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{NameFilters: []string{testApp1.Name}})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{NameFilters: []string{testApp1.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 2)
 	c.Assert(strings.HasPrefix(res.Releases[0].Name, testApp1.Name), Equals, true)
@@ -681,7 +681,7 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple releases by a mixture of app name and release name
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{NameFilters: []string{testApp1.Name, testRelease2.Name}})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{NameFilters: []string{testApp1.Name, testRelease2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 1)
 	c.Assert(strings.HasPrefix(res.Releases[0].Name, testApp1.Name), Equals, true)
@@ -689,12 +689,12 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_IN]
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key:    "test.int",
-					Op:     protobuf.LabelFilter_Expression_OP_IN,
+					Op:     api.LabelFilter_Expression_OP_IN,
 					Values: []string{"1", "2"},
 				},
 			},
@@ -709,17 +709,17 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_NOT_IN]
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key:    "test.int",
-					Op:     protobuf.LabelFilter_Expression_OP_NOT_IN,
+					Op:     api.LabelFilter_Expression_OP_NOT_IN,
 					Values: []string{"2", "4"},
 				}, // AND
-				&protobuf.LabelFilter_Expression{
+				{
 					Key:    "test.string",
-					Op:     protobuf.LabelFilter_Expression_OP_NOT_IN,
+					Op:     api.LabelFilter_Expression_OP_NOT_IN,
 					Values: []string{"foo", "bar"},
 				},
 			},
@@ -732,16 +732,16 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_EXISTS]
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.int",
-					Op:  protobuf.LabelFilter_Expression_OP_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_EXISTS,
 				}, // AND
-				&protobuf.LabelFilter_Expression{
+				{
 					Key: "test.string",
-					Op:  protobuf.LabelFilter_Expression_OP_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_EXISTS,
 				},
 			},
 		},
@@ -753,20 +753,20 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test filtering by labels [OP_NOT_EXISTS]
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.int",
-					Op:  protobuf.LabelFilter_Expression_OP_NOT_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_NOT_EXISTS,
 				},
 			},
 		}, // OR
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.string",
-					Op:  protobuf.LabelFilter_Expression_OP_NOT_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_NOT_EXISTS,
 				},
 			},
 		},
@@ -782,10 +782,10 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test streaming creates for specific app
-	stream, cancel := streamReleasesWithCancel(&protobuf.StreamReleasesRequest{NameFilters: []string{testApp4.Name}, StreamCreates: true})
+	stream, cancel := streamReleasesWithCancel(&api.StreamReleasesRequest{NameFilters: []string{testApp4.Name}, StreamCreates: true})
 	receiveReleasesStream(stream) // initial page
-	testRelease5 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Env: map[string]string{"Five": "5"}, Labels: map[string]string{"test.string": "baz"}})
-	testRelease6 := s.createTestRelease(c, testApp4.Name, &protobuf.Release{Env: map[string]string{"Six": "6"}, Labels: map[string]string{"test.string": "biz"}})
+	testRelease5 := s.createTestRelease(c, testApp3.Name, &api.Release{Env: map[string]string{"Five": "5"}, Labels: map[string]string{"test.string": "baz"}})
+	testRelease6 := s.createTestRelease(c, testApp4.Name, &api.Release{Env: map[string]string{"Six": "6"}, Labels: map[string]string{"test.string": "biz"}})
 	res = receiveReleasesStream(stream)
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 1)
@@ -793,49 +793,49 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 	cancel()
 
 	// test creates are not streamed when flag not set
-	stream, cancel = streamReleasesWithCancel(&protobuf.StreamReleasesRequest{NameFilters: []string{testApp4.Name}})
+	stream, cancel = streamReleasesWithCancel(&api.StreamReleasesRequest{NameFilters: []string{testApp4.Name}})
 	receiveReleasesStream(stream) // initial page
-	testRelease7 := s.createTestRelease(c, testApp4.Name, &protobuf.Release{Env: map[string]string{"Seven": "7"}, Labels: map[string]string{"test.string": "flu"}})
+	testRelease7 := s.createTestRelease(c, testApp4.Name, &api.Release{Env: map[string]string{"Seven": "7"}, Labels: map[string]string{"test.string": "flu"}})
 	res = receiveReleasesStream(stream)
 	c.Assert(res, IsNil)
 	cancel()
 
 	// test streaming creates that don't match the LabelFilters [OP_EXISTS]
-	stream, cancel = streamReleasesWithCancel(&protobuf.StreamReleasesRequest{LabelFilters: []*protobuf.LabelFilter{
-		&protobuf.LabelFilter{
-			Expressions: []*protobuf.LabelFilter_Expression{
-				&protobuf.LabelFilter_Expression{
+	stream, cancel = streamReleasesWithCancel(&api.StreamReleasesRequest{LabelFilters: []*api.LabelFilter{
+		{
+			Expressions: []*api.LabelFilter_Expression{
+				{
 					Key: "test.int",
-					Op:  protobuf.LabelFilter_Expression_OP_EXISTS,
+					Op:  api.LabelFilter_Expression_OP_EXISTS,
 				},
 			},
 		},
 	}, StreamCreates: true})
 	receiveReleasesStream(stream) // initial page
-	testRelease8 := s.createTestRelease(c, testApp4.Name, &protobuf.Release{Labels: map[string]string{"test.string": "hue"}})
+	testRelease8 := s.createTestRelease(c, testApp4.Name, &api.Release{Labels: map[string]string{"test.string": "hue"}})
 	res = receiveReleasesStream(stream)
 	c.Assert(res, IsNil)
 	cancel()
 
 	// test streaming creates that don't match the NameFilters
-	stream, cancel = streamReleasesWithCancel(&protobuf.StreamReleasesRequest{NameFilters: []string{testApp4.Name}, StreamCreates: true})
+	stream, cancel = streamReleasesWithCancel(&api.StreamReleasesRequest{NameFilters: []string{testApp4.Name}, StreamCreates: true})
 	receiveReleasesStream(stream) // initial page
-	testRelease9 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Labels: map[string]string{"test.string": "bue"}})
+	testRelease9 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"test.string": "bue"}})
 	res = receiveReleasesStream(stream)
 	c.Assert(res, IsNil)
 	cancel()
 
 	// test unary pagination
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{PageSize: 1})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{PageSize: 1})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 1)
 	c.Assert(res.Releases[0], DeepEquals, testRelease9)
 	c.Assert(receivedEOF, Equals, true)
 	c.Assert(res.NextPageToken, Not(Equals), "")
 	c.Assert(res.PageComplete, Equals, true)
-	for i, testRelease := range []*protobuf.Release{testRelease8, testRelease7, testRelease6, testRelease5, testRelease4, testRelease3} {
+	for i, testRelease := range []*api.Release{testRelease8, testRelease7, testRelease6, testRelease5, testRelease4, testRelease3} {
 		comment := Commentf("iteraction %d", i)
-		res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{PageSize: 1, PageToken: res.NextPageToken})
+		res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{PageSize: 1, PageToken: res.NextPageToken})
 		c.Assert(res, Not(IsNil), comment)
 		c.Assert(len(res.Releases), Equals, 1, comment)
 		c.Assert(res.Releases[0], DeepEquals, testRelease, comment)
@@ -843,7 +843,7 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 		c.Assert(res.NextPageToken, Not(Equals), "", comment)
 		c.Assert(res.PageComplete, Equals, true, comment)
 	}
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{PageSize: 2, PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{PageSize: 2, PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 2)
 	c.Assert(res.Releases[0], DeepEquals, testRelease2)
@@ -854,18 +854,18 @@ func (s *GRPCSuite) TestStreamReleases(c *C) {
 }
 
 func (s *GRPCSuite) TestStreamReleasesUnaryPagination(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
-	testRelease1 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"NO": "1"}})
-	testRelease2 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"NO": "2"}})
-	testRelease3 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"NO": "3"}})
-	testRelease4 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"NO": "4"}})
-	testRelease5 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"NO": "5"}})
-	testRelease6 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"NO": "6"}})
-	testRelease7 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"NO": "7"}})
-	testRelease8 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Env: map[string]string{"NO": "8"}})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"NO": "1"}})
+	testRelease2 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"NO": "2"}})
+	testRelease3 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"NO": "3"}})
+	testRelease4 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"NO": "4"}})
+	testRelease5 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"NO": "5"}})
+	testRelease6 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"NO": "6"}})
+	testRelease7 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"NO": "7"}})
+	testRelease8 := s.createTestRelease(c, testApp1.Name, &api.Release{Env: map[string]string{"NO": "8"}})
 
 	// page 1
-	res, receivedEOF := unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{PageSize: 3})
+	res, receivedEOF := unaryReceiveReleases(s, c, &api.StreamReleasesRequest{PageSize: 3})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 3)
 	c.Assert(receivedEOF, Equals, true)
@@ -876,7 +876,7 @@ func (s *GRPCSuite) TestStreamReleasesUnaryPagination(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 
 	// page 2
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 3)
 	c.Assert(receivedEOF, Equals, true)
@@ -887,7 +887,7 @@ func (s *GRPCSuite) TestStreamReleasesUnaryPagination(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 
 	// page 3 (last)
-	res, receivedEOF = unaryReceiveReleases(s, c, &protobuf.StreamReleasesRequest{PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveReleases(s, c, &api.StreamReleasesRequest{PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Releases), Equals, 2)
 	c.Assert(receivedEOF, Equals, true)
@@ -901,14 +901,14 @@ func (s *GRPCSuite) TestStreamReleasesPaginationWithStreamUpdates(c *C) {
 	// TODO(jvatic): Test pagination with StreamUpdates set
 }
 
-func (s *GRPCSuite) streamScalesWithCancel(c *C, req *protobuf.StreamScalesRequest) (protobuf.Controller_StreamScalesClient, context.CancelFunc) {
+func (s *GRPCSuite) streamScalesWithCancel(c *C, req *api.StreamScalesRequest) (api.Controller_StreamScalesClient, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	stream, err := s.grpc.StreamScales(ctx, req)
 	c.Assert(err, IsNil)
 	return stream, cancel
 }
 
-func (s *GRPCSuite) receiveScalesStream(c *C, stream protobuf.Controller_StreamScalesClient) *protobuf.StreamScalesResponse {
+func (s *GRPCSuite) receiveScalesStream(c *C, stream api.Controller_StreamScalesClient) *api.StreamScalesResponse {
 	res, err := stream.Recv()
 	if err == io.EOF || isErrCanceled(err) || isErrDeadlineExceeded(err) {
 		return nil
@@ -917,7 +917,7 @@ func (s *GRPCSuite) receiveScalesStream(c *C, stream protobuf.Controller_StreamS
 	return res
 }
 
-func unaryReceiveScales(s *GRPCSuite, c *C, req *protobuf.StreamScalesRequest) (res *protobuf.StreamScalesResponse, receivedEOF bool) {
+func unaryReceiveScales(s *GRPCSuite, c *C, req *api.StreamScalesRequest) (res *api.StreamScalesResponse, receivedEOF bool) {
 	ctx, ctxCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer func() {
 		if !receivedEOF {
@@ -942,24 +942,24 @@ func unaryReceiveScales(s *GRPCSuite, c *C, req *protobuf.StreamScalesRequest) (
 }
 
 func (s *GRPCSuite) TestStreamScales(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
-	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2"})
-	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3"})
-	testRelease1 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "1"}, Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testRelease2 := s.createTestRelease(c, testApp2.Name, &protobuf.Release{Labels: map[string]string{"i": "2"}, Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testRelease3 := s.createTestRelease(c, testApp2.Name, &protobuf.Release{Labels: map[string]string{"i": "3"}, Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testRelease4 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "4"}, Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testRelease5 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Labels: map[string]string{"i": "5"}, Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testRelease6 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Labels: map[string]string{"i": "6"}, Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testScale1 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale2 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease2.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale3 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease3.Name, Processes: map[string]int32{"devnull": 2}})
-	testScale4 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease4.Name, Processes: map[string]int32{"devnull": 2}})
-	testScale5 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale6 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 2}})
-	testScale7 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 3}})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testApp2 := s.createTestApp(c, &api.App{DisplayName: "test2"})
+	testApp3 := s.createTestApp(c, &api.App{DisplayName: "test3"})
+	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "1"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
+	testRelease2 := s.createTestRelease(c, testApp2.Name, &api.Release{Labels: map[string]string{"i": "2"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
+	testRelease3 := s.createTestRelease(c, testApp2.Name, &api.Release{Labels: map[string]string{"i": "3"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
+	testRelease4 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "4"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
+	testRelease5 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"i": "5"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
+	testRelease6 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"i": "6"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
+	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
+	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease2.Name, Processes: map[string]int32{"devnull": 1}})
+	testScale3 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease3.Name, Processes: map[string]int32{"devnull": 2}})
+	testScale4 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease4.Name, Processes: map[string]int32{"devnull": 2}})
+	testScale5 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 1}})
+	testScale6 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 2}})
+	testScale7 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 3}})
 
-	testScales := []*protobuf.ScaleRequest{
+	testScales := []*api.ScaleRequest{
 		testScale1,
 		testScale2,
 		testScale3,
@@ -970,51 +970,51 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 		testScale7,
 	}
 	for _, scale := range testScales {
-		scale.State = protobuf.ScaleRequestState_SCALE_PENDING
+		scale.State = api.ScaleRequestState_SCALE_PENDING
 		s.updateTestScaleRequest(c, scale)
 	}
-	testScale2.State = protobuf.ScaleRequestState_SCALE_COMPLETE
+	testScale2.State = api.ScaleRequestState_SCALE_COMPLETE
 	s.updateTestScaleRequest(c, testScale2)
-	testScale4.State = protobuf.ScaleRequestState_SCALE_COMPLETE
+	testScale4.State = api.ScaleRequestState_SCALE_COMPLETE
 	s.updateTestScaleRequest(c, testScale4)
 
-	testScaleDisplayName := func(scale *protobuf.ScaleRequest) string {
+	testScaleDisplayName := func(scale *api.ScaleRequest) string {
 		return s.scaleRequestNameMap[scale.Name]
 	}
-	assertScaleRequestsEqual := func(c *C, a, b *protobuf.ScaleRequest) {
+	assertScaleRequestsEqual := func(c *C, a, b *api.ScaleRequest) {
 		c.Assert(a.Name, Equals, b.Name, Commentf("expected %s, got %s", testScaleDisplayName(b), testScaleDisplayName(a)))
 	}
 
 	// test fetching the latest scale
-	res, receivedEOF := unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageSize: 1})
+	res, receivedEOF := unaryReceiveScales(s, c, &api.StreamScalesRequest{PageSize: 1})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
 	c.Assert(res.ScaleRequests[0].Name, Equals, testScale7.Name)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a single scale by name
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{NameFilters: []string{testScale5.Name}})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{NameFilters: []string{testScale5.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
 	c.Assert(res.ScaleRequests[0].Name, Equals, testScale5.Name)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a single scale by release name
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageSize: 1, NameFilters: []string{testRelease3.Name}})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{PageSize: 1, NameFilters: []string{testRelease3.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
 	c.Assert(res.ScaleRequests[0].Name, Equals, testScale3.Name)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a single scale by app name
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageSize: 1, NameFilters: []string{testApp2.Name}})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{PageSize: 1, NameFilters: []string{testApp2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
 	c.Assert(res.ScaleRequests[0].Name, Equals, testScale3.Name)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple scales by release name
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{NameFilters: []string{testRelease6.Name}})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{NameFilters: []string{testRelease6.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 2)
 	c.Assert(res.ScaleRequests[0].Name, Equals, testScale7.Name)
@@ -1022,7 +1022,7 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple scales by app name
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{NameFilters: []string{testApp1.Name}})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{NameFilters: []string{testApp1.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 2)
 	c.Assert(res.ScaleRequests[0].Name, Equals, testScale4.Name)
@@ -1030,14 +1030,14 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple scales by a mixture of app name and release name
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease4.Name}})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease4.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
 	c.Assert(res.ScaleRequests[0].Name, Equals, testScale4.Name)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple scales by state
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{StateFilters: []protobuf.ScaleRequestState{protobuf.ScaleRequestState_SCALE_COMPLETE}})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{StateFilters: []api.ScaleRequestState{api.ScaleRequestState_SCALE_COMPLETE}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 2)
 	c.Assert(res.ScaleRequests[0].Name, Equals, testScale4.Name)
@@ -1045,10 +1045,10 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test streaming creates for specific release
-	stream, cancel := s.streamScalesWithCancel(c, &protobuf.StreamScalesRequest{NameFilters: []string{testRelease6.Name}, StreamCreates: true})
+	stream, cancel := s.streamScalesWithCancel(c, &api.StreamScalesRequest{NameFilters: []string{testRelease6.Name}, StreamCreates: true})
 	s.receiveScalesStream(c, stream) // initial page
-	testScale8 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 3}})
-	testScale9 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 0}})
+	testScale8 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 3}})
+	testScale9 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 0}})
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
@@ -1056,13 +1056,13 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	cancel()
 
 	// test streaming creates for specific app or release
-	stream, cancel = s.streamScalesWithCancel(c, &protobuf.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease6.Name}, StreamCreates: true})
-	s.receiveScalesStream(c, stream)                                                                                                               // initial page
-	testScale10 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 3}}) // neither
-	testScale11 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 0}}) // testRelease6 create
-	testScale4.State = protobuf.ScaleRequestState_SCALE_CANCELLED
-	s.updateTestScaleRequest(c, testScale4)                                                                                                        // testApp1 update
-	testScale12 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 0}}) // testApp1 create
+	stream, cancel = s.streamScalesWithCancel(c, &api.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease6.Name}, StreamCreates: true})
+	s.receiveScalesStream(c, stream)                                                                                                          // initial page
+	testScale10 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 3}}) // neither
+	testScale11 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 0}}) // testRelease6 create
+	testScale4.State = api.ScaleRequestState_SCALE_CANCELLED
+	s.updateTestScaleRequest(c, testScale4)                                                                                                   // testApp1 update
+	testScale12 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 0}}) // testApp1 create
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
@@ -1074,9 +1074,9 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	cancel()
 
 	// test creates are not streamed when flag not set
-	stream, cancel = s.streamScalesWithCancel(c, &protobuf.StreamScalesRequest{})
+	stream, cancel = s.streamScalesWithCancel(c, &api.StreamScalesRequest{})
 	s.receiveScalesStream(c, stream) // initial page
-	testScale13 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 3}})
+	testScale13 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 3}})
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, IsNil)
 	cancel()
@@ -1084,13 +1084,13 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	time.Sleep(100 * time.Millisecond) // mitigate race for next test
 
 	// test streaming updates (new scale for the app/release)
-	stream, cancel = s.streamScalesWithCancel(c, &protobuf.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease6.Name}, StreamUpdates: true})
-	s.receiveScalesStream(c, stream)                                                                                                               // initial page
-	testScale14 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease4.Name, Processes: map[string]int32{"devnull": 3}}) // testApp1
-	testScale15 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale6.State = protobuf.ScaleRequestState_SCALE_PENDING
+	stream, cancel = s.streamScalesWithCancel(c, &api.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease6.Name}, StreamUpdates: true})
+	s.receiveScalesStream(c, stream)                                                                                                          // initial page
+	testScale14 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease4.Name, Processes: map[string]int32{"devnull": 3}}) // testApp1
+	testScale15 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 1}})
+	testScale6.State = api.ScaleRequestState_SCALE_PENDING
 	s.updateTestScaleRequest(c, testScale6)
-	testScale4.State = protobuf.ScaleRequestState_SCALE_PENDING
+	testScale4.State = api.ScaleRequestState_SCALE_PENDING
 	s.updateTestScaleRequest(c, testScale4)
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
@@ -1106,11 +1106,11 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	cancel()
 
 	// test streaming updates (new scale for the app/release) with state filters
-	stream, cancel = s.streamScalesWithCancel(c, &protobuf.StreamScalesRequest{StateFilters: []protobuf.ScaleRequestState{protobuf.ScaleRequestState_SCALE_CANCELLED}, StreamUpdates: true})
+	stream, cancel = s.streamScalesWithCancel(c, &api.StreamScalesRequest{StateFilters: []api.ScaleRequestState{api.ScaleRequestState_SCALE_CANCELLED}, StreamUpdates: true})
 	s.receiveScalesStream(c, stream) // initial page
-	testScale7.State = protobuf.ScaleRequestState_SCALE_PENDING
+	testScale7.State = api.ScaleRequestState_SCALE_PENDING
 	s.updateTestScaleRequest(c, testScale7)
-	testScale11.State = protobuf.ScaleRequestState_SCALE_CANCELLED
+	testScale11.State = api.ScaleRequestState_SCALE_CANCELLED
 	s.updateTestScaleRequest(c, testScale11)
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
@@ -1119,19 +1119,19 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	cancel()
 
 	// test unary pagination
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageSize: 20})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{PageSize: 20})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 15)
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageSize: 1})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{PageSize: 1})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
 	assertScaleRequestsEqual(c, res.ScaleRequests[0], testScale15)
 	c.Assert(receivedEOF, Equals, true)
 	c.Assert(res.NextPageToken, Not(Equals), "")
 	c.Assert(res.PageComplete, Equals, true)
-	for i, testScale := range []*protobuf.ScaleRequest{testScale14, testScale13, testScale12, testScale11, testScale10, testScale9, testScale8, testScale7, testScale6, testScale5, testScale4, testScale3} {
+	for i, testScale := range []*api.ScaleRequest{testScale14, testScale13, testScale12, testScale11, testScale10, testScale9, testScale8, testScale7, testScale6, testScale5, testScale4, testScale3} {
 		comment := Commentf("iteraction %d", i)
-		res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageSize: 1, PageToken: res.NextPageToken})
+		res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{PageSize: 1, PageToken: res.NextPageToken})
 		c.Assert(res, Not(IsNil), comment)
 		c.Assert(len(res.ScaleRequests), Equals, 1, comment)
 		c.Assert(res.ScaleRequests[0].Name, DeepEquals, testScale.Name, comment)
@@ -1139,7 +1139,7 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 		c.Assert(res.NextPageToken, Not(Equals), "", comment)
 		c.Assert(res.PageComplete, Equals, true, comment)
 	}
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageSize: 2, PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{PageSize: 2, PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 2)
 	assertScaleRequestsEqual(c, res.ScaleRequests[0], testScale2)
@@ -1150,23 +1150,23 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 }
 
 func (s *GRPCSuite) TestStreamScalesUnaryPagination(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
-	testRelease1 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testScale1 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale2 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 2}})
-	testScale3 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 3}})
-	testScale4 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 4}})
-	testScale5 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 5}})
-	testScale6 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 6}})
-	testScale7 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 7}})
-	testScale8 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 8}})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
+	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
+	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 2}})
+	testScale3 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 3}})
+	testScale4 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 4}})
+	testScale5 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 5}})
+	testScale6 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 6}})
+	testScale7 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 7}})
+	testScale8 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 8}})
 
-	assertScaleRequestsEqual := func(c *C, a, b *protobuf.ScaleRequest) {
+	assertScaleRequestsEqual := func(c *C, a, b *api.ScaleRequest) {
 		c.Assert(a.Name, Equals, b.Name)
 	}
 
 	// page 1
-	res, receivedEOF := unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageSize: 3})
+	res, receivedEOF := unaryReceiveScales(s, c, &api.StreamScalesRequest{PageSize: 3})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 3)
 	c.Assert(receivedEOF, Equals, true)
@@ -1177,7 +1177,7 @@ func (s *GRPCSuite) TestStreamScalesUnaryPagination(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 
 	// page 2
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 3)
 	c.Assert(receivedEOF, Equals, true)
@@ -1188,7 +1188,7 @@ func (s *GRPCSuite) TestStreamScalesUnaryPagination(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 
 	// page 3 (last page)
-	res, receivedEOF = unaryReceiveScales(s, c, &protobuf.StreamScalesRequest{PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveScales(s, c, &api.StreamScalesRequest{PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 2)
 	c.Assert(receivedEOF, Equals, true)
@@ -1203,15 +1203,15 @@ func (s *GRPCSuite) TestStreamScalesPaginationWithStreamUpdates(c *C) {
 }
 
 func (s *GRPCSuite) TestStreamScalesForApp(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
-	testRelease1 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "1"}, Processes: map[string]*protobuf.ProcessType{"devnull": &protobuf.ProcessType{Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "1"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
 
 	// stream scales for the app
-	stream, cancel := s.streamScalesWithCancel(c, &protobuf.StreamScalesRequest{NameFilters: []string{testApp1.Name}, StreamUpdates: true, StreamCreates: true})
+	stream, cancel := s.streamScalesWithCancel(c, &api.StreamScalesRequest{NameFilters: []string{testApp1.Name}, StreamUpdates: true, StreamCreates: true})
 	s.receiveScalesStream(c, stream) // initial page
 
 	// scale the release
-	testScale1 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
+	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
 	// expect to get the scale request in stream
 	res := s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
@@ -1219,7 +1219,7 @@ func (s *GRPCSuite) TestStreamScalesForApp(c *C) {
 	c.Assert(res.ScaleRequests[0].Name, DeepEquals, testScale1.Name)
 
 	// scale the release again
-	testScale2 := s.createTestScaleRequest(c, &protobuf.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 2}})
+	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 2}})
 	// expect to get the scale request in stream
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
@@ -1230,7 +1230,7 @@ func (s *GRPCSuite) TestStreamScalesForApp(c *C) {
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
 	c.Assert(res.ScaleRequests[0].Name, DeepEquals, testScale1.Name)
-	c.Assert(res.ScaleRequests[0].State, DeepEquals, protobuf.ScaleRequestState_SCALE_CANCELLED)
+	c.Assert(res.ScaleRequests[0].State, DeepEquals, api.ScaleRequestState_SCALE_CANCELLED)
 
 	// close the stream
 	cancel()
@@ -1239,7 +1239,7 @@ func (s *GRPCSuite) TestStreamScalesForApp(c *C) {
 func (s *GRPCSuite) TestStreamScalesForAppPagination(c *C) { // TODO(jvatic): implement test
 }
 
-func unaryReceiveDeployments(s *GRPCSuite, c *C, req *protobuf.StreamDeploymentsRequest) (res *protobuf.StreamDeploymentsResponse, receivedEOF bool) {
+func unaryReceiveDeployments(s *GRPCSuite, c *C, req *api.StreamDeploymentsRequest) (res *api.StreamDeploymentsResponse, receivedEOF bool) {
 	ctx, ctxCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer func() {
 		if !receivedEOF {
@@ -1264,33 +1264,33 @@ func unaryReceiveDeployments(s *GRPCSuite, c *C, req *protobuf.StreamDeployments
 }
 
 func (s *GRPCSuite) TestStreamDeployments(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
-	testApp2 := s.createTestApp(c, &protobuf.App{DisplayName: "test2"})
-	testApp3 := s.createTestApp(c, &protobuf.App{DisplayName: "test3"})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testApp2 := s.createTestApp(c, &api.App{DisplayName: "test2"})
+	testApp3 := s.createTestApp(c, &api.App{DisplayName: "test3"})
 	testArtifact1 := s.createTestArtifact(c, &ct.Artifact{})
 	testArtifact2 := s.createTestArtifact(c, &ct.Artifact{})
-	testRelease1 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "1"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease2 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "2"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease3 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Labels: map[string]string{"i": "3"}, Artifacts: []string{testArtifact2.ID}})
-	testRelease4 := s.createTestRelease(c, testApp2.Name, &protobuf.Release{Labels: map[string]string{"i": "4"}})
+	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "1"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease2 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "2"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease3 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"i": "3"}, Artifacts: []string{testArtifact2.ID}})
+	testRelease4 := s.createTestRelease(c, testApp2.Name, &api.Release{Labels: map[string]string{"i": "4"}})
 	testDeployment1 := s.createTestDeployment(c, testRelease1.Name)
 	testDeployment2 := s.createTestDeployment(c, testRelease2.Name)
 	testDeployment3 := s.createTestDeployment(c, testRelease3.Name)
 	testDeployment4 := s.createTestDeployment(c, testRelease4.Name)
 
-	c.Assert(testDeployment1.Type, Equals, protobuf.ReleaseType_CODE)
-	c.Assert(testDeployment2.Type, Equals, protobuf.ReleaseType_CONFIG)
-	c.Assert(testDeployment3.Type, Equals, protobuf.ReleaseType_CODE)
-	c.Assert(testDeployment4.Type, Equals, protobuf.ReleaseType_CONFIG)
+	c.Assert(testDeployment1.Type, Equals, api.ReleaseType_CODE)
+	c.Assert(testDeployment2.Type, Equals, api.ReleaseType_CONFIG)
+	c.Assert(testDeployment3.Type, Equals, api.ReleaseType_CODE)
+	c.Assert(testDeployment4.Type, Equals, api.ReleaseType_CONFIG)
 
-	streamDeploymentsWithCancel := func(req *protobuf.StreamDeploymentsRequest) (protobuf.Controller_StreamDeploymentsClient, context.CancelFunc) {
+	streamDeploymentsWithCancel := func(req *api.StreamDeploymentsRequest) (api.Controller_StreamDeploymentsClient, context.CancelFunc) {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		stream, err := s.grpc.StreamDeployments(ctx, req)
 		c.Assert(err, IsNil)
 		return stream, cancel
 	}
 
-	receiveDeploymentsStream := func(stream protobuf.Controller_StreamDeploymentsClient) *protobuf.StreamDeploymentsResponse {
+	receiveDeploymentsStream := func(stream api.Controller_StreamDeploymentsClient) *api.StreamDeploymentsResponse {
 		res, err := stream.Recv()
 		if err == io.EOF || isErrCanceled(err) || isErrDeadlineExceeded(err) {
 			return nil
@@ -1299,7 +1299,7 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 		return res
 	}
 
-	assertDeploymentsEqual := func(c *C, a, b *protobuf.ExpandedDeployment) {
+	assertDeploymentsEqual := func(c *C, a, b *api.ExpandedDeployment) {
 		comment := Commentf("Obtained %#v", a)
 		if a != nil {
 			comment = Commentf("Obtained %T{NewRelease: %#v ...}", a, a.NewRelease)
@@ -1319,28 +1319,28 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	}
 
 	// test fetching the latest deployment
-	res, receivedEOF := unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{PageSize: 1})
+	res, receivedEOF := unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{PageSize: 1})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 1)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment4)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a single deployment by name
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{NameFilters: []string{testDeployment2.Name}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{NameFilters: []string{testDeployment2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 1)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment2)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching a single deployment by app name
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{NameFilters: []string{testApp3.Name}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{NameFilters: []string{testApp3.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 1)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment3)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple deployments by name
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{NameFilters: []string{testDeployment3.Name, testDeployment2.Name}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{NameFilters: []string{testDeployment3.Name, testDeployment2.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 2)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment3)
@@ -1348,7 +1348,7 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple deployments by app name
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{NameFilters: []string{testApp1.Name}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{NameFilters: []string{testApp1.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 2)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment2)
@@ -1356,21 +1356,21 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple deployments by a mixture of app name and deployment name
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{NameFilters: []string{testDeployment2.Name, testApp1.Name}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{NameFilters: []string{testDeployment2.Name, testApp1.Name}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 1)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment2)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple deployments by type [ANY]
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{PageSize: 1, TypeFilters: []protobuf.ReleaseType{protobuf.ReleaseType_ANY}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{PageSize: 1, TypeFilters: []api.ReleaseType{api.ReleaseType_ANY}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 1)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment4)
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple deployments by type [CODE]
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{TypeFilters: []protobuf.ReleaseType{protobuf.ReleaseType_CODE}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{TypeFilters: []api.ReleaseType{api.ReleaseType_CODE}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 2)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment3)
@@ -1378,7 +1378,7 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching multiple deployments by type [CONFIG]
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{TypeFilters: []protobuf.ReleaseType{protobuf.ReleaseType_CONFIG}})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{TypeFilters: []api.ReleaseType{api.ReleaseType_CONFIG}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 2)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment4)
@@ -1386,24 +1386,24 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	c.Assert(receivedEOF, Equals, true)
 
 	// test fetching filtering deployments by status
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{StatusFilters: []protobuf.DeploymentStatus{
-		protobuf.DeploymentStatus_FAILED,
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{StatusFilters: []api.DeploymentStatus{
+		api.DeploymentStatus_FAILED,
 	}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 0)
-	testDeployment2.Status = protobuf.DeploymentStatus_FAILED
+	testDeployment2.Status = api.DeploymentStatus_FAILED
 	s.createTestDeploymentEvent(c, testDeployment2, &ct.DeploymentEvent{Status: "failed"})
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{StatusFilters: []protobuf.DeploymentStatus{
-		protobuf.DeploymentStatus_FAILED,
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{StatusFilters: []api.DeploymentStatus{
+		api.DeploymentStatus_FAILED,
 	}})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 1)
 	assertDeploymentsEqual(c, res.Deployments[0], testDeployment2)
 
 	// test streaming creates for specific app
-	stream, cancel := streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{NameFilters: []string{testApp2.Name}, StreamCreates: true})
+	stream, cancel := streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{NameFilters: []string{testApp2.Name}, StreamCreates: true})
 	receiveDeploymentsStream(stream) // initial page
-	testRelease5 := s.createTestRelease(c, testApp2.Name, &protobuf.Release{Labels: map[string]string{"i": "5"}})
+	testRelease5 := s.createTestRelease(c, testApp2.Name, &api.Release{Labels: map[string]string{"i": "5"}})
 	testDeployment5 := s.createTestDeployment(c, testRelease5.Name)
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, Not(IsNil))
@@ -1412,27 +1412,27 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	cancel()
 
 	// test creates are not streamed when flag not set
-	stream, cancel = streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{NameFilters: []string{testApp2.Name}})
+	stream, cancel = streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{NameFilters: []string{testApp2.Name}})
 	receiveDeploymentsStream(stream) // initial page
-	testRelease6 := s.createTestRelease(c, testApp2.Name, &protobuf.Release{Labels: map[string]string{"i": "6"}})
+	testRelease6 := s.createTestRelease(c, testApp2.Name, &api.Release{Labels: map[string]string{"i": "6"}})
 	testDeployment6 := s.createTestDeployment(c, testRelease6.Name)
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, IsNil)
 	cancel()
 
 	// test streaming creates that don't match the NameFilters
-	stream, cancel = streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{NameFilters: []string{testApp2.Name}, StreamCreates: true})
+	stream, cancel = streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{NameFilters: []string{testApp2.Name}, StreamCreates: true})
 	receiveDeploymentsStream(stream) // initial page
-	testRelease7 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "7"}})
+	testRelease7 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "7"}})
 	testDeployment7 := s.createTestDeployment(c, testRelease7.Name)
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, IsNil)
 	cancel()
 
 	// test streaming creates without filters
-	stream, cancel = streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{StreamCreates: true})
+	stream, cancel = streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{StreamCreates: true})
 	receiveDeploymentsStream(stream) // initial page
-	testRelease8 := s.createTestRelease(c, testApp2.Name, &protobuf.Release{Labels: map[string]string{"i": "8"}})
+	testRelease8 := s.createTestRelease(c, testApp2.Name, &api.Release{Labels: map[string]string{"i": "8"}})
 	testDeployment8 := s.createTestDeployment(c, testRelease8.Name)
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, Not(IsNil))
@@ -1441,11 +1441,11 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	cancel()
 
 	// test streaming creates that don't match the TypeFilters
-	stream, cancel = streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{TypeFilters: []protobuf.ReleaseType{protobuf.ReleaseType_CODE}, StreamCreates: true})
+	stream, cancel = streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{TypeFilters: []api.ReleaseType{api.ReleaseType_CODE}, StreamCreates: true})
 	receiveDeploymentsStream(stream) // initial page
-	testRelease9 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Labels: map[string]string{"i": "9"}, Artifacts: testRelease3.Artifacts})
+	testRelease9 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"i": "9"}, Artifacts: testRelease3.Artifacts})
 	testDeployment9 := s.createTestDeployment(c, testRelease9.Name) // doesn't match TypeFilters
-	testRelease10 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Labels: map[string]string{"i": "10"}})
+	testRelease10 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"i": "10"}})
 	testDeployment10 := s.createTestDeployment(c, testRelease10.Name) // matches TypeFilters
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, Not(IsNil))
@@ -1454,11 +1454,11 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	cancel()
 
 	// test streaming updates
-	stream, cancel = streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{StreamUpdates: true})
+	stream, cancel = streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{StreamUpdates: true})
 	receiveDeploymentsStream(stream) // initial page
-	testRelease11 := s.createTestRelease(c, testApp3.Name, &protobuf.Release{Labels: map[string]string{"i": "11"}})
+	testRelease11 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"i": "11"}})
 	testDeployment11 := s.createTestDeployment(c, testRelease11.Name) // make sure creates aren't streamed
-	testDeployment10.Status = protobuf.DeploymentStatus_PENDING
+	testDeployment10.Status = api.DeploymentStatus_PENDING
 	s.createTestDeploymentEvent(c, testDeployment10, &ct.DeploymentEvent{Status: "pending"})
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, Not(IsNil))
@@ -1467,11 +1467,11 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	cancel()
 
 	// test streaming updates respects NameFilters [app name]
-	stream, cancel = streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{NameFilters: []string{testApp2.Name}, StreamUpdates: true})
+	stream, cancel = streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{NameFilters: []string{testApp2.Name}, StreamUpdates: true})
 	receiveDeploymentsStream(stream) // initial page
-	testDeployment10.Status = protobuf.DeploymentStatus_COMPLETE
+	testDeployment10.Status = api.DeploymentStatus_COMPLETE
 	s.createTestDeploymentEvent(c, testDeployment10, &ct.DeploymentEvent{Status: "complete"})
-	testDeployment6.Status = protobuf.DeploymentStatus_PENDING
+	testDeployment6.Status = api.DeploymentStatus_PENDING
 	s.createTestDeploymentEvent(c, testDeployment6, &ct.DeploymentEvent{Status: "pending"})
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, Not(IsNil))
@@ -1480,11 +1480,11 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	cancel()
 
 	// test streaming updates respects NameFilters [deployment name]
-	stream, cancel = streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{NameFilters: []string{testDeployment5.Name}, StreamUpdates: true})
+	stream, cancel = streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{NameFilters: []string{testDeployment5.Name}, StreamUpdates: true})
 	receiveDeploymentsStream(stream) // initial page
-	testDeployment6.Status = protobuf.DeploymentStatus_COMPLETE
+	testDeployment6.Status = api.DeploymentStatus_COMPLETE
 	s.createTestDeploymentEvent(c, testDeployment6, &ct.DeploymentEvent{Status: "complete"})
-	testDeployment5.Status = protobuf.DeploymentStatus_PENDING
+	testDeployment5.Status = api.DeploymentStatus_PENDING
 	s.createTestDeploymentEvent(c, testDeployment5, &ct.DeploymentEvent{Status: "pending"})
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, Not(IsNil))
@@ -1493,11 +1493,11 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	cancel()
 
 	// test streaming updates respects StatusFilters
-	stream, cancel = streamDeploymentsWithCancel(&protobuf.StreamDeploymentsRequest{StatusFilters: []protobuf.DeploymentStatus{protobuf.DeploymentStatus_FAILED}, StreamUpdates: true})
+	stream, cancel = streamDeploymentsWithCancel(&api.StreamDeploymentsRequest{StatusFilters: []api.DeploymentStatus{api.DeploymentStatus_FAILED}, StreamUpdates: true})
 	receiveDeploymentsStream(stream) // initial page
-	testDeployment5.Status = protobuf.DeploymentStatus_PENDING
+	testDeployment5.Status = api.DeploymentStatus_PENDING
 	s.createTestDeploymentEvent(c, testDeployment5, &ct.DeploymentEvent{Status: "pending"})
-	testDeployment6.Status = protobuf.DeploymentStatus_FAILED
+	testDeployment6.Status = api.DeploymentStatus_FAILED
 	s.createTestDeploymentEvent(c, testDeployment6, &ct.DeploymentEvent{Status: "failed"})
 	res = receiveDeploymentsStream(stream)
 	c.Assert(res, Not(IsNil))
@@ -1506,16 +1506,16 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 	cancel()
 
 	// test unary pagination
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{PageSize: 1})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{PageSize: 1})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 1)
 	c.Assert(res.Deployments[0], DeepEquals, testDeployment11)
 	c.Assert(receivedEOF, Equals, true)
 	c.Assert(res.NextPageToken, Not(Equals), "")
 	c.Assert(res.PageComplete, Equals, true)
-	for i, testDeployment := range []*protobuf.ExpandedDeployment{testDeployment10, testDeployment9, testDeployment8, testDeployment7, testDeployment6, testDeployment5, testDeployment4, testDeployment3} {
+	for i, testDeployment := range []*api.ExpandedDeployment{testDeployment10, testDeployment9, testDeployment8, testDeployment7, testDeployment6, testDeployment5, testDeployment4, testDeployment3} {
 		comment := Commentf("iteraction %d", i)
-		res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{PageSize: 1, PageToken: res.NextPageToken})
+		res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{PageSize: 1, PageToken: res.NextPageToken})
 		c.Assert(res, Not(IsNil), comment)
 		c.Assert(len(res.Deployments), Equals, 1, comment)
 		c.Assert(res.Deployments[0], DeepEquals, testDeployment, comment)
@@ -1523,7 +1523,7 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 		c.Assert(res.NextPageToken, Not(Equals), "", comment)
 		c.Assert(res.PageComplete, Equals, true, comment)
 	}
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{PageSize: 2, PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{PageSize: 2, PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 2)
 	c.Assert(res.Deployments[0], DeepEquals, testDeployment2)
@@ -1534,16 +1534,16 @@ func (s *GRPCSuite) TestStreamDeployments(c *C) {
 }
 
 func (s *GRPCSuite) TestStreamDeploymentsUnaryPagination(c *C) {
-	testApp1 := s.createTestApp(c, &protobuf.App{DisplayName: "test1"})
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
 	testArtifact1 := s.createTestArtifact(c, &ct.Artifact{})
-	testRelease1 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "1"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease2 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "2"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease3 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "3"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease4 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "4"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease5 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "5"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease6 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "6"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease7 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "7"}, Artifacts: []string{testArtifact1.ID}})
-	testRelease8 := s.createTestRelease(c, testApp1.Name, &protobuf.Release{Labels: map[string]string{"i": "8"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "1"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease2 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "2"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease3 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "3"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease4 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "4"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease5 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "5"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease6 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "6"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease7 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "7"}, Artifacts: []string{testArtifact1.ID}})
+	testRelease8 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "8"}, Artifacts: []string{testArtifact1.ID}})
 	testDeployment1 := s.createTestDeployment(c, testRelease1.Name)
 	testDeployment2 := s.createTestDeployment(c, testRelease2.Name)
 	testDeployment3 := s.createTestDeployment(c, testRelease3.Name)
@@ -1554,7 +1554,7 @@ func (s *GRPCSuite) TestStreamDeploymentsUnaryPagination(c *C) {
 	testDeployment8 := s.createTestDeployment(c, testRelease8.Name)
 
 	// page 1
-	res, receivedEOF := unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{PageSize: 3})
+	res, receivedEOF := unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{PageSize: 3})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 3)
 	c.Assert(receivedEOF, Equals, true)
@@ -1565,7 +1565,7 @@ func (s *GRPCSuite) TestStreamDeploymentsUnaryPagination(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 
 	// page 2
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 3)
 	c.Assert(receivedEOF, Equals, true)
@@ -1576,7 +1576,7 @@ func (s *GRPCSuite) TestStreamDeploymentsUnaryPagination(c *C) {
 	c.Assert(res.PageComplete, Equals, true)
 
 	// page 3 (last)
-	res, receivedEOF = unaryReceiveDeployments(s, c, &protobuf.StreamDeploymentsRequest{PageToken: res.NextPageToken})
+	res, receivedEOF = unaryReceiveDeployments(s, c, &api.StreamDeploymentsRequest{PageToken: res.NextPageToken})
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Deployments), Equals, 2)
 	c.Assert(receivedEOF, Equals, true)
