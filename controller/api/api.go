@@ -1,4 +1,4 @@
-package protobuf
+package api
 
 import (
 	context "context"

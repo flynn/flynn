@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/cupcake/jsonschema"
+	"github.com/flynn/flynn/controller/api"
 	controller "github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/controller/protobuf"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
@@ -673,8 +673,8 @@ func (s *ControllerSuite) TestGRPCWeb(t *c.C) {
 	// check we can invoke the Status method
 	var (
 		req empty.Empty
-		res protobuf.StatusResponse
+		res api.StatusResponse
 	)
-	t.Assert(client.Invoke("controller.Controller/Status", &req, &res), c.IsNil)
-	t.Assert(res.Status, c.Equals, protobuf.StatusResponse_HEALTHY)
+	t.Assert(client.Invoke("flynn.api.v1.Controller/Status", &req, &res), c.IsNil)
+	t.Assert(res.Status, c.Equals, api.StatusResponse_HEALTHY)
 }
