@@ -48,12 +48,17 @@ options:
   -x, --version=<version>   version to use [default: dev]
   -t, --tuf-db=<path>       path to TUF database [default: build/tuf.db]
   -v, --verbose             be verbose
+  --filter=<imageIDs>       imageIDs to build (defaults to all)
 
 Build Flynn images using builder/manifest.json.
 `[1:],
 }
 
 type Builder struct {
+	// imageWhitelist is used to limit which images are built
+	imageWhitelist    []string
+	imageWhitelistMap map[string]struct{}
+
 	// baseLayer is used when building an image which has no
 	// dependencies (e.g. the ubuntu-bionic image)
 	baseLayer *host.Mountspec
@@ -246,10 +251,11 @@ func runBuild(args *docopt.Args) error {
 
 	tufRootKeys, _ := json.Marshal(manifest.TUFConfig.RootKeys)
 	builder := &Builder{
-		tufClient: tufClient,
-		tufConfig: manifest.TUFConfig,
-		baseLayer: manifest.BaseLayer,
-		artifacts: make(map[string]*ct.Artifact),
+		imageWhitelist: strings.Split(args.String["--filter"], ","),
+		tufClient:      tufClient,
+		tufConfig:      manifest.TUFConfig,
+		baseLayer:      manifest.BaseLayer,
+		artifacts:      make(map[string]*ct.Artifact),
 		envTemplateData: map[string]string{
 			"TUFRootKeys":   string(tufRootKeys),
 			"TUFRepository": manifest.TUFConfig.Repository,
@@ -373,11 +379,72 @@ func (b *Builder) Build(images []*Image) error {
 		}
 	}
 
+	// make sure all builds specified with --filter have themselfs and their
+	// dependencies whitelisted
+	imageWhitelistMap := make(map[string]struct{}, len(b.imageWhitelist))
+	var addToWhitelist func(*Build)
+	addToWhitelist = func(build *Build) {
+		imageWhitelistMap[build.Image.ID] = struct{}{}
+		for dep := range build.Dependencies {
+			addToWhitelist(dep)
+		}
+	}
+	for _, id := range b.imageWhitelist {
+		if build, ok := builds[id]; ok {
+			addToWhitelist(build)
+		}
+	}
+	b.imageWhitelistMap = imageWhitelistMap
+	imageWhitelist := make([]string, 0, len(imageWhitelistMap))
+	for imageID := range imageWhitelistMap {
+		imageWhitelist = append(imageWhitelist, imageID)
+	}
+	sort.Strings(imageWhitelist)
+	b.imageWhitelist = imageWhitelist
+	if len(imageWhitelist) > 0 {
+		b.log.Info(fmt.Sprintf("build restricted to the following images: %s", strings.Join(imageWhitelist, ", ")))
+	}
+
 	// build images until there are no pending builds left
 	done := make(chan *Build, len(builds))
 	failures := make(map[string]error)
 	for len(builds) > 0 {
 		for _, build := range builds {
+			// see --filter option
+			if len(imageWhitelistMap) > 0 {
+				if _, ok := imageWhitelistMap[build.Image.ID]; !ok {
+					build.Once.Do(func() {
+						b.log.Debug(fmt.Sprintf("%s build skip", build.Image.ID))
+
+						// attempt to load image artifact for use in WriteManifests
+						artifact := &ct.Artifact{}
+						path := filepath.Join("build", "image", build.Image.ID+".json")
+						f, err := os.Open(path)
+						if err != nil {
+							build.Err = fmt.Errorf("error reading image artifact for %q: %s", build.Image.ID, err)
+							b.log.Debug(build.Err.Error())
+							done <- build
+							return
+						}
+						defer f.Close()
+						if err := json.NewDecoder(f).Decode(artifact); err != nil {
+							build.Err = fmt.Errorf("error decoding image artifact for %q: %s", build.Image.ID, err)
+							b.log.Debug(build.Err.Error())
+							done <- build
+							return
+						}
+
+						b.artifactsMtx.Lock()
+						b.artifacts[build.Image.ID] = artifact
+						b.artifactsMtx.Unlock()
+
+						build.StartedAt = time.Now()
+						done <- build
+					})
+					continue
+				}
+			}
+
 			// if the build has no more pending dependencies, build it
 			if len(build.Dependencies) == 0 {
 				build.Once.Do(func() {
