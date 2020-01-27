@@ -16,6 +16,7 @@ OPTIONS:
   -v, --verbose           Be verbose
   -x, --version=VERSION   Explicit version to use [default: dev]
   -f, --force-bootstrap   Force bootstrap
+  --force                 Force images to be built without using layer cache
   --filter=ImageIDs       Only build images in given comma-seperated list of IDs
   --host=HOST             Host to run the build on
   --git-version           Generate the version using git status
@@ -28,6 +29,7 @@ main() {
   local verbose=false
   local force_bootstrap=false
   local filter=""
+  local force=false
 
   while true; do
     case "$1" in
@@ -56,6 +58,10 @@ main() {
         fi
         filter="$2"
         shift 2
+        ;;
+      --force)
+        force=true
+        shift
         ;;
       -x | --version)
         if [[ -z "$2" ]]; then
@@ -128,6 +134,9 @@ main() {
   fi
   if [ -n "$filter" ]; then
     args+=("--filter=${filter}")
+  fi
+  if $force; then
+    args+=("--force")
   fi
   args+=("--tuf-db=/tmp/tuf.db")
 

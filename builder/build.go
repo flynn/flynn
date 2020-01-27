@@ -49,6 +49,7 @@ options:
   -t, --tuf-db=<path>       path to TUF database [default: build/tuf.db]
   -v, --verbose             be verbose
   --filter=<imageIDs>       imageIDs to build (defaults to all)
+  --force                   ignore layer cache
 
 Build Flynn images using builder/manifest.json.
 `[1:],
@@ -58,6 +59,11 @@ type Builder struct {
 	// imageWhitelist is used to limit which images are built
 	imageWhitelist    []string
 	imageWhitelistMap map[string]struct{}
+
+	// ignoreLayerCache is used to force all images to be built
+	// without regard for the layer cache
+	ignoreLayerCache    bool
+	layerCacheWhitelist map[string]struct{}
 
 	// baseLayer is used when building an image which has no
 	// dependencies (e.g. the ubuntu-bionic image)
@@ -251,11 +257,13 @@ func runBuild(args *docopt.Args) error {
 
 	tufRootKeys, _ := json.Marshal(manifest.TUFConfig.RootKeys)
 	builder := &Builder{
-		imageWhitelist: strings.Split(args.String["--filter"], ","),
-		tufClient:      tufClient,
-		tufConfig:      manifest.TUFConfig,
-		baseLayer:      manifest.BaseLayer,
-		artifacts:      make(map[string]*ct.Artifact),
+		imageWhitelist:      strings.Split(args.String["--filter"], ","),
+		ignoreLayerCache:    args.Bool["--force"],
+		layerCacheWhitelist: map[string]struct{}{},
+		tufClient:           tufClient,
+		tufConfig:           manifest.TUFConfig,
+		baseLayer:           manifest.BaseLayer,
+		artifacts:           make(map[string]*ct.Artifact),
 		envTemplateData: map[string]string{
 			"TUFRootKeys":   string(tufRootKeys),
 			"TUFRepository": manifest.TUFConfig.Repository,
@@ -386,6 +394,7 @@ func (b *Builder) Build(images []*Image) error {
 	addToWhitelist = func(build *Build) {
 		imageWhitelistMap[build.Image.ID] = struct{}{}
 		for dep := range build.Dependencies {
+			b.layerCacheWhitelist[dep.Image.ID] = struct{}{}
 			addToWhitelist(dep)
 		}
 	}
@@ -427,7 +436,7 @@ func (b *Builder) Build(images []*Image) error {
 							return
 						}
 						defer f.Close()
-						if err := json.NewDecoder(f).Decode(artifact); err != nil {
+						if err := json.NewDecoder(f).Decode(&artifact); err != nil {
 							build.Err = fmt.Errorf("error decoding image artifact for %q: %s", build.Image.ID, err)
 							b.log.Debug(build.Err.Error())
 							done <- build
@@ -509,6 +518,16 @@ func (b *Builder) Build(images []*Image) error {
 // b.artifacts
 func (b *Builder) BuildImage(image *Image) error {
 	var layers []*ct.ImageLayer
+	// see --force option
+	ignoreLayerCache := b.ignoreLayerCache
+	if ignoreLayerCache {
+		// don't ignore layer cache for dependencies of images
+		// specified with --filter
+		_, ok := b.layerCacheWhitelist[image.ID]
+		if ok {
+			ignoreLayerCache = false
+		}
+	}
 	for _, l := range image.Layers {
 		name := l.Name
 		if name == "" {
@@ -657,7 +676,7 @@ func (b *Builder) BuildImage(image *Image) error {
 
 		start := time.Now()
 		l, err := b.layerGroup.Do(id, func() (interface{}, error) {
-			return b.BuildLayer(l, id, name, run, env, artifact, inputs)
+			return b.BuildLayer(l, ignoreLayerCache, id, name, run, env, artifact, inputs)
 		})
 		if err != nil {
 			return err
@@ -839,13 +858,15 @@ func (b *Builder) GetCachedLayer(name, id string) (*ct.ImageLayer, error) {
 }
 
 // BuildLayer either returns a cached layer or runs a job to build the layer
-func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[string]string, artifact *ct.Artifact, inputs []string) (*ct.ImageLayer, error) {
-	// try and get the cached layer first
-	layer, err := b.GetCachedLayer(name, id)
-	if err != nil {
-		return nil, err
-	} else if layer != nil {
-		return layer, nil
+func (b *Builder) BuildLayer(l *Layer, ignoreLayerCache bool, id, name string, run []string, env map[string]string, artifact *ct.Artifact, inputs []string) (*ct.ImageLayer, error) {
+	if !ignoreLayerCache {
+		// try and get the cached layer first
+		layer, err := b.GetCachedLayer(name, id)
+		if err != nil {
+			return nil, err
+		} else if layer != nil {
+			return layer, nil
+		}
 	}
 
 	// create a shared directory containing the inputs so we can ensure the
@@ -1062,7 +1083,7 @@ func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[st
 	if _, err := io.Copy(dst, io.TeeReader(f, h)); err != nil {
 		return nil, fmt.Errorf("error writing to layer cache: %s", err)
 	}
-	layer = &ct.ImageLayer{
+	layer := &ct.ImageLayer{
 		ID:     id,
 		Type:   ct.ImageLayerTypeSquashfs,
 		Length: stat.Size(),
