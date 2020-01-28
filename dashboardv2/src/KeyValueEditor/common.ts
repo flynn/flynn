@@ -14,6 +14,7 @@ import {
 } from './Data';
 import { StringValidator } from '../useStringValidation';
 import isActionType from '../util/isActionType';
+import parseKeyValuePairs from '../util/parseKeyValuePairs';
 
 export enum ActionType {
 	SET_DATA = 'KVEDITOR__SET_DATA',
@@ -184,7 +185,7 @@ export function reducer(prevState: State, actions: Action | Action[]): State {
 
 				// Detect key=value paste
 				if (action.text.match(/^(\S+=[^=]+\n?)+$/)) {
-					for (const [key, val] of parsePairs(action.text.trim())) {
+					for (const [key, val] of parseKeyValuePairs(action.text.trim())) {
 						nextData = appendEntry(nextData, key, val);
 					}
 				} else if (action.entryInnerIndex === 1 && action.text.indexOf('\n') >= 0) {
@@ -368,44 +369,6 @@ export function reducer(prevState: State, actions: Action | Action[]): State {
 	}, prevState);
 
 	return buildState(prevState, nextState);
-}
-
-function parsePairs(str: string): Iterable<[string, string]> {
-	let offset = 0;
-	let len = str.length;
-	return {
-		*[Symbol.iterator]() {
-			let key = '';
-			let val = '';
-			let i = offset;
-			while (offset < len) {
-				while (str.slice(i++)[0] !== '=') {
-					if (i === len) return;
-					key = str.slice(offset, i);
-				}
-				offset = i;
-				if (str.slice(i)[0] === '"') {
-					i++;
-					offset++;
-					while (!(str.slice(i++)[0] === '"' && str.slice(i - 2)[0] !== '\\')) {
-						if (i === len) return;
-						val = str.slice(offset, i);
-					}
-					val = val.replace(/\\"/g, '"'); // unescape quotes (e.g. JSON)
-				} else {
-					while (str.slice(i++)[0] !== '\n') {
-						val = str.slice(offset, i);
-						if (i === len) break;
-					}
-				}
-				offset = i;
-				yield [
-					key.trim(),
-					val.trim().replace(/\\n/g, '\n') // unescape newlines
-				] as [string, string];
-			}
-		}
-	};
 }
 
 export interface SuggestionValueTemplate extends InputSelection {
