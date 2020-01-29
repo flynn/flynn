@@ -3,6 +3,7 @@ package v1controller
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 	router "github.com/flynn/flynn/router/types"
+	"github.com/golang/protobuf/proto"
 )
 
 // Client is a client for the v1 of the controller API.
@@ -942,6 +944,69 @@ func (c *Client) StreamSinks(since *time.Time, output chan *ct.Sink) (stream.Str
 	}
 	t := since.UTC().Format(time.RFC3339Nano)
 	return c.Stream("GET", "/sinks?since="+t, nil, output)
+}
+
+// Invoke invokes the given gRPC method using the grpc-web protocol.
+//
+// See https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md
+func (c *Client) Invoke(method string, in, out proto.Message) error {
+	// encode the request message
+	reqMsg, err := proto.Marshal(in)
+	if err != nil {
+		return err
+	}
+
+	// generate the request message prefix (i.e. COMPRESSED-FLAG + MESSAGE-LENGTH)
+	reqPrefix := make([]byte, 5)
+	reqPrefix[0] = 0x0 // uncompressed
+	binary.BigEndian.PutUint32(reqPrefix[1:], uint32(len(reqMsg)))
+
+	// generate the request body (i.e. PREFIX + MESSAGE)
+	reqBody := bytes.NewReader(append(reqPrefix, reqMsg...))
+
+	// create the request header using the appropriate Content-Type and Auth-Key
+	header := make(http.Header)
+	header.Set("Content-Type", "application/grpc-web+proto")
+	if c.Key != "" {
+		header.Set("Auth-Key", c.Key)
+	}
+
+	// do the request
+	res, err := c.RawReq("POST", "/"+method, header, reqBody, nil)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if v := res.Header.Get("Grpc-Status"); v != "" && v != "0" {
+		return fmt.Errorf("unexpected Grpc-Status: %v (%v)", v, res.Header.Get("Grpc-Message"))
+	}
+
+	// read the response message prefix (i.e. COMPRESSED-FLAG + MESSAGE-LENGTH)
+	resPrefix := make([]byte, 5)
+	n, err := res.Body.Read(resPrefix)
+	if err != nil {
+		return err
+	}
+	if n != 5 {
+		return fmt.Errorf("expected to read 5 prefix bytes, got %d", n)
+	}
+	if resPrefix[0] != 0 { // expect uncompressed
+		return fmt.Errorf("expected first header byte to be zero, got %x", resPrefix[0])
+	}
+	resLen := binary.BigEndian.Uint32(resPrefix[1:])
+
+	// read the response message
+	resBody := make([]byte, resLen)
+	n, err = res.Body.Read(resBody)
+	if err != nil {
+		return err
+	}
+	if n != int(resLen) {
+		return fmt.Errorf("expected to read %d response bytes, got %d", resLen, n)
+	}
+
+	// decode the response message
+	return proto.Unmarshal(resBody, out)
 }
 
 func (c *Client) Put(path string, in, out interface{}) error {

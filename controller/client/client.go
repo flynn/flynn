@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 	router "github.com/flynn/flynn/router/types"
+	"github.com/golang/protobuf/proto"
 )
 
 type Client interface {
@@ -101,6 +102,7 @@ type Client interface {
 	DeleteSink(sinkID string) (*ct.Sink, error)
 	ListSinks() ([]*ct.Sink, error)
 	StreamSinks(since *time.Time, output chan *ct.Sink) (stream.Stream, error)
+	Invoke(method string, in, out proto.Message) error
 }
 
 type Config struct {

@@ -3,12 +3,10 @@ package main
 import (
 	"archive/tar"
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,7 +22,6 @@ import (
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
 	c "github.com/flynn/go-check"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
@@ -581,100 +578,14 @@ func (s *ControllerSuite) TestBackup(t *c.C) {
 	}
 }
 
-type testGRPCWebClient struct {
-	url  string
-	host string
-	key  string
-}
-
-// Invoke invokes the given gRPC method using the grpc-web protocol.
-//
-// See https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md
-func (t *testGRPCWebClient) Invoke(method string, in, out proto.Message) error {
-	// encode the request message
-	reqMsg, err := proto.Marshal(in)
-	if err != nil {
-		return err
-	}
-
-	// generate the request message prefix (i.e. COMPRESSED-FLAG + MESSAGE-LENGTH)
-	reqPrefix := make([]byte, 5)
-	reqPrefix[0] = 0x0 // uncompressed
-	binary.BigEndian.PutUint32(reqPrefix[1:], uint32(len(reqMsg)))
-
-	// generate the request body (i.e. PREFIX + MESSAGE)
-	reqBody := bytes.NewReader(append(reqPrefix, reqMsg...))
-
-	// create the HTTP request using the appropriate Content-Type, Host and Auth-Key
-	req, err := http.NewRequest("POST", t.url+"/"+method, reqBody)
-	if err != nil {
-		return err
-	}
-	req.Host = t.host
-	req.Header.Set("Auth-Key", t.key)
-	req.Header.Set("Content-Type", "application/grpc-web+proto")
-
-	// do the request
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("expected HTTP status 200, got %v", res.Status)
-	}
-	if v := res.Header.Get("Grpc-Status"); v != "" && v != "0" {
-		return fmt.Errorf("expected Grpc-Status 0, got %v (%v)", v, res.Header.Get("Grpc-Message"))
-	}
-
-	// read the response message prefix (i.e. COMPRESSED-FLAG + MESSAGE-LENGTH)
-	resPrefix := make([]byte, 5)
-	n, err := res.Body.Read(resPrefix)
-	if err != nil {
-		return err
-	}
-	if n != 5 {
-		return fmt.Errorf("expected to read 5 prefix bytes, got %d", n)
-	}
-	if resPrefix[0] != 0 { // expect uncompressed
-		return fmt.Errorf("expected first header byte to be zero, got %x", resPrefix[0])
-	}
-	resLen := binary.BigEndian.Uint32(resPrefix[1:])
-
-	// read the response message
-	resBody := make([]byte, resLen)
-	n, err = res.Body.Read(resBody)
-	if err != nil {
-		return err
-	}
-	if n != int(resLen) {
-		return fmt.Errorf("expected to read %d response bytes, got %d", resLen, n)
-	}
-
-	// decode the response message
-	return proto.Unmarshal(resBody, out)
-}
-
 // TestGRPCWeb tests that the controller's gRPC API is accessible via the
 // router using the grpc-web protocol
 func (s *ControllerSuite) TestGRPCWeb(t *c.C) {
-	// get the controller's URL and key
-	config := s.clusterConf(t)
-	controllerURL, err := url.Parse(config.ControllerURL)
-	t.Assert(err, c.IsNil)
-
-	// create a grpc-web client that hits the router
-	client := testGRPCWebClient{
-		url:  "http://" + routerIP,
-		host: controllerURL.Host,
-		key:  config.Key,
-	}
-
 	// check we can invoke the Status method
 	var (
 		req empty.Empty
 		res api.StatusResponse
 	)
-	t.Assert(client.Invoke("flynn.api.v1.Controller/Status", &req, &res), c.IsNil)
+	t.Assert(s.controllerClient(t).Invoke("flynn.api.v1.Controller/Status", &req, &res), c.IsNil)
 	t.Assert(res.Status, c.Equals, api.StatusResponse_HEALTHY)
 }
