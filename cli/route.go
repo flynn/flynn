@@ -19,9 +19,9 @@ import (
 func init() {
 	register("route", runRoute, `
 usage: flynn route
-       flynn route add http [-s <service>] [-p <port>] [-c <tls-cert> -k <tls-key>] [--sticky] [--leader] [--no-leader] [--no-drain-backends] <domain>
+       flynn route add http [-s <service>] [-p <port>] [-c <tls-cert> -k <tls-key>] [--sticky] [--leader] [--no-leader] [--no-drain-backends] [--disable-keep-alives] <domain>
        flynn route add tcp [-s <service>] [-p <port>] [--leader] [--no-drain-backends]
-       flynn route update <id> [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--no-sticky] [--leader] [--no-leader]
+       flynn route update <id> [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--no-sticky] [--leader] [--no-leader] [--disable-keep-alives] [--enable-keep-alives]
        flynn route remove <id>
 
 Manage routes for application.
@@ -36,6 +36,8 @@ Options:
 	--no-leader                disable leader-only routing mode (update only)
 	-p, --port=<port>          port to accept traffic on
 	--no-drain-backends        don't wait for in-flight requests to complete before stopping backends
+	--disable-keep-alives      disable keep alives between the router and backends for the given route
+	--enable-keep-alives       enable keep alives between the router and backends for the given route
 
 Commands:
 	With no arguments, shows a list of routes.
@@ -173,15 +175,16 @@ func runRouteAddHTTP(args *docopt.Args, client controller.Client) error {
 	}
 
 	hr := &router.HTTPRoute{
-		Service:       service,
-		Domain:        u.Host,
-		Port:          port,
-		LegacyTLSCert: tlsCert,
-		LegacyTLSKey:  tlsKey,
-		Sticky:        args.Bool["--sticky"],
-		Leader:        args.Bool["--leader"],
-		Path:          u.Path,
-		DrainBackends: !args.Bool["--no-drain-backends"],
+		Service:           service,
+		Domain:            u.Host,
+		Port:              port,
+		LegacyTLSCert:     tlsCert,
+		LegacyTLSKey:      tlsKey,
+		Sticky:            args.Bool["--sticky"],
+		Leader:            args.Bool["--leader"],
+		Path:              u.Path,
+		DrainBackends:     !args.Bool["--no-drain-backends"],
+		DisableKeepAlives: args.Bool["--disable-keep-alives"],
 	}
 	route := hr.ToRoute()
 	if err := client.CreateRoute(mustApp(), route); err != nil {
@@ -249,6 +252,12 @@ func runRouteUpdateHTTP(args *docopt.Args, client controller.Client) error {
 		route.Leader = true
 	} else if args.Bool["--no-leader"] {
 		route.Leader = false
+	}
+
+	if args.Bool["--disable-keep-alives"] {
+		route.DisableKeepAlives = true
+	} else if args.Bool["--enable-keep-alives"] {
+		route.DisableKeepAlives = false
 	}
 
 	if err := client.UpdateRoute(appName, id, route); err != nil {
