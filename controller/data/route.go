@@ -79,6 +79,7 @@ func (r *RouteRepo) addHTTP(tx *postgres.DBTx, route *router.Route) error {
 		route.Domain,
 		route.Sticky,
 		route.Path,
+		route.DisableKeepAlives,
 	).Scan(&route.ID, &route.Path, &route.CreatedAt, &route.UpdatedAt); err != nil {
 		return err
 	}
@@ -203,6 +204,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 		&route.Domain,
 		&route.Sticky,
 		&route.Path,
+		&route.DisableKeepAlives,
 		&route.CreatedAt,
 		&route.UpdatedAt,
 		&certID,
@@ -347,6 +349,7 @@ func (r *RouteRepo) updateHTTP(tx *postgres.DBTx, route *router.Route) error {
 		route.Leader,
 		route.Sticky,
 		route.Path,
+		route.DisableKeepAlives,
 		route.ID,
 		route.Domain,
 	).Scan(
@@ -359,6 +362,7 @@ func (r *RouteRepo) updateHTTP(tx *postgres.DBTx, route *router.Route) error {
 		&route.Domain,
 		&route.Sticky,
 		&route.Path,
+		&route.DisableKeepAlives,
 		&route.CreatedAt,
 		&route.UpdatedAt,
 	); err != nil {

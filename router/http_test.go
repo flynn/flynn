@@ -1627,6 +1627,62 @@ func (t *testHTTPBlockHandler) ServeHTTP(w http.ResponseWriter, req *http.Reques
 	}
 }
 
+func (s *S) TestHTTPDisableKeepalive(c *C) {
+	// start a backend server and track its connections
+	connStates := make(chan http.ConnState, 3)
+	done := make(chan struct{})
+	defer close(done)
+	srv := httptest.NewUnstartedServer(httpTestHandler("1"))
+	srv.Config.ConnState = func(conn net.Conn, state http.ConnState) {
+		select {
+		case connStates <- state:
+		case <-done:
+		}
+	}
+	srv.Start()
+	defer srv.Close()
+
+	// start a listener and route to the backend
+	l := s.newHTTPListener(c)
+	defer l.Close()
+	r := s.addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	assertStates := func(states ...http.ConnState) {
+		for _, expected := range states {
+			select {
+			case actual := <-connStates:
+				c.Assert(actual, Equals, expected)
+			case <-time.After(time.Second):
+				c.Fatalf("timed out waiting for conn state %q", expected)
+			}
+		}
+	}
+
+	// check that routes use keep alives by default
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertStates(http.StateNew, http.StateActive, http.StateIdle)
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertStates(http.StateActive, http.StateIdle)
+
+	// check that routes with keep alives disabled lead to new connections
+	// per request
+	r.DisableKeepAlives = true
+	s.addRoute(c, l, r)
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertStates(http.StateNew, http.StateActive, http.StateClosed)
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertStates(http.StateNew, http.StateActive, http.StateClosed)
+
+	// check that keep alives can be re-enabled
+	r.DisableKeepAlives = false
+	s.addRoute(c, l, r)
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertStates(http.StateNew, http.StateActive, http.StateIdle)
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertStates(http.StateActive, http.StateIdle)
+}
+
 // TestHTTPLoadBalance tests that the router prefers routing to backends with
 // lower numbers of in-flight requests
 func (s *S) TestHTTPLoadBalance(c *C) {

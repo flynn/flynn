@@ -70,9 +70,10 @@ type RequestTracker interface {
 // NewReverseProxy initializes a new ReverseProxy with a callback to get
 // backends, a stickyKey for encrypting sticky session cookies, and a flag
 // sticky to enable sticky sessions.
-func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool, rt RequestTracker, l log15.Logger) *ReverseProxy {
+func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky, disableKeepAlives bool, rt RequestTracker, l log15.Logger) *ReverseProxy {
 	return &ReverseProxy{
 		transport: &transport{
+			Transport:         newHTTPTransport(disableKeepAlives),
 			getBackends:       bf,
 			stickyCookieKey:   stickyKey,
 			useStickySessions: sticky,

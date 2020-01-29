@@ -66,6 +66,10 @@ type Route struct {
 	// (used by the scheduler to only stop jobs once all requests have
 	// completed).
 	DrainBackends bool `json:"drain_backends,omitempty"`
+
+	// DisableKeepAlives when set will disable keep alives between the
+	// router and backends for this route
+	DisableKeepAlives bool `json:"disable_keep_alives,omitempty"`
 }
 
 func (r Route) FormattedID() string {
@@ -83,12 +87,13 @@ func (r Route) HTTPRoute() *HTTPRoute {
 		CreatedAt:     r.CreatedAt,
 		UpdatedAt:     r.UpdatedAt,
 
-		Domain:        r.Domain,
-		Certificate:   r.Certificate,
-		LegacyTLSCert: r.LegacyTLSCert,
-		LegacyTLSKey:  r.LegacyTLSKey,
-		Sticky:        r.Sticky,
-		Path:          r.Path,
+		Domain:            r.Domain,
+		Certificate:       r.Certificate,
+		LegacyTLSCert:     r.LegacyTLSCert,
+		LegacyTLSKey:      r.LegacyTLSKey,
+		Sticky:            r.Sticky,
+		Path:              r.Path,
+		DisableKeepAlives: r.DisableKeepAlives,
 	}
 }
 
@@ -116,12 +121,13 @@ type HTTPRoute struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 
-	Domain        string
-	Certificate   *Certificate `json:"certificate,omitempty"`
-	LegacyTLSCert string       `json:"tls_cert,omitempty"`
-	LegacyTLSKey  string       `json:"tls_key,omitempty"`
-	Sticky        bool
-	Path          string
+	Domain            string
+	Certificate       *Certificate `json:"certificate,omitempty"`
+	LegacyTLSCert     string       `json:"tls_cert,omitempty"`
+	LegacyTLSKey      string       `json:"tls_key,omitempty"`
+	Sticky            bool
+	Path              string
+	DisableKeepAlives bool
 }
 
 func (r HTTPRoute) FormattedID() string {
@@ -146,12 +152,13 @@ func (r HTTPRoute) ToRoute() *Route {
 		UpdatedAt:     r.UpdatedAt,
 
 		// http-specific fields
-		Domain:        r.Domain,
-		Certificate:   r.Certificate,
-		LegacyTLSCert: r.LegacyTLSCert,
-		LegacyTLSKey:  r.LegacyTLSKey,
-		Sticky:        r.Sticky,
-		Path:          r.Path,
+		Domain:            r.Domain,
+		Certificate:       r.Certificate,
+		LegacyTLSCert:     r.LegacyTLSCert,
+		LegacyTLSKey:      r.LegacyTLSKey,
+		Sticky:            r.Sticky,
+		Path:              r.Path,
+		DisableKeepAlives: r.DisableKeepAlives,
 	}
 }
 

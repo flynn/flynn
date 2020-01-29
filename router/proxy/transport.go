@@ -27,15 +27,6 @@ var (
 	errNoBackends = errors.New("router: no backends available")
 	errCanceled   = errors.New("router: backend connection canceled")
 
-	httpTransport = &http.Transport{
-		Dial: customDial,
-		// The response header timeout is currently set pretty high because
-		// gitreceive doesn't send headers until it is done unpacking the repo,
-		// it should be lowered after this is fixed.
-		ResponseHeaderTimeout: 10 * time.Minute,
-		TLSHandshakeTimeout:   10 * time.Second, // unused, but safer to leave default in place
-	}
-
 	dialer backendDialer = &net.Dialer{
 		Timeout:   1 * time.Second,
 		KeepAlive: 30 * time.Second,
@@ -49,7 +40,21 @@ const maxBackendAttempts = 4
 // BackendListFunc returns a slice of backends
 type BackendListFunc func() []*router.Backend
 
+func newHTTPTransport(disableKeepAlives bool) *http.Transport {
+	return &http.Transport{
+		Dial: customDial,
+		// The response header timeout is currently set pretty high because
+		// gitreceive doesn't send headers until it is done unpacking the repo,
+		// it should be lowered after this is fixed.
+		ResponseHeaderTimeout: 10 * time.Minute,
+		TLSHandshakeTimeout:   10 * time.Second, // unused, but safer to leave default in place
+		DisableKeepAlives:     disableKeepAlives,
+	}
+}
+
 type transport struct {
+	*http.Transport
+
 	getBackends BackendListFunc
 
 	stickyCookieKey   *[32]byte
@@ -205,7 +210,7 @@ func (t *transport) RoundTrip(req *http.Request, l log15.Logger) (*http.Response
 	err := t.eachBackend(stickyBackend, backends, l, func(backend *router.Backend) (err error) {
 		req.URL.Host = backend.Addr
 		rt.TrackRequestStart(backend.Addr)
-		res, err = httpTransport.RoundTrip(req)
+		res, err = t.Transport.RoundTrip(req)
 		if err == nil {
 			trace.Finalize(backend)
 			t.setStickyBackend(res, stickyBackend)

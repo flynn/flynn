@@ -954,6 +954,9 @@ CREATE FUNCTION deployment_status(deployment_id uuid) RETURNS text AS $$
   SELECT data->>'status' FROM events WHERE object_type = 'deployment' AND object_id::uuid = deployment_id ORDER BY created_at DESC LIMIT 1;
 $$ LANGUAGE SQL;
 	`)
+	migrations.Add(49, `
+ALTER TABLE http_routes ADD COLUMN disable_keep_alives boolean NOT NULL DEFAULT false;
+	`)
 }
 
 func MigrateDB(db *postgres.DB) error {
