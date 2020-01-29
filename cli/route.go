@@ -36,8 +36,8 @@ Options:
 	--no-leader                disable leader-only routing mode (update only)
 	-p, --port=<port>          port to accept traffic on
 	--no-drain-backends        don't wait for in-flight requests to complete before stopping backends
-	--disable-keep-alives      disable keep alives between the router and backends for the given route
-	--enable-keep-alives       enable keep alives between the router and backends for the given route
+	--disable-keep-alives      disable keep-alives between the router and backends for the given route
+	--enable-keep-alives       enable keep-alives between the router and backends for the given route
 
 Commands:
 	With no arguments, shows a list of routes.

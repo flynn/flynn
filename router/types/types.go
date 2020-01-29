@@ -67,7 +67,7 @@ type Route struct {
 	// completed).
 	DrainBackends bool `json:"drain_backends,omitempty"`
 
-	// DisableKeepAlives when set will disable keep alives between the
+	// DisableKeepAlives when set will disable keep-alives between the
 	// router and backends for this route
 	DisableKeepAlives bool `json:"disable_keep_alives,omitempty"`
 }

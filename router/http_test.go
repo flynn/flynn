@@ -1659,13 +1659,13 @@ func (s *S) TestHTTPDisableKeepalive(c *C) {
 		}
 	}
 
-	// check that routes use keep alives by default
+	// check that routes use keep-alives by default
 	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 	assertStates(http.StateNew, http.StateActive, http.StateIdle)
 	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 	assertStates(http.StateActive, http.StateIdle)
 
-	// check that routes with keep alives disabled lead to new connections
+	// check that routes with keep-alives disabled lead to new connections
 	// per request
 	r.DisableKeepAlives = true
 	s.addRoute(c, l, r)
@@ -1674,7 +1674,7 @@ func (s *S) TestHTTPDisableKeepalive(c *C) {
 	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 	assertStates(http.StateNew, http.StateActive, http.StateClosed)
 
-	// check that keep alives can be re-enabled
+	// check that keep-alives can be re-enabled
 	r.DisableKeepAlives = false
 	s.addRoute(c, l, r)
 	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")

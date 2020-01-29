@@ -60,7 +60,7 @@
     },
     "disable_keep_alives": {
       "type": "boolean",
-      "description": "Whether to disable keep alives between the router and backends for this route."
+      "description": "Whether to disable keep-alives between the router and backends for this route."
     },
     "port": {
       "type": "integer",
