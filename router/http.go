@@ -249,7 +249,14 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	} else {
 		bf = backendFunc(r.Service, service.sc.Instances)
 	}
-	r.rp = proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky, r.DisableKeepAlives, service, logger.New("service", r.Service))
+	r.rp = proxy.NewReverseProxy(proxy.ReverseProxyConfig{
+		BackendListFunc:   bf,
+		StickyKey:         h.l.cookieKey,
+		Sticky:            r.Sticky,
+		DisableKeepAlives: r.DisableKeepAlives,
+		RequestTracker:    service,
+		Logger:            logger.New("service", r.Service),
+	})
 	r.rp.Error503Page = h.l.error503Page
 	r.service = service
 	h.l.routes[data.ID] = r

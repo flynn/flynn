@@ -189,7 +189,11 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	} else {
 		bf = backendFunc(r.Service, service.sc.Instances)
 	}
-	r.rp = proxy.NewReverseProxy(bf, nil, false, false, service, logger)
+	r.rp = proxy.NewReverseProxy(proxy.ReverseProxyConfig{
+		BackendListFunc: bf,
+		RequestTracker:  service,
+		Logger:          logger,
+	})
 	if listener, ok := h.l.listeners[r.Port]; ok {
 		r.l = listener
 		delete(h.l.listeners, r.Port)
