@@ -62,6 +62,16 @@ type ReverseProxy struct {
 	Error503Page []byte
 }
 
+// ReverseProxyConfig is used to initialise a ReverseProxy struct
+type ReverseProxyConfig struct {
+	BackendListFunc   BackendListFunc
+	StickyKey         *[32]byte
+	Sticky            bool
+	DisableKeepAlives bool
+	RequestTracker    RequestTracker
+	Logger            log15.Logger
+}
+
 type RequestTracker interface {
 	TrackRequestStart(backend string)
 	TrackRequestDone(backend string)
@@ -70,18 +80,18 @@ type RequestTracker interface {
 // NewReverseProxy initializes a new ReverseProxy with a callback to get
 // backends, a stickyKey for encrypting sticky session cookies, and a flag
 // sticky to enable sticky sessions.
-func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky, disableKeepAlives bool, rt RequestTracker, l log15.Logger) *ReverseProxy {
+func NewReverseProxy(c ReverseProxyConfig) *ReverseProxy {
 	return &ReverseProxy{
 		transport: &transport{
-			Transport:         newHTTPTransport(disableKeepAlives),
-			getBackends:       bf,
-			stickyCookieKey:   stickyKey,
-			useStickySessions: sticky,
+			Transport:         newHTTPTransport(c.DisableKeepAlives),
+			getBackends:       c.BackendListFunc,
+			stickyCookieKey:   c.StickyKey,
+			useStickySessions: c.Sticky,
 			inFlightRequests:  make(map[string]int64),
 		},
 		FlushInterval:  10 * time.Millisecond,
-		RequestTracker: rt,
-		Logger:         l,
+		RequestTracker: c.RequestTracker,
+		Logger:         c.Logger,
 	}
 }
 
