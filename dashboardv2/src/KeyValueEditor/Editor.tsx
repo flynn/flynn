@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Checkmark as CheckmarkIcon, Copy as CopyIcon, StatusWarning as WarningIcon } from 'grommet-icons';
+import { Checkmark as CheckmarkIcon, StatusWarning as WarningIcon } from 'grommet-icons';
 import { Box, Button } from 'grommet';
 import Notification from '../Notification';
 import copyToClipboard from '../util/copyToClipboard';
@@ -125,15 +125,22 @@ function Editor({
 					MapEntriesOption.APPEND_EMPTY_ENTRY
 				)}
 			</Box>
-			<Button
-				disabled={!data.hasChanges}
-				type="submit"
-				primary
-				icon={hasConflicts ? <WarningIcon /> : <CheckmarkIcon />}
-				label={submitLabel}
-			/>
-			&nbsp;
-			<Button title={copyButtonTitle} type="button" icon={<CopyIcon />} onClick={handleCopyButtonClick} />
+			<Box direction="row" margin={{ top: 'xsmall', bottom: 'xsmall' }}>
+				<Button
+					disabled={!data.hasChanges}
+					type="submit"
+					primary
+					icon={hasConflicts ? <WarningIcon /> : <CheckmarkIcon />}
+					label={submitLabel}
+				/>
+				<Button
+					type="button"
+					label="copy"
+					title={copyButtonTitle}
+					onClick={handleCopyButtonClick}
+					margin={{ left: 'xsmall' }}
+				/>
+			</Box>
 		</form>
 	);
 }

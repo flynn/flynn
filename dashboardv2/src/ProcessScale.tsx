@@ -36,6 +36,10 @@ const LabelText = styled(Text)`
 	margin: 0 0.5em;
 `;
 
+const DeltaText = styled(Text)`
+	color: #e9a945;
+`;
+
 export enum ActionType {
 	SET_VALUE = 'ProcessScale__SET_VALUE',
 	SET_VALUE_EDITABLE = 'ProcessScale__SET_VALUE_EDITABLE',
@@ -182,11 +186,12 @@ const ProcessScale = React.memo(function ProcessScale({
 
 	const delta = React.useMemo(() => value - originalValue, [originalValue, value]);
 	const deltaText = React.useMemo(() => {
+		if (delta === 0) return '';
 		let sign = '+';
 		if (delta < 0) {
 			sign = '-';
 		}
-		return ` (${sign}${Math.abs(delta)})`;
+		return ` ${sign}${Math.abs(delta)}`;
 	}, [delta]);
 
 	// Handle incoming changes to props.value
@@ -293,7 +298,10 @@ const ProcessScale = React.memo(function ProcessScale({
 				) : null}
 			</Box>
 			<Box flex="grow">
-				<LabelText size={size}>{showLabelDelta ? `${label}${deltaText}` : label}</LabelText>
+				<LabelText size={size}>
+					{label}
+					{showLabelDelta ? <DeltaText>{deltaText}</DeltaText> : null}
+				</LabelText>
 			</Box>
 		</Box>
 	);
