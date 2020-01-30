@@ -1,31 +1,152 @@
 import * as React from 'react';
+import fz from 'fz';
 import { Box } from 'grommet';
 
 import useRouter from './useRouter';
-import useAppsList from './useAppsList';
+import {
+	useAppsListWithDispatch,
+	ActionType as AppsActionType,
+	Action as AppsAction,
+	reducer as appsReducer,
+	initialState as initialAppsState,
+	State as AppsState
+} from './useAppsList';
 import useErrorHandler from './useErrorHandler';
+import useDebouncedInputOnChange from './useDebouncedInputOnChange';
+
+import isActionType from './util/isActionType';
 
 import { App } from './generated/controller_pb';
 import { excludeAppsWithLabels } from './client';
 
 import Loading from './Loading';
 import NavAnchor from './NavAnchor';
+import { TextInput } from './GrommetTextInput';
 import WindowedListState from './WindowedListState';
 import WindowedList, { WindowedListItem } from './WindowedList';
 
-export interface Props {
-	onNav?: (path: string) => void;
+export enum ActionType {
+	SET_START_INDEX = 'AppsListNav__SET_START_INDEX',
+	SET_LENGTH = 'AppsListNav__SET_LENGTH',
+	SET_FILTER = 'AppsListNav__SET_FILTER'
 }
 
-export default function AppsListNav({ onNav }: Props) {
+interface SetStartIndexAction {
+	type: ActionType.SET_START_INDEX;
+	index: number;
+}
+
+interface SetLengthAction {
+	type: ActionType.SET_LENGTH;
+	length: number;
+}
+
+interface SetFilterAction {
+	type: ActionType.SET_FILTER;
+	value: string;
+}
+
+export type Action = SetStartIndexAction | SetLengthAction | SetFilterAction | AppsAction;
+
+type Dispatcher = (actions: Action | Action[]) => void;
+
+interface State {
+	appsState: AppsState;
+	filterText: string;
+	filteredApps: App[];
+	startIndex: number;
+	length: number;
+	windowedListState: WindowedListState;
+	windowingThresholdTop: number;
+	windowingThresholdBottom: number;
+}
+
+function initialState(): State {
+	const appsState = initialAppsState();
+	return {
+		appsState,
+		filterText: '',
+		filteredApps: appsState.allApps,
+		startIndex: 0,
+		length: 0,
+		windowedListState: new WindowedListState(),
+		windowingThresholdTop: 600,
+		windowingThresholdBottom: 600
+	};
+}
+
+type Reducer = (prevState: State, actions: Action | Action[]) => State;
+
+function reducer(prevState: State, actions: Action | Action[]): State {
+	if (!Array.isArray(actions)) {
+		actions = [actions];
+	}
+	const nextState = actions.reduce((prevState: State, action: Action) => {
+		const nextState = Object.assign({}, prevState);
+		switch (action.type) {
+			case ActionType.SET_START_INDEX:
+				nextState.startIndex = action.index;
+				return nextState;
+
+			case ActionType.SET_LENGTH:
+				nextState.length = action.length;
+				return nextState;
+
+			case ActionType.SET_FILTER:
+				nextState.filterText = action.value;
+				return nextState;
+
+			default:
+				if (isActionType<AppsAction>(AppsActionType, action)) {
+					nextState.appsState = appsReducer(prevState.appsState, action);
+					return nextState;
+				}
+
+				return prevState;
+		}
+	}, prevState);
+
+	if (nextState === prevState) return prevState;
+
+	(() => {
+		const {
+			appsState: { allApps },
+			filterText
+		} = nextState;
+		if (allApps === prevState.appsState.allApps && filterText === prevState.filterText) {
+			return;
+		}
+		nextState.filteredApps = allApps.filter((a) => {
+			return fz(a.getDisplayName(), filterText);
+		});
+	})();
+
+	return nextState;
+}
+
+export interface Props {}
+
+export default function AppsListNav(props: Props) {
 	const { location, urlParams } = useRouter();
+	const [
+		{
+			appsState: { nextPageToken, fetchNextPage, loading: isLoading, error: appsError },
+			filteredApps: apps,
+			startIndex,
+			length,
+			windowedListState,
+			windowingThresholdTop,
+			windowingThresholdBottom
+		},
+		dispatch
+	] = React.useReducer(reducer, initialState());
 	const excludeSystemAppsFilter = React.useMemo(() => excludeAppsWithLabels([['flynn-system-app', 'true']]), []);
 	const showSystemApps = urlParams.get('show-system-apps') === 'true';
 	const appsListFilters = React.useMemo(() => (showSystemApps ? [] : [excludeSystemAppsFilter]), [
 		excludeSystemAppsFilter,
 		showSystemApps
 	]);
-	const { apps, nextPageToken, fetchNextPage, loading: isLoading, error: appsError } = useAppsList(appsListFilters);
+	useAppsListWithDispatch(dispatch, appsListFilters);
 	const handleError = useErrorHandler();
 	React.useEffect(() => {
 		let cancel = () => {};
@@ -34,6 +155,22 @@ export default function AppsListNav({ onNav }: Props) {
 		}
 		return cancel;
 	}, [appsError, handleError]);
+
+	const setFilterText = React.useCallback(
+		(value: string) => {
+			dispatch({ type: ActionType.SET_FILTER, value });
+		},
+		[dispatch]
+	);
+	const [filterText, handleFilterTextChange, flushFilterText, cancelFilterTextChange] = useDebouncedInputOnChange(
+		'',
+		setFilterText
+	);
+	React.useEffect(() => {
+		return () => {
+			cancelFilterTextChange();
+		};
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 	// some query params are persistent, make sure they're passed along if present
 	const persistedUrlParams = new URLSearchParams();
@@ -47,11 +184,6 @@ export default function AppsListNav({ onNav }: Props) {
 	const scrollContainerRef = React.useRef<HTMLElement>();
 	const paddingTopRef = React.useRef<HTMLElement>();
 	const paddingBottomRef = React.useRef<HTMLElement>();
-	const [startIndex, setStartIndex] = React.useState(0);
-	const [length, setLength] = React.useState(0);
-	const windowedListState = React.useMemo(() => new WindowedListState(), []);
-	const windowingThresholdTop = 600;
-	const windowingThresholdBottom = 600;
 	React.useEffect(() => {
 		return windowedListState.onChange((state: WindowedListState) => {
 			const paddingTopNode = paddingTopRef.current;
@@ -63,8 +195,10 @@ export default function AppsListNav({ onNav }: Props) {
 				paddingBottomNode.style.height = state.paddingBottom + 'px';
 			}
 
-			setStartIndex(state.visibleIndexTop);
-			setLength(state.visibleLength);
+			dispatch([
+				{ type: ActionType.SET_START_INDEX, index: state.visibleIndexTop },
+				{ type: ActionType.SET_LENGTH, length: state.visibleLength }
+			]);
 		});
 	}, [windowedListState]);
 
@@ -78,7 +212,7 @@ export default function AppsListNav({ onNav }: Props) {
 		windowedListState.length = apps.length;
 		windowedListState.defaultHeight = 50;
 		windowedListState.calculateVisibleIndices();
-	}, [apps.length, windowedListState]);
+	}, [apps.length, windowedListState, windowingThresholdTop, windowingThresholdBottom]);
 
 	// pagination
 	React.useEffect(() => {
@@ -101,67 +235,66 @@ export default function AppsListNav({ onNav }: Props) {
 		[location.pathname, search]
 	);
 
-	const navHandler = React.useCallback(
-		(path: string) => {
-			if (location.pathname === path) {
-				return;
-			}
-			if (onNav) {
-				onNav(path);
-			}
-		},
-		[location.pathname, onNav]
-	);
-
 	return (
-		<Box
-			ref={scrollContainerRef as any}
-			tag="ul"
-			margin="none"
-			pad="none"
-			flex={true}
-			overflow={{ vertical: 'auto', horizontal: 'auto' }}
-		>
-			{isLoading ? <Loading /> : null}
-
-			<Box tag="li" ref={paddingTopRef as any} style={{ height: windowedListState.paddingTop }} flex={false}>
-				&nbsp;
+		<>
+			<Box margin={{ bottom: 'xsmall', left: 'xsmall', right: 'xsmall' }}>
+				<TextInput
+					placeholder="Filter apps..."
+					value={filterText}
+					onChange={handleFilterTextChange}
+					onBlur={flushFilterText}
+				/>
 			</Box>
 
-			<WindowedList state={windowedListState} thresholdTop={windowingThresholdTop}>
-				{(windowedListItemProps) => {
-					return apps.map((app, index) => {
-						if (index < startIndex) return null;
-						const r = appRoute(app);
-						return (
-							<WindowedListItem key={r.path} index={index} {...windowedListItemProps}>
-								{(ref) => (
-									<NavAnchor path={r.path} search={search} onNav={navHandler}>
-										<Box
-											tag="li"
-											ref={ref as any}
-											direction="row"
-											justify="between"
-											align="center"
-											border="bottom"
-											pad={{ horizontal: 'medium', vertical: 'small' }}
-											basis="auto"
-											flex={false}
-											background={r.selected ? 'accent-1' : 'neutral-1'}
-										>
-											{r.displayName}
-										</Box>
-									</NavAnchor>
-								)}
-							</WindowedListItem>
-						);
-					});
-				}}
-			</WindowedList>
+			<Box
+				ref={scrollContainerRef as any}
+				tag="ul"
+				margin="none"
+				pad="none"
+				flex={true}
+				overflow={{ vertical: 'auto', horizontal: 'auto' }}
+			>
+				{isLoading ? <Loading /> : null}
 
-			<Box tag="li" ref={paddingBottomRef as any} style={{ height: windowedListState.paddingBottom }} flex={false}>
-				&nbsp;
+				<Box tag="li" ref={paddingTopRef as any} style={{ height: windowedListState.paddingTop }} flex={false}>
+					&nbsp;
+				</Box>
+
+				<WindowedList state={windowedListState} thresholdTop={windowingThresholdTop}>
+					{(windowedListItemProps) => {
+						return apps.map((app, index) => {
+							if (index < startIndex) return null;
+							const r = appRoute(app);
+							return (
+								<WindowedListItem key={r.path} index={index} {...windowedListItemProps}>
+									{(ref) => (
+										<NavAnchor path={r.path} search={search}>
+											<Box
+												tag="li"
+												ref={ref as any}
+												direction="row"
+												justify="between"
+												align="center"
+												border="bottom"
+												pad={{ horizontal: 'medium', vertical: 'small' }}
+												basis="auto"
+												flex={false}
+												background={r.selected ? 'accent-1' : 'neutral-1'}
+											>
+												{r.displayName}
+											</Box>
+										</NavAnchor>
+									)}
+								</WindowedListItem>
+							);
+						});
+					}}
+				</WindowedList>
+
+				<Box tag="li" ref={paddingBottomRef as any} style={{ height: windowedListState.paddingBottom }} flex={false}>
+					&nbsp;
+				</Box>
 			</Box>
-		</Box>
+		</>
 	);
 }
