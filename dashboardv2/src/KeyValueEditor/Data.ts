@@ -4,6 +4,7 @@ export enum DataActionType {
 	SET_KEY_AT_INDEX = 'KVDATA__SET_KEY_AT_INDEX',
 	SET_VAL_AT_INDEX = 'KVDATA__SET_VAL_AT_INDEX',
 	REBASE = 'KVDATA_REBASE',
+	RESET = 'KVDATA_RESET',
 	APPEND_ENTRY = 'KVDATA__APPEND_ENTRY',
 	APPLY_FILTER = 'KVDATA__APPLY_FILTER'
 }
@@ -25,6 +26,10 @@ interface RebaseAction {
 	base: [string, string][];
 }
 
+interface ResetAction {
+	type: DataActionType.RESET;
+}
+
 interface AppendEntryAction {
 	type: DataActionType.APPEND_ENTRY;
 	key: string;
@@ -40,6 +45,7 @@ export type DataAction =
 	| SetKeyAtIndexAction
 	| SetValAtIndexAction
 	| RebaseAction
+	| ResetAction
 	| AppendEntryAction
 	| ApplyFilterAction;
 
@@ -56,6 +62,8 @@ export function dataReducer(prevData: Data, actions: DataAction | DataAction[]):
 				return setValueAtIndex(prevData, action.value, action.index);
 			case DataActionType.REBASE:
 				return rebaseData(prevData, action.base);
+			case DataActionType.RESET:
+				return resetData(prevData);
 			case DataActionType.APPEND_ENTRY:
 				return appendEntry(prevData, action.key, action.value);
 			case DataActionType.APPLY_FILTER:
@@ -649,5 +657,28 @@ export function rebaseData(data: Data, base: [string, string][]): Data {
 			}, [] as Entry[])
 		);
 	nextData.hasChanges = nextData._changedIndices.size > 0;
+	return nextData;
+}
+
+export function resetData(data: Data): Data {
+	const nextEntries = data._entries.reduce((m: Entry[], entry: Entry | undefined) => {
+		if (!entry) return m;
+		const { originalKey, originalValue } = entry[2];
+		if (!originalKey) return m;
+		const key = originalKey;
+		const val = originalValue || '';
+		return m.concat([[key, val, { originalKey, originalValue }]]);
+	}, [] as Entry[]);
+	const nextData = {
+		conflicts: [],
+		_indicesMap: new Map(data._indicesMap),
+		_indices: new Set(data._indices),
+		_changedIndices: new Set<number>(),
+		_deletedLength: 0,
+		length: nextEntries.length,
+		_entries: nextEntries,
+		hasChanges: false,
+		[Symbol.iterator]: data[Symbol.iterator]
+	} as Data;
 	return nextData;
 }
