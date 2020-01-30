@@ -10,7 +10,8 @@ import {
 	nextIndex as nextDataIndex,
 	getEntries,
 	mapEntries,
-	MapEntriesOption
+	MapEntriesOption,
+	DataActionType
 } from './Data';
 import { State, Dispatcher, ActionType } from './common';
 import { SearchInput } from './SearchInput';
@@ -24,6 +25,8 @@ export interface Props {
 	submitLabel?: string;
 	conflictsMessage?: string;
 	copyButtonTitle?: string;
+	resetButtonTitle?: string;
+	resetConfirmText?: string;
 }
 
 function Editor({
@@ -33,7 +36,9 @@ function Editor({
 	valuePlaceholder = 'Value',
 	submitLabel = 'Review Changes',
 	conflictsMessage = 'Some entries have conflicts',
-	copyButtonTitle = 'Copy data to clipboard'
+	copyButtonTitle = 'Copy data to clipboard',
+	resetButtonTitle = 'Reset data',
+	resetConfirmText = 'Are you sure you want to reset the data?'
 }: Props) {
 	// focus next entry's input when entry deleted
 	// and maintain current selection
@@ -94,13 +99,26 @@ function Editor({
 		[data]
 	);
 
+	const handleResetButtonClick = React.useCallback(
+		(event: React.SyntheticEvent) => {
+			event.preventDefault();
+			if (window.confirm(resetConfirmText)) {
+				dispatch({ type: DataActionType.RESET });
+			}
+		},
+		[dispatch, resetConfirmText]
+	);
+
+	const handleSubmit = React.useCallback(
+		(event: React.SyntheticEvent) => {
+			event.preventDefault();
+			dispatch({ type: ActionType.SUBMIT_DATA, data });
+		},
+		[dispatch, data]
+	);
+
 	return (
-		<form
-			onSubmit={(e: React.SyntheticEvent) => {
-				e.preventDefault();
-				dispatch({ type: ActionType.SUBMIT_DATA, data: data });
-			}}
-		>
+		<form onSubmit={handleSubmit}>
 			<Box direction="column" gap="xsmall">
 				{hasConflicts ? <Notification status="warning" message={conflictsMessage} /> : null}
 				<SearchInput dispatch={dispatch} />
@@ -138,6 +156,14 @@ function Editor({
 					label="copy"
 					title={copyButtonTitle}
 					onClick={handleCopyButtonClick}
+					margin={{ left: 'xsmall' }}
+				/>
+				<Button
+					disabled={!data.hasChanges}
+					type="button"
+					label="reset"
+					title={resetButtonTitle}
+					onClick={handleResetButtonClick}
 					margin={{ left: 'xsmall' }}
 				/>
 			</Box>
