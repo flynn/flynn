@@ -189,6 +189,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 	var (
 		route         router.Route
 		certID        *string
+		certRoutes    *string
 		certCert      *string
 		certKey       *string
 		certCreatedAt *time.Time
@@ -208,6 +209,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 		&route.CreatedAt,
 		&route.UpdatedAt,
 		&certID,
+		&certRoutes,
 		&certCert,
 		&certKey,
 		&certCreatedAt,
@@ -221,6 +223,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 			ID:        *certID,
 			Cert:      *certCert,
 			Key:       *certKey,
+			Routes:    splitPGStringArray(*certRoutes),
 			CreatedAt: *certCreatedAt,
 			UpdatedAt: *certUpdatedAt,
 		}
