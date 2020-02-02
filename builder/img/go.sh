@@ -26,7 +26,8 @@ cp "builder/go-wrapper.sh" "/usr/local/bin/cgo"
 cp "builder/go-wrapper.sh" "/usr/local/bin/gobin"
 
 # install gobin
-git clone https://github.com/flynn/gobin "${tmpdir}/gobin"
-cd "${tmpdir}/gobin"
+git clone https://github.com/flynn/gobin "/tmp/gobin"
+trap "rm -rf /tmp/gobin" EXIT
+cd "/tmp/gobin"
 git reset --hard ${gobin_commit}
 /usr/local/bin/go build -o /usr/local/bin/gobin-noenv
