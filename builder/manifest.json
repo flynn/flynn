@@ -544,76 +544,10 @@
       }
     },
     {
-      "id": "dashboard-builder",
+      "id": "dashboard-base",
       "base": "go",
       "layers": [{
-        "script": "util/assetbuilder/build.sh",
-        "env": {"TARGET": "dashboard"},
-        "gobuild": {
-          "dashboard/app": "/bin/dashboard-compile"
-        },
-	"gobin": ["github.com/go-bindata/go-bindata/go-bindata"],
-        "inputs": [
-          "dashboard/app/Gemfile",
-          "dashboard/app/Gemfile.lock"
-        ]
-      }]
-    },
-    {
-      "id": "dashboard-compiled",
-      "base": "dashboard-builder",
-      "layers": [{
-        "script": "dashboard/img/compile.sh",
-        "inputs": [
-          "dashboard/app/lib/dashboard.html.tmpl",
-          "dashboard/app/lib/images/*.png",
-          "dashboard/app/lib/javascripts/dashboard.js",
-          "dashboard/app/lib/javascripts/dashboard/*.js",
-          "dashboard/app/lib/javascripts/dashboard/*.erb",
-          "dashboard/app/lib/javascripts/dashboard/actions/*.js",
-          "dashboard/app/lib/javascripts/dashboard/routers/*.js",
-          "dashboard/app/lib/javascripts/dashboard/stores/*.js",
-          "dashboard/app/lib/javascripts/dashboard/views/*.js",
-          "dashboard/app/lib/javascripts/dashboard/views/*.js.jsx",
-          "dashboard/app/lib/javascripts/dashboard/views/*.js.jsx.erb",
-          "dashboard/app/lib/javascripts/dashboard/views/css/*.js",
-          "dashboard/app/lib/javascripts/dashboard/views/helpers/*.js",
-          "dashboard/app/lib/javascripts/dashboard/views/models/*.js",
-          "dashboard/app/lib/stylesheets/dashboard.scss",
-          "dashboard/app/lib/stylesheets/dashboard/*.scss",
-          "dashboard/app/vendor/fonts/*.eot",
-          "dashboard/app/vendor/fonts/*.svg",
-          "dashboard/app/vendor/fonts/*.ttf",
-          "dashboard/app/vendor/fonts/*.woff",
-          "dashboard/app/vendor/javascripts/*.js",
-          "dashboard/app/vendor/stylesheets/*.scss"
-        ],
-        "limits": { "memory": "3G" }
-      }]
-    },
-    {
-      "id": "dashboard",
-      "base": "busybox",
-      "layers": [{
-        "build_with": "dashboard-compiled",
-        "run": [
-          "cp /bindata.go dashboard"
-        ],
-        "gobuild": {
-          "dashboard": "/bin/flynn-dashboard"
-        }
-      }],
-      "entrypoint": {
-        "args": [
-          "/bin/flynn-dashboard"
-        ]
-      }
-    },
-    {
-      "id": "dashboardv2-base",
-      "base": "go",
-      "layers": [{
-        "script": "builder/img/dashboardv2-base.sh",
+        "script": "builder/img/dashboard-base.sh",
         "inputs": [
           "controller/api/*.proto"
         ],
@@ -624,58 +558,58 @@
       }]
     },
     {
-      "id": "dashboardv2-compiled",
-      "base": "dashboardv2-base",
+      "id": "dashboard-compiled",
+      "base": "dashboard-base",
       "layers": [
         {
          "protobuildjs": {
-           "controller/api": "dashboardv2/src/generated"
+           "controller/api": "dashboard/src/generated"
           }
         },
         {
-         "script": "dashboardv2/img/compile.sh",
+         "script": "dashboard/img/compile.sh",
          "inputs": [
-           "dashboardv2/.eslintignore",
-           "dashboardv2/yarn.lock",
-           "dashboardv2/*.json",
-           "dashboardv2/*.ts",
-           "dashboardv2/config/*.js",
-           "dashboardv2/scripts/*.js",
-           "dashboardv2/public/*.png",
-           "dashboardv2/public/*.ico",
-           "dashboardv2/public/*.json",
-           "dashboardv2/public/*.html",
-           "dashboardv2/src/*.css",
-           "dashboardv2/src/*.ts",
-           "dashboardv2/src/*.tsx",
-           "dashboardv2/src/util/*.ts",
-           "dashboardv2/src/generated/*.ts",
-           "dashboardv2/src/generated/*.js",
-           "dashboardv2/src/generated/google/api/*.ts",
-           "dashboardv2/src/generated/google/api/*.js",
-           "dashboardv2/src/KeyValueEditor/*.ts",
-           "dashboardv2/src/KeyValueEditor/*.tsx"
+           "dashboard/.eslintignore",
+           "dashboard/yarn.lock",
+           "dashboard/*.json",
+           "dashboard/*.ts",
+           "dashboard/config/*.js",
+           "dashboard/scripts/*.js",
+           "dashboard/public/*.png",
+           "dashboard/public/*.ico",
+           "dashboard/public/*.json",
+           "dashboard/public/*.html",
+           "dashboard/src/*.css",
+           "dashboard/src/*.ts",
+           "dashboard/src/*.tsx",
+           "dashboard/src/util/*.ts",
+           "dashboard/src/generated/*.ts",
+           "dashboard/src/generated/*.js",
+           "dashboard/src/generated/google/api/*.ts",
+           "dashboard/src/generated/google/api/*.js",
+           "dashboard/src/KeyValueEditor/*.ts",
+           "dashboard/src/KeyValueEditor/*.tsx"
          ],
          "limits": { "memory": "3G", "temp_disk": "3G" }
        }
       ]
     },
     {
-      "id": "dashboardv2",
+      "id": "dashboard",
       "base": "busybox",
       "layers": [{
-        "build_with": "dashboardv2-compiled",
+        "build_with": "dashboard-compiled",
         "run": [
-          "cp /app/bindata.go dashboardv2"
+          "cp /app/bindata.go dashboard"
         ],
         "gobuild": {
-          "dashboardv2": "/bin/flynn-dashboardv2"
+          "dashboard": "/bin/flynn-dashboard"
         },
         "limits": { "temp_disk": "1G" }
       }],
       "entrypoint": {
         "args": [
-          "/bin/flynn-dashboardv2"
+          "/bin/flynn-dashboard"
         ]
       }
     },

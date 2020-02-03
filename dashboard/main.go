@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	conf := LoadConfigFromEnv()
-	h := APIHandler(conf)
+	conf := MustConfig()
+	h := NewDashboardHandler(conf)
 	log.Fatal(http.ListenAndServe(conf.Addr, h))
 }
