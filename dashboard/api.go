@@ -34,24 +34,20 @@ func NewDashboardHandler(conf *Config) http.Handler {
 	router := httprouter.New()
 	router2 := httprouter.New()
 
-	prefixPath := func(p string) string {
-		return p // TODO(jvatic): handle path prefix?
-	}
-
 	router.HandlerFunc("GET", status.Path, status.HealthyHandler.ServeHTTP)
 
-	router.GET(prefixPath("/robots.txt"), api.WrapHandler(api.ServeRobotsTxt))
+	router.GET("/robots.txt", api.WrapHandler(api.ServeRobotsTxt))
 
-	router.POST(prefixPath("/login"), api.WrapHandler(api.Login))
-	router.POST(prefixPath("/logout"), api.WrapHandler(api.Logout))
+	router.POST("/login", api.WrapHandler(api.Login))
+	router.POST("/logout", api.WrapHandler(api.Logout))
 
-	router.GET(prefixPath("/"), api.WrapHandler(api.ServeIndex))
-	router.GET(prefixPath("/apps/*path"), api.WrapHandler(api.ServeIndex))
+	router.GET("/", api.WrapHandler(api.ServeIndex))
+	router.GET("/apps/*path", api.WrapHandler(api.ServeIndex))
 
-	router.GET(prefixPath("/config.js"), api.WrapHandler(api.ServeConfigJs))
+	router.GET("/config.js", api.WrapHandler(api.ServeConfigJs))
 
 	router.NotFound = router2.ServeHTTP
-	router2.GET(prefixPath("/*path"), api.WrapHandler(api.ServeAsset))
+	router2.GET("/*path", api.WrapHandler(api.ServeAsset))
 
 	return httphelper.ContextInjector("dashboard",
 		httphelper.NewRequestLogger(
