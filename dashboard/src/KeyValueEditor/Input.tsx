@@ -2,10 +2,15 @@ import * as React from 'react';
 import fz from 'fz';
 import { StatusWarning as WarningIcon, Update as UpdateIcon } from 'grommet-icons';
 import { Stack, Box, Button, TextArea } from 'grommet';
+import styled from 'styled-components';
 import { TextInput } from '../GrommetTextInput';
 import useDebouncedInputOnChange from '../useDebouncedInputOnChange';
 import { default as useStringValidation, StringValidator } from '../useStringValidation';
 import { InputSelection } from './common';
+
+const StyledTextArea = styled(TextArea)`
+	color: var(--accent-1);
+`;
 
 export interface InputProps {
 	placeholder: string;
@@ -94,7 +99,7 @@ function Input(props: InputProps) {
 		const inputRefProp = refHandler ? { ref: refHandler } : {};
 		if (expanded) {
 			return (
-				<TextArea
+				<StyledTextArea
 					value={value}
 					onChange={changeHandler}
 					onInput={selectionChangeHandler}

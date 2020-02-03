@@ -8,6 +8,7 @@ import {
 	StatusWarning,
 	Close as CloseIcon
 } from 'grommet-icons';
+import styled from 'styled-components';
 
 interface NotificationProps extends BoxProps {
 	onClose?: () => void;
@@ -28,6 +29,10 @@ const StatusIcon = ({ value, ...rest }: { value: string; color: string }) => {
 	return <Icon color={`status-${value.toLowerCase()}`} {...rest} />;
 };
 
+const StyledText = styled(Text)`
+	color: var(--black);
+`;
+
 export default ({ message, status, onClose, ...rest }: NotificationProps) => (
 	<Box
 		direction="row"
@@ -42,7 +47,7 @@ export default ({ message, status, onClose, ...rest }: NotificationProps) => (
 				<StatusIcon value={status} color="white" />
 			</Box>
 		) : null}
-		{message ? <Text>{message}</Text> : null}
+		{message ? <StyledText>{message}</StyledText> : null}
 		{onClose ? (
 			<Box margin={{ right: 'medium' }} onClick={onClose}>
 				<Button>
