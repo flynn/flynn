@@ -65,13 +65,6 @@
       }]
     },
     {
-      "id": "protocjs",
-      "base": "protoc",
-      "layers": [{
-        "script": "builder/img/protocjs.sh"
-      }]
-    },
-    {
       "id": "builder",
       "base": "go",
       "layers": [{
@@ -164,7 +157,10 @@
       "layers": [
         {
           "protobuild": [
-            "controller/api"
+            {
+              "src": "controller/api",
+              "lang": "go"
+            }
           ]
         },
         {
@@ -562,9 +558,13 @@
       "base": "dashboard-base",
       "layers": [
         {
-         "protobuildjs": {
-           "controller/api": "dashboard/src/generated"
-          }
+          "protobuild": [
+            {
+              "src": "controller/api",
+              "dst": "dashboard/src/generated",
+              "lang": "js"
+            }
+          ]
         },
         {
          "script": "dashboard/img/compile.sh",
