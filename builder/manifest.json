@@ -544,9 +544,7 @@
       "base": "go",
       "layers": [{
         "script": "builder/img/dashboard-base.sh",
-        "inputs": [
-          "controller/api/*.proto"
-        ],
+        "inputs": [],
         "limits": { "temp_disk": "1G" }
       },
       {
