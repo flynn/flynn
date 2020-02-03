@@ -993,7 +993,7 @@ func (b *Builder) BuildLayer(l *Layer, id, name string, run []string, env map[st
 			if err != nil {
 				return err
 			}
-			if err := os.MkdirAll(filepath.Dir(dstPath), info.Mode()); err != nil {
+			if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
 				return err
 			}
 			dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
