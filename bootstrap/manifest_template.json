@@ -675,7 +675,6 @@
       "env": {
         "SESSION_DOMAIN": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "INTERFACE_URL": "https://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
-        "CONTROLLER_HOST": "https://controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "CONTROLLER_DOMAIN": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
