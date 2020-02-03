@@ -95,10 +95,8 @@ func (s *DomainMigrationSuite) migrateDomain(t *c.C, client controller.Client, d
 
 	dashboardRelease, err := client.GetAppRelease("dashboard")
 	t.Assert(err, c.IsNil)
-	t.Assert(dashboardRelease.Env["DEFAULT_ROUTE_DOMAIN"], c.Equals, dm.Domain)
 	t.Assert(dashboardRelease.Env["CONTROLLER_DOMAIN"], c.Equals, fmt.Sprintf("controller.%s", dm.Domain))
-	t.Assert(dashboardRelease.Env["URL"], c.Equals, fmt.Sprintf("https://dashboard.%s", dm.Domain))
-	t.Assert(dashboardRelease.Env["CA_CERT"], c.Equals, cert.CACert)
+	t.Assert(dashboardRelease.Env["INTERFACE_URL"], c.Equals, fmt.Sprintf("https://dashboard.%s", dm.Domain))
 
 	routes, err := client.AppRouteList("controller")
 	t.Assert(err, c.IsNil)
