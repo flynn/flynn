@@ -5,8 +5,8 @@ import (
 	"os"
 )
 
-// This file is replaced with a version with all assets compiled into it before
-// it's run in the cluster.
+// This file is replaced with a version with all assets compiled into it via
+// the flynn build process.
 
 func Asset(path string) ([]byte, error) {
 	return ioutil.ReadFile(path)

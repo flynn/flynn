@@ -1,114 +1,86 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"path"
-	"strings"
 
-	ct "github.com/flynn/flynn/controller/types"
 	"github.com/gorilla/sessions"
 )
 
 type Config struct {
-	Addr                    string
-	DefaultRouteDomain      string
-	ControllerDomain        string
-	ControllerKey           string
-	StatusDomain            string
-	StatusKey               string
-	URL                     string
-	InterfaceURL            string
-	PathPrefix              string
-	CookiePath              string
-	SecureCookies           bool
-	LoginToken              string
-	GithubToken             string
-	GithubAPIURL            string
-	GithubTokenURL          string
-	GithubCloneAuthRequired bool
-	SessionStore            *sessions.CookieStore
-	AppName                 string
-	InstallCert             bool
-	Cache                   bool
-	DefaultDeployTimeout    int
+	Addr              string
+	ControllerDomain  string
+	ControllerAuthKey string
+	InterfaceURL      string
+	LoginToken        string
+	SessionStore      *sessions.CookieStore
+	PublicConfig      map[string]string
+	PublicConfigJSON  []byte
+	PrivateConfig     map[string]string
+	PrivateConfigJSON []byte
 }
 
-func LoadConfigFromEnv() *Config {
+func MustConfig() *Config {
 	conf := &Config{}
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "5000"
+		port = "5200"
 	}
 	conf.Addr = ":" + port
-
-	conf.DefaultRouteDomain = os.Getenv("DEFAULT_ROUTE_DOMAIN")
-	if conf.DefaultRouteDomain == "" {
-		log.Fatal("DEFAULT_ROUTE_DOMAIN is required!")
-	}
 
 	conf.ControllerDomain = os.Getenv("CONTROLLER_DOMAIN")
 	if conf.ControllerDomain == "" {
 		log.Fatal("CONTROLLER_DOMAIN is required!")
 	}
 
-	conf.ControllerKey = os.Getenv("CONTROLLER_KEY")
-	if conf.ControllerKey == "" {
-		log.Fatal("CONTROLLER_KEY is required!")
+	conf.ControllerAuthKey = os.Getenv("CONTROLLER_AUTH_KEY")
+	if conf.ControllerAuthKey == "" {
+		log.Fatal("CONTROLLER_AUTH_KEY is required!")
 	}
 
-	conf.StatusDomain = fmt.Sprintf("status.%s", conf.DefaultRouteDomain)
-	conf.StatusKey = os.Getenv("STATUS_KEY")
-
-	conf.URL = os.Getenv("URL")
-	if conf.URL == "" {
-		log.Fatal("URL is required!")
+	conf.LoginToken = os.Getenv("LOGIN_TOKEN")
+	if conf.LoginToken == "" {
+		log.Fatal("LOGIN_TOKEN is required!")
 	}
-	conf.InterfaceURL = conf.URL
+
+	conf.InterfaceURL = os.Getenv("INTERFACE_URL")
+	if conf.InterfaceURL == "" {
+		log.Fatal("INTERFACE_URL is required!")
+	}
 
 	sessionSecret := os.Getenv("SESSION_SECRET")
 	if sessionSecret == "" {
 		log.Fatal("SESSION_SECRET is required!")
 	}
 	conf.SessionStore = sessions.NewCookieStore([]byte(sessionSecret))
-
-	pathPrefix := path.Clean(os.Getenv("PATH_PREFIX"))
-	conf.CookiePath = pathPrefix
-	if pathPrefix == "/" || pathPrefix == "." {
-		pathPrefix = ""
-		conf.CookiePath = "/"
-	}
-	conf.PathPrefix = pathPrefix
-
-	conf.SecureCookies = os.Getenv("SECURE_COOKIES") != ""
-
-	conf.LoginToken = os.Getenv("LOGIN_TOKEN")
-	if conf.LoginToken == "" {
-		log.Fatal("LOGIN_TOKEN is required")
-	}
-
-	conf.GithubToken = os.Getenv("GITHUB_TOKEN")
-
-	if host := os.Getenv("GITHUB_ENTERPRISE_HOST"); host != "" {
-		conf.GithubAPIURL = fmt.Sprintf("https://%s/api/v3", host)
-		conf.GithubTokenURL = fmt.Sprintf("https://%s/settings/tokens/new", host)
-		conf.GithubCloneAuthRequired = true
+	conf.SessionStore.Options.Secure = true
+	if d := os.Getenv("SESSION_DOMAIN"); d != "" {
+		conf.SessionStore.Options.Domain = d
 	} else {
-		conf.GithubAPIURL = "https://api.github.com"
-		conf.GithubTokenURL = "https://github.com/settings/tokens/new"
+		log.Fatal("SESSION_DOMAIN is required!")
 	}
 
-	conf.AppName = os.Getenv("APP_NAME")
-	if conf.AppName == "" {
-		conf.AppName = "dashboard"
+	conf.PublicConfig = map[string]string{
+		"CONTROLLER_HOST": fmt.Sprintf("https://%s", conf.ControllerDomain),
+		"PUBLIC_URL":      conf.InterfaceURL,
 	}
 
-	conf.InstallCert = strings.HasPrefix(conf.URL, "https://")
+	var err error
+	conf.PublicConfigJSON, err = json.Marshal(conf.PublicConfig)
+	if err != nil {
+		log.Fatalf("Error encoding PublicConfigJSON: %v", err)
+	}
 
-	conf.Cache = os.Getenv("DISABLE_CACHE") == ""
+	conf.PrivateConfig = map[string]string{
+		"CONTROLLER_AUTH_KEY": conf.ControllerAuthKey,
+	}
 
-	conf.DefaultDeployTimeout = ct.DefaultDeployTimeout
+	conf.PrivateConfigJSON, err = json.Marshal(conf.PrivateConfig)
+	if err != nil {
+		log.Fatalf("Error encoding PrivateConfigJSON: %v", err)
+	}
 
 	return conf
 }
