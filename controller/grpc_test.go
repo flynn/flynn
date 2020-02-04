@@ -32,6 +32,7 @@ type GRPCSuite struct {
 	api                 *controllerAPI
 	grpc                api.ControllerClient
 	grpcNoAuth          api.ControllerClient
+	routerClient        api.RouterClient
 	httpSrv             *httptest.Server
 	tearDownFns         []func()
 	scaleRequestNameMap map[string]string
@@ -74,7 +75,7 @@ func (s *GRPCSuite) SetUpSuite(c *C) {
 	s.onTeardown(func() { grpcListener.Close() })
 	go grpcServer.Serve(grpcListener)
 
-	grpcClient := func(opts ...grpc.DialOption) api.ControllerClient {
+	grpcConn := func(opts ...grpc.DialOption) *grpc.ClientConn {
 		opts = append(opts, grpc.WithInsecure())
 		opts = append(opts, grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
 			return grpcListener.Dial()
@@ -84,14 +85,17 @@ func (s *GRPCSuite) SetUpSuite(c *C) {
 			c.Fatalf("did not connect to server: %v", err)
 		}
 		s.onTeardown(func() { conn.Close() })
-		return api.NewControllerClient(conn)
+		return conn
 	}
 
 	// Set up an authenticated connection to the server
-	s.grpc = grpcClient(api.WithAuthKey(authKeys[0]))
+	authConn := grpcConn(api.WithAuthKey(authKeys[0]))
+	s.grpc = api.NewControllerClient(authConn)
 
 	// Set up an unauthenticated connection to the server
-	s.grpcNoAuth = grpcClient()
+	s.grpcNoAuth = api.NewControllerClient(grpcConn())
+
+	s.routerClient = api.NewRouterClient(authConn)
 
 	// Wait for the server to start
 	var req empty.Empty

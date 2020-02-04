@@ -5,12 +5,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/controller/api"
 	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/testutils"
 	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
+	"golang.org/x/net/context"
 )
 
 type fakeStream struct{}
@@ -346,4 +348,235 @@ func (s *S) TestStreamRouteEvents(c *C) {
 	case <-time.After(10 * time.Second):
 		c.Fatal("Timed out waiting for remove event")
 	}
+}
+
+func (s *GRPCSuite) TestSetRoutes(c *C) {
+	// create some apps
+	app1 := s.createTestApp(c, &api.App{DisplayName: "app1"})
+	app2 := s.createTestApp(c, &api.App{DisplayName: "app2"})
+	app3 := s.createTestApp(c, &api.App{DisplayName: "app3"})
+	var app1Routes, app2Routes, app3Routes []*api.Route
+
+	// define some convenience functions
+	httpRoute := func(service, domain string) *api.Route {
+		return &api.Route{
+			ServiceTarget: &api.Route_ServiceTarget{
+				ServiceName:   service,
+				DrainBackends: true,
+			},
+			Config: &api.Route_Http{Http: &api.Route_HTTP{
+				Domain: domain,
+				Path:   "/",
+			}},
+		}
+	}
+	setRoutes := func(dryRun bool, expectedState []byte) (*api.SetRoutesResponse, error) {
+		req := &api.SetRoutesRequest{
+			AppRoutes: []*api.AppRoutes{
+				{App: app1.Name, Routes: app1Routes},
+				{App: app2.Name, Routes: app2Routes},
+				{App: app3.Name, Routes: app3Routes},
+			},
+			DryRun:        dryRun,
+			ExpectedState: expectedState,
+		}
+		return s.routerClient.SetRoutes(context.Background(), req)
+	}
+	dryRun := func() *api.SetRoutesResponse {
+		res, err := setRoutes(true, nil)
+		c.Assert(err, IsNil)
+		c.Assert(res.DryRun, Equals, true)
+		c.Assert(res.AppliedToState, Not(IsNil))
+		return res
+	}
+	applyRoutes := func(expectedState []byte) *api.SetRoutesResponse {
+		res, err := setRoutes(false, expectedState)
+		c.Assert(err, IsNil)
+		c.Assert(res.DryRun, Equals, false)
+		c.Assert(res.AppliedToState, Not(IsNil))
+		return res
+	}
+	assertChange := func(change *api.RouteChange, action api.RouteChange_Action, before, after *api.Route) {
+		c.Assert(change.Action, Equals, action)
+
+		if before == nil {
+			c.Assert(change.Before, IsNil)
+		} else {
+			c.Assert(change.Before, Not(IsNil))
+			c.Assert(change.Before.String(), Equals, before.String())
+		}
+
+		if after == nil {
+			c.Assert(change.After, IsNil)
+		} else {
+			c.Assert(change.After, Not(IsNil))
+			c.Assert(change.After.String(), Equals, after.String())
+		}
+	}
+	assertNoRoutes := func() {
+		var count int64
+		err := s.db.QueryRow(
+			"SELECT COUNT(*) FROM http_routes WHERE parent_ref IN ($1, $2, $3) AND deleted_at IS NULL",
+			"controller/"+app1.Name, "controller/"+app2.Name, "controller/"+app3.Name,
+		).Scan(&count)
+		c.Assert(err, IsNil)
+		if count != 0 {
+			c.Fatalf("expected no routes, got %d", count)
+		}
+	}
+	assertRoutes := func(expected ...*api.Route) {
+		rows, err := s.db.Query(
+			"SELECT service, domain FROM http_routes WHERE parent_ref IN ($1, $2, $3) AND deleted_at IS NULL ORDER BY domain",
+			"controller/"+app1.Name, "controller/"+app2.Name, "controller/"+app3.Name,
+		)
+		c.Assert(err, IsNil)
+		defer rows.Close()
+		var routes []*router.Route
+		for rows.Next() {
+			var route router.Route
+			c.Assert(rows.Scan(&route.Service, &route.Domain), IsNil)
+			routes = append(routes, &route)
+		}
+		c.Assert(rows.Err(), IsNil)
+		if len(routes) != len(expected) {
+			c.Fatalf("expected %d routes, got %d", len(expected), len(routes))
+		}
+		for i, r := range expected {
+			c.Assert(routes[i].Service, Equals, r.ServiceTarget.ServiceName)
+			c.Assert(routes[i].Domain, Equals, r.Config.(*api.Route_Http).Http.Domain)
+		}
+	}
+
+	// start with a route per app
+	route1 := httpRoute("app1-web", "app1.example.com")
+	route2 := httpRoute("app2-web", "app2.example.com")
+	route3 := httpRoute("app3-web", "app3.example.com")
+	app1Routes = []*api.Route{route1}
+	app2Routes = []*api.Route{route2}
+	app3Routes = []*api.Route{route3}
+
+	// initial dry run should return three create changes but not create the routes
+	res := dryRun()
+	c.Assert(res.RouteChanges, HasLen, 3)
+	assertChange(res.RouteChanges[0], api.RouteChange_ACTION_CREATE, nil, route1)
+	assertChange(res.RouteChanges[1], api.RouteChange_ACTION_CREATE, nil, route2)
+	assertChange(res.RouteChanges[2], api.RouteChange_ACTION_CREATE, nil, route3)
+	assertNoRoutes()
+
+	// grab the initial state so we can check re-applying fails later
+	initialState := res.AppliedToState
+
+	// applying should create the routes
+	res = applyRoutes(res.AppliedToState)
+	assertRoutes(route1, route2, route3)
+
+	// trying to apply the same change again should fail
+	_, err := setRoutes(false, initialState)
+	c.Assert(err, NotNil)
+	c.Assert(strings.Contains(err.Error(), "the expected route state in the request does not match the current state"), Equals, true, Commentf("err = %s", err))
+	assertRoutes(route1, route2, route3)
+
+	// updating a route should lead to a single update change
+	newRoute1 := &api.Route{
+		ServiceTarget: &api.Route_ServiceTarget{
+			ServiceName:   "app1-foo",
+			DrainBackends: true,
+		},
+		Config: route1.Config,
+	}
+	app1Routes = []*api.Route{newRoute1}
+	res = dryRun()
+	c.Assert(res.RouteChanges, HasLen, 1)
+	assertChange(res.RouteChanges[0], api.RouteChange_ACTION_UPDATE, route1, newRoute1)
+	assertRoutes(route1, route2, route3)
+	res = applyRoutes(res.AppliedToState)
+	assertRoutes(newRoute1, route2, route3)
+
+	// adding a duplicate route should fail, both on a dry run and when applying changes
+	dupRoute := &api.Route{
+		ServiceTarget: &api.Route_ServiceTarget{
+			ServiceName:   "app2-web",
+			DrainBackends: true,
+		},
+		Config: route1.Config,
+	}
+	app2Routes = append(app2Routes, dupRoute)
+	_, err = setRoutes(true, res.AppliedToState)
+	c.Assert(err, NotNil)
+	c.Assert(strings.Contains(err.Error(), "conflict: a http route with domain=app1.example.com and path=/ already exists"), Equals, true, Commentf("err = %s", err))
+	_, err = setRoutes(false, nil)
+	c.Assert(err, NotNil)
+	c.Assert(strings.Contains(err.Error(), "conflict: a http route with domain=app1.example.com and path=/ already exists"), Equals, true, Commentf("err = %s", err))
+	app2Routes = app2Routes[:1]
+
+	// adding a route should lead to a single create change
+	newRoute2 := httpRoute("app2-foo", "foo.example.com")
+	app2Routes = append(app2Routes, newRoute2)
+	res = dryRun()
+	c.Assert(res.RouteChanges, HasLen, 1)
+	assertChange(res.RouteChanges[0], api.RouteChange_ACTION_CREATE, nil, newRoute2)
+	assertRoutes(newRoute1, route2, route3)
+	res = applyRoutes(res.AppliedToState)
+	assertRoutes(newRoute1, route2, route3, newRoute2)
+
+	// removing a route should lead to a single delete change
+	app2Routes = app2Routes[:1]
+	res = dryRun()
+	c.Assert(res.RouteChanges, HasLen, 1)
+	assertChange(res.RouteChanges[0], api.RouteChange_ACTION_DELETE, newRoute2, nil)
+	assertRoutes(newRoute1, route2, route3, newRoute2)
+	res = applyRoutes(res.AppliedToState)
+	assertRoutes(newRoute1, route2, route3)
+
+	// making multiple changes should return the correct changes
+	newRoute3 := httpRoute("app1-bar", "bar.example.com")
+	newRoute4 := &api.Route{
+		ServiceTarget: &api.Route_ServiceTarget{
+			ServiceName:   "app2-bar",
+			DrainBackends: true,
+		},
+		Config: route2.Config,
+	}
+	app1Routes = append(app1Routes, newRoute3)
+	app2Routes = []*api.Route{newRoute4}
+	app3Routes = []*api.Route{}
+	res = dryRun()
+	c.Assert(res.RouteChanges, HasLen, 3)
+	assertChange(res.RouteChanges[0], api.RouteChange_ACTION_DELETE, route3, nil)
+	assertChange(res.RouteChanges[1], api.RouteChange_ACTION_UPDATE, route2, newRoute4)
+	assertChange(res.RouteChanges[2], api.RouteChange_ACTION_CREATE, nil, newRoute3)
+	assertRoutes(newRoute1, route2, route3)
+	res = applyRoutes(res.AppliedToState)
+	assertRoutes(newRoute1, newRoute4, newRoute3)
+
+	// moving a route between apps should work
+	newRoute5 := &api.Route{
+		ServiceTarget: &api.Route_ServiceTarget{
+			ServiceName:   "app1-web",
+			DrainBackends: true,
+		},
+		Config: route2.Config,
+	}
+	app1Routes = append(app1Routes, newRoute5)
+	app2Routes = []*api.Route{}
+	res = dryRun()
+	c.Assert(res.RouteChanges, HasLen, 2)
+	assertChange(res.RouteChanges[0], api.RouteChange_ACTION_DELETE, newRoute4, nil)
+	assertChange(res.RouteChanges[1], api.RouteChange_ACTION_CREATE, nil, newRoute5)
+	assertRoutes(newRoute1, newRoute4, newRoute3)
+	res = applyRoutes(res.AppliedToState)
+	assertRoutes(newRoute1, newRoute5, newRoute3)
+
+	// setting all app routes to empty should delete all routes
+	app1Routes = []*api.Route{}
+	app2Routes = []*api.Route{}
+	app3Routes = []*api.Route{}
+	res = dryRun()
+	c.Assert(res.RouteChanges, HasLen, 3)
+	assertChange(res.RouteChanges[0], api.RouteChange_ACTION_DELETE, newRoute1, nil)
+	assertChange(res.RouteChanges[1], api.RouteChange_ACTION_DELETE, newRoute5, nil)
+	assertChange(res.RouteChanges[2], api.RouteChange_ACTION_DELETE, newRoute3, nil)
+	assertRoutes(newRoute1, newRoute5, newRoute3)
+	res = applyRoutes(res.AppliedToState)
+	assertNoRoutes()
 }

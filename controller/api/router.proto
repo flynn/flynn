@@ -1,0 +1,141 @@
+syntax = 'proto3';
+
+package flynn.api.v1;
+
+option go_package = 'api';
+
+// Flynn Router gRPC API v1
+service Router {
+  // SetRoutes takes a desired list of routes for a set of apps, calculates the
+  // changes that are needed to the existing routes to realise that list, and
+  // then either atomically applies those changes or returns them for user
+  // confirmation (otherwise known as a dry run).
+  //
+  // The given list of routes for each app is expected to contain the desired
+  // configuration for all of the app's routes, and so if any existing routes
+  // are not contained in the list, or they match ones in the list but have
+  // different configuration, then they will be either deleted or updated.
+  rpc SetRoutes(SetRoutesRequest) returns (SetRoutesResponse);
+}
+
+// SetRoutesRequest is a request to set a list of app routes.
+message SetRoutesRequest {
+  // app_routes are the app routes to set.
+  repeated AppRoutes app_routes = 1;
+
+  // dry_run indicates whether to just generate the changes that would be
+  // applied to existing routes by this request (true) or to also atomically
+  // apply the route changes (false).
+  bool dry_run = 2;
+
+  // expected_state is the expected state of existing routes to apply this
+  // request to, with the request failing if the actual state differs.
+  bytes expected_state = 3;
+}
+
+// SetRoutesResponse is a response to a SetRoutes request.
+message SetRoutesResponse {
+  // route_changes is the list of route changes that were either applied if
+  // dry_run=false or that would have been applied if dry_run=true.
+  repeated RouteChange route_changes = 1;
+
+  // dry_run indicates whether the request was a dry run or not.
+  bool dry_run = 2;
+
+  // applied_to_state is the state of the existing routes that this request was
+  // applied to, and can be used as the expected_state in a subsequent request
+  // to confirm the application of a dry run.
+  bytes applied_to_state = 3;
+}
+
+// AppRoutes is a list of desired routes for an app.
+message AppRoutes {
+  // app is an identifier for the app.
+  string app = 1;
+
+  // routes are the desired routes for the app.
+  repeated Route routes = 2;
+}
+
+// RouteChange is a change made to a route in response to a SetRoutes request.
+message RouteChange {
+  enum Action {
+    // Unused/invalid default value.
+    ACTION_UNSPECIFIED = 0;
+
+    // ACTION_CREATE represents a route that was created.
+    ACTION_CREATE = 1;
+
+    // ACTION_UPDATE represents a route that was updated.
+    ACTION_UPDATE = 2;
+
+    // ACTION_DELETE represents a route that was deleted.
+    ACTION_DELETE = 3;
+  }
+
+  // action is the action that was performed.
+  Action action = 1;
+
+  // before is the route before the action was applied.
+  Route before = 2;
+
+  // after is the route after the action was applied.
+  Route after = 3;
+}
+
+// Route is a HTTP or TCP route.
+message Route {
+  // A discoverd service target.
+  message ServiceTarget {
+    // Required. The discoverd service name to route requests to.
+    string service_name = 1;
+
+    // Wait for in-flight requests to this target to finish before backends are terminated.
+    bool drain_backends = 2;
+  }
+
+  message HTTP {
+    // Required. The name of the server that this route matches. May contain up
+    // to 10 wildcard labels for plaintext HTTP routes or a single wildcard
+    // label for TLS routes, followed by one or more non-wildcard labels. This
+    // is matched against SNI to choose the TLS configuration and the Host
+    // header to select the route.
+    string domain = 1;
+
+    // The HTTP path prefix to match against. Defaults to the root path `/`. To
+    // create a route with a non-root path prefix, a root path route must already
+    // exist for the same listener and domain, which will be used for the TLS and
+    // HSTS configuration. Trailing slashes are stripped and only full path
+    // segments are matched. The full unstripped path is sent in requests to the
+    // target.
+    string path = 2;
+  }
+
+  message TCP {
+    // The TCP port configuration for the route. Required and only valid for TCP
+    // listeners.
+    TCPPort port = 1;
+  }
+
+  message TCPPort {
+    // The TCP port to bind to. If unspecified, a port will be automatically chosen
+    // during route creation and provided in the response.
+    uint32 port = 1;
+  }
+
+  // Required. The parent resource name, in the format `apps/{APP_ID}` or
+  // `apps/{APP_DISPLAY_NAME}`
+  string parent = 1;
+
+  // Required. The discoverd service target for this route.
+  ServiceTarget service_target = 2;
+
+  // The protocol-specific configuration.
+  oneof config {
+    // An HTTP route configuration.
+    HTTP http = 3;
+
+    // A TCP route configuration.
+    TCP tcp = 4;
+  }
+}

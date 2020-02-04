@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bytes"
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/tls"
@@ -10,12 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/controller/api"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	router "github.com/flynn/flynn/router/types"
 	"github.com/jackc/pgx"
+	cjson "github.com/tent/canonical-json-go"
 )
 
 var ErrRouteNotFound = errors.New("controller: route not found")
@@ -26,6 +29,230 @@ type RouteRepo struct {
 
 func NewRouteRepo(db *postgres.DB) *RouteRepo {
 	return &RouteRepo{db: db}
+}
+
+// Set takes the desired list of routes for a set of apps, calculates the
+// changes that are needed to the existing routes to realise that list, and
+// then either atomically applies those changes or returns them for user
+// confirmation (otherwise known as a dry run).
+//
+// The given list of app routes are expected to contain the desired
+// configuration for all of the app's routes, and so if any existing routes are
+// not contained in the list, or they match ones in the list but have different
+// configuration, then they will be either deleted or updated.
+//
+// If dryRun is true, then the state of all existing routes is calculated and
+// returned along with the changes without applying them so that a user can
+// inspect the changes and then set the routes again but specifying the state
+// that they expect the changes to be applied to, with the request being
+// rejected if the state differs.
+//
+// If dryRun is false, then changes are atomically both calculated and applied,
+// first checking that expectedState matches the state of existing routes if
+// set.
+func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []byte) ([]*api.RouteChange, []byte, error) {
+	// if we're doing a dry run, just load the existing routes and return
+	// their state along with what changes would be applied
+	if dryRun {
+		existingRoutes, err := r.List("")
+		if err != nil {
+			return nil, nil, err
+		}
+		state := routeState(existingRoutes)
+		changes, err := r.set(nil, routes, existingRoutes)
+		return changes, state, err
+	}
+
+	// we're not doing a dry run, so load the existing routes and apply the
+	// requested changes using a db transaction
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	existingRoutes, err := r.list(tx, "")
+	if err != nil {
+		tx.Rollback()
+		return nil, nil, err
+	}
+
+	// if the request includes an expected state, check it matches the
+	// current state of the existing routes
+	currentState := routeState(existingRoutes)
+	if len(expectedState) > 0 {
+		if !bytes.Equal(expectedState, currentState) {
+			tx.Rollback()
+			msg := "the expected route state in the request does not match the current state"
+			return nil, nil, httphelper.PreconditionFailedErr(msg)
+		}
+	}
+
+	// set the routes and return the changes
+	changes, err := r.set(tx, routes, existingRoutes)
+	if err != nil {
+		tx.Rollback()
+		return nil, nil, err
+	}
+	return changes, currentState, tx.Commit()
+}
+
+func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, existingRoutes []*router.Route) ([]*api.RouteChange, error) {
+	// determine which routes we are going to create, update or delete for each
+	// app first so that we can then apply them in the order we want to (e.g.
+	// we want to process all deletes before updates and creates to support
+	// moving routes between apps)
+	var creates []*router.Route
+	var updates []*routeUpdate
+	var deletes []*router.Route
+	for _, appRoutes := range desiredAppRoutes {
+		// ensure the app exists
+		appID := strings.TrimPrefix(appRoutes.App, "apps/")
+		app, err := selectApp(r.db, appID, false)
+		if err != nil {
+			if err == ErrNotFound {
+				err = fmt.Errorf("app not found: %v", appID)
+			}
+			return nil, err
+		}
+
+		// track desired routes that already exist so we know not to create them
+		exists := make(map[*api.Route]struct{}, len(appRoutes.Routes))
+
+		// iterate over the app's existing routes to determine what changes to make
+		for _, existingRoute := range existingRoutes {
+			if existingRoute.ParentRef != ct.RouteParentRefPrefix+app.ID {
+				continue
+			}
+
+			// we should delete the route unless we find a matching desired route
+			shouldDelete := true
+
+			for _, desiredRoute := range appRoutes.Routes {
+				// ensure HTTP routes have a normalised path
+				if config, ok := desiredRoute.Config.(*api.Route_Http); ok {
+					config.Http.Path = normaliseRoutePath(config.Http.Path)
+				}
+
+				// check if the desired route matches the existing route
+				if routesMatchForUpdate(existingRoute, desiredRoute) {
+					// track that the desired route exists so we don't create it
+					exists[desiredRoute] = struct{}{}
+
+					// we shouldn't delete the existing route now that it matches
+					shouldDelete = false
+
+					// track this as an update if the configuration differs
+					if !routesEqualForUpdate(existingRoute, desiredRoute) {
+						update := ToRouterRoute(app.ID, desiredRoute)
+						update.ID = existingRoute.ID
+						updates = append(updates, &routeUpdate{
+							existingRoute: existingRoute,
+							updatedRoute:  update,
+						})
+					}
+
+					break
+				}
+			}
+
+			// track as a delete if we didn't match with a desired route
+			if shouldDelete {
+				deletes = append(deletes, existingRoute)
+			}
+		}
+
+		// track routes to create that don't exist
+		for _, route := range appRoutes.Routes {
+			if _, ok := exists[route]; ok {
+				continue
+			}
+			creates = append(creates, ToRouterRoute(app.ID, route))
+		}
+	}
+
+	// process the operations and track the changes made
+	var changes []*api.RouteChange
+
+	// process deletions first so they don't affect further validations
+	// (e.g. so a domain can be deleted from one app and added to another
+	// in the same request)
+	for _, routeToDelete := range deletes {
+		if err := r.validate(routeToDelete, existingRoutes, routeOpDelete); err != nil {
+			return nil, err
+		}
+		// actually perform the delete if we have a db transaction
+		if tx != nil {
+			if err := r.deleteTx(tx, routeToDelete); err != nil {
+				return nil, err
+			}
+		}
+		changes = append(changes, &api.RouteChange{
+			Action: api.RouteChange_ACTION_DELETE,
+			Before: ToAPIRoute(routeToDelete),
+		})
+		// remove the deleted route from the existing routes so it no
+		// longer affects validations
+		newExistingRoutes := make([]*router.Route, 0, len(existingRoutes))
+		for _, route := range existingRoutes {
+			if route.ID == routeToDelete.ID {
+				continue
+			}
+			newExistingRoutes = append(newExistingRoutes, route)
+		}
+		existingRoutes = newExistingRoutes
+	}
+
+	// process updates
+	for _, u := range updates {
+		if err := r.validate(u.updatedRoute, existingRoutes, routeOpUpdate); err != nil {
+			return nil, err
+		}
+		// actually perform the update if we have a db transaction
+		if tx != nil {
+			if err := r.updateTx(tx, u.updatedRoute); err != nil {
+				return nil, err
+			}
+		}
+		changes = append(changes, &api.RouteChange{
+			Action: api.RouteChange_ACTION_UPDATE,
+			Before: ToAPIRoute(u.existingRoute),
+			After:  ToAPIRoute(u.updatedRoute),
+		})
+		// replace the existing route with the updated one in
+		// the existing routes so that it affects future
+		// validations
+		newExistingRoutes := make([]*router.Route, 0, len(existingRoutes))
+		for _, route := range existingRoutes {
+			if u.updatedRoute.ID == route.ID {
+				newExistingRoutes = append(newExistingRoutes, u.updatedRoute)
+			} else {
+				newExistingRoutes = append(newExistingRoutes, route)
+			}
+		}
+		existingRoutes = newExistingRoutes
+	}
+
+	// process creates
+	for _, newRoute := range creates {
+		if err := r.validate(newRoute, existingRoutes, routeOpCreate); err != nil {
+			return nil, err
+		}
+		// actually perform the create if we have a db transaction
+		if tx != nil {
+			if err := r.addTx(tx, newRoute); err != nil {
+				return nil, err
+			}
+		}
+		changes = append(changes, &api.RouteChange{
+			Action: api.RouteChange_ACTION_CREATE,
+			After:  ToAPIRoute(newRoute),
+		})
+		// add the new route to the existing routes so that
+		// it affects future validations
+		existingRoutes = append(existingRoutes, newRoute)
+	}
+
+	return changes, nil
 }
 
 func (r *RouteRepo) Add(route *router.Route) error {
@@ -619,4 +846,95 @@ func normaliseRoutePath(path string) string {
 		return path + "/"
 	}
 	return path
+}
+
+// routeState calculates the state of the given set of routes as the SHA256
+// digest of the canonical JSON representation of a map of route IDs to routes
+func routeState(routes []*router.Route) []byte {
+	v := make(map[string]*router.Route, len(routes))
+	for _, r := range routes {
+		v[r.ID] = r
+	}
+	data, _ := cjson.Marshal(v)
+	state := sha256.Sum256(data)
+	return state[:]
+}
+
+// routeUpdate is used to track existing routes that need to be updated along
+// with their updated route
+type routeUpdate struct {
+	existingRoute *router.Route
+	updatedRoute  *router.Route
+}
+
+// routesMatchForUpdate checks whether an existing route matches the given
+// desired route and should thus be updated with it
+func routesMatchForUpdate(existing *router.Route, desired *api.Route) bool {
+	switch config := desired.Config.(type) {
+	case *api.Route_Http:
+		// HTTP routes should be updated with the desired route if they
+		// have the same domain and path
+		return config.Http.Domain == existing.Domain && config.Http.Path == existing.Path
+	case *api.Route_Tcp:
+		// TCP routes should be updated with the desired route if they
+		// have the same port
+		return int32(config.Tcp.Port.Port) == existing.Port
+	default:
+		return false
+	}
+}
+
+// routesEqualForUpdate checks whether an existing route has the same
+// configuration as a desired route that has been identified as being an update
+// of the existing route
+func routesEqualForUpdate(existing *router.Route, desired *api.Route) bool {
+	// check whether they have the same service configuration
+	if desired.ServiceTarget == nil {
+		return existing.Service == ""
+	}
+	return existing.Service == desired.ServiceTarget.ServiceName &&
+		existing.DrainBackends == desired.ServiceTarget.DrainBackends
+}
+
+// ToAPIRoute converts a router.Route to an api.Route
+func ToAPIRoute(route *router.Route) *api.Route {
+	r := &api.Route{
+		ServiceTarget: &api.Route_ServiceTarget{
+			ServiceName:   route.Service,
+			DrainBackends: route.DrainBackends,
+		},
+	}
+	switch route.Type {
+	case "http":
+		r.Config = &api.Route_Http{Http: &api.Route_HTTP{
+			Domain: route.Domain,
+			Path:   route.Path,
+		}}
+	case "tcp":
+		r.Config = &api.Route_Tcp{Tcp: &api.Route_TCP{
+			Port: &api.Route_TCPPort{Port: uint32(route.Port)},
+		}}
+	}
+	return r
+}
+
+// ToRouterRoute converts an api.Route into a router.Route
+func ToRouterRoute(appID string, route *api.Route) *router.Route {
+	r := &router.Route{
+		ParentRef: ct.RouteParentRefPrefix + appID,
+	}
+	if t := route.ServiceTarget; t != nil {
+		r.Service = t.ServiceName
+		r.DrainBackends = t.DrainBackends
+	}
+	switch config := route.Config.(type) {
+	case *api.Route_Http:
+		r.Type = "http"
+		r.Domain = config.Http.Domain
+		r.Path = config.Http.Path
+	case *api.Route_Tcp:
+		r.Type = "tcp"
+		r.Port = int32(config.Tcp.Port.Port)
+	}
+	return r
 }

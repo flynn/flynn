@@ -133,6 +133,7 @@ func (g *grpcAPI) grpcServer() *grpc.Server {
 		grpc.UnaryInterceptor(g.unaryInterceptor),
 	)
 	api.RegisterControllerServer(s, g)
+	api.RegisterRouterServer(s, g)
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
 	return s
@@ -936,6 +937,18 @@ func (g *grpcAPI) CreateDeployment(req *api.CreateDeploymentRequest, ds api.Cont
 	}
 
 	return maybeError(sub.Err)
+}
+
+func (g *grpcAPI) SetRoutes(ctx context.Context, req *api.SetRoutesRequest) (*api.SetRoutesResponse, error) {
+	changes, state, err := g.routeRepo.Set(req.AppRoutes, req.DryRun, req.ExpectedState)
+	if err != nil {
+		return nil, err
+	}
+	return &api.SetRoutesResponse{
+		RouteChanges:   changes,
+		DryRun:         req.DryRun,
+		AppliedToState: state,
+	}, nil
 }
 
 func maybeError(err error) error {
