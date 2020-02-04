@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/inconshreveable/log15"
+	"github.com/jackc/pgx"
 )
 
 var ErrNotFound = ct.ErrNotFound
@@ -82,6 +83,7 @@ func toCursorID(t *time.Time) *string {
 }
 
 type rowQueryer interface {
+	Query(query string, args ...interface{}) (*pgx.Rows, error)
 	QueryRow(query string, args ...interface{}) postgres.Scanner
 }
 

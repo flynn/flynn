@@ -77,6 +77,10 @@ func IsObjectExistsError(err error) bool {
 	return isJSONErrorWithCode(err, ObjectExistsErrorCode)
 }
 
+func IsConflictError(err error) bool {
+	return isJSONErrorWithCode(err, ConflictErrorCode)
+}
+
 func IsPreconditionFailedError(err error) bool {
 	return isJSONErrorWithCode(err, PreconditionFailedErrorCode)
 }
@@ -231,8 +235,12 @@ func ObjectExistsError(w http.ResponseWriter, message string) {
 	Error(w, ObjectExistsErr(message))
 }
 
+func ConflictErr(message string) error {
+	return JSONError{Code: ConflictErrorCode, Message: message}
+}
+
 func ConflictError(w http.ResponseWriter, message string) {
-	Error(w, JSONError{Code: ConflictErrorCode, Message: message})
+	Error(w, ConflictErr(message))
 }
 
 func PreconditionFailedErr(message string) error {
@@ -243,13 +251,17 @@ func ServiceUnavailableError(w http.ResponseWriter, message string) {
 	Error(w, JSONError{Code: ServiceUnavailableErrorCode, Message: message, Retry: true})
 }
 
-func ValidationError(w http.ResponseWriter, field, message string) {
+func ValidationErr(field, message string) error {
 	err := JSONError{Code: ValidationErrorCode, Message: message}
 	if field != "" {
 		err.Message = fmt.Sprintf("%s %s", field, message)
 		err.Detail, _ = json.Marshal(map[string]string{"field": field})
 	}
-	Error(w, err)
+	return err
+}
+
+func ValidationError(w http.ResponseWriter, field, message string) {
+	Error(w, ValidationErr(field, message))
 }
 
 func JSON(w http.ResponseWriter, status int, v interface{}) {

@@ -10,6 +10,7 @@ import (
 	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	worker "github.com/flynn/flynn/controller/worker/types"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/tlscert"
 	router "github.com/flynn/flynn/router/types"
@@ -341,7 +342,7 @@ func (m *migration) appMaybeCreateRoute(appID string, oldRoute *router.Route, ro
 		route.Certificate = oldRoute.Certificate
 	}
 	err := m.client.CreateRoute(appID, route)
-	if err != nil && err.Error() == "conflict: Duplicate route" {
+	if err != nil && hh.IsConflictError(err) {
 		return nil
 	}
 	return err

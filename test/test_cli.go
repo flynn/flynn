@@ -422,7 +422,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	// duplicate http route
 	dupRoute := app.flynn("route", "add", "http", "--sticky", route)
 	t.Assert(dupRoute, c.Not(Succeeds))
-	t.Assert(dupRoute.Output, c.Equals, "conflict: Duplicate route\n")
+	t.Assert(dupRoute.Output, c.Equals, fmt.Sprintf("conflict: a http route with domain=%s and path=/ already exists\n", route))
 
 	// ensure sticky and leader flags are set
 	routes, err = client.AppRouteList(app.name)
@@ -485,7 +485,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	// flynn route add domain path duplicate
 	dupRoute = app.flynn("route", "add", "http", route+"/path/")
 	t.Assert(dupRoute, c.Not(Succeeds))
-	t.Assert(dupRoute.Output, c.Equals, "conflict: Duplicate route\n")
+	t.Assert(dupRoute.Output, c.Equals, fmt.Sprintf("conflict: a http route with domain=%s and path=/path/ already exists\n", route))
 
 	// flynn route add domain path without trailing should correct to trailing
 	noTrailingRoute := app.flynn("route", "add", "http", route+"/path2")

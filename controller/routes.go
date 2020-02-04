@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"sort"
 
@@ -28,33 +27,7 @@ func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, 
 
 	err := c.routeRepo.Add(&route)
 	if err != nil {
-		rjson, jerr := json.Marshal(&route)
-		if jerr != nil {
-			httphelper.Error(w, jerr)
-			return
-		}
-		jsonError := httphelper.JSONError{Detail: rjson}
-		switch err {
-		case data.ErrRouteConflict:
-			jsonError.Code = httphelper.ConflictErrorCode
-			jsonError.Message = "Duplicate route"
-		case data.ErrRouteReserved:
-			jsonError.Code = httphelper.ConflictErrorCode
-			jsonError.Message = "Port reserved for HTTP/HTTPS traffic"
-		case data.ErrRouteUnreservedHTTP:
-			jsonError.Code = httphelper.ValidationErrorCode
-			jsonError.Message = "Port not reserved for HTTP traffic"
-		case data.ErrRouteUnreservedHTTPS:
-			jsonError.Code = httphelper.ValidationErrorCode
-			jsonError.Message = "Port not reserved for HTTPS traffic"
-		case data.ErrRouteInvalid:
-			jsonError.Code = httphelper.ValidationErrorCode
-			jsonError.Message = "Invalid route"
-		default:
-			httphelper.Error(w, err)
-			return
-		}
-		httphelper.Error(w, jsonError)
+		respondWithError(w, err)
 		return
 	}
 
@@ -126,13 +99,6 @@ func (c *controllerAPI) DeleteRoute(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	if err := c.routeRepo.Delete(route); err != nil {
-		if err == data.ErrRouteInvalid {
-			httphelper.Error(w, httphelper.JSONError{
-				Code:    httphelper.ValidationErrorCode,
-				Message: "Route has dependent routes",
-			})
-			return
-		}
 		if err == data.ErrRouteNotFound {
 			err = ErrNotFound
 		}

@@ -173,7 +173,7 @@ func (s *S) TestCreateDuplicateRoute(c *C) {
 	// attempt to create the same route again, ensure fails with conflict
 	err := s.c.CreateRoute(app.ID, route)
 	c.Assert(err, Not(IsNil))
-	c.Assert(err.Error(), Equals, "conflict: Duplicate route")
+	c.Assert(err.Error(), Equals, "conflict: a http route with domain=dup.example.com and path=/ already exists")
 }
 
 func (s *S) TestCreateTCPRouteReservedPort(c *C) {
