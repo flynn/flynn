@@ -429,19 +429,40 @@ const StickyBox = styled(Box)`
 		props.bottom ? 'bottom: ' + props.bottom + ';' : ''};
 `;
 
+const StyledDateHeaderBox = styled(StickyBox)`
+	margin: 0;
+	&:before {
+		position: absolute;
+		display: block;
+		content: ' ';
+		width: 100%;
+		height: 50%;
+		top: 0px;
+		border-bottom: 1px solid var(--dark-6);
+		background-color: var(--background);
+		z-index: 1000;
+	}
+`;
+
 interface ReleaseHistoryDateHeaderProps extends BoxProps {
 	date: Date;
 }
 
+/* function isWindow(obj: any): obj is Window { */
+/* 	if (obj === window) return true; */
+/* 	return false; */
+/* } */
+
+// TODO(jvatic): BUG: if this is rendered yesterday than it will incorrectly show "Today"
 function ReleaseHistoryDateHeader({ date, ...boxProps }: ReleaseHistoryDateHeaderProps) {
 	// NOTE: We need to unset min-height for the <Box /> below as it is otherwise
 	// set to 0 which causes the content to overflow the box.
 	return (
-		<StickyBox top="-1px" {...boxProps}>
-			<Box round background="background" alignSelf="center" pad="small" style={{ minHeight: 'unset' }}>
+		<StyledDateHeaderBox top="-1px" style={{ minHeight: 'unset' }} {...boxProps}>
+			<Box alignSelf="center" round background="background" pad="small" style={{ zIndex: 1002 }}>
 				{isToday(date) ? 'Today' : date.toDateString()}
 			</Box>
-		</StickyBox>
+		</StyledDateHeaderBox>
 	);
 }
 
