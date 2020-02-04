@@ -1,6 +1,7 @@
 import * as React from 'react';
 import fz from 'fz';
 import { Box } from 'grommet';
+import styled from 'styled-components';
 
 import useRouter from './useRouter';
 import {
@@ -24,6 +25,13 @@ import NavAnchor from './NavAnchor';
 import { TextInput } from './GrommetTextInput';
 import WindowedListState from './WindowedListState';
 import WindowedList, { WindowedListItem } from './WindowedList';
+
+const StyledTextInput = styled(TextInput)`
+	color: var(--white);
+	&::placeholder {
+		color: var(--white);
+	}
+`;
 
 export enum ActionType {
 	SET_START_INDEX = 'AppsListNav__SET_START_INDEX',
@@ -238,7 +246,7 @@ export default function AppsListNav(props: Props) {
 	return (
 		<>
 			<Box margin={{ bottom: 'xsmall', left: 'xsmall', right: 'xsmall' }}>
-				<TextInput
+				<StyledTextInput
 					placeholder="Filter apps..."
 					value={filterText}
 					onChange={handleFilterTextChange}
