@@ -21,6 +21,7 @@ import {
 import { useAppScaleWithDispatch, Action as AppScaleAction, ActionType as AppScaleActionType } from './useAppScale';
 import useErrorHandler from './useErrorHandler';
 import useWithCancel from './useWithCancel';
+import useDateString from './useDateString';
 import { listDeploymentsRequestFilterType, ReleaseHistoryItem } from './client';
 import {
 	App,
@@ -46,6 +47,7 @@ import WindowedList, { WindowedListItem } from './WindowedList';
 import protoMapDiff, { Diff, DiffOp, DiffOption } from './util/protoMapDiff';
 import protoMapReplace from './util/protoMapReplace';
 import isActionType from './util/isActionType';
+import roundedDate from './util/roundedDate';
 
 enum SelectedResourceType {
 	Release = 1,
@@ -325,30 +327,6 @@ interface MapHistoryProps<T> {
 	renderScale: (key: string, scaleRequest: ScaleRequest, index: number) => T;
 }
 
-function roundedDate(d: Date): Date {
-	const out = new Date(d);
-	out.setMilliseconds(0);
-	out.setSeconds(0);
-	out.setMinutes(0);
-	out.setHours(0);
-	return out;
-}
-
-const TODAY = roundedDate(new Date());
-
-function isToday(d: Date): boolean {
-	if (d.getFullYear() !== TODAY.getFullYear()) {
-		return false;
-	}
-	if (d.getMonth() !== TODAY.getMonth()) {
-		return false;
-	}
-	if (d.getDate() !== TODAY.getDate()) {
-		return false;
-	}
-	return true;
-}
-
 function _last<T>(arr: Array<T>): T {
 	return arr[arr.length - 1];
 }
@@ -455,12 +433,13 @@ interface ReleaseHistoryDateHeaderProps extends BoxProps {
 
 // TODO(jvatic): BUG: if this is rendered yesterday than it will incorrectly show "Today"
 function ReleaseHistoryDateHeader({ date, ...boxProps }: ReleaseHistoryDateHeaderProps) {
+	const dateString = useDateString(date);
 	// NOTE: We need to unset min-height for the <Box /> below as it is otherwise
 	// set to 0 which causes the content to overflow the box.
 	return (
 		<StyledDateHeaderBox top="-1px" style={{ minHeight: 'unset' }} {...boxProps}>
 			<Box alignSelf="center" round background="background" pad="small" style={{ zIndex: 1002 }}>
-				{isToday(date) ? 'Today' : date.toDateString()}
+				{dateString}
 			</Box>
 		</StyledDateHeaderBox>
 	);
