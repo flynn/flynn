@@ -44,61 +44,51 @@ interface ScaleBoxProps {
 	scaleDirection: 'up' | 'down' | '';
 }
 
+function scaleBoxUpCSS() {
+	return `
+		border-color: var(--dark-4);
+		font-weight: 600;
+		color: var(--white);
+		background-color: var(--brand);
+
+		* {
+			border-color: var(--dark-1);
+		}
+
+		svg {
+			stroke: var(--dark-1);
+		}
+	`;
+}
+
+function scaleBoxDownCSS() {
+	return `
+		border-color: var(--dark-4);
+		font-weight: 600;
+		color: var(--dark-1);
+		background-color: var(--status-warning);
+
+		* {
+			border-color: var(--dark-1);
+		}
+
+		svg {
+			stroke: var(--dark-1);
+		}
+	`;
+}
+
 const ScaleBox = styled(Box)`
-	border-color: var(--dark-4);
-	font-weight: ${(props: ScaleBoxProps) => {
+	${(props: ScaleBoxProps) => {
 		switch (props.scaleDirection) {
 			case 'up':
+				return scaleBoxUpCSS();
 			case 'down':
-				return '600';
+				return scaleBoxDownCSS();
 			default:
-				return '400';
+				return '';
 		}
-	}};
-	color: ${(props: ScaleBoxProps) => {
-		switch (props.scaleDirection) {
-			case 'up':
-				return 'var(--white)';
-			case 'down':
-				return 'var(--dark-1)';
-			default:
-				return 'inherit';
-		}
-	}};
-	background-color: ${(props: ScaleBoxProps) => {
-		switch (props.scaleDirection) {
-			case 'up':
-				return 'var(--brand)';
-			case 'down':
-				return 'var(--status-warning)';
-			default:
-				return 'inherit';
-		}
-	}};
-
-	* {
-		border-color: ${(props: ScaleBoxProps) => {
-			switch (props.scaleDirection) {
-				case 'up':
-				case 'down':
-					return 'var(--dark-1)';
-				default:
-					return 'var(--placeholder)';
-			}
-		}};
-	}
-
-	svg {
-		stroke: ${(props: ScaleBoxProps) => {
-			switch (props.scaleDirection) {
-				case 'up':
-				case 'down':
-					return 'var(--dark-1)';
-				default:
-					return 'var(--placeholder)';
-			}
-		}};
-	}
+	}}
 `;
 
 export enum ActionType {
