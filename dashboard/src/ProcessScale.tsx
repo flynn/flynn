@@ -40,6 +40,67 @@ const DeltaText = styled(Text)`
 	color: #e9a945;
 `;
 
+interface ScaleBoxProps {
+	scaleDirection: 'up' | 'down' | '';
+}
+
+const ScaleBox = styled(Box)`
+	border-color: var(--dark-4);
+	font-weight: ${(props: ScaleBoxProps) => {
+		switch (props.scaleDirection) {
+			case 'up':
+			case 'down':
+				return '600';
+			default:
+				return '400';
+		}
+	}};
+	color: ${(props: ScaleBoxProps) => {
+		switch (props.scaleDirection) {
+			case 'up':
+				return 'var(--white)';
+			case 'down':
+				return 'var(--dark-1)';
+			default:
+				return 'inherit';
+		}
+	}};
+	background-color: ${(props: ScaleBoxProps) => {
+		switch (props.scaleDirection) {
+			case 'up':
+				return 'var(--brand)';
+			case 'down':
+				return 'var(--status-warning)';
+			default:
+				return 'inherit';
+		}
+	}};
+
+	* {
+		border-color: ${(props: ScaleBoxProps) => {
+			switch (props.scaleDirection) {
+				case 'up':
+				case 'down':
+					return 'var(--dark-1)';
+				default:
+					return 'var(--placeholder)';
+			}
+		}};
+	}
+
+	svg {
+		stroke: ${(props: ScaleBoxProps) => {
+			switch (props.scaleDirection) {
+				case 'up':
+				case 'down':
+					return 'var(--dark-1)';
+				default:
+					return 'var(--placeholder)';
+			}
+		}};
+	}
+`;
+
 export enum ActionType {
 	SET_VALUE = 'ProcessScale__SET_VALUE',
 	SET_VALUE_EDITABLE = 'ProcessScale__SET_VALUE_EDITABLE',
@@ -250,8 +311,11 @@ const ProcessScale = React.memo(function ProcessScale({
 		dispatch({ type: ActionType.SET_VALUE_EDITABLE, editable: false });
 	}, [dispatch]);
 
+	const direction = showDelta ? (delta > 0 ? 'up' : delta < 0 ? 'down' : '') : '';
+
 	return (
-		<Box
+		<ScaleBox
+			scaleDirection={direction}
 			align="center"
 			border="all"
 			round
@@ -303,7 +367,7 @@ const ProcessScale = React.memo(function ProcessScale({
 					{showLabelDelta ? <DeltaText>{deltaText}</DeltaText> : null}
 				</LabelText>
 			</Box>
-		</Box>
+		</ScaleBox>
 	);
 });
 
