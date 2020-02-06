@@ -5,20 +5,27 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/flynn/flynn/controller/api"
 	controller "github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/controller/data"
+	"github.com/flynn/flynn/pkg/routeconfig"
 	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/go-docopt"
+	"github.com/olekukonko/tablewriter"
 )
 
 func init() {
 	register("route", runRoute, `
 usage: flynn route
+       flynn route config generate [-f <file>] <apps>...
+       flynn route config apply [--force] <file>
        flynn route add http [-s <service>] [-p <port>] [-c <tls-cert> -k <tls-key>] [--sticky] [--leader] [--no-leader] [--no-drain-backends] [--disable-keep-alives] <domain>
        flynn route add tcp [-s <service>] [-p <port>] [--leader] [--no-drain-backends]
        flynn route update <id> [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--no-sticky] [--leader] [--no-leader] [--disable-keep-alives] [--enable-keep-alives]
@@ -38,14 +45,22 @@ Options:
 	--no-drain-backends        don't wait for in-flight requests to complete before stopping backends
 	--disable-keep-alives      disable keep-alives between the router and backends for the given route
 	--enable-keep-alives       enable keep-alives between the router and backends for the given route (default for new routes)
+	-f, --file=<file>          name of file to write generated config to (defaults to stdout)
+	--force                    forcibly apply route changes without user confirmation
 
 Commands:
 	With no arguments, shows a list of routes.
 
+	config  generates or applies route config
 	add     adds a route to an app
+	update  updates a route
 	remove  removes a route
 
 Examples:
+
+        $ flynn route config generate -f routes.cfg app1 app2 app3
+
+        $ flynn route config apply routes.cfg
 
 	$ flynn route add http example.com
 
@@ -58,7 +73,16 @@ Examples:
 }
 
 func runRoute(args *docopt.Args, client controller.Client) error {
-	if args.Bool["add"] {
+	if args.Bool["config"] {
+		switch {
+		case args.Bool["generate"]:
+			return runRouteConfigGenerate(args, client)
+		case args.Bool["apply"]:
+			return runRouteConfigApply(args, client)
+		default:
+			return errors.New("unknown route config command")
+		}
+	} else if args.Bool["add"] {
 		switch {
 		case args.Bool["http"]:
 			return runRouteAddHTTP(args, client)
@@ -116,6 +140,161 @@ func runRoute(args *docopt.Args, client controller.Client) error {
 		listRec(w, protocol+":"+route, service, k.FormattedID(), sticky, k.Leader, path)
 	}
 	return nil
+}
+
+func runRouteConfigGenerate(args *docopt.Args, client controller.Client) error {
+	// list routes for the given apps
+	apps := args.All["<apps>"].([]string)
+	req := api.ListAppRoutesRequest{Apps: apps}
+	var res api.ListAppRoutesResponse
+	if err := client.Invoke("flynn.api.v1.Router/ListAppRoutes", &req, &res); err != nil {
+		return fmt.Errorf("error getting routes: %s", err)
+	}
+
+	// generate the route config
+	configData := &routeconfig.Data{
+		AppRoutes: make([]*routeconfig.AppRoutes, len(res.AppRoutes)),
+	}
+	for i, app := range apps {
+		appRoutes := res.AppRoutes[i]
+		routes := make([]*router.Route, len(appRoutes.Routes))
+		for i, route := range appRoutes.Routes {
+			routes[i] = data.ToRouterRoute(app, route)
+		}
+		configData.AppRoutes[i] = &routeconfig.AppRoutes{
+			App:    app,
+			Routes: routes,
+		}
+	}
+	config, err := routeconfig.Generate(configData)
+	if err != nil {
+		return fmt.Errorf("error generating config: %s", err)
+	}
+
+	// open the output file
+	var out io.Writer = os.Stdout
+	if file := args.String["--file"]; file != "" {
+		f, err := os.Create(file)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		out = f
+	}
+
+	// write the config
+	if _, err := out.Write(config); err != nil {
+		return fmt.Errorf("error writing config: %s", err)
+	}
+
+	return nil
+}
+
+func runRouteConfigApply(args *docopt.Args, client controller.Client) error {
+	// load the app routes from the route config
+	var in io.Reader
+	if args.String["<file>"] == "-" {
+		in = os.Stdin
+	} else {
+		f, err := os.Open(args.String["<file>"])
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		in = f
+	}
+	appRoutes, err := routeconfig.Load(in)
+	if err != nil {
+		return err
+	}
+
+	// perform the request
+	req := api.SetRoutesRequest{
+		AppRoutes: appRoutes,
+		DryRun:    !args.Bool["--force"],
+	}
+	var res api.SetRoutesResponse
+	if err := client.Invoke("flynn.api.v1.Router/SetRoutes", &req, &res); err != nil {
+		return fmt.Errorf("error applying config: %s", err)
+	}
+
+	// if performing a dry run, confirm the changes with the user then
+	// perform the request again
+	if len(res.RouteChanges) > 0 && res.DryRun {
+		if !confirmRouteChanges(res.RouteChanges) {
+			return errors.New("Cancelling route change at user request.")
+		}
+		req.DryRun = false
+		req.ExpectedState = res.AppliedToState
+		if err := client.Invoke("flynn.api.v1.Router/SetRoutes", &req, &res); err != nil {
+			return fmt.Errorf("error applying config: %s", err)
+		}
+		fmt.Println("The confirmed route changes were made successfully.")
+		return nil
+	}
+
+	// report the changes
+	switch len(res.RouteChanges) {
+	case 0:
+		fmt.Println("No route changes were made as all routes are up-to-date.")
+	case 1:
+		fmt.Println("The following route change was made:")
+		printRouteChanges(res.RouteChanges)
+	default:
+		fmt.Println("The following", len(res.RouteChanges), "route changes were made:")
+		printRouteChanges(res.RouteChanges)
+	}
+
+	return nil
+}
+
+func confirmRouteChanges(changes []*api.RouteChange) bool {
+	fmt.Println()
+	if len(changes) == 1 {
+		fmt.Println("!!! You are about to make the following route change: !!!")
+	} else {
+		fmt.Printf("!!! You are about to make the following %d route changes: !!!\n", len(changes))
+	}
+	fmt.Println()
+	printRouteChanges(changes)
+	fmt.Println()
+	return promptYesNo("Are you sure you want to proceed?")
+}
+
+func printRouteChanges(changes []*api.RouteChange) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"ACTION", "ROUTE", "SERVICE", "CONFIG"})
+	for _, change := range changes {
+		var (
+			action   string
+			apiRoute *api.Route
+		)
+		switch change.Action {
+		case api.RouteChange_ACTION_CREATE:
+			action = "CREATE"
+			apiRoute = change.After
+		case api.RouteChange_ACTION_UPDATE:
+			action = "UPDATE"
+			apiRoute = change.Before
+		case api.RouteChange_ACTION_DELETE:
+			action = "DELETE"
+			apiRoute = change.Before
+		}
+		r := data.ToRouterRoute("", apiRoute)
+		var route string
+		switch r.Type {
+		case "http":
+			route = fmt.Sprintf("http:%s%s", r.Domain, r.Path)
+		case "tcp":
+			route = fmt.Sprintf("tcp:%d", r.Port)
+		}
+		config := fmt.Sprintf(
+			"leader=%v sticky=%v drain_backends=%v disable_keep_alives=%v",
+			r.Leader, r.Sticky, r.DrainBackends, r.DisableKeepAlives,
+		)
+		table.Append([]string{action, route, r.Service, config})
+	}
+	table.Render()
 }
 
 func runRouteAddTCP(args *docopt.Args, client controller.Client) error {
