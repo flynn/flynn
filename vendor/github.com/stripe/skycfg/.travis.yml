@@ -1,0 +1,35 @@
+language: go
+go_import_path: github.com/stripe/skycfg
+go:
+  - "1.11"
+  - "1.12"
+  - "1.13"
+  - master
+env:
+  global:
+    - PROTOC_VERSION=3.6.1
+    - GO111MODULE=on
+
+install:
+  - mkdir -p "${TRAVIS_HOME}/third_party/protobuf-${PROTOC_VERSION}"
+  - |
+    (
+      cd "${TRAVIS_HOME}/third_party/protobuf-${PROTOC_VERSION}"
+      wget "https://github.com/google/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${TRAVIS_OS_NAME}-x86_64.zip"
+      unzip "protoc-${PROTOC_VERSION}-${TRAVIS_OS_NAME}-x86_64.zip"
+    )
+  - export PATH="${TRAVIS_HOME}/third_party/protobuf-${PROTOC_VERSION}/bin:${PATH}"
+  - go get github.com/golang/protobuf/protoc-gen-go
+  - go get github.com/gogo/protobuf/protoc-gen-gogofast
+  - mkdir -p "${TRAVIS_HOME}/protopath/github.com/stripe"
+  - ln -s "${PWD}" "${TRAVIS_HOME}/protopath/github.com/stripe/skycfg"
+  - mkdir -p "${TRAVIS_HOME}/protopath/github.com/gogo/protobuf/gogoproto"
+  - ( cd "${TRAVIS_HOME}/protopath/github.com/gogo/protobuf/gogoproto" && wget https://raw.githubusercontent.com/gogo/protobuf/v1.1.1/gogoproto/gogo.proto )
+  - protoc --go_out="${TRAVIS_HOME}/gopath/src" --proto_path="${TRAVIS_HOME}/protopath" github.com/stripe/skycfg/internal/testdata/test_proto/test_proto_v2.proto github.com/stripe/skycfg/internal/testdata/test_proto/test_proto_v3.proto
+  - protoc --gogofast_out="${TRAVIS_HOME}/gopath/src" --proto_path="${TRAVIS_HOME}/protopath" github.com/stripe/skycfg/internal/testdata/test_proto_gogo/test_proto_gogo.proto
+  - go get -t -v ./...
+
+script:
+  - go test -v ./...
+  - ( cd _examples/repl && go build . )
+  - if [[ "$TRAVIS_GO_VERSION" != "master" ]]; then ( cd _examples/wasm && GOOS=js GOARCH=wasm go build -o skycfg.wasm . ); fi

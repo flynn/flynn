@@ -106,13 +106,17 @@ github.com/golang/glog
 # github.com/golang/groupcache v0.0.0-20160803200408-a6b377e3400b
 github.com/golang/groupcache/singleflight
 # github.com/golang/protobuf v1.3.2
+github.com/golang/protobuf/descriptor
+github.com/golang/protobuf/jsonpb
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/protoc-gen-go/descriptor
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/empty
+github.com/golang/protobuf/ptypes/struct
 github.com/golang/protobuf/ptypes/timestamp
+github.com/golang/protobuf/ptypes/wrappers
 # github.com/google/go-cmp v0.3.1
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/internal/diff
@@ -166,13 +170,15 @@ github.com/kr/pty
 # github.com/krolaw/dhcp4 v0.0.0-20180925202202-7cead472c414
 github.com/krolaw/dhcp4
 github.com/krolaw/dhcp4/conn
-# github.com/kylelemons/godebug v0.0.0-20131002215753-808ac284003c
+# github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 github.com/kylelemons/godebug/diff
 github.com/kylelemons/godebug/pretty
 # github.com/mattn/go-colorable v0.0.0-20140924234614-043ae1629135
 github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.0-20151211000621-56b76bdf51f7
 github.com/mattn/go-isatty
+# github.com/mattn/go-runewidth v0.0.7
+github.com/mattn/go-runewidth
 # github.com/miekg/dns v0.0.0-20160726032027-db96a2b759cd
 github.com/miekg/dns
 # github.com/minio/minio-go v0.0.0-20170324230031-29b05151452a
@@ -187,6 +193,8 @@ github.com/mistifyio/go-zfs
 github.com/mitchellh/go-homedir
 # github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618
 github.com/mrunalp/fileutils
+# github.com/olekukonko/tablewriter v0.0.4
+github.com/olekukonko/tablewriter
 # github.com/olekukonko/ts v0.0.0-20140412220145-ecf753e7c962
 github.com/olekukonko/ts
 # github.com/opencontainers/runc v1.0.0-rc8 => github.com/flynn/runc v1.0.0-rc1001
@@ -227,6 +235,9 @@ github.com/sirupsen/logrus
 # github.com/stevvooe/resumable v0.0.0-20150521211217-51ad44105773
 github.com/stevvooe/resumable
 github.com/stevvooe/resumable/sha512
+# github.com/stripe/skycfg v0.0.0-20200203220729-dbbbdcca497c
+github.com/stripe/skycfg
+github.com/stripe/skycfg/internal/go/skycfg
 # github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
 github.com/syndtr/gocapability/capability
 # github.com/tent/canonical-json-go v0.0.0-20130607151641-96e4ba3a7613
@@ -255,6 +266,13 @@ go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/propagation
 go.opencensus.io/trace/tracestate
+# go.starlark.net v0.0.0-20190604130855-6ddc71c0ba77
+go.starlark.net/internal/compile
+go.starlark.net/internal/spell
+go.starlark.net/resolve
+go.starlark.net/starlark
+go.starlark.net/starlarkstruct
+go.starlark.net/syntax
 # golang.org/x/crypto v0.0.0-20190911031432-227b76d455e7
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519

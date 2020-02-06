@@ -61,39 +61,54 @@ func (l keyvals) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 func (l keyvals) Less(i, j int) bool { return l[i].key < l[j].key }
 
 func (l keyvals) WriteTo(w *bytes.Buffer, indent string, cfg *Config) {
-	keyWidth := 0
-
-	for _, kv := range l {
-		if kw := len(kv.key); kw > keyWidth {
-			keyWidth = kw
-		}
-	}
-	padding := strings.Repeat(" ", keyWidth+1)
-
-	inner := indent + "  " + padding
 	w.WriteByte('{')
-	for i, kv := range l {
-		if cfg.Compact {
-			w.WriteString(kv.key)
-			w.WriteByte(':')
-		} else {
-			if i > 0 || cfg.Diffable {
-				w.WriteString("\n ")
-				w.WriteString(indent)
+
+	switch {
+	case cfg.Compact:
+		// All on one line:
+		for i, kv := range l {
+			if i > 0 {
+				w.WriteByte(',')
 			}
 			w.WriteString(kv.key)
 			w.WriteByte(':')
-			w.WriteString(padding[len(kv.key):])
+			kv.val.WriteTo(w, indent, cfg)
 		}
-		kv.val.WriteTo(w, inner, cfg)
-		if i+1 < len(l) || cfg.Diffable {
-			w.WriteByte(',')
+	case cfg.Diffable:
+		w.WriteByte('\n')
+		inner := indent + " "
+		// Each value gets its own line:
+		for _, kv := range l {
+			w.WriteString(inner)
+			w.WriteString(kv.key)
+			w.WriteString(": ")
+			kv.val.WriteTo(w, inner, cfg)
+			w.WriteString(",\n")
 		}
-	}
-	if !cfg.Compact && cfg.Diffable && len(l) > 0 {
-		w.WriteString("\n")
 		w.WriteString(indent)
+	default:
+		keyWidth := 0
+		for _, kv := range l {
+			if kw := len(kv.key); kw > keyWidth {
+				keyWidth = kw
+			}
+		}
+		alignKey := indent + " "
+		alignValue := strings.Repeat(" ", keyWidth)
+		inner := alignKey + alignValue + "  "
+		// First and last line shared with bracket:
+		for i, kv := range l {
+			if i > 0 {
+				w.WriteString(",\n")
+				w.WriteString(alignKey)
+			}
+			w.WriteString(kv.key)
+			w.WriteString(": ")
+			w.WriteString(alignValue[len(kv.key):])
+			kv.val.WriteTo(w, inner, cfg)
+		}
 	}
+
 	w.WriteByte('}')
 }
 
@@ -108,21 +123,38 @@ func (l list) WriteTo(w *bytes.Buffer, indent string, cfg *Config) {
 		}
 	}
 
-	inner := indent + " "
 	w.WriteByte('[')
-	for i, v := range l {
-		if !cfg.Compact && (i > 0 || cfg.Diffable) {
-			w.WriteByte('\n')
-			w.WriteString(inner)
+
+	switch {
+	case cfg.Compact:
+		// All on one line:
+		for i, v := range l {
+			if i > 0 {
+				w.WriteByte(',')
+			}
+			v.WriteTo(w, indent, cfg)
 		}
-		v.WriteTo(w, inner, cfg)
-		if i+1 < len(l) || cfg.Diffable {
-			w.WriteByte(',')
-		}
-	}
-	if !cfg.Compact && cfg.Diffable && len(l) > 0 {
+	case cfg.Diffable:
 		w.WriteByte('\n')
+		inner := indent + " "
+		// Each value gets its own line:
+		for _, v := range l {
+			w.WriteString(inner)
+			v.WriteTo(w, inner, cfg)
+			w.WriteString(",\n")
+		}
 		w.WriteString(indent)
+	default:
+		inner := indent + " "
+		// First and last line shared with bracket:
+		for i, v := range l {
+			if i > 0 {
+				w.WriteString(",\n")
+				w.WriteString(inner)
+			}
+			v.WriteTo(w, inner, cfg)
+		}
 	}
+
 	w.WriteByte(']')
 }

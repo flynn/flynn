@@ -1,0 +1,15 @@
+# The AUTHORS file lists the copyright holders; this file
+# lists people.  For example, Stripe employees are listed here
+# but not in AUTHORS, because Stripe holds the copyright.
+#
+# Names should be added to this file as:
+#     Name <email address>
+
+Alexander Pakulov <apakulov@stripe.com>
+Benjamin Yolken <yolken@stripe.com>
+Dmitry Ilyevsky <ilyevsky@gmail.com> # GM Cruise LLC
+Isaac Diamond <idiamond@stripe.com>
+John Millikin <jmillikin@stripe.com>
+Matt Moriarity <mmoriarity@stripe.com>
+
+# Please alphabetize new entries.

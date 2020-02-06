@@ -59,7 +59,7 @@ require (
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/kr/pty v1.1.8
 	github.com/krolaw/dhcp4 v0.0.0-20180925202202-7cead472c414
-	github.com/kylelemons/godebug v0.0.0-20131002215753-808ac284003c
+	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 	github.com/mattn/go-colorable v0.0.0-20140924234614-043ae1629135
 	github.com/mattn/go-isatty v0.0.0-20151211000621-56b76bdf51f7 // indirect
 	github.com/miekg/dns v0.0.0-20160726032027-db96a2b759cd
@@ -68,6 +68,7 @@ require (
 	github.com/mitchellh/go-homedir v0.0.0-20140913165950-7d2d8c8a4e07
 	github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618 // indirect
 	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
+	github.com/olekukonko/tablewriter v0.0.4
 	github.com/olekukonko/ts v0.0.0-20140412220145-ecf753e7c962 // indirect
 	github.com/opencontainers/runc v1.0.0-rc8
 	github.com/opencontainers/runtime-spec v1.0.1 // indirect
@@ -80,6 +81,7 @@ require (
 	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20190710185942-9d28bd7c0945 // indirect
 	github.com/stevvooe/resumable v0.0.0-20150521211217-51ad44105773
+	github.com/stripe/skycfg v0.0.0-20200203220729-dbbbdcca497c
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
 	github.com/tent/canonical-json-go v0.0.0-20130607151641-96e4ba3a7613
 	github.com/vanillahsu/go_reuseport v0.0.0-20140603073948-087e013b0a0c
