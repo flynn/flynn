@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/controller/data"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -949,6 +950,52 @@ func (g *grpcAPI) SetRoutes(ctx context.Context, req *api.SetRoutesRequest) (*ap
 		DryRun:         req.DryRun,
 		AppliedToState: state,
 	}, nil
+}
+
+func (g *grpcAPI) ListAppRoutes(ctx context.Context, req *api.ListAppRoutesRequest) (*api.ListAppRoutesResponse, error) {
+	if len(req.Apps) == 0 {
+		return nil, hh.ValidationErr("apps", "must be set")
+	}
+
+	// determine the apps to get routes for
+	appList, err := g.appRepo.List()
+	if err != nil {
+		return nil, err
+	}
+	allApps := appList.([]*ct.App)
+	apps := make([]*ct.App, len(req.Apps))
+outer:
+	for i, reqApp := range req.Apps {
+		for _, app := range allApps {
+			if app.ID == reqApp || app.Name == reqApp {
+				apps[i] = app
+				continue outer
+			}
+		}
+		return nil, fmt.Errorf("app not found: %v", reqApp)
+	}
+
+	// load the routes
+	res := &api.ListAppRoutesResponse{
+		AppRoutes: make([]*api.AppRoutes, len(apps)),
+	}
+	for i, app := range apps {
+		routes, err := g.routeRepo.List(ct.RouteParentRefPrefix + app.ID)
+		if err != nil {
+			return nil, err
+		}
+		apiRoutes := make([]*api.Route, len(routes))
+		for i, route := range routes {
+			apiRoutes[i] = data.ToAPIRoute(route)
+		}
+		res.AppRoutes[i] = &api.AppRoutes{
+			App:    "apps/" + app.ID,
+			Routes: apiRoutes,
+		}
+	}
+
+	// return the response
+	return res, nil
 }
 
 func maybeError(err error) error {

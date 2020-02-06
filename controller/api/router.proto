@@ -16,6 +16,9 @@ service Router {
   // are not contained in the list, or they match ones in the list but have
   // different configuration, then they will be either deleted or updated.
   rpc SetRoutes(SetRoutesRequest) returns (SetRoutesResponse);
+
+  // ListAppRoutes list routes for a set of apps.
+  rpc ListAppRoutes(ListAppRoutesRequest) returns (ListAppRoutesResponse);
 }
 
 // SetRoutesRequest is a request to set a list of app routes.
@@ -46,6 +49,18 @@ message SetRoutesResponse {
   // applied to, and can be used as the expected_state in a subsequent request
   // to confirm the application of a dry run.
   bytes applied_to_state = 3;
+}
+
+// ListAppRoutesRequest is a request to list routes for a set of apps.
+message ListAppRoutesRequest {
+  // apps is the set of apps to list routes for.
+  repeated string apps = 1;
+}
+
+// ListAppRoutesResponse is a response to list routes for a set of apps.
+message ListAppRoutesResponse {
+  // app_routes are the requested routes.
+  repeated AppRoutes app_routes = 1;
 }
 
 // AppRoutes is a list of desired routes for an app.
