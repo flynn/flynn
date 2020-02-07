@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Search as SearchIcon } from 'grommet-icons';
-import { Stack, Box, TextInput } from 'grommet';
+import { Stack, Box } from 'grommet';
+import { TextInput } from '../GrommetTextInput';
 
 import { Action } from './common';
 import { DataActionType } from './Data';

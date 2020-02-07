@@ -1,6 +1,13 @@
 import * as React from 'react';
 import { TextInput as GrommetTextInput } from 'grommet';
+import styled from 'styled-components';
 import ifDev from './ifDev';
+
+const StyledGrommetTextInput = styled(GrommetTextInput)`
+	&::placeholder {
+		opacity: 0.55;
+	}
+`;
 
 // TextInput wraps grommet's TextInput so we can listen for `select` events on
 // the input element. This behaviour is not currently supported by grommet due
@@ -57,7 +64,7 @@ export const TextInput = React.forwardRef(
 		);
 
 		return (
-			<GrommetTextInput
+			<StyledGrommetTextInput
 				onSuggestionsOpen={handleSuggestionsOpen}
 				onSuggestionsClose={handleSuggestionsClose}
 				onKeyDown={onKeyDown}
@@ -79,4 +86,4 @@ export const TextInput = React.forwardRef(
 	}
 );
 
-ifDev(() => ((GrommetTextInput as any).whyDidYouRender = true));
+ifDev(() => ((TextInput as any).whyDidYouRender = true));
