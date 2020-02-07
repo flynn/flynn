@@ -247,9 +247,6 @@ message CreateReleaseRequest {
 message CreateDeploymentRequest {
   // parent = "apps/APP_ID/releases/RELEASE_ID"
   string parent = 1;
-
-  // optional scale request
-  CreateScaleRequest scale_request = 2;
 }
 
 message App {

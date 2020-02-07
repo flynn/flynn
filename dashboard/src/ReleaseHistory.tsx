@@ -825,12 +825,7 @@ function ReleaseHistory({ appName }: Props) {
 					nextScale ? (
 						<CreateScaleRequestComponent appName={appName} nextScale={nextScale} dispatch={dispatch} />
 					) : (
-						<CreateDeployment
-							appName={appName}
-							releaseName={nextReleaseName}
-							newScale={nextScale || undefined}
-							dispatch={dispatch}
-						/>
+						<CreateDeployment appName={appName} releaseName={nextReleaseName} dispatch={dispatch} />
 					)}
 				</RightOverlay>
 			) : null}
