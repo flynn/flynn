@@ -4150,8 +4150,7 @@ proto.flynn.api.v1.CreateDeploymentRequest.prototype.toObject = function(opt_inc
  */
 proto.flynn.api.v1.CreateDeploymentRequest.toObject = function(includeInstance, msg) {
   var f, obj = {
-    parent: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    scaleRequest: (f = msg.getScaleRequest()) && proto.flynn.api.v1.CreateScaleRequest.toObject(includeInstance, f)
+    parent: jspb.Message.getFieldWithDefault(msg, 1, "")
   };
 
   if (includeInstance) {
@@ -4192,11 +4191,6 @@ proto.flynn.api.v1.CreateDeploymentRequest.deserializeBinaryFromReader = functio
       var value = /** @type {string} */ (reader.readString());
       msg.setParent(value);
       break;
-    case 2:
-      var value = new proto.flynn.api.v1.CreateScaleRequest;
-      reader.readMessage(value,proto.flynn.api.v1.CreateScaleRequest.deserializeBinaryFromReader);
-      msg.setScaleRequest(value);
-      break;
     default:
       reader.skipField();
       break;
@@ -4233,14 +4227,6 @@ proto.flynn.api.v1.CreateDeploymentRequest.serializeBinaryToWriter = function(me
       f
     );
   }
-  f = message.getScaleRequest();
-  if (f != null) {
-    writer.writeMessage(
-      2,
-      f,
-      proto.flynn.api.v1.CreateScaleRequest.serializeBinaryToWriter
-    );
-  }
 };
 
 
@@ -4259,43 +4245,6 @@ proto.flynn.api.v1.CreateDeploymentRequest.prototype.getParent = function() {
  */
 proto.flynn.api.v1.CreateDeploymentRequest.prototype.setParent = function(value) {
   return jspb.Message.setProto3StringField(this, 1, value);
-};
-
-
-/**
- * optional CreateScaleRequest scale_request = 2;
- * @return {?proto.flynn.api.v1.CreateScaleRequest}
- */
-proto.flynn.api.v1.CreateDeploymentRequest.prototype.getScaleRequest = function() {
-  return /** @type{?proto.flynn.api.v1.CreateScaleRequest} */ (
-    jspb.Message.getWrapperField(this, proto.flynn.api.v1.CreateScaleRequest, 2));
-};
-
-
-/**
- * @param {?proto.flynn.api.v1.CreateScaleRequest|undefined} value
- * @return {!proto.flynn.api.v1.CreateDeploymentRequest} returns this
-*/
-proto.flynn.api.v1.CreateDeploymentRequest.prototype.setScaleRequest = function(value) {
-  return jspb.Message.setWrapperField(this, 2, value);
-};
-
-
-/**
- * Clears the message field making it undefined.
- * @return {!proto.flynn.api.v1.CreateDeploymentRequest} returns this
- */
-proto.flynn.api.v1.CreateDeploymentRequest.prototype.clearScaleRequest = function() {
-  return this.setScaleRequest(undefined);
-};
-
-
-/**
- * Returns whether this field is set.
- * @return {boolean}
- */
-proto.flynn.api.v1.CreateDeploymentRequest.prototype.hasScaleRequest = function() {
-  return jspb.Message.getField(this, 2) != null;
 };
 
 

@@ -51,7 +51,7 @@ export interface Client {
 	updateApp: (app: App, cb: AppCallback) => CancelFunc;
 	createScale: (req: CreateScaleRequest, cb: CreateScaleCallback) => CancelFunc;
 	createRelease: (parentName: string, release: Release, cb: ReleaseCallback) => CancelFunc;
-	createDeployment: (parentName: string, scale: CreateScaleRequest | null, cb: ErrorCallback) => CancelFunc;
+	createDeployment: (parentName: string, cb: ErrorCallback) => CancelFunc;
 }
 
 interface AuthStatus {
@@ -926,12 +926,9 @@ class _Client implements Client {
 		);
 	}
 
-	public createDeployment(parentName: string, scale: CreateScaleRequest | null, cb: ErrorCallback): CancelFunc {
+	public createDeployment(parentName: string, cb: ErrorCallback): CancelFunc {
 		const req = new CreateDeploymentRequest();
 		req.setParent(parentName);
-		if (scale) {
-			req.setScaleRequest(scale);
-		}
 
 		const stream = this._cc.createDeployment(req, this.metadata());
 		stream.on('status', (s: Status) => {

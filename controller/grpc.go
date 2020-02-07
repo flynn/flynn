@@ -906,19 +906,6 @@ func (g *grpcAPI) CreateDeployment(req *api.CreateDeploymentRequest, ds api.Cont
 			continue
 		}
 
-		// Scale release to requested processes/tags once deployment is complete
-		if de.Status == "complete" {
-			if sr := req.ScaleRequest; sr != nil {
-				if _, err := g.createScale(&api.CreateScaleRequest{
-					Parent:    fmt.Sprintf("apps/%s/releases/%s", de.AppID, de.ReleaseID),
-					Processes: sr.Processes,
-					Tags:      sr.Tags,
-				}); err != nil {
-					return err
-				}
-			}
-		}
-
 		ds.Send(&api.DeploymentEvent{
 			Parent:     fmt.Sprintf("apps/%s/deployments/%s", de.AppID, de.DeploymentID),
 			JobType:    de.JobType,

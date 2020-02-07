@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Checkmark as CheckmarkIcon } from 'grommet-icons';
 import { Box, Button } from 'grommet';
 
-import { Release, CreateScaleRequest } from './generated/controller_pb';
+import { Release } from './generated/controller_pb';
 import useClient from './useClient';
 import useMergeDispatch from './useMergeDispatch';
 import {
@@ -13,14 +13,6 @@ import {
 	ActionType as AppReleaseActionType,
 	Action as AppReleaseAction
 } from './useAppRelease';
-import {
-	useAppScaleWithDispatch,
-	State as AppScaleState,
-	initialState as initialAppScaleState,
-	reducer as appScaleReducer,
-	ActionType as AppScaleActionType,
-	Action as AppScaleAction
-} from './useAppScale';
 import {
 	useReleaseWithDispatch,
 	State as ReleaseState,
@@ -33,7 +25,6 @@ import isActionType from './util/isActionType';
 import useWithCancel from './useWithCancel';
 import Loading from './Loading';
 import ReleaseComponent from './Release';
-import ProcessesDiff, { ActionType as ProcessesDiffActionType, Action as ProcessesDiffAction } from './ProcessesDiff';
 
 export enum ActionType {
 	SET_CREATING = 'CreateDeployment__SET_CREATING',
@@ -64,11 +55,9 @@ export type Action =
 	| SetCreatingAction
 	| SetErrorAction
 	| AppReleaseAction
-	| AppScaleAction
 	| ReleaseAction
 	| CancelAction
-	| CreatedAction
-	| ProcessesDiffAction;
+	| CreatedAction;
 
 type Dispatcher = (actions: Action | Action[]) => void;
 
@@ -76,14 +65,10 @@ interface State {
 	// useAppRelease
 	currentReleaseState: AppReleaseState;
 
-	// useAppScale
-	currentScaleState: AppScaleState;
-
 	// useRelease
 	nextReleaseState: ReleaseState;
 
 	isCreating: boolean;
-	isScaleToZeroConfirmed: boolean;
 }
 
 function initialState(props: Props): State {
@@ -91,14 +76,10 @@ function initialState(props: Props): State {
 		// useAppRelease
 		currentReleaseState: initialAppReleaseState(),
 
-		// useAppScale
-		currentScaleState: initialAppScaleState(),
-
 		// useRelease
 		nextReleaseState: initialReleaseState(),
 
-		isCreating: false,
-		isScaleToZeroConfirmed: props.newScale ? false : true
+		isCreating: false
 	};
 }
 
@@ -119,24 +100,10 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 				// no-op, parent component is expected to handle this
 				return prevState;
 
-			case ProcessesDiffActionType.SCALE_TO_ZERO_CONFIRMED:
-				nextState.isScaleToZeroConfirmed = true;
-				return nextState;
-
-			case ProcessesDiffActionType.SCALE_TO_ZERO_UNCONFIRMED:
-				nextState.isScaleToZeroConfirmed = false;
-				return nextState;
-
 			default:
 				// useAppRelease
 				if (isActionType<AppReleaseAction>(AppReleaseActionType, action)) {
 					nextState.currentReleaseState = appReleaseReducer(prevState.currentReleaseState, action);
-					return nextState;
-				}
-
-				// useAppScale
-				if (isActionType<AppScaleAction>(AppScaleActionType, action)) {
-					nextState.currentScaleState = appScaleReducer(prevState.currentScaleState, action);
 					return nextState;
 				}
 
@@ -151,18 +118,27 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 	}, prevState);
 }
 
-interface Props {
+interface PropsCommon {
 	appName: string;
-	releaseName?: string;
-	newRelease?: Release;
-	newScale?: CreateScaleRequest;
 	dispatch: Dispatcher;
 }
 
-export default function CreateDeployment(props: Props) {
+interface PropsA extends PropsCommon {
+	releaseName: string;
+}
+
+interface PropsB extends PropsCommon {
+	newRelease: Release;
+}
+
+type Props = PropsA | PropsB;
+
+export default function CreateDeployment(props: PropsA): ReturnType<React.FC<PropsA>>;
+export default function CreateDeployment(props: PropsB): ReturnType<React.FC<PropsB>>;
+export default function CreateDeployment(props: Props): ReturnType<React.FC<Props>> {
 	const client = useClient();
-	const newRelease = props.newRelease;
-	const newScale = props.newScale;
+	const releaseName = (props as PropsA).releaseName || '';
+	const newRelease = (props as PropsB).newRelease;
 	const callerDispatch = props.dispatch;
 
 	const [
@@ -170,31 +146,26 @@ export default function CreateDeployment(props: Props) {
 			// useAppRelease
 			currentReleaseState: { release: currentRelease, loading: currentReleaseLoading, error: currentReleaseError },
 
-			// useAppScale
-			currentScaleState: { scale: currentScale, loading: currentScaleLoading, error: currentScaleError },
-
 			// useRelease
 			nextReleaseState: { release: nextRelease, loading: nextReleaseLoading, error: nextReleaseError },
 
-			isCreating,
-			isScaleToZeroConfirmed
+			isCreating
 		},
 		localDispatch
 	] = React.useReducer(reducer, initialState(props));
 	const dispatch = useMergeDispatch(localDispatch, callerDispatch);
 
 	useAppReleaseWithDispatch(props.appName, dispatch);
-	useAppScaleWithDispatch(props.appName, dispatch);
-	useReleaseWithDispatch(props.releaseName || '', dispatch);
+	useReleaseWithDispatch(releaseName, dispatch);
 	React.useEffect(() => {
-		const error = currentReleaseError || nextReleaseError || currentScaleError;
+		const error = currentReleaseError || nextReleaseError;
 		if (error) {
 			dispatch({ type: ActionType.SET_ERROR, error });
 		}
-	}, [currentReleaseError, nextReleaseError, currentScaleError, dispatch]);
+	}, [currentReleaseError, nextReleaseError, dispatch]);
 	const isLoading = React.useMemo(() => {
-		return currentReleaseLoading || nextReleaseLoading || currentScaleLoading;
-	}, [currentReleaseLoading, nextReleaseLoading, currentScaleLoading]);
+		return currentReleaseLoading || nextReleaseLoading;
+	}, [currentReleaseLoading, nextReleaseLoading]);
 
 	const withCancel = useWithCancel();
 
@@ -212,13 +183,13 @@ export default function CreateDeployment(props: Props) {
 		}) as Promise<Release>;
 	}
 
-	function createDeployment(release: Release, scale?: CreateScaleRequest) {
+	function createDeployment(release: Release) {
 		let resolve: () => void, reject: (error: Error) => void;
 		const p = new Promise((rs, rj) => {
 			resolve = rs;
 			reject = rj;
 		});
-		const cancel = client.createDeployment(release.getName(), scale || null, (error: Error | null) => {
+		const cancel = client.createDeployment(release.getName(), (error: Error | null) => {
 			if (error) {
 				reject(error);
 			}
@@ -230,15 +201,14 @@ export default function CreateDeployment(props: Props) {
 
 	function handleFormSubmit(e: React.SyntheticEvent) {
 		e.preventDefault();
-		const { newScale } = props;
 		dispatch({ type: ActionType.SET_CREATING, creating: true });
 		let p = Promise.resolve(null) as Promise<any>;
 		if (newRelease) {
 			p = createRelease(newRelease).then((release: Release) => {
-				return createDeployment(release, newScale);
+				return createDeployment(release);
 			});
 		} else if (nextRelease) {
-			p = createDeployment(nextRelease, newScale);
+			p = createDeployment(nextRelease);
 		}
 		p.then(() => {
 			queueMicrotask(() => {
@@ -262,26 +232,12 @@ export default function CreateDeployment(props: Props) {
 			<Box>
 				<h3>Review Changes</h3>
 				<ReleaseComponent release={(nextRelease || newRelease) as Release} prevRelease={currentRelease} />
-
-				{currentScale && newScale ? (
-					<ProcessesDiff
-						wrap
-						align="center"
-						direction="column"
-						margin="small"
-						scale={currentScale}
-						nextScale={newScale}
-						release={currentRelease}
-						dispatch={dispatch}
-						confirmScaleToZero
-					/>
-				) : null}
 			</Box>
 
 			<Box fill="horizontal" direction="row" align="end" gap="small" justify="between">
 				<Button
 					type="submit"
-					disabled={isCreating || !isScaleToZeroConfirmed}
+					disabled={isCreating}
 					primary
 					icon={<CheckmarkIcon />}
 					label={isCreating ? 'Deploying...' : 'Deploy'}

@@ -495,11 +495,6 @@ export class CreateDeploymentRequest extends jspb.Message {
   getParent(): string;
   setParent(value: string): void;
 
-  hasScaleRequest(): boolean;
-  clearScaleRequest(): void;
-  getScaleRequest(): CreateScaleRequest | undefined;
-  setScaleRequest(value?: CreateScaleRequest): void;
-
   serializeBinary(): Uint8Array;
   toObject(includeInstance?: boolean): CreateDeploymentRequest.AsObject;
   static toObject(includeInstance: boolean, msg: CreateDeploymentRequest): CreateDeploymentRequest.AsObject;
@@ -513,7 +508,6 @@ export class CreateDeploymentRequest extends jspb.Message {
 export namespace CreateDeploymentRequest {
   export type AsObject = {
     parent: string,
-    scaleRequest?: CreateScaleRequest.AsObject,
   }
 }
 
