@@ -3,7 +3,6 @@ import * as jspb from 'google-protobuf';
 import { Box, Button, Text } from 'grommet';
 
 import useClient from './useClient';
-import useMergeDispatch from './useMergeDispatch';
 import {
 	useAppReleaseWithDispatch,
 	State as AppReleaseState,
@@ -22,6 +21,7 @@ import {
 } from './useAppScale';
 import isActionType from './util/isActionType';
 import useWithCancel from './useWithCancel';
+import useErrorHandler from './useErrorHandler';
 import useNavProtection from './useNavProtection';
 import Loading from './Loading';
 import RightOverlay from './RightOverlay';
@@ -45,8 +45,7 @@ export enum ActionType {
 	INCREMENT_PROCESS = 'FormationEditor__INCREMENT_PROCESS',
 	DECREMENT_PROCESS = 'FormationEditor__DECREMENT_PROCESS',
 	RESET = 'FormationEditor__RESET',
-	SET_CONFIRMING = 'FormationEditor__SET_CONFIRMING',
-	SET_ERROR = 'FormationEditor__SET_ERROR'
+	SET_CONFIRMING = 'FormationEditor__SET_CONFIRMING'
 }
 
 interface SetProcessesAction {
@@ -79,11 +78,6 @@ interface SetConfirmingAction {
 	confirming: boolean;
 }
 
-interface SetErrorAction {
-	type: ActionType.SET_ERROR;
-	error: Error;
-}
-
 export type Action =
 	| SetProcessesAction
 	| ProcessChangeAction
@@ -91,7 +85,6 @@ export type Action =
 	| DecrementProcessAction
 	| ResetAction
 	| SetConfirmingAction
-	| SetErrorAction
 	| AppReleaseAction
 	| AppScaleAction
 	| CreateScaleRequestAction
@@ -195,11 +188,6 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 				nextState.isConfirming = action.confirming;
 				return nextState;
 
-			case ActionType.SET_ERROR:
-				// no-op, parent component is expected to handle this
-				// see <AppComponent>
-				return prevState;
-
 			case CreateScaleRequestActionType.CREATED:
 				return reducer(prevState, { type: ActionType.SET_CONFIRMING, confirming: false });
 
@@ -288,13 +276,13 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 
 interface Props {
 	appName: string;
-	dispatch: Dispatcher;
 }
 
 export default function FormationEditor(props: Props) {
-	const { appName, dispatch: callerDispatch } = props;
+	const { appName } = props;
 	const client = useClient();
 	const withCancel = useWithCancel();
+	const handleError = useErrorHandler();
 
 	const [
 		{
@@ -309,9 +297,8 @@ export default function FormationEditor(props: Props) {
 			isConfirming,
 			nextScale
 		},
-		localDispatch
+		dispatch
 	] = React.useReducer(reducer, initialState(props));
-	const dispatch = useMergeDispatch(localDispatch, callerDispatch);
 	useAppScaleWithDispatch(appName, dispatch);
 	useAppReleaseWithDispatch(appName, dispatch);
 
@@ -320,9 +307,9 @@ export default function FormationEditor(props: Props) {
 	React.useEffect(() => {
 		const error = scaleError || releaseError;
 		if (error) {
-			dispatch({ type: ActionType.SET_ERROR, error });
+			handleError(error);
 		}
-	}, [scaleError, releaseError, dispatch]);
+	}, [scaleError, releaseError, handleError]);
 
 	const [enableNavProtection, disableNavProtection] = useNavProtection();
 	React.useEffect(
@@ -356,7 +343,7 @@ export default function FormationEditor(props: Props) {
 		protoMapReplace(req.getTagsMap(), scale.getNewTagsMap());
 		const cancel = client.createScale(req, (scaleReq: ScaleRequest, error: Error | null) => {
 			if (error) {
-				dispatch({ type: ActionType.SET_ERROR, error });
+				handleError(error);
 				return;
 			}
 			dispatch({
