@@ -688,32 +688,28 @@ function ReleaseHistory({ appName }: Props) {
 		}
 
 		const actions: Action[] = [];
-		if (selectedResourceType === SelectedResourceType.ScaleRequest) {
-			// It's a scale request we're deploying
-			const item = items.find((sr) => sr.getName() === selectedItemName);
-			const sr = item && item.isScaleRequest ? item.getScaleRequest() : null;
-			const nextScale = new CreateScaleRequest();
-			if (!sr) {
-				return;
-			}
-			nextScale.setParent(sr.getParent());
-			protoMapReplace(nextScale.getProcessesMap(), sr.getNewProcessesMap());
-			protoMapReplace(nextScale.getTagsMap(), sr.getNewTagsMap());
-			actions.push({ type: ActionType.SET_NEXT_SCALE, scale: nextScale });
-			if (selectedItemName.startsWith(currentReleaseName)) {
-				// We're scaling the current release
-				actions.push({ type: ActionType.SET_NEXT_RELEASE_NAME, name: currentReleaseName });
-			} else {
-				// We're deploying and scaling a release
-				actions.push({ type: ActionType.SET_NEXT_RELEASE_NAME, name: sr.getParent() });
-			}
-			actions.push({ type: ActionType.SET_DEPLOY_STATUS, isDeploying: true });
-		} else {
-			// It's a release we're deploying
-			actions.push({ type: ActionType.SET_NEXT_RELEASE_NAME, name: selectedItemName });
-			actions.push({ type: ActionType.SET_NEXT_SCALE, scale: null });
-			actions.push({ type: ActionType.SET_DEPLOY_STATUS, isDeploying: true });
+		actions.push({ type: ActionType.SET_NEXT_RELEASE_NAME, name: selectedItemName });
+		actions.push({ type: ActionType.SET_NEXT_SCALE, scale: null });
+		actions.push({ type: ActionType.SET_DEPLOY_STATUS, isDeploying: true });
+		dispatch(actions);
+	};
+
+	const handleScaleBtnClick = (e: React.SyntheticEvent) => {
+		e.preventDefault();
+
+		const actions: Action[] = [];
+		const item = items.find((sr) => sr.getName() === selectedItemName);
+		const sr = item && item.isScaleRequest ? item.getScaleRequest() : null;
+		const nextScale = new CreateScaleRequest();
+		if (!sr) {
+			return;
 		}
+		nextScale.setParent(sr.getParent());
+		protoMapReplace(nextScale.getProcessesMap(), sr.getNewProcessesMap());
+		protoMapReplace(nextScale.getTagsMap(), sr.getNewTagsMap());
+		actions.push({ type: ActionType.SET_NEXT_SCALE, scale: nextScale });
+		actions.push({ type: ActionType.SET_NEXT_RELEASE_NAME, name: currentReleaseName });
+		actions.push({ type: ActionType.SET_DEPLOY_STATUS, isDeploying: true });
 		dispatch(actions);
 	};
 
@@ -912,17 +908,23 @@ function ReleaseHistory({ appName }: Props) {
 
 				<StickyBox bottom="0px" background="background" pad="xsmall" width="medium">
 					{selectedResourceType === SelectedResourceType.ScaleRequest ? (
-						selectedItemName.startsWith(currentReleaseName) ? (
+						<Box direction="row">
 							<Button
 								type="submit"
-								disabled={(selectedScaleRequestDiff as Diff<string, number>).length === 0}
+								disabled={selectedItemName.startsWith(currentReleaseName)}
 								primary
 								icon={<CheckmarkIcon />}
-								label="Scale Release"
+								label="Deploy Release"
 							/>
-						) : (
-							<Button type="submit" primary icon={<CheckmarkIcon />} label="Deploy Release / Scale" />
-						)
+							&nbsp;
+							<Button
+								type="button"
+								disabled={(selectedScaleRequestDiff as Diff<string, number>).length === 0}
+								onClick={handleScaleBtnClick}
+								icon={<CheckmarkIcon />}
+								label="Scale"
+							/>
+						</Box>
 					) : (
 						<Button
 							type="submit"
