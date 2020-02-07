@@ -15,28 +15,31 @@ import isActionType from './util/isActionType';
 import useRouter from './useRouter';
 import { NavProtectionContext, buildNavProtectionContext } from './useNavProtection';
 
-import { default as useErrorHandler } from './useErrorHandler';
+import useErrorHandler from './useErrorHandler';
 import Notification from './Notification';
 import Loading from './Loading';
 import ExternalAnchor from './ExternalAnchor';
-import { ActionType as FormationActionType, Action as FormationAction } from './FormationEditor';
 const FormationEditor = React.lazy(() => import('./FormationEditor'));
 const ReleaseHistory = React.lazy(() => import('./ReleaseHistory'));
 const EnvEditor = React.lazy(() => import('./EnvEditor'));
 const MetadataEditor = React.lazy(() => import('./MetadataEditor'));
 
-export enum ActionType {}
+export enum ActionType {
+	SET_ERROR = 'AppComponent__SET_ERROR'
+}
 
-export type Action = AppAction | FormationAction;
+interface SetErrorAction {
+	type: ActionType.SET_ERROR;
+	error: Error;
+}
 
-type Dispatcher = (actions: Action | Action[]) => void;
+export type Action = SetErrorAction | AppAction;
+
+export type Dispatcher = (actions: Action | Action[]) => void;
 
 interface State {
 	// useApp
 	appState: AppState;
-
-	// <FormationEditor>
-	formationEditorError: Error | null;
 
 	isAppDeleted: boolean;
 	githubURL: string | null;
@@ -46,9 +49,6 @@ function initialState(props: Props): State {
 	return {
 		// useApp
 		appState: initialAppState(),
-
-		// <FormationEditor>
-		formationEditorError: null,
 
 		isAppDeleted: false,
 		githubURL: null
@@ -64,10 +64,6 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 	const nextState = actions.reduce((prevState: State, action: Action) => {
 		const nextState = Object.assign({}, prevState);
 		switch (action.type) {
-			case FormationActionType.SET_ERROR:
-				nextState.formationEditorError = action.error;
-				return nextState;
-
 			default:
 				if (isActionType<AppAction>(AppActionType, action)) {
 					nextState.appState = appReducer(prevState.appState, action);
@@ -128,8 +124,7 @@ export default function AppComponent(props: Props) {
 		{
 			appState: { app, loading: appLoading, error: appError },
 			isAppDeleted,
-			githubURL,
-			formationEditorError
+			githubURL
 		},
 		dispatch
 	] = React.useReducer(reducer, initialState(props));
@@ -146,14 +141,8 @@ export default function AppComponent(props: Props) {
 					handleError(new Error(`${app ? app.getDisplayName() : 'App(' + name + ')'}: ${appError.message}`));
 				}
 			}
-
-			let cancel = () => {};
-			if (formationEditorError) {
-				cancel = handleError(formationEditorError);
-			}
-			return cancel;
 		},
-		[appError, formationEditorError] // eslint-disable-line react-hooks/exhaustive-deps
+		[appError] // eslint-disable-line react-hooks/exhaustive-deps
 	);
 	React.useDebugValue(`App(${app ? name : 'null'})${appLoading ? ' (Loading)' : ''}`);
 
@@ -163,7 +152,7 @@ export default function AppComponent(props: Props) {
 	const panels = app
 		? [
 				<AppComponentPanel key="scale" label="Scale" index={panelIndex++} defaultActive={true}>
-					<FormationEditor appName={app.getName()} dispatch={dispatch} />
+					<FormationEditor appName={app.getName()} />
 				</AppComponentPanel>,
 
 				<AppComponentPanel key="env" label="Environment Variables" index={panelIndex++} defaultActive={true}>
