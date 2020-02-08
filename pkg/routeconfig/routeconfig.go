@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"regexp"
 	"text/template"
 
@@ -17,31 +16,20 @@ import (
 
 // Load loads app routes from the given route config
 func Load(routeConfig io.Reader) ([]*api.AppRoutes, error) {
-	// skycfg wants to read from a single file, so create a temp file
-	// to hold both the main and the supplied config
-	tmp, err := ioutil.TempFile("", "flynn-route-config-")
+	// read the route config
+	data, err := ioutil.ReadAll(routeConfig)
 	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
-
-	// write the main config followed by the route config to the tmp file
-	if _, err := io.WriteString(tmp, configMain); err != nil {
-		return nil, fmt.Errorf("error creating config file: %s", err)
-	}
-	if _, err := io.Copy(tmp, routeConfig); err != nil {
-		return nil, fmt.Errorf("error creating config file: %s", err)
+		return nil, fmt.Errorf("error reading config file: %s", err)
 	}
 
-	// flush the config to disk by closing the tmp file
-	if err := tmp.Close(); err != nil {
-		return nil, fmt.Errorf("error creating config file: %s", err)
+	// append the route config to the main config and wrap in a fileReader
+	r := &fileReader{
+		source: append([]byte(configMain), data...),
 	}
 
 	// load the config using skycfg
 	ctx := context.Background()
-	config, err := skycfg.Load(ctx, tmp.Name())
+	config, err := skycfg.Load(ctx, "", skycfg.WithFileReader(r))
 	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %s", err)
 	}
@@ -141,4 +129,21 @@ type Data struct {
 type AppRoutes struct {
 	App    string
 	Routes []*router.Route
+}
+
+// fileReader implements the skycfg.FileReader and returns the given source for
+// the root path and an error for non-root paths
+type fileReader struct {
+	source []byte
+}
+
+func (f *fileReader) Resolve(ctx context.Context, name, fromPath string) (string, error) {
+	return name, nil
+}
+
+func (f *fileReader) ReadFile(ctx context.Context, path string) ([]byte, error) {
+	if path == "" {
+		return f.source, nil
+	}
+	return nil, fmt.Errorf("file not found: %s", path)
 }
