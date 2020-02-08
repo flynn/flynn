@@ -61,6 +61,10 @@ message ListAppRoutesRequest {
 message ListAppRoutesResponse {
   // app_routes are the requested routes.
   repeated AppRoutes app_routes = 1;
+
+  // state is the state of the returned routes that can be used as the
+  // expected_state in a subsequent call to SetRoutes.
+  bytes state = 2;
 }
 
 // AppRoutes is a list of desired routes for an app.

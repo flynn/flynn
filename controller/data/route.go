@@ -64,7 +64,7 @@ func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []by
 		if err != nil {
 			return nil, nil, err
 		}
-		state := routeState(existingRoutes)
+		state := RouteState(existingRoutes)
 		changes, err := r.set(nil, routes, existingRoutes)
 		return changes, state, err
 	}
@@ -84,7 +84,7 @@ func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []by
 
 	// if the request includes an expected state, check it matches the
 	// current state of the existing routes
-	currentState := routeState(existingRoutes)
+	currentState := RouteState(existingRoutes)
 	if len(expectedState) > 0 {
 		if !bytes.Equal(expectedState, currentState) {
 			tx.Rollback()
@@ -886,9 +886,9 @@ func normaliseRoutePath(path string) string {
 	return path
 }
 
-// routeState calculates the state of the given set of routes as the SHA256
+// RouteState calculates the state of the given set of routes as the SHA256
 // digest of the canonical JSON representation of a map of route IDs to routes
-func routeState(routes []*router.Route) []byte {
+func RouteState(routes []*router.Route) []byte {
 	v := make(map[string]*router.Route, len(routes))
 	for _, r := range routes {
 		v[r.ID] = r

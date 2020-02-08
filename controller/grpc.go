@@ -15,6 +15,7 @@ import (
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/golang/protobuf/ptypes/empty"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	log "github.com/inconshreveable/log15"
@@ -982,11 +983,13 @@ outer:
 	res := &api.ListAppRoutesResponse{
 		AppRoutes: make([]*api.AppRoutes, len(apps)),
 	}
+	var allRoutes []*router.Route
 	for i, app := range apps {
 		routes, err := g.routeRepo.List(ct.RouteParentRefPrefix + app.ID)
 		if err != nil {
 			return nil, err
 		}
+		allRoutes = append(allRoutes, routes...)
 		apiRoutes := make([]*api.Route, len(routes))
 		for i, route := range routes {
 			apiRoutes[i] = data.ToAPIRoute(route)
@@ -996,6 +999,9 @@ outer:
 			Routes: apiRoutes,
 		}
 	}
+
+	// add the route state to the response
+	res.State = data.RouteState(allRoutes)
 
 	// return the response
 	return res, nil
