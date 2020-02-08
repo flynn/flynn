@@ -957,13 +957,12 @@ $$ LANGUAGE SQL;
 	migrations.Add(49, `
 ALTER TABLE http_routes ADD COLUMN disable_keep_alives boolean NOT NULL DEFAULT false;
 	`)
-	// migration 50 removes route validation from the database (it now exists in the controller)
+	// migration 50 removes some route validation from the database that
+	// was moved to the controller
 	migrations.Add(50, `
-DROP INDEX http_routes_domain_port_path_key;
 DROP TRIGGER check_http_route_drain_backends ON http_routes;
 DROP TRIGGER check_http_route_update ON http_routes;
 
-DROP INDEX tcp_routes_port_key;
 -- NOTE: the below is not a typo, the trigger was added incorrectly
 DROP TRIGGER check_http_route_drain_backends ON tcp_routes;
 DROP TRIGGER set_tcp_route_port ON tcp_routes;
