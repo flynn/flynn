@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"regexp"
 	"text/template"
 
 	"github.com/flynn/flynn/controller/api"
@@ -17,21 +16,19 @@ import (
 )
 
 // Load loads app routes from the given route config
-func Load(routeConfig io.Reader) ([]*api.AppRoutes, error) {
+func Load(in io.Reader) ([]*api.AppRoutes, error) {
 	// read the route config
-	data, err := ioutil.ReadAll(routeConfig)
+	data, err := ioutil.ReadAll(in)
 	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %s", err)
 	}
 
-	// append the route config to the main config and wrap in a fileReader
-	r := &fileReader{
-		source: append([]byte(configMain), data...),
-	}
+	// initialise a skycfg FileReader to read the route config
+	r := &fileReader{config: data}
 
 	// load the config using skycfg
 	ctx := context.Background()
-	config, err := skycfg.Load(ctx, "", skycfg.WithFileReader(r))
+	config, err := skycfg.Load(ctx, "main", skycfg.WithFileReader(r))
 	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %s", err)
 	}
@@ -41,18 +38,20 @@ func Load(routeConfig io.Reader) ([]*api.AppRoutes, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error parsing config file: %s", err)
 	}
-	appRoutes := make([]*api.AppRoutes, len(msgs))
-	for i, msg := range msgs {
-		v, ok := msg.(*api.AppRoutes)
-		if !ok {
-			return nil, fmt.Errorf("error parsing config file: expected return value %d to be api.AppRoutes, got %T", i, msg)
-		}
-		appRoutes[i] = v
+	if len(msgs) != 1 {
+		return nil, fmt.Errorf("error parsing config file: expected main to return a single protocol message, got %d", len(msgs))
 	}
-	return appRoutes, nil
+	routeConfig, ok := msgs[0].(*api.RouteConfig)
+	if !ok {
+		return nil, fmt.Errorf("error parsing config file: expected main to return RouteConfig, got %T", msgs[0])
+	}
+	switch routeConfig.Version {
+	case api.RouteConfig_VERSION_1:
+		return routeConfig.AppRoutes, nil
+	default:
+		return nil, fmt.Errorf("error parsing config file: unexpected version %s, only %s is supported", routeConfig.Version, api.RouteConfig_VERSION_1)
+	}
 }
-
-var multiNewlinesPattern = regexp.MustCompile("\n\n+")
 
 // Generate generates route config based on the given app routes
 func Generate(apps []string, appRoutes []*api.AppRoutes) ([]byte, error) {
@@ -76,66 +75,107 @@ func Generate(apps []string, appRoutes []*api.AppRoutes) ([]byte, error) {
 	if err := configTemplate.Execute(&buf, tmplData); err != nil {
 		return nil, err
 	}
-	// remove multiple newlines caused by the template actions
-	return multiNewlinesPattern.ReplaceAll(buf.Bytes(), []byte("\n")), nil
+	return buf.Bytes(), nil
 }
-
-// configMain is the main skycfg code that is preprended to user supplied route
-// config when configuring routes
-const configMain = `
-api = proto.package("flynn.api.v1")
-
-def main(ctx):
-  allAppRoutes = []
-
-  for appName, appRoutes in routes(ctx).items():
-    appRef = "apps/{}".format(appName)
-
-    for route in appRoutes:
-      route.parent = appRef
-
-    allAppRoutes.append(api.AppRoutes(app = appRef, routes = appRoutes))
-
-  return allAppRoutes
-
-def http_route(domain, service):
-  return api.Route(
-    http = api.Route.HTTP(domain = domain),
-    service_target = api.Route.ServiceTarget(service_name = service, drain_backends = True),
-  )
-
-def tcp_route(port, service):
-  return api.Route(
-    tcp = api.Route.TCP(port = api.Route.TCPPort(port = port)),
-    service_target = api.Route.ServiceTarget(service_name = service, drain_backends = True),
-  )
-
-### config read from the user's config file ends up below this line ###
-`
 
 // configTemplate is the template used to generate a route config file from
 // existing app routes
 var configTemplate = template.Must(template.New("routes.cfg").Parse(`
+# FLYNN ROUTE CONFIG
+# ------------------
+#
+# This is a Flynn route config file that defines the list of routes that should exist for a set of
+# Flynn apps.
+#
+# To ensure the routes defined in this file exist (and that routes not defined in this file don't
+# exist), apply it by running:
+#
+#     flynn route config apply path/to/routes.cfg
+#
+# To re-generate this route config based on routes that exist for a list of apps:
+#
+#     flynn route config generate app1 app2 app3 > path/to/routes.cfg
+#
+# STRUCTURE
+# ---------
+#
+# The file uses the Starlark configuration language (https://github.com/bazelbuild/starlark)
+# and is processed using the Skycfg extension library (https://github.com/stripe/skycfg).
+#
+# A 'main' function must be defined that returns a single element list containing an
+# apiv1.RouteConfig protocol message that represents the routes that should exist
+# for a set of apps.
+
+apiv1 = proto.package("flynn.api.v1")
+
+# routes returns a dict mapping app names to the list of routes that should exist for
+# each app.
 def routes(ctx):
   return {
-{{ range .AppRoutes }}
+    {{ range .AppRoutes -}}
     "{{ .App }}": [
-{{ range .Routes }}
-{{ if eq .Type "http" }}
+      {{- range .Routes -}}
+      {{- if eq .Type "http" }}
       http_route(
-        domain  = "{{ .Domain }}",
-        service = "{{ .Service }}",
+	domain  = "{{ .Domain }}",
+	service = "{{ .Service }}",
       ),
-{{ else if eq .Type "tcp" }}
+      {{- end -}}
+      {{- if eq .Type "tcp" }}
       tcp_route(
-        port    = {{ .Port }},
-        service = "{{ .Service }}",
+	port    = {{ .Port }},
+	service = "{{ .Service }}",
       ),
-{{ end }}
-{{ end }}
+      {{- end -}}
+      {{- end }}
     ],
-{{ end }}
+    {{- end }}
   }
+
+def main(ctx):
+  return [
+    apiv1.RouteConfig(
+      version = apiv1.RouteConfig.Version.VERSION_1,
+      app_routes = app_routes(routes(ctx)),
+    ),
+  ]
+
+def app_routes(v):
+  appRoutes = []
+
+  for appName, routes in v.items():
+    appRef = "apps/{}".format(appName)
+
+    for route in routes:
+      route.parent = appRef
+
+    appRoutes.append(apiv1.AppRoutes(app = appRef, routes = routes))
+
+  return appRoutes
+
+def http_route(domain, service):
+  return apiv1.Route(
+    http = apiv1.Route.HTTP(
+      domain = domain,
+    ),
+    service_target = apiv1.Route.ServiceTarget(
+      service_name = service,
+      drain_backends = True,
+    ),
+  )
+
+def tcp_route(port, service):
+  return apiv1.Route(
+    tcp = apiv1.Route.TCP(
+      port = apiv1.Route.TCPPort(
+	port = port,
+      ),
+    ),
+    service_target = apiv1.Route.ServiceTarget(
+      service_name = service,
+      drain_backends = True,
+    ),
+  )
 `[1:]))
 
 // Data is used to render the config template
@@ -149,10 +189,9 @@ type AppRoutes struct {
 	Routes []*router.Route
 }
 
-// fileReader implements the skycfg.FileReader and returns the given source for
-// the root path and an error for non-root paths
+// fileReader implements the skycfg.FileReader to load route config
 type fileReader struct {
-	source []byte
+	config []byte
 }
 
 func (f *fileReader) Resolve(ctx context.Context, name, fromPath string) (string, error) {
@@ -160,8 +199,8 @@ func (f *fileReader) Resolve(ctx context.Context, name, fromPath string) (string
 }
 
 func (f *fileReader) ReadFile(ctx context.Context, path string) ([]byte, error) {
-	if path == "" {
-		return f.source, nil
+	if path == "main" {
+		return f.config, nil
 	}
 	return nil, fmt.Errorf("file not found: %s", path)
 }
