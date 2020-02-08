@@ -3,6 +3,7 @@ package routeconfig
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/flynn/flynn/controller/api"
+	"github.com/flynn/flynn/controller/data"
 	router "github.com/flynn/flynn/router/types"
 	"github.com/stripe/skycfg"
 )
@@ -52,10 +54,26 @@ func Load(routeConfig io.Reader) ([]*api.AppRoutes, error) {
 
 var multiNewlinesPattern = regexp.MustCompile("\n\n+")
 
-// Generate generates route config based on the given data
-func Generate(data *Data) ([]byte, error) {
+// Generate generates route config based on the given app routes
+func Generate(apps []string, appRoutes []*api.AppRoutes) ([]byte, error) {
+	if len(apps) != len(appRoutes) {
+		return nil, errors.New("apps and routes must have the same length")
+	}
+	tmplData := &Data{
+		AppRoutes: make([]*AppRoutes, len(appRoutes)),
+	}
+	for i, app := range apps {
+		routes := make([]*router.Route, len(appRoutes[i].Routes))
+		for j, route := range appRoutes[i].Routes {
+			routes[j] = data.ToRouterRoute(app, route)
+		}
+		tmplData.AppRoutes[i] = &AppRoutes{
+			App:    app,
+			Routes: routes,
+		}
+	}
 	var buf bytes.Buffer
-	if err := configTemplate.Execute(&buf, data); err != nil {
+	if err := configTemplate.Execute(&buf, tmplData); err != nil {
 		return nil, err
 	}
 	// remove multiple newlines caused by the template actions

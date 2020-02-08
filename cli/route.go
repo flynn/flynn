@@ -159,21 +159,7 @@ func runRouteConfigGenerate(args *docopt.Args, client controller.Client) error {
 	}
 
 	// generate the route config
-	configData := &routeconfig.Data{
-		AppRoutes: make([]*routeconfig.AppRoutes, len(res.AppRoutes)),
-	}
-	for i, app := range apps {
-		appRoutes := res.AppRoutes[i]
-		routes := make([]*router.Route, len(appRoutes.Routes))
-		for i, route := range appRoutes.Routes {
-			routes[i] = data.ToRouterRoute(app, route)
-		}
-		configData.AppRoutes[i] = &routeconfig.AppRoutes{
-			App:    app,
-			Routes: routes,
-		}
-	}
-	config, err := routeconfig.Generate(configData)
+	config, err := routeconfig.Generate(apps, res.AppRoutes)
 	if err != nil {
 		return fmt.Errorf("error generating config: %s", err)
 	}
