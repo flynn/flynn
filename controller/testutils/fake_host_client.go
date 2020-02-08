@@ -7,7 +7,7 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
+	host "github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
@@ -133,7 +133,7 @@ func (c *FakeHostClient) StopJob(id string) error {
 		c.Jobs[id] = job
 		return c.stop(id)
 	} else {
-		return ct.NotFoundError{Resource: id}
+		return cluster.ErrNotFound
 	}
 }
 
@@ -170,7 +170,7 @@ func (c *FakeHostClient) CrashJob(uuid string) error {
 		c.Jobs[id] = job
 		return c.stop(id)
 	} else {
-		return ct.NotFoundError{Resource: id}
+		return cluster.ErrNotFound
 	}
 }
 

@@ -12,12 +12,14 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
 	host "github.com/flynn/flynn/host/types"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/golang/protobuf/ptypes"
 	durpb "github.com/golang/protobuf/ptypes/duration"
 	tspb "github.com/golang/protobuf/ptypes/timestamp"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
 
 func NewStatusResponse(healthy bool, detail []byte) *StatusResponse {
@@ -177,16 +179,46 @@ func NewControllerLabelFilterExpression(from *LabelFilter_Expression) *ct.LabelF
 	}
 }
 
-func NewError(err error, message string, args ...interface{}) error {
-	errCode := codes.Unknown
+func Error(err error) error {
+	if s, ok := status.FromError(err); ok {
+		return s.Err()
+	}
+	if e, ok := err.(hh.JSONError); ok {
+		return status.New(toStatusCode(e.Code), e.Message).Err()
+	}
+	code := codes.Unknown
 	if err == controller.ErrNotFound {
-		errCode = codes.NotFound
+		code = codes.NotFound
 	}
 	switch err.(type) {
 	case ct.ValidationError, *ct.ValidationError:
-		errCode = codes.InvalidArgument
+		code = codes.InvalidArgument
 	}
-	return grpc.Errorf(errCode, fmt.Sprintf(message, args...))
+	return status.Error(code, err.Error())
+}
+
+// toStatusCode converts a httphelper.ErrorCode to a gRPC status code
+func toStatusCode(code hh.ErrorCode) codes.Code {
+	switch code {
+	case hh.NotFoundErrorCode, hh.ObjectNotFoundErrorCode:
+		return codes.NotFound
+	case hh.ObjectExistsErrorCode:
+		return codes.AlreadyExists
+	case hh.ConflictErrorCode, hh.PreconditionFailedErrorCode:
+		return codes.FailedPrecondition
+	case hh.SyntaxErrorCode, hh.ValidationErrorCode, hh.RequestBodyTooBigErrorCode:
+		return codes.InvalidArgument
+	case hh.UnauthorizedErrorCode:
+		return codes.PermissionDenied
+	case hh.UnknownErrorCode:
+		return codes.Unknown
+	case hh.RatelimitedErrorCode:
+		return codes.ResourceExhausted
+	case hh.ServiceUnavailableErrorCode:
+		return codes.Unavailable
+	default:
+		return codes.Unknown
+	}
 }
 
 func NewTimestamp(t *time.Time) *tspb.Timestamp {

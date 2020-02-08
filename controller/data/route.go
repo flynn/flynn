@@ -116,7 +116,7 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 		app, err := selectApp(r.db, appID, false)
 		if err != nil {
 			if err == ErrNotFound {
-				err = fmt.Errorf("app not found: %v", appID)
+				err = hh.ValidationErr("", fmt.Sprintf("app not found: %s", appID))
 			}
 			return nil, err
 		}

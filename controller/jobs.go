@@ -87,7 +87,7 @@ func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req 
 	}
 
 	if err = client.StopJob(job.ID); err != nil {
-		if _, ok := err.(ct.NotFoundError); ok {
+		if err == cluster.ErrNotFound {
 			err = ErrNotFound
 		}
 		respondWithError(w, err)

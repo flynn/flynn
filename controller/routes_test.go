@@ -13,6 +13,8 @@ import (
 	router "github.com/flynn/flynn/router/types"
 	. "github.com/flynn/go-check"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type fakeStream struct{}
@@ -524,10 +526,16 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 	app2Routes = append(app2Routes, dupRoute)
 	_, err = setRoutes(true, res.AppliedToState)
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "conflict: a http route with domain=app1.example.com and path=/ already exists"), Equals, true, Commentf("err = %s", err))
+	statusErr, ok := status.FromError(err)
+	c.Assert(ok, Equals, true, Commentf("expected a status error, got %T", err))
+	c.Assert(statusErr.Code(), Equals, codes.FailedPrecondition)
+	c.Assert(statusErr.Message(), Equals, "a http route with domain=app1.example.com and path=/ already exists")
 	_, err = setRoutes(false, nil)
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "conflict: a http route with domain=app1.example.com and path=/ already exists"), Equals, true, Commentf("err = %s", err))
+	statusErr, ok = status.FromError(err)
+	c.Assert(ok, Equals, true, Commentf("expected a status error, got %T", err))
+	c.Assert(statusErr.Code(), Equals, codes.FailedPrecondition)
+	c.Assert(statusErr.Message(), Equals, "a http route with domain=app1.example.com and path=/ already exists")
 	app2Routes = app2Routes[:1]
 
 	// adding a route should lead to a single create change
