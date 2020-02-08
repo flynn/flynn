@@ -426,7 +426,7 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 	}
 	assertRoutes := func(expected ...*api.Route) {
 		rows, err := s.db.Query(
-			"SELECT service, domain FROM http_routes WHERE parent_ref IN ($1, $2, $3) AND deleted_at IS NULL ORDER BY domain",
+			"SELECT service, leader, domain, sticky, drain_backends, disable_keep_alives FROM http_routes WHERE parent_ref IN ($1, $2, $3) AND deleted_at IS NULL ORDER BY domain",
 			"controller/"+app1.Name, "controller/"+app2.Name, "controller/"+app3.Name,
 		)
 		c.Assert(err, IsNil)
@@ -434,7 +434,14 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 		var routes []*router.Route
 		for rows.Next() {
 			var route router.Route
-			c.Assert(rows.Scan(&route.Service, &route.Domain), IsNil)
+			c.Assert(rows.Scan(
+				&route.Service,
+				&route.Leader,
+				&route.Domain,
+				&route.Sticky,
+				&route.DrainBackends,
+				&route.DisableKeepAlives,
+			), IsNil)
 			routes = append(routes, &route)
 		}
 		c.Assert(rows.Err(), IsNil)
@@ -443,7 +450,11 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 		}
 		for i, r := range expected {
 			c.Assert(routes[i].Service, Equals, r.ServiceTarget.ServiceName)
+			c.Assert(routes[i].Leader, Equals, r.ServiceTarget.Leader)
+			c.Assert(routes[i].DrainBackends, Equals, r.ServiceTarget.DrainBackends)
 			c.Assert(routes[i].Domain, Equals, r.Config.(*api.Route_Http).Http.Domain)
+			c.Assert(routes[i].Sticky, Equals, (r.Config.(*api.Route_Http).Http.StickySessions != nil))
+			c.Assert(routes[i].DisableKeepAlives, Equals, r.DisableKeepAlives)
 		}
 	}
 
@@ -469,6 +480,9 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 	// applying should create the routes
 	res = applyRoutes(res.AppliedToState)
 	assertRoutes(route1, route2, route3)
+	route1.Name = res.RouteChanges[0].After.Name
+	route2.Name = res.RouteChanges[1].After.Name
+	route3.Name = res.RouteChanges[2].After.Name
 
 	// trying to apply the same change again should fail
 	_, err := setRoutes(false, initialState)
@@ -478,11 +492,18 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 
 	// updating a route should lead to a single update change
 	newRoute1 := &api.Route{
+		Name: route1.Name,
 		ServiceTarget: &api.Route_ServiceTarget{
 			ServiceName:   "app1-foo",
-			DrainBackends: true,
+			Leader:        true,
+			DrainBackends: false,
 		},
-		Config: route1.Config,
+		DisableKeepAlives: true,
+		Config: &api.Route_Http{Http: &api.Route_HTTP{
+			Domain:         route1.Config.(*api.Route_Http).Http.Domain,
+			Path:           route1.Config.(*api.Route_Http).Http.Path,
+			StickySessions: &api.Route_HTTP_StickySessions{},
+		}},
 	}
 	app1Routes = []*api.Route{newRoute1}
 	res = dryRun()
@@ -518,6 +539,7 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 	assertRoutes(newRoute1, route2, route3)
 	res = applyRoutes(res.AppliedToState)
 	assertRoutes(newRoute1, route2, route3, newRoute2)
+	newRoute2.Name = res.RouteChanges[0].After.Name
 
 	// removing a route should lead to a single delete change
 	app2Routes = app2Routes[:1]
@@ -531,6 +553,7 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 	// making multiple changes should return the correct changes
 	newRoute3 := httpRoute("app1-bar", "bar.example.com")
 	newRoute4 := &api.Route{
+		Name: route2.Name,
 		ServiceTarget: &api.Route_ServiceTarget{
 			ServiceName:   "app2-bar",
 			DrainBackends: true,
@@ -548,6 +571,7 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 	assertRoutes(newRoute1, route2, route3)
 	res = applyRoutes(res.AppliedToState)
 	assertRoutes(newRoute1, newRoute4, newRoute3)
+	newRoute3.Name = res.RouteChanges[2].After.Name
 
 	// moving a route between apps should work
 	newRoute5 := &api.Route{
@@ -566,6 +590,7 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 	assertRoutes(newRoute1, newRoute4, newRoute3)
 	res = applyRoutes(res.AppliedToState)
 	assertRoutes(newRoute1, newRoute5, newRoute3)
+	newRoute5.Name = res.RouteChanges[1].After.Name
 
 	// setting all app routes to empty should delete all routes
 	app1Routes = []*api.Route{}

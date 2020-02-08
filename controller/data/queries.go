@@ -648,8 +648,8 @@ LEFT OUTER JOIN certificates AS c ON c.id = rc.certificate_id
 WHERE r.id = $1 AND r.deleted_at IS NULL`
 	httpRouteUpdateQuery = `
 UPDATE http_routes as r
-SET parent_ref = $1, service = $2, port = $3, leader = $4, sticky = $5, path = $6, disable_keep_alives = $7
-WHERE id = $8 AND domain = $9 AND deleted_at IS NULL
+SET parent_ref = $1, service = $2, port = $3, leader = $4, sticky = $5, path = $6, drain_backends = $7, disable_keep_alives = $8
+WHERE id = $9 AND domain = $10 AND deleted_at IS NULL
 RETURNING r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.disable_keep_alives, r.created_at, r.updated_at`
 	httpRouteDeleteQuery = `
 UPDATE http_routes SET deleted_at = now()
@@ -668,8 +668,8 @@ RETURNING id, port, created_at, updated_at`
 SELECT id, parent_ref, service, port, leader, drain_backends, created_at, updated_at FROM tcp_routes
 WHERE id = $1 AND deleted_at IS NULL`
 	tcpRouteUpdateQuery = `
-UPDATE tcp_routes SET parent_ref = $1, service = $2, port = $3, leader = $4
-WHERE id = $5 AND deleted_at IS NULL
+UPDATE tcp_routes SET parent_ref = $1, service = $2, port = $3, leader = $4, drain_backends = $5
+WHERE id = $6 AND deleted_at IS NULL
 RETURNING id, parent_ref, service, port, leader, drain_backends, created_at, updated_at`
 	tcpRouteDeleteQuery = `
 UPDATE tcp_routes SET deleted_at = now()

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"strings"
 	"time"
 
@@ -51,6 +52,11 @@ func NewRouteRepo(db *postgres.DB) *RouteRepo {
 // first checking that expectedState matches the state of existing routes if
 // set.
 func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []byte) ([]*api.RouteChange, []byte, error) {
+	// check the routes have required fields set
+	if err := validateAPIRoutes(routes); err != nil {
+		return nil, nil, err
+	}
+
 	// if we're doing a dry run, just load the existing routes and return
 	// their state along with what changes would be applied
 	if dryRun {
@@ -128,11 +134,6 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 			shouldDelete := true
 
 			for _, desiredRoute := range appRoutes.Routes {
-				// ensure HTTP routes have a normalised path
-				if config, ok := desiredRoute.Config.(*api.Route_Http); ok {
-					config.Http.Path = normaliseRoutePath(config.Http.Path)
-				}
-
 				// check if the desired route matches the existing route
 				if routesMatchForUpdate(existingRoute, desiredRoute) {
 					// track that the desired route exists so we don't create it
@@ -559,6 +560,7 @@ func (r *RouteRepo) updateHTTP(tx *postgres.DBTx, route *router.Route) error {
 		route.Leader,
 		route.Sticky,
 		route.Path,
+		route.DrainBackends,
 		route.DisableKeepAlives,
 		route.ID,
 		route.Domain,
@@ -588,6 +590,7 @@ func (r *RouteRepo) updateTCP(tx *postgres.DBTx, route *router.Route) error {
 		route.Service,
 		route.Port,
 		route.Leader,
+		route.DrainBackends,
 		route.ID,
 	).Scan(
 		&route.ID,
@@ -654,6 +657,41 @@ func (r *RouteRepo) createEvent(tx *postgres.DBTx, route *router.Route, typ ct.E
 		ObjectType: typ,
 		UniqueID:   uniqueID,
 	}, route)
+}
+
+// validateAPIRoutes checks that the given API routes are semantically valid
+func validateAPIRoutes(appRoutes []*api.AppRoutes) error {
+	for _, a := range appRoutes {
+		if a.App == "" {
+			return hh.ValidationErr("app", "must be set")
+		}
+		for _, route := range a.Routes {
+			if route.ServiceTarget == nil {
+				return hh.ValidationErr("service_target", "must be set")
+			}
+			switch config := route.Config.(type) {
+			case *api.Route_Http:
+				if config.Http == nil {
+					return hh.ValidationErr("config.http", "must be set for HTTP routes")
+				}
+				if config.Http.Domain == "" {
+					return hh.ValidationErr("config.http.domain", "must be set for HTTP routes")
+				}
+				// ensure HTTP routes have a normalised path
+				config.Http.Path = normaliseRoutePath(config.Http.Path)
+			case *api.Route_Tcp:
+				if config.Tcp == nil {
+					return hh.ValidationErr("config.tcp", "must be set for TCP routes")
+				}
+				if config.Tcp.Port == nil {
+					return hh.ValidationErr("config.tcp.port", "must be set for TCP routes")
+				}
+			default:
+				return hh.ValidationErr("config", "must be either HTTP or TCP")
+			}
+		}
+	}
+	return nil
 }
 
 // routeOp represents an operation that is performed on a route and is used to
@@ -888,12 +926,18 @@ func routesMatchForUpdate(existing *router.Route, desired *api.Route) bool {
 // configuration as a desired route that has been identified as being an update
 // of the existing route
 func routesEqualForUpdate(existing *router.Route, desired *api.Route) bool {
-	// check whether they have the same service configuration
-	if desired.ServiceTarget == nil {
-		return existing.Service == ""
+	// check HTTP routes for a change in stickiness
+	if config, ok := desired.Config.(*api.Route_Http); ok {
+		if existing.Sticky == (config.Http.StickySessions == nil) {
+			return false
+		}
 	}
+
+	// check general config is the same
 	return existing.Service == desired.ServiceTarget.ServiceName &&
-		existing.DrainBackends == desired.ServiceTarget.DrainBackends
+		existing.Leader == desired.ServiceTarget.Leader &&
+		existing.DrainBackends == desired.ServiceTarget.DrainBackends &&
+		existing.DisableKeepAlives == desired.DisableKeepAlives
 }
 
 // ToAPIRoute converts a router.Route to an api.Route
@@ -901,8 +945,16 @@ func ToAPIRoute(route *router.Route) *api.Route {
 	r := &api.Route{
 		ServiceTarget: &api.Route_ServiceTarget{
 			ServiceName:   route.Service,
+			Leader:        route.Leader,
 			DrainBackends: route.DrainBackends,
 		},
+		DisableKeepAlives: route.DisableKeepAlives,
+	}
+	if route.ID != "" {
+		r.Name = path.Join(
+			strings.TrimPrefix(route.ParentRef, "controller/"),
+			"routes", route.ID,
+		)
 	}
 	switch route.Type {
 	case "http":
@@ -910,6 +962,9 @@ func ToAPIRoute(route *router.Route) *api.Route {
 			Domain: route.Domain,
 			Path:   route.Path,
 		}}
+		if route.Sticky {
+			r.Config.(*api.Route_Http).Http.StickySessions = &api.Route_HTTP_StickySessions{}
+		}
 	case "tcp":
 		r.Config = &api.Route_Tcp{Tcp: &api.Route_TCP{
 			Port: &api.Route_TCPPort{Port: uint32(route.Port)},
@@ -921,10 +976,12 @@ func ToAPIRoute(route *router.Route) *api.Route {
 // ToRouterRoute converts an api.Route into a router.Route
 func ToRouterRoute(appID string, route *api.Route) *router.Route {
 	r := &router.Route{
-		ParentRef: ct.RouteParentRefPrefix + appID,
+		ParentRef:         ct.RouteParentRefPrefix + appID,
+		DisableKeepAlives: route.DisableKeepAlives,
 	}
 	if t := route.ServiceTarget; t != nil {
 		r.Service = t.ServiceName
+		r.Leader = t.Leader
 		r.DrainBackends = t.DrainBackends
 	}
 	switch config := route.Config.(type) {
@@ -932,6 +989,7 @@ func ToRouterRoute(appID string, route *api.Route) *router.Route {
 		r.Type = "http"
 		r.Domain = config.Http.Domain
 		r.Path = config.Http.Path
+		r.Sticky = config.Http.StickySessions != nil
 	case *api.Route_Tcp:
 		r.Type = "tcp"
 		r.Port = int32(config.Tcp.Port.Port)

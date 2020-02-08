@@ -105,11 +105,17 @@ message Route {
     // Required. The discoverd service name to route requests to.
     string service_name = 1;
 
+    // Route to the service leader.
+    bool leader = 2;
+
     // Wait for in-flight requests to this target to finish before backends are terminated.
-    bool drain_backends = 2;
+    bool drain_backends = 3;
   }
 
   message HTTP {
+    // Sticky session configuration. Currently there are no configuration options.
+    message StickySessions {}
+
     // Required. The name of the server that this route matches. May contain up
     // to 10 wildcard labels for plaintext HTTP routes or a single wildcard
     // label for TLS routes, followed by one or more non-wildcard labels. This
@@ -124,6 +130,11 @@ message Route {
     // segments are matched. The full unstripped path is sent in requests to the
     // target.
     string path = 2;
+
+    // Enables best-effort session-backend stickiness using an encrypted cookie set
+    // and managed by the router that will send requests containing the cookie to
+    // the same backend instance. Incompatible with RedirectTarget.
+    StickySessions sticky_sessions = 3;
   }
 
   message TCP {
@@ -138,19 +149,26 @@ message Route {
     uint32 port = 1;
   }
 
+  // Output only. The unique identifier of this route resource in the format:
+  // `apps/{APP_ID}/routes/{ROUTE_ID}`
+  string name = 1;
+
   // Required. The parent resource name, in the format `apps/{APP_ID}` or
   // `apps/{APP_DISPLAY_NAME}`
-  string parent = 1;
+  string parent = 2;
 
   // Required. The discoverd service target for this route.
-  ServiceTarget service_target = 2;
+  ServiceTarget service_target = 3;
+
+  // Disable keep-alives between the router and backends for this route.
+  bool disable_keep_alives = 4;
 
   // The protocol-specific configuration.
   oneof config {
     // An HTTP route configuration.
-    HTTP http = 3;
+    HTTP http = 5;
 
     // A TCP route configuration.
-    TCP tcp = 4;
+    TCP tcp = 6;
   }
 }
