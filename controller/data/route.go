@@ -76,7 +76,7 @@ func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []by
 		return nil, nil, err
 	}
 
-	existingRoutes, err := r.list(tx, "")
+	existingRoutes, err := r.listForUpdate(tx, "")
 	if err != nil {
 		tx.Rollback()
 		return nil, nil, err
@@ -257,15 +257,17 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 }
 
 func (r *RouteRepo) Add(route *router.Route) error {
-	existingRoutes, err := r.List("")
+	tx, err := r.db.Begin()
 	if err != nil {
+		return err
+	}
+	existingRoutes, err := r.listForUpdate(tx, "")
+	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if err := r.validate(route, existingRoutes, routeOpCreate); err != nil {
-		return err
-	}
-	tx, err := r.db.Begin()
-	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if err := r.addTx(tx, route); err != nil {
@@ -448,31 +450,36 @@ func scanTCPRoute(s postgres.Scanner) (*router.Route, error) {
 }
 
 func (r *RouteRepo) List(parentRef string) ([]*router.Route, error) {
-	return r.list(r.db, parentRef)
+	return r.list(r.db, parentRef, false)
 }
 
-func (r *RouteRepo) list(db rowQueryer, parentRef string) ([]*router.Route, error) {
-	httpRoutes, err := r.listHTTP(db, parentRef)
+func (r *RouteRepo) listForUpdate(db rowQueryer, parentRef string) ([]*router.Route, error) {
+	return r.list(db, parentRef, true)
+}
+
+func (r *RouteRepo) list(db rowQueryer, parentRef string, forUpdate bool) ([]*router.Route, error) {
+	httpRoutes, err := r.listHTTP(db, parentRef, forUpdate)
 	if err != nil {
 		return nil, err
 	}
-	tcpRoutes, err := r.listTCP(db, parentRef)
+	tcpRoutes, err := r.listTCP(db, parentRef, forUpdate)
 	if err != nil {
 		return nil, err
 	}
 	return append(httpRoutes, tcpRoutes...), nil
 }
 
-func (r *RouteRepo) listHTTP(db rowQueryer, parentRef string) ([]*router.Route, error) {
-	var (
-		rows *pgx.Rows
-		err  error
-	)
-	if parentRef != "" {
-		rows, err = db.Query("http_route_list_by_parent_ref", parentRef)
-	} else {
-		rows, err = db.Query("http_route_list")
+func (r *RouteRepo) listHTTP(db rowQueryer, parentRef string, forUpdate bool) ([]*router.Route, error) {
+	query := "http_route_list"
+	var args []interface{}
+	if forUpdate {
+		query += "_for_update"
 	}
+	if parentRef != "" {
+		query += "_by_parent_ref"
+		args = append(args, parentRef)
+	}
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -488,16 +495,17 @@ func (r *RouteRepo) listHTTP(db rowQueryer, parentRef string) ([]*router.Route, 
 	return routes, rows.Err()
 }
 
-func (r *RouteRepo) listTCP(db rowQueryer, parentRef string) ([]*router.Route, error) {
-	var (
-		rows *pgx.Rows
-		err  error
-	)
-	if parentRef != "" {
-		rows, err = db.Query("tcp_route_list_by_parent_ref", parentRef)
-	} else {
-		rows, err = db.Query("tcp_route_list")
+func (r *RouteRepo) listTCP(db rowQueryer, parentRef string, forUpdate bool) ([]*router.Route, error) {
+	query := "tcp_route_list"
+	var args []interface{}
+	if forUpdate {
+		query += "_for_update"
 	}
+	if parentRef != "" {
+		query += "_by_parent_ref"
+		args = append(args, parentRef)
+	}
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -514,15 +522,17 @@ func (r *RouteRepo) listTCP(db rowQueryer, parentRef string) ([]*router.Route, e
 }
 
 func (r *RouteRepo) Update(route *router.Route) error {
-	existingRoutes, err := r.List("")
+	tx, err := r.db.Begin()
 	if err != nil {
+		return err
+	}
+	existingRoutes, err := r.listForUpdate(tx, "")
+	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if err := r.validate(route, existingRoutes, routeOpUpdate); err != nil {
-		return err
-	}
-	tx, err := r.db.Begin()
-	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if err := r.updateTx(tx, route); err != nil {
@@ -605,15 +615,17 @@ func (r *RouteRepo) updateTCP(tx *postgres.DBTx, route *router.Route) error {
 }
 
 func (r *RouteRepo) Delete(route *router.Route) error {
-	existingRoutes, err := r.List("")
+	tx, err := r.db.Begin()
 	if err != nil {
+		return err
+	}
+	existingRoutes, err := r.listForUpdate(tx, "")
+	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if err := r.validate(route, existingRoutes, routeOpDelete); err != nil {
-		return err
-	}
-	tx, err := r.db.Begin()
-	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if err := r.deleteTx(tx, route); err != nil {
