@@ -58,9 +58,9 @@ Commands:
 
 Examples:
 
-        $ flynn route config generate -f routes.cfg app1 app2 app3
+	$ flynn route config generate -f routes.cfg app1 app2 app3
 
-        $ flynn route config apply routes.cfg
+	$ flynn route config apply routes.cfg
 
 	$ flynn route add http example.com
 
