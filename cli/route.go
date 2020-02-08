@@ -24,7 +24,7 @@ import (
 func init() {
 	register("route", runRoute, `
 usage: flynn route
-       flynn route config generate [-f <file>] <apps>...
+       flynn route config generate [-f <file>] [<apps>...]
        flynn route config apply [--force] <file>
        flynn route add http [-s <service>] [-p <port>] [-c <tls-cert> -k <tls-key>] [--sticky] [--leader] [--no-leader] [--no-drain-backends] [--disable-keep-alives] <domain>
        flynn route add tcp [-s <service>] [-p <port>] [--leader] [--no-drain-backends]
@@ -143,8 +143,15 @@ func runRoute(args *docopt.Args, client controller.Client) error {
 }
 
 func runRouteConfigGenerate(args *docopt.Args, client controller.Client) error {
-	// list routes for the given apps
+	// list routes for the given apps or the current app
 	apps := args.All["<apps>"].([]string)
+	if len(apps) == 0 {
+		app, err := app()
+		if err != nil {
+			return errors.New("no app found, run from a repo with a flynn remote, specify one with -a or pass a list of apps on the command line")
+		}
+		apps = []string{app}
+	}
 	req := api.ListAppRoutesRequest{Apps: apps}
 	var res api.ListAppRoutesResponse
 	if err := client.Invoke("flynn.api.v1.Router/ListAppRoutes", &req, &res); err != nil {
