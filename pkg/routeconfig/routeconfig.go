@@ -117,14 +117,26 @@ def routes(ctx):
       {{- range .Routes -}}
       {{- if eq .Type "http" }}
       http_route(
-	domain  = "{{ .Domain }}",
-	service = "{{ .Service }}",
+	domain = "{{ .Domain }}",
+	{{- if not (eq .Path "/") }}
+	path = "{{ .Path }}",
+	{{- end }}
+	target = service("{{ .Service }}"{{ if .Leader }}, leader = True{{ end }}{{ if not .DrainBackends }}, drain_backends = False{{ end }}),
+	{{- if .Sticky }}
+	sticky = True,
+	{{- end }}
+	{{- if .DisableKeepAlives }}
+	disable_keep_alives = True,
+	{{- end }}
       ),
       {{- end -}}
       {{- if eq .Type "tcp" }}
       tcp_route(
-	port    = {{ .Port }},
-	service = "{{ .Service }}",
+	port   = {{ .Port }},
+	target = service("{{ .Service }}"{{ if .Leader }}, leader = True{{ end }}{{ if not .DrainBackends }}, drain_backends = False{{ end }}),
+	{{- if .DisableKeepAlives }}
+	disable_keep_alives = True,
+	{{- end }}
       ),
       {{- end -}}
       {{- end }}
@@ -153,28 +165,37 @@ def app_routes(v):
 
   return appRoutes
 
-def http_route(domain, service):
-  return apiv1.Route(
+def http_route(domain, target, path = "/", sticky = False, disable_keep_alives = False):
+  route = apiv1.Route(
     http = apiv1.Route.HTTP(
       domain = domain,
+      path = path,
     ),
-    service_target = apiv1.Route.ServiceTarget(
-      service_name = service,
-      drain_backends = True,
-    ),
+    service_target = target,
+    disable_keep_alives = disable_keep_alives,
   )
 
-def tcp_route(port, service):
+  if sticky:
+    route.http.sticky_sessions = apiv1.Route.HTTP.StickySessions()
+
+  return route
+
+def tcp_route(port, target, disable_keep_alives = False):
   return apiv1.Route(
     tcp = apiv1.Route.TCP(
       port = apiv1.Route.TCPPort(
 	port = port,
       ),
     ),
-    service_target = apiv1.Route.ServiceTarget(
-      service_name = service,
-      drain_backends = True,
-    ),
+    service_target = target,
+    disable_keep_alives = disable_keep_alives,
+  )
+
+def service(name, leader = False, drain_backends = True):
+  return apiv1.Route.ServiceTarget(
+    service_name = name,
+    leader = leader,
+    drain_backends = drain_backends,
   )
 `[1:]))
 
