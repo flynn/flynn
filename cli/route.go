@@ -256,38 +256,70 @@ func confirmRouteChanges(changes []*api.RouteChange) bool {
 
 func printRouteChanges(changes []*api.RouteChange) {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"ACTION", "ROUTE", "SERVICE", "CONFIG"})
+	table.SetRowLine(true)
+	table.SetAutoWrapText(false)
+	table.SetHeader([]string{"ACTION", "ROUTE", "BEFORE", "AFTER"})
 	for _, change := range changes {
 		var (
-			action   string
-			apiRoute *api.Route
+			action string
+			route  *router.Route
 		)
 		switch change.Action {
 		case api.RouteChange_ACTION_CREATE:
 			action = "CREATE"
-			apiRoute = change.After
+			route = data.ToRouterRoute("", change.After)
 		case api.RouteChange_ACTION_UPDATE:
 			action = "UPDATE"
-			apiRoute = change.Before
+			route = data.ToRouterRoute("", change.After)
 		case api.RouteChange_ACTION_DELETE:
 			action = "DELETE"
-			apiRoute = change.Before
+			route = data.ToRouterRoute("", change.Before)
 		}
-		r := data.ToRouterRoute("", apiRoute)
-		var route string
-		switch r.Type {
+
+		var routeDesc string
+		switch route.Type {
 		case "http":
-			route = fmt.Sprintf("http:%s%s", r.Domain, r.Path)
+			routeDesc = fmt.Sprintf("http:%s%s", route.Domain, route.Path)
 		case "tcp":
-			route = fmt.Sprintf("tcp:%d", r.Port)
+			routeDesc = fmt.Sprintf("tcp:%d", route.Port)
 		}
-		config := fmt.Sprintf(
-			"leader=%v sticky=%v drain_backends=%v disable_keep_alives=%v",
-			r.Leader, r.Sticky, r.DrainBackends, r.DisableKeepAlives,
-		)
-		table.Append([]string{action, route, r.Service, config})
+
+		table.Append([]string{
+			action,
+			routeDesc,
+			formatRouteConfig(change.Before),
+			formatRouteConfig(change.After),
+		})
 	}
 	table.Render()
+}
+
+func formatRouteConfig(route *api.Route) string {
+	if route == nil {
+		return "-"
+	}
+
+	r := data.ToRouterRoute("", route)
+	var lines []string
+
+	service := "service: " + r.Service
+	if r.Leader {
+		service += " (leader)"
+	}
+	if !r.DrainBackends {
+		service += " (no-drain-backends)"
+	}
+	lines = append(lines, service)
+
+	if r.Sticky {
+		lines = append(lines, "sticky sessions: true")
+	}
+
+	if r.DisableKeepAlives {
+		lines = append(lines, "disable keep alives: true")
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func runRouteAddTCP(args *docopt.Args, client controller.Client) error {
