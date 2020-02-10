@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -996,12 +997,11 @@ func (c *Client) Invoke(method string, in, out proto.Message) error {
 	resLen := binary.BigEndian.Uint32(resPrefix[1:])
 
 	// read the response message
-	resBody := make([]byte, resLen)
-	n, err = res.Body.Read(resBody)
+	resBody, err := ioutil.ReadAll(io.LimitReader(res.Body, int64(resLen)))
 	if err != nil {
 		return err
 	}
-	if n != int(resLen) {
+	if len(resBody) != int(resLen) {
 		return fmt.Errorf("expected to read %d response bytes, got %d", resLen, n)
 	}
 
