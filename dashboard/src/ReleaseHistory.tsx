@@ -463,7 +463,6 @@ const ReleaseHistoryRelease = React.memo(
 				<label>
 					<CheckBox
 						checked={selected}
-						indeterminate={!selected && isCurrent}
 						onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)}
 					/>
 					<ReleaseComponent release={r} prevRelease={p} />
@@ -522,7 +521,7 @@ const ReleaseHistoryScale = React.memo(
 		return (
 			<SelectableBox ref={ref} selected={selected} highlighted={isCurrent} {...boxProps}>
 				<label>
-					<CheckBox checked={selected} indeterminate={!selected && isCurrent} onChange={handleChange} />
+					<CheckBox checked={selected} onChange={handleChange} />
 					<div>
 						<div>Release {releaseID}</div>
 						<div>
