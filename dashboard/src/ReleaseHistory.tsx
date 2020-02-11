@@ -552,7 +552,6 @@ const ReleaseHistoryScale = React.memo(
 								m.push(
 									<ProcessScale
 										key={op.key}
-										direction="row"
 										margin="xsmall"
 										size="xsmall"
 										value={val as number}
