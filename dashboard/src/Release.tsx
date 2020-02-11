@@ -63,7 +63,8 @@ function ReleaseComponent({ release, prevRelease: prev }: ReleaseProps) {
 			{gitCommit(release) ? (
 				<>
 					<span>
-						git.commit {githubURL ? <ExternalAnchor href={githubURL}>{gitCommit(release)}</ExternalAnchor> : gitCommit}
+						git.commit{' '}
+						{githubURL ? <ExternalAnchor href={githubURL}>{gitCommit(release)}</ExternalAnchor> : gitCommit(release)}
 						{githubCompareURL ? (
 							<>
 								&nbsp;
