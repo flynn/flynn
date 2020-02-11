@@ -117,6 +117,9 @@ const colors = {
 };
 const modifiedAruba = Object.assign({}, aruba, {
 	global: Object.assign({}, (aruba as any).global, {
+		font: {
+			family: null // inherit from ./index.css
+		},
 		colors: Object.assign({}, (aruba as any).global.colors, {
 			// color used on active hover state
 			active:
