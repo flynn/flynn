@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Switch, Route } from 'react-router-dom';
 import { Grommet, Box, Heading } from 'grommet';
 import { aruba } from 'grommet-theme-aruba';
 import tinycolor from 'tinycolor2';
+import styled from 'styled-components';
 
 import Config from './config';
 import { useLocation } from 'react-router-dom';
@@ -11,6 +12,7 @@ import Split from './Split';
 import Loading from './Loading';
 import AppsListNav from './AppsListNav';
 import { DisplayErrors } from './useErrorHandler';
+import flynnLogoPath from './flynn.svg';
 
 // DEBUG:
 import { default as client, Client } from './client';
@@ -25,6 +27,10 @@ if (typeof window !== 'undefined') {
 
 const Login = React.lazy(() => import('./Login'));
 const AppComponent = React.lazy(() => import('./AppComponent'));
+
+const StyledLogoImg = styled('img')`
+	width: 50%;
+`;
 
 function appNameFromPath(path: string): string {
 	const m = path.match(/\/apps\/[^/]+/);
@@ -46,8 +52,8 @@ function DashboardInner() {
 	return (
 		<Split>
 			<Box tag="aside" basis="medium" flex={false} fill>
-				<Box tag="header" pad="small">
-					<h1>Flynn Dashboard</h1>
+				<Box tag="header" pad="small" flex={false}>
+					<StyledLogoImg src={flynnLogoPath} alt="Flynn Logo" />
 				</Box>
 				<Box flex>{authenticated ? <AppsListNav /> : null}</Box>
 			</Box>
