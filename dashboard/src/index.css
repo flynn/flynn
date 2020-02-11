@@ -1,3 +1,26 @@
+@font-face {
+  font-family: 'League Spartan';
+  src: url(./fonts/leaguespartan-bold.eot);
+  src: url(./fonts/leaguespartan-bold.eot?#iefix) format('embedded-opentype'),
+       url(./fonts/leaguespartan-bold.woff2) format('woff2'),
+       url(./fonts/leaguespartan-bold.woff) format('woff'),
+       url(./fonts/leaguespartan-bold.ttf) format('truetype'),
+       url(./fonts/leaguespartan-bold.svg#league_spartanbold) format('svg');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'VarelaRound';
+  src: url(./fonts/VarelaRound.eot?#iefix) format('embedded-opentype'),
+       url(./fonts/VarelaRound.otf)  format('opentype'),
+       url(./fonts/VarelaRound.woff) format('woff'),
+       url(./fonts/VarelaRound.ttf)  format('truetype'),
+       url(./fonts/VarelaRound.svg#VarelaRound) format('svg');
+  font-weight: normal;
+  font-style: normal;
+}
+
 html {
 	box-sizing: border-box;
 }
@@ -11,10 +34,13 @@ html {
 body {
 	margin: 0;
 	padding: 0;
-	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans',
-		'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: "VarelaRound", "Helvetica Neue", Helvetica, Arial, sans-serif;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "League Spartan", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 code {
