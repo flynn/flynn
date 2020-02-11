@@ -1,6 +1,6 @@
 import * as React from 'react';
 import styled from 'styled-components';
-import { LinkUp as LinkUpIcon, LinkDown as LinkDownIcon } from 'grommet-icons';
+import { Add as AddIcon, FormSubtract as FormSubtractIcon } from 'grommet-icons';
 import { Text, Box, BoxProps, Button, CheckBox } from 'grommet';
 import useMergeDispatch from './useMergeDispatch';
 import ifDev from './ifDev';
@@ -34,10 +34,10 @@ const LabelText = styled(Text)`
 	font-size: ${(props) => (props.size === 'xsmall' ? '0.75em' : props.size === 'small' ? '1em' : '1.5em')};
 	line-height: 1.5em;
 	margin: 0 0.5em;
-`;
-
-const DeltaText = styled(Text)`
-	color: #e9a945;
+	width: 10ch;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 `;
 
 interface ScaleBoxProps {
@@ -78,7 +78,7 @@ function scaleBoxDownCSS() {
 	`;
 }
 
-const ScaleBox = styled(Box)`
+const ScaleBoxContainer = styled(Box)`
 	${(props: ScaleBoxProps) => {
 		switch (props.scaleDirection) {
 			case 'up':
@@ -89,6 +89,19 @@ const ScaleBox = styled(Box)`
 				return '';
 		}
 	}}
+
+	button {
+		visibility: hidden;
+	}
+	&:hover {
+		button {
+			visibility: visible;
+		}
+	}
+`;
+
+const ScaleBox = styled(Box)`
+	border-width: 2px;
 `;
 
 export enum ActionType {
@@ -194,7 +207,6 @@ export interface Props extends BoxProps {
 	value: number;
 	originalValue?: number;
 	showDelta?: boolean;
-	showLabelDelta?: boolean;
 	label: string;
 	size?: 'xsmall' | 'small' | 'large';
 	mutable?: boolean;
@@ -223,7 +235,6 @@ const ProcessScale = React.memo(function ProcessScale({
 	value: initialValue,
 	originalValue = 0,
 	showDelta = false,
-	showLabelDelta = false,
 	label,
 	size = 'small',
 	mutable = false,
@@ -236,14 +247,6 @@ const ProcessScale = React.memo(function ProcessScale({
 	const dispatch = useMergeDispatch(localDispatch, callerDispatch, false);
 
 	const delta = React.useMemo(() => value - originalValue, [originalValue, value]);
-	const deltaText = React.useMemo(() => {
-		if (delta === 0) return '';
-		let sign = '+';
-		if (delta < 0) {
-			sign = '-';
-		}
-		return ` ${sign}${Math.abs(delta)}`;
-	}, [delta]);
 
 	// Handle incoming changes to props.value
 	React.useEffect(() => {
@@ -304,21 +307,15 @@ const ProcessScale = React.memo(function ProcessScale({
 	const direction = showDelta ? (delta > 0 ? 'up' : delta < 0 ? 'down' : '') : '';
 
 	return (
-		<ScaleBox
+		<ScaleBoxContainer
 			scaleDirection={direction}
 			align="center"
-			border="all"
-			round
-			title={showDelta ? `Scaled ${delta > 0 ? 'up ' : delta < 0 ? 'down ' : ''}to ${value}${deltaText}` : ''}
+			title={
+				showDelta ? (delta === 0 ? undefined : `Scales ${direction} from ${value - delta} to ${value}`) : undefined
+			}
 			{...boxProps}
 		>
-			<Box
-				direction="row"
-				align="center"
-				justify="center"
-				border={boxProps.direction === 'row' ? 'right' : 'bottom'}
-				fill="horizontal"
-			>
+			<ScaleBox direction="row" align="center" justify="center" border="all" round fill="horizontal">
 				{valueEditable ? (
 					<ValueInput
 						ref={valueInput}
@@ -329,7 +326,7 @@ const ProcessScale = React.memo(function ProcessScale({
 					/>
 				) : showDelta ? (
 					<Box direction="row" justify="center" align="center">
-						<Box justify="center">{delta > 0 ? <LinkUpIcon /> : delta < 0 ? <LinkDownIcon /> : null}</Box>
+						<Box justify="center">{delta > 0 ? <AddIcon /> : delta < 0 ? <FormSubtractIcon /> : null}</Box>
 						<ValueText size={size} onClick={handleValueTextClick}>
 							{value}
 						</ValueText>
@@ -341,8 +338,8 @@ const ProcessScale = React.memo(function ProcessScale({
 				)}
 				{mutable ? (
 					<Box>
-						<Button margin="xsmall" plain icon={<LinkUpIcon />} onClick={handleIncrement} />
-						<Button margin="xsmall" plain icon={<LinkDownIcon />} onClick={handleDecrement} />
+						<Button margin="xsmall" plain icon={<AddIcon />} onClick={handleIncrement} />
+						<Button margin="xsmall" plain icon={<FormSubtractIcon />} onClick={handleDecrement} />
 					</Box>
 				) : null}
 				{confirmScaleToZero && value === 0 && delta !== 0 ? (
@@ -350,14 +347,13 @@ const ProcessScale = React.memo(function ProcessScale({
 						<CheckBox checked={scaleToZeroConfirmed} onChange={handleConfirmChange} />
 					</Box>
 				) : null}
-			</Box>
+			</ScaleBox>
 			<Box flex="grow">
-				<LabelText size={size}>
+				<LabelText size={size} title={label}>
 					{label}
-					{showLabelDelta ? <DeltaText>{deltaText}</DeltaText> : null}
 				</LabelText>
 			</Box>
-		</ScaleBox>
+		</ScaleBoxContainer>
 	);
 });
 

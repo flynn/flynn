@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, BoxProps } from 'grommet';
+import { Box, Grid, GridProps } from 'grommet';
 
 import ProcessScale, {
 	ActionType as ProcessScaleActionType,
@@ -8,7 +8,7 @@ import ProcessScale, {
 } from './ProcessScale';
 import protoMapDiff, { Diff, DiffOp, DiffOption } from './util/protoMapDiff';
 import buildProcessesMap from './util/buildProcessesMap';
-import { ScaleRequest, CreateScaleRequest, ScaleRequestState, Release } from './generated/controller_pb';
+import { ScaleRequest, CreateScaleRequest, Release } from './generated/controller_pb';
 import useMergeDispatch from './useMergeDispatch';
 
 export enum ActionType {
@@ -177,9 +177,10 @@ interface StateProps {
 	confirmScaleToZero: boolean;
 }
 
-interface Props extends Pick<StateProps, Exclude<keyof StateProps, 'confirmScaleToZero'>>, BoxProps {
+interface Props extends Pick<StateProps, Exclude<keyof StateProps, 'confirmScaleToZero'>>, GridProps {
 	confirmScaleToZero?: boolean;
 	dispatch: Dispatcher;
+	direction?: 'row' | 'column';
 }
 
 export default function ProcessesDiff({
@@ -189,7 +190,7 @@ export default function ProcessesDiff({
 	confirmScaleToZero = true,
 	dispatch: callerDispatch,
 	direction,
-	...boxProps
+	...gridProps
 }: Props) {
 	const [{ isScaleToZeroConfirmed, scaleToZeroConfirmed, processesFullDiff }, localDispatch] = React.useReducer(
 		reducer,
@@ -209,10 +210,8 @@ export default function ProcessesDiff({
 		}
 	}, [isScaleToZeroConfirmed, dispatch]);
 
-	const isPending = scale.getState() === ScaleRequestState.SCALE_PENDING;
-
 	return (
-		<Box direction="row" gap="small" {...boxProps}>
+		<Grid justify="start" columns="small" gap="small" {...gridProps}>
 			{processesFullDiff.reduce((m: React.ReactNodeArray, op: DiffOp<string, number>) => {
 				const key = op.key;
 				let startVal = scale.getNewProcessesMap().get(key) || 0;
@@ -232,7 +231,6 @@ export default function ProcessesDiff({
 							scaleToZeroConfirmed={scaleToZeroConfirmed.get(key)}
 							value={val}
 							originalValue={startVal}
-							showLabelDelta={!isPending}
 							label={key}
 							dispatch={dispatch}
 						/>
@@ -240,7 +238,7 @@ export default function ProcessesDiff({
 				);
 				return m;
 			}, [] as React.ReactNodeArray)}
-		</Box>
+		</Grid>
 	);
 }
 

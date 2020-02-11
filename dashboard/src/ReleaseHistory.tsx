@@ -3,7 +3,7 @@ import * as timestamp_pb from 'google-protobuf/google/protobuf/timestamp_pb';
 import styled from 'styled-components';
 
 import { Checkmark as CheckmarkIcon } from 'grommet-icons';
-import { CheckBox, Button, Box, BoxProps, Text } from 'grommet';
+import { CheckBox, Button, Grid, Box, BoxProps, Text } from 'grommet';
 
 import ifDev from './ifDev';
 import ProcessScale from './ProcessScale';
@@ -538,7 +538,7 @@ const ReleaseHistoryScale = React.memo(
 								}
 							})()}
 						</div>
-						<Box wrap direction="row">
+						<Grid justify="start" columns="small">
 							{diff.length === 0 ? <Text color="dark-2">&lt;No processes&gt;</Text> : null}
 							{diff.reduce((m: React.ReactNodeArray, op: DiffOp<string, number>) => {
 								if (op.op === 'remove') {
@@ -564,7 +564,7 @@ const ReleaseHistoryScale = React.memo(
 								);
 								return m;
 							}, [] as React.ReactNodeArray)}
-						</Box>
+						</Grid>
 					</div>
 				</label>
 			</SelectableBox>
