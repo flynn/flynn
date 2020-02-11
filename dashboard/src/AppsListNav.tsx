@@ -26,6 +26,12 @@ import { TextInput } from './GrommetTextInput';
 import WindowedListState from './WindowedListState';
 import WindowedList, { WindowedListItem } from './WindowedList';
 
+const List = styled('ul')`
+	margin: 0;
+	padding: 0;
+	overflow-y: auto;
+`;
+
 interface StyledNavAnchorProps {
 	selected: boolean;
 }
@@ -251,7 +257,7 @@ export default function AppsListNav(props: Props) {
 
 	return (
 		<>
-			<Box margin={{ bottom: 'xsmall', left: 'xsmall', right: 'xsmall' }}>
+			<Box margin={{ bottom: 'xsmall', left: 'xsmall', right: 'xsmall' }} flex={false}>
 				<TextInput
 					placeholder="Filter apps..."
 					value={filterText}
@@ -260,14 +266,7 @@ export default function AppsListNav(props: Props) {
 				/>
 			</Box>
 
-			<Box
-				ref={scrollContainerRef as any}
-				tag="ul"
-				margin="none"
-				pad="none"
-				flex={true}
-				overflow={{ vertical: 'auto', horizontal: 'auto' }}
-			>
+			<List ref={scrollContainerRef as any}>
 				{isLoading ? <Loading /> : null}
 
 				<Box tag="li" ref={paddingTopRef as any} style={{ height: windowedListState.paddingTop }} flex={false}>
@@ -307,7 +306,7 @@ export default function AppsListNav(props: Props) {
 				<Box tag="li" ref={paddingBottomRef as any} style={{ height: windowedListState.paddingBottom }} flex={false}>
 					&nbsp;
 				</Box>
-			</Box>
+			</List>
 		</>
 	);
 }
