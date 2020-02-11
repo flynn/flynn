@@ -323,7 +323,12 @@ const ProcessScale = React.memo(function ProcessScale({
 				{mutable ? (
 					<Box>
 						<Button margin="xsmall" plain icon={<AddIcon />} onClick={handleIncrement} />
-						<Button margin="xsmall" plain icon={<FormSubtractIcon />} onClick={handleDecrement} />
+						<Button
+							margin="xsmall"
+							plain
+							icon={<FormSubtractIcon style={value === 0 ? { opacity: 0.5 } : undefined} />}
+							onClick={handleDecrement}
+						/>
 					</Box>
 				) : null}
 				{confirmScaleToZero && value === 0 && delta !== 0 ? (
