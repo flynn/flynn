@@ -1,18 +1,15 @@
 import * as React from 'react';
 import { BrowserRouter as Router, Switch, Route } from 'react-router-dom';
 
-import { Grommet, Box, Paragraph, Heading, Button } from 'grommet';
+import { Grommet, Box, Heading } from 'grommet';
 import { aruba } from 'grommet-theme-aruba';
 import tinycolor from 'tinycolor2';
 
 import Config from './config';
-import useClient from './useClient';
-import useWithCancel from './useWithCancel';
 import { useLocation } from 'react-router-dom';
 import Split from './Split';
 import Loading from './Loading';
 import AppsListNav from './AppsListNav';
-import ExternalAnchor from './ExternalAnchor';
 import { DisplayErrors } from './useErrorHandler';
 
 // DEBUG:
@@ -44,46 +41,15 @@ function DashboardInner() {
 	React.useEffect(() => {
 		setAppName(appNameFromPath(currentPath));
 	}, [currentPath]);
-	const client = useClient();
-	const withCancel = useWithCancel();
 	const [authenticated, setAuthenticated] = React.useState(Config.isAuthenticated());
-
-	const handleLogoutBtnClick = (e: React.SyntheticEvent) => {
-		e.preventDefault();
-		const cancel = client.logout(() => {
-			setAuthenticated(false);
-		});
-		withCancel.set('logout', cancel);
-	};
 
 	return (
 		<Split>
-			<Box tag="aside" basis="medium" flex={false} background="neutral-1" fill>
+			<Box tag="aside" basis="medium" flex={false} fill>
 				<Box tag="header" pad="small">
 					<h1>Flynn Dashboard</h1>
 				</Box>
 				<Box flex>{authenticated ? <AppsListNav /> : null}</Box>
-				<Box tag="footer" alignSelf="center">
-					<Paragraph size="small" margin="xsmall">
-						Flynn is designed, built, and managed by Prime Directive, Inc.
-						<br />
-						&copy; 2013-
-						{new Date().getFullYear()} Prime Directive, Inc. Flynn® is a trademark of Prime Directive, Inc.
-					</Paragraph>
-					<Paragraph size="small" margin="xsmall">
-						<ExternalAnchor href="https://flynn.io/legal/privacy">Privacy Policy</ExternalAnchor>
-						&nbsp;|&nbsp;
-						<ExternalAnchor href="https://flynn.io/docs/trademark-guidelines">Trademark Guidelines</ExternalAnchor>
-						{authenticated ? null : (
-							<>
-								&nbsp;|&nbsp;
-								<Button plain as="a" onClick={handleLogoutBtnClick}>
-									Logout
-								</Button>
-							</>
-						)}
-					</Paragraph>
-				</Box>
 			</Box>
 
 			<Box pad="xsmall" fill overflow="scroll" gap="small">

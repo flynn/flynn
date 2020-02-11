@@ -26,11 +26,17 @@ import { TextInput } from './GrommetTextInput';
 import WindowedListState from './WindowedListState';
 import WindowedList, { WindowedListItem } from './WindowedList';
 
-const StyledTextInput = styled(TextInput)`
+interface StyledNavAnchorProps {
+	selected: boolean;
+}
+
+const selectedNavAnchorCSS = `
 	color: var(--white);
-	&::placeholder {
-		color: var(--white);
-	}
+`;
+
+const StyledNavAnchor = styled(NavAnchor)`
+	width: 100%;
+	${(props: StyledNavAnchorProps) => (props.selected ? selectedNavAnchorCSS : '')}
 `;
 
 export enum ActionType {
@@ -246,7 +252,7 @@ export default function AppsListNav(props: Props) {
 	return (
 		<>
 			<Box margin={{ bottom: 'xsmall', left: 'xsmall', right: 'xsmall' }}>
-				<StyledTextInput
+				<TextInput
 					placeholder="Filter apps..."
 					value={filterText}
 					onChange={handleFilterTextChange}
@@ -276,22 +282,21 @@ export default function AppsListNav(props: Props) {
 							return (
 								<WindowedListItem key={r.path} index={index} {...windowedListItemProps}>
 									{(ref) => (
-										<NavAnchor path={r.path} search={search}>
-											<Box
-												tag="li"
-												ref={ref as any}
-												direction="row"
-												justify="between"
-												align="center"
-												border="bottom"
-												pad={{ horizontal: 'medium', vertical: 'small' }}
-												basis="auto"
-												flex={false}
-												background={r.selected ? 'accent-1' : 'neutral-1'}
-											>
-												{r.displayName}
-											</Box>
-										</NavAnchor>
+										<Box
+											tag="li"
+											ref={ref as any}
+											direction="row"
+											justify="between"
+											align="center"
+											basis="auto"
+											background={r.selected ? 'brand' : undefined}
+										>
+											<StyledNavAnchor path={r.path} search={search} selected={r.selected}>
+												<Box pad={{ horizontal: 'medium', vertical: 'small' }} fill>
+													{r.displayName}
+												</Box>
+											</StyledNavAnchor>
+										</Box>
 									)}
 								</WindowedListItem>
 							);
