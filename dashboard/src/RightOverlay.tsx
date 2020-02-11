@@ -1,5 +1,11 @@
 import * as React from 'react';
 import { Layer, Box } from 'grommet';
+import styled from 'styled-components';
+
+const StyledLayer = styled(Layer)`
+	min-width: 50vw;
+	max-width: 75vw;
+`;
 
 export interface Props {
 	children: React.ReactNode;
@@ -8,10 +14,10 @@ export interface Props {
 
 export default function RightOverlay({ children, onClose }: Props) {
 	return (
-		<Layer position="right" onClickOutside={onClose} onEsc={onClose} full="vertical">
+		<StyledLayer position="right" onClickOutside={onClose} onEsc={onClose} full="vertical">
 			<Box fill pad="small" overflow="scroll">
 				{children}
 			</Box>
-		</Layer>
+		</StyledLayer>
 	);
 }

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as jspb from 'google-protobuf';
-import { Box, Button, Text } from 'grommet';
+import { Grid, Box, Button, Text } from 'grommet';
 
 import useClient from './useClient';
 import {
@@ -377,7 +377,7 @@ export default function FormationEditor(props: Props) {
 			) : null}
 
 			<Box as="form" onSubmit={isConfirming ? handleConfirmSubmit : handleSubmit} margin={{ bottom: 'xsmall' }}>
-				<Box wrap direction="row" gap="small" margin={{ bottom: 'xsmall' }}>
+				<Grid gap="xsmall" margin={{ bottom: 'xsmall' }} justify="start" columns="small">
 					{processes.length === 0 ? (
 						<Text color="dark-2">&lt;No processes&gt;</Text>
 					) : (
@@ -387,7 +387,7 @@ export default function FormationEditor(props: Props) {
 							</Box>
 						))
 					)}
-				</Box>
+				</Grid>
 				<Box direction="row">
 					{hasChanges && !isPending ? (
 						<>
