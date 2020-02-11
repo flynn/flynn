@@ -260,14 +260,7 @@ export default function CreateScaleRequestComponent(props: Props) {
 			<Box>
 				<h3>Review Changes</h3>
 
-				<ProcessesDiff
-					direction="row"
-					margin="small"
-					scale={scale}
-					nextScale={nextScale}
-					release={release}
-					dispatch={dispatch}
-				/>
+				<ProcessesDiff margin="small" scale={scale} nextScale={nextScale} release={release} dispatch={dispatch} />
 			</Box>
 
 			<Box fill="horizontal" direction="row" align="end" gap="small" justify="between">

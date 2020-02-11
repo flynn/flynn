@@ -46,34 +46,16 @@ interface ScaleBoxProps {
 
 function scaleBoxUpCSS() {
 	return `
-		border-color: var(--dark-4);
-		font-weight: 600;
-		color: var(--white);
-		background-color: var(--brand);
-
-		* {
-			border-color: var(--dark-1);
-		}
-
-		svg {
-			stroke: var(--dark-1);
+		> * {
+			border-color: var(--brand);
 		}
 	`;
 }
 
 function scaleBoxDownCSS() {
 	return `
-		border-color: var(--dark-4);
-		font-weight: 600;
-		color: var(--dark-1);
-		background-color: var(--status-warning);
-
-		* {
-			border-color: var(--dark-1);
-		}
-
-		svg {
-			stroke: var(--dark-1);
+		> * {
+			border-color: var(--status-warning);
 		}
 	`;
 }
@@ -89,6 +71,8 @@ const ScaleBoxContainer = styled(Box)`
 				return '';
 		}
 	}}
+
+	font-weight: 600;
 
 	button {
 		visibility: hidden;

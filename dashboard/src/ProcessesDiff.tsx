@@ -232,6 +232,7 @@ export default function ProcessesDiff({
 							value={val}
 							originalValue={startVal}
 							label={key}
+							showDelta
 							dispatch={dispatch}
 						/>
 					</Box>
