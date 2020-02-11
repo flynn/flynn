@@ -29,7 +29,7 @@ const Login = React.lazy(() => import('./Login'));
 const AppComponent = React.lazy(() => import('./AppComponent'));
 
 const StyledLogoImg = styled('img')`
-	width: 50%;
+	height: 2em;
 `;
 
 function appNameFromPath(path: string): string {
@@ -52,7 +52,7 @@ function DashboardInner() {
 	return (
 		<Split>
 			<Box tag="aside" basis="medium" flex={false} fill>
-				<Box tag="header" pad="small" flex={false}>
+				<Box tag="header" pad="small" direction="row">
 					<StyledLogoImg src={flynnLogoPath} alt="Flynn Logo" />
 				</Box>
 				<Box flex>{authenticated ? <AppsListNav /> : null}</Box>
