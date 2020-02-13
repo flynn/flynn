@@ -2,12 +2,13 @@ import * as React from 'react';
 import * as timestamp_pb from 'google-protobuf/google/protobuf/timestamp_pb';
 import styled from 'styled-components';
 
-import { Checkmark as CheckmarkIcon } from 'grommet-icons';
-import { CheckBox, Button, Grid, Box, BoxProps, Text } from 'grommet';
+import { Grid, Box, BoxProps, Text } from 'grommet';
 
 import ifDev from './ifDev';
 import ProcessScale from './ProcessScale';
 import RightOverlay from './RightOverlay';
+import ExpandedRelease from './ExpandedRelease';
+import ExpandedScaleRequestComponent from './ExpandedScaleRequest';
 import { default as useRouter } from './useRouter';
 import { useAppWithDispatch, Action as AppAction, ActionType as AppActionType } from './useApp';
 import {
@@ -23,15 +24,7 @@ import useErrorHandler from './useErrorHandler';
 import useWithCancel from './useWithCancel';
 import useDateString from './useDateString';
 import { listDeploymentsRequestFilterType, ReleaseHistoryItem } from './client';
-import {
-	App,
-	Release,
-	ReleaseType,
-	ReleaseTypeMap,
-	ScaleRequest,
-	CreateScaleRequest,
-	ScaleRequestState
-} from './generated/controller_pb';
+import { App, Release, ReleaseType, ReleaseTypeMap, ScaleRequest, CreateScaleRequest } from './generated/controller_pb';
 import Loading from './Loading';
 import CreateDeployment, {
 	Action as CreateDeploymentAction,
@@ -45,7 +38,6 @@ import ReleaseComponent from './Release';
 import WindowedListState from './WindowedListState';
 import WindowedList, { WindowedListItem } from './WindowedList';
 import protoMapDiff, { Diff, DiffOp, DiffOption } from './util/protoMapDiff';
-import protoMapReplace from './util/protoMapReplace';
 import isActionType from './util/isActionType';
 import roundedDate from './util/roundedDate';
 
@@ -55,12 +47,14 @@ enum SelectedResourceType {
 }
 
 enum ActionType {
-	SET_DEPLOY_STATUS = 'SET_DEPLOY_STATUS',
-	SET_SELECTED_ITEM = 'SET_SELECTED_ITEM',
-	SET_NEXT_SCALE = 'SET_NEXT_SCALE',
-	SET_NEXT_RELEASE_NAME = 'SET_NEXT_RELEASE_NAME',
-	SET_WINDOW = 'SET_WINDOW',
-	SET_PANE_HEIGHT = 'SET_PANE_HEIGHT'
+	SET_DEPLOY_STATUS = 'ReleaseHistory__SET_DEPLOY_STATUS',
+	SET_SELECTED_ITEM = 'ReleaseHistory__SET_SELECTED_ITEM',
+	CLEAR_SELECTION = 'ReleaseHistory__CLEAR_SELECTION',
+	SELECT_RESOURCE = 'ReleaseHistory__SELECT_RESOURCE',
+	SET_NEXT_SCALE = 'ReleaseHistory__SET_NEXT_SCALE',
+	SET_NEXT_RELEASE_NAME = 'ReleaseHistory__SET_NEXT_RELEASE_NAME',
+	SET_WINDOW = 'ReleaseHistory__SET_WINDOW',
+	SET_PANE_HEIGHT = 'ReleaseHistory__SET_PANE_HEIGHT'
 }
 
 interface SetDeployStatusAction {
@@ -72,6 +66,15 @@ interface SetSelectedItemAction {
 	type: ActionType.SET_SELECTED_ITEM;
 	name: string;
 	resourceType?: SelectedResourceType;
+}
+
+interface ClearSelectionAction {
+	type: ActionType.CLEAR_SELECTION;
+}
+
+interface SelectResourceAction {
+	type: ActionType.SELECT_RESOURCE;
+	selection: ReleaseSelection | ScaleSelection;
 }
 
 interface SetNextScaleAction {
@@ -98,6 +101,8 @@ interface SetPaneHeightAction {
 type Action =
 	| SetDeployStatusAction
 	| SetSelectedItemAction
+	| ClearSelectionAction
+	| SelectResourceAction
 	| SetNextScaleAction
 	| SetNextReleaseNameAction
 	| SetWindowAction
@@ -110,6 +115,22 @@ type Action =
 
 type Dispatcher = (actions: Action | Action[]) => void;
 
+enum SelectionType {
+	RELEASE = 'RELEASE',
+	SCALE = 'SCALE'
+}
+
+interface ReleaseSelection {
+	type: SelectionType.RELEASE;
+	release: Release;
+	prevRelease?: Release | null;
+}
+
+interface ScaleSelection {
+	type: SelectionType.SCALE;
+	scale: ScaleRequest;
+}
+
 interface State {
 	isDeploying: boolean;
 	selectedItemName: string;
@@ -120,6 +141,8 @@ interface State {
 	length: number;
 	paneHeight: number;
 	selectedScaleRequestDiff: Diff<string, number>;
+
+	selection: ReleaseSelection | ScaleSelection | null;
 
 	// useApp
 	app: App | null;
@@ -155,6 +178,8 @@ function initialState(): State {
 		length: 0,
 		paneHeight: 400,
 		selectedScaleRequestDiff: emptyScaleRequestDiff,
+
+		selection: null,
 
 		// useApp
 		app: null,
@@ -193,6 +218,14 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 				if (action.resourceType) {
 					nextState.selectedResourceType = action.resourceType;
 				}
+				return nextState;
+
+			case ActionType.CLEAR_SELECTION:
+				nextState.selection = null;
+				return nextState;
+
+			case ActionType.SELECT_RESOURCE:
+				nextState.selection = action.selection;
 				return nextState;
 
 			case ActionType.SET_NEXT_SCALE:
@@ -450,23 +483,20 @@ interface ReleaseHistoryReleaseProps extends BoxProps {
 	isCurrent: boolean;
 	release: Release;
 	prevRelease: Release | null;
-	onChange: (isSelected: boolean) => void;
+	dispatch: Dispatcher;
 }
 
 const ReleaseHistoryRelease = React.memo(
 	React.forwardRef(function ReleaseHistoryRelease(
-		{ release: r, prevRelease: p, selected, isCurrent, onChange, ...boxProps }: ReleaseHistoryReleaseProps,
+		{ release, prevRelease, selected, isCurrent, dispatch, ...boxProps }: ReleaseHistoryReleaseProps,
 		ref: any
 	) {
+		const handleClick = React.useCallback(() => {
+			dispatch({ type: ActionType.SELECT_RESOURCE, selection: { type: SelectionType.RELEASE, release, prevRelease } });
+		}, [release, prevRelease, dispatch]);
 		return (
-			<SelectableBox ref={ref} selected={selected} highlighted={isCurrent} {...boxProps}>
-				<label>
-					<CheckBox
-						checked={selected}
-						onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)}
-					/>
-					<ReleaseComponent release={r} prevRelease={p} />
-				</label>
+			<SelectableBox ref={ref} selected={selected} highlighted={isCurrent} {...boxProps} onClick={handleClick}>
+				<ReleaseComponent release={release} prevRelease={prevRelease} />
 			</SelectableBox>
 		);
 	}),
@@ -495,77 +525,40 @@ const ReleaseHistoryScale = React.memo(
 		{ scaleRequest: s, selected, isCurrent, currentReleaseName, dispatch, ...boxProps }: ReleaseHistoryScaleProps,
 		ref: any
 	) {
-		const releaseID = s.getParent().split('/')[3];
+		const handleClick = React.useCallback(() => {
+			dispatch({ type: ActionType.SELECT_RESOURCE, selection: { type: SelectionType.SCALE, scale: s } });
+		}, [s, dispatch]);
+
 		const diff = protoMapDiff(s.getOldProcessesMap(), s.getNewProcessesMap(), DiffOption.INCLUDE_UNCHANGED);
 
-		const handleChange = React.useCallback(
-			(e: React.ChangeEvent<HTMLInputElement>) => {
-				const isSelected = e.target.checked;
-				if (isSelected) {
-					dispatch({
-						type: ActionType.SET_SELECTED_ITEM,
-						name: s.getName(),
-						resourceType: SelectedResourceType.ScaleRequest
-					});
-				} else {
-					dispatch({
-						type: ActionType.SET_SELECTED_ITEM,
-						name: currentReleaseName,
-						resourceType: SelectedResourceType.Release
-					});
-				}
-			},
-			[s, currentReleaseName, dispatch]
-		);
-
 		return (
-			<SelectableBox ref={ref} selected={selected} highlighted={isCurrent} {...boxProps}>
-				<label>
-					<CheckBox checked={selected} onChange={handleChange} />
-					<div>
-						<div>Release {releaseID}</div>
-						<div>
-							{(() => {
-								switch (s.getState()) {
-									case ScaleRequestState.SCALE_PENDING:
-										return 'PENDING';
-									case ScaleRequestState.SCALE_CANCELLED:
-										return 'CANCELED';
-									case ScaleRequestState.SCALE_COMPLETE:
-										return 'COMPLETE';
-									default:
-										return 'UNKNOWN';
-								}
-							})()}
-						</div>
-						<Grid justify="start" columns="small">
-							{diff.length === 0 ? <Text color="dark-2">&lt;No processes&gt;</Text> : null}
-							{diff.reduce((m: React.ReactNodeArray, op: DiffOp<string, number>) => {
-								if (op.op === 'remove') {
-									return m;
-								}
-								let val = op.value;
-								let prevVal = s.getOldProcessesMap().get(op.key);
-								if (op.op === 'keep') {
-									val = prevVal;
-								}
-								m.push(
-									<ProcessScale
-										key={op.key}
-										margin="xsmall"
-										size="xsmall"
-										value={val as number}
-										originalValue={prevVal}
-										showDelta
-										label={op.key}
-										dispatch={dispatch}
-									/>
-								);
-								return m;
-							}, [] as React.ReactNodeArray)}
-						</Grid>
-					</div>
-				</label>
+			<SelectableBox ref={ref} selected={selected} highlighted={isCurrent} {...boxProps} onClick={handleClick}>
+				<Grid justify="start" columns="small">
+					{diff.length === 0 ? <Text color="dark-2">&lt;No processes&gt;</Text> : null}
+					{diff.reduce((m: React.ReactNodeArray, op: DiffOp<string, number>) => {
+						if (op.op === 'remove') {
+							return m;
+						}
+						let val = op.value;
+						let prevVal = s.getOldProcessesMap().get(op.key);
+						if (op.op === 'keep') {
+							val = prevVal;
+						}
+						m.push(
+							<ProcessScale
+								key={op.key}
+								margin="xsmall"
+								size="xsmall"
+								value={val as number}
+								originalValue={prevVal}
+								showDelta
+								label={op.key}
+								dispatch={dispatch}
+							/>
+						);
+						return m;
+					}, [] as React.ReactNodeArray)}
+				</Grid>
 			</SelectableBox>
 		);
 	}),
@@ -594,6 +587,8 @@ function ReleaseHistory({ appName }: Props) {
 			length,
 			paneHeight,
 			selectedScaleRequestDiff,
+
+			selection,
 
 			// useApp
 			app,
@@ -678,37 +673,8 @@ function ReleaseHistory({ appName }: Props) {
 		dispatch
 	);
 
-	const submitHandler = (e: React.SyntheticEvent) => {
-		e.preventDefault();
-
-		if (selectedItemName === '') {
-			return;
-		}
-
-		const actions: Action[] = [];
-		actions.push({ type: ActionType.SET_NEXT_RELEASE_NAME, name: selectedItemName });
-		actions.push({ type: ActionType.SET_NEXT_SCALE, scale: null });
-		actions.push({ type: ActionType.SET_DEPLOY_STATUS, isDeploying: true });
-		dispatch(actions);
-	};
-
-	const handleScaleBtnClick = (e: React.SyntheticEvent) => {
-		e.preventDefault();
-
-		const actions: Action[] = [];
-		const item = items.find((sr) => sr.getName() === selectedItemName);
-		const sr = item && item.isScaleRequest ? item.getScaleRequest() : null;
-		const nextScale = new CreateScaleRequest();
-		if (!sr) {
-			return;
-		}
-		nextScale.setParent(sr.getParent());
-		protoMapReplace(nextScale.getProcessesMap(), sr.getNewProcessesMap());
-		protoMapReplace(nextScale.getTagsMap(), sr.getNewTagsMap());
-		actions.push({ type: ActionType.SET_NEXT_SCALE, scale: nextScale });
-		actions.push({ type: ActionType.SET_NEXT_RELEASE_NAME, name: currentReleaseName });
-		actions.push({ type: ActionType.SET_DEPLOY_STATUS, isDeploying: true });
-		dispatch(actions);
+	const handleSelectionCancel = () => {
+		dispatch({ type: ActionType.CLEAR_SELECTION });
 	};
 
 	const handleDeployCancel = () => {
@@ -811,6 +777,20 @@ function ReleaseHistory({ appName }: Props) {
 
 	return (
 		<>
+			{selection ? (
+				<RightOverlay onClose={handleSelectionCancel}>
+					{selection.type === SelectionType.SCALE ? (
+						<ExpandedScaleRequestComponent appName={appName} scale={selection.scale} />
+					) : (
+						<ExpandedRelease
+							appName={appName}
+							release={selection.release}
+							prevRelease={selection.prevRelease || undefined}
+						/>
+					)}
+				</RightOverlay>
+			) : null}
+
 			{isDeploying ? (
 				<RightOverlay onClose={handleDeployCancel}>
 					{selectedResourceType === SelectedResourceType.ScaleRequest &&
@@ -824,116 +804,70 @@ function ReleaseHistory({ appName }: Props) {
 				</RightOverlay>
 			) : null}
 
-			<form onSubmit={submitHandler}>
-				<Box
-					ref={releaseHistoryScrollContainerRef as any}
-					tag="ul"
-					flex={false}
-					alignContent="start"
-					overflow={{ vertical: 'scroll', horizontal: 'auto' }}
-					style={{
-						position: 'relative',
-						height: paneHeight,
-						padding: 0,
-						margin: 0
-					}}
-				>
-					<Box tag="li" ref={paddingTopRef as any} style={{ height: windowedListState.paddingTop }} flex={false}>
-						&nbsp;
-					</Box>
-					<WindowedList state={windowedListState} thresholdTop={windowingThresholdTop}>
-						{(windowedListItemProps) => {
-							return mapHistory({
-								startIndex,
-								length,
-								items,
-								renderDate: (key, date) => <ReleaseHistoryDateHeader key={key} date={date} tag="li" margin="xsmall" />,
-								renderRelease: (key, [r, p], index) => (
-									<WindowedListItem key={key} index={index} {...windowedListItemProps}>
-										{(ref) => (
-											<ReleaseHistoryRelease
-												ref={ref}
-												tag="li"
-												flex={false}
-												margin={{ bottom: 'small' }}
-												release={r}
-												prevRelease={p}
-												selected={selectedItemName === r.getName()}
-												isCurrent={currentReleaseName === r.getName()}
-												onChange={(isSelected) => {
-													if (isSelected) {
-														dispatch({
-															type: ActionType.SET_SELECTED_ITEM,
-															name: r.getName(),
-															resourceType: SelectedResourceType.Release
-														});
-													} else {
-														dispatch({
-															type: ActionType.SET_SELECTED_ITEM,
-															name: currentReleaseName,
-															resourceType: SelectedResourceType.Release
-														});
-													}
-												}}
-											/>
-										)}
-									</WindowedListItem>
-								),
-								renderScale: (key, s, index) => (
-									<WindowedListItem key={key} index={index} {...windowedListItemProps}>
-										{(ref) => (
-											<ReleaseHistoryScale
-												ref={ref}
-												tag="li"
-												flex={false}
-												margin={{ bottom: 'small' }}
-												scaleRequest={s}
-												currentReleaseName={currentReleaseName}
-												selected={selectedItemName === s.getName()}
-												isCurrent={currentScale ? currentScale.getName() === s.getName() : false}
-												dispatch={dispatch}
-											/>
-										)}
-									</WindowedListItem>
-								)
-							});
-						}}
-					</WindowedList>
-					<Box tag="li" ref={paddingBottomRef as any} style={{ height: windowedListState.paddingBottom }} flex={false}>
-						&nbsp;
-					</Box>
+			<Box
+				ref={releaseHistoryScrollContainerRef as any}
+				tag="ul"
+				flex={false}
+				alignContent="start"
+				overflow={{ vertical: 'scroll', horizontal: 'auto' }}
+				style={{
+					position: 'relative',
+					height: paneHeight,
+					padding: 0,
+					margin: 0
+				}}
+			>
+				<Box tag="li" ref={paddingTopRef as any} style={{ height: windowedListState.paddingTop }} flex={false}>
+					&nbsp;
 				</Box>
-
-				<StickyBox bottom="0px" background="background" pad="xsmall" width="medium">
-					{selectedResourceType === SelectedResourceType.ScaleRequest ? (
-						<Box direction="row">
-							<Button
-								type="submit"
-								disabled={selectedItemName.startsWith(currentReleaseName)}
-								primary
-								icon={<CheckmarkIcon />}
-								label="Deploy Release"
-							/>
-							&nbsp;
-							<Button
-								type="button"
-								disabled={(selectedScaleRequestDiff as Diff<string, number>).length === 0}
-								onClick={handleScaleBtnClick}
-								icon={<CheckmarkIcon />}
-								label="Scale"
-							/>
-						</Box>
-					) : (
-						<Button
-							type="submit"
-							disabled={selectedItemName === currentReleaseName}
-							primary
-							icon={<CheckmarkIcon />}
-							label="Deploy Release"
-						/>
-					)}
-				</StickyBox>
-			</form>
+				<WindowedList state={windowedListState} thresholdTop={windowingThresholdTop}>
+					{(windowedListItemProps) => {
+						return mapHistory({
+							startIndex,
+							length,
+							items,
+							renderDate: (key, date) => <ReleaseHistoryDateHeader key={key} date={date} tag="li" margin="xsmall" />,
+							renderRelease: (key, [r, p], index) => (
+								<WindowedListItem key={key} index={index} {...windowedListItemProps}>
+									{(ref) => (
+										<ReleaseHistoryRelease
+											ref={ref}
+											tag="li"
+											flex={false}
+											margin={{ bottom: 'small' }}
+											release={r}
+											prevRelease={p}
+											selected={selectedItemName === r.getName()}
+											isCurrent={currentReleaseName === r.getName()}
+											dispatch={dispatch}
+										/>
+									)}
+								</WindowedListItem>
+							),
+							renderScale: (key, s, index) => (
+								<WindowedListItem key={key} index={index} {...windowedListItemProps}>
+									{(ref) => (
+										<ReleaseHistoryScale
+											ref={ref}
+											tag="li"
+											flex={false}
+											margin={{ bottom: 'small' }}
+											scaleRequest={s}
+											currentReleaseName={currentReleaseName}
+											selected={selectedItemName === s.getName()}
+											isCurrent={currentScale ? currentScale.getName() === s.getName() : false}
+											dispatch={dispatch}
+										/>
+									)}
+								</WindowedListItem>
+							)
+						});
+					}}
+				</WindowedList>
+				<Box tag="li" ref={paddingBottomRef as any} style={{ height: windowedListState.paddingBottom }} flex={false}>
+					&nbsp;
+				</Box>
+			</Box>
 		</>
 	);
 }
