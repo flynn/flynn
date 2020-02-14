@@ -1,12 +1,13 @@
 import * as React from 'react';
 import * as jspb from 'google-protobuf';
-import { Release, ScaleRequest } from './generated/controller_pb';
+import { Box, Button } from 'grommet';
+import { Release } from './generated/controller_pb';
 import KeyValueDiff from './KeyValueDiff';
 import ExternalAnchor from './ExternalAnchor';
 import ReleaseProcessesDiff from './ReleaseProcessesDiff';
-import Loading from './Loading';
 import isActionType from './util/isActionType';
 import useApp from './useApp';
+import useMergeDispatch from './useMergeDispatch';
 import {
 	useAppReleaseWithDispatch,
 	State as AppReleaseState,
@@ -16,27 +17,40 @@ import {
 	reducer as appReleaseReducer
 } from './useAppRelease';
 
-enum ActionType {}
+export enum ActionType {
+	// parent component should handle these actions
+	DEPLOY_RELEASE = 'ExpandedRelease__DEPLOY_RELEASE',
+	CLOSE = 'ExpandedRelease__CLOSE'
+}
 
-type Action = AppReleaseAction;
+interface DeployReleaseAction {
+	type: ActionType.DEPLOY_RELEASE;
+	releaseName: string;
+}
+
+interface CloseAction {
+	type: ActionType.CLOSE;
+}
+
+export type Action = DeployReleaseAction | CloseAction | AppReleaseAction;
 
 type Dispatcher = (actions: Action | Action[]) => void;
 
-interface State {
+export interface State {
 	// useAppRelease
 	currentReleaseState: AppReleaseState;
 }
 
 type Reducer = (prevState: State, actions: Action | Action[]) => State;
 
-function initialState(): State {
+export function initialState(): State {
 	return {
 		// useAppRelease
 		currentReleaseState: initialAppReleaseState()
 	};
 }
 
-function reducer(prevState: State, actions: Action | Action[]): State {
+export function reducer(prevState: State, actions: Action | Action[]): State {
 	if (!Array.isArray(actions)) {
 		actions = [actions];
 	}
@@ -63,15 +77,17 @@ interface Props {
 	appName: string;
 	release: Release;
 	prevRelease?: Release;
+	dispatch: Dispatcher;
 }
 
-export default function ExpandedRelease({ appName, release, prevRelease: prev }: Props) {
+export default function ExpandedRelease({ appName, release, prevRelease: prev, dispatch: callerDispatch }: Props) {
 	const [
 		{
 			currentReleaseState: { release: currentRelease }
 		},
-		dispatch
+		localDispatch
 	] = React.useReducer(reducer, initialState());
+	const dispatch = useMergeDispatch(localDispatch, callerDispatch);
 	useAppReleaseWithDispatch(appName, dispatch);
 
 	const { app } = useApp(appName);
@@ -111,38 +127,65 @@ export default function ExpandedRelease({ appName, release, prevRelease: prev }:
 		}
 	}
 
+	const handleSubmit = React.useCallback(
+		(e: React.SyntheticEvent) => {
+			e.preventDefault();
+			dispatch({ type: ActionType.DEPLOY_RELEASE, releaseName: release.getName() });
+		},
+		[release, dispatch]
+	);
+
+	const handleCloseBtnClick = React.useCallback(
+		(e: React.SyntheticEvent) => {
+			e.preventDefault();
+			dispatch({ type: ActionType.CLOSE });
+		},
+		[dispatch]
+	);
+
 	return (
-		<>
-			Release {releaseID}
-			{currentRelease && release.getName() === currentRelease.getName() ? <>&nbsp;(CURRENT)</> : null}
-			{createTime ? (
-				<>
-					<br />
-					{createTime.toString()}
-				</>
-			) : null}
-			{gitCommit(release) ? (
-				<>
-					<span>
+		<Box tag="form" fill direction="column" onSubmit={handleSubmit} gap="small" justify="between">
+			<Box>
+				Release {releaseID}
+				{currentRelease && release.getName() === currentRelease.getName() ? <>&nbsp;(CURRENT)</> : null}
+				{createTime ? (
+					<>
 						<br />
-						git.commit{' '}
-						{githubURL ? <ExternalAnchor href={githubURL}>{gitCommit(release)}</ExternalAnchor> : gitCommit(release)}
-						{githubCompareURL ? (
-							<>
-								&nbsp;
-								<ExternalAnchor href={githubCompareURL}>[compare]</ExternalAnchor>
-							</>
-						) : null}
-					</span>
-					<br />
-				</>
-			) : null}
-			<h3>Processes</h3>
-			<ReleaseProcessesDiff release={release} prevRelease={prev} />
-			<h3>Environment Variables</h3>
-			<KeyValueDiff prev={prev ? prev.getEnvMap() : new jspb.Map([])} next={release.getEnvMap()} />
-			<h3>Metadata</h3>
-			<KeyValueDiff prev={prev ? prev.getLabelsMap() : new jspb.Map([])} next={release.getLabelsMap()} />
-		</>
+						{createTime.toString()}
+					</>
+				) : null}
+				{gitCommit(release) ? (
+					<>
+						<span>
+							<br />
+							git.commit{' '}
+							{githubURL ? <ExternalAnchor href={githubURL}>{gitCommit(release)}</ExternalAnchor> : gitCommit(release)}
+							{githubCompareURL ? (
+								<>
+									&nbsp;
+									<ExternalAnchor href={githubCompareURL}>[compare]</ExternalAnchor>
+								</>
+							) : null}
+						</span>
+						<br />
+					</>
+				) : null}
+				<h3>Processes</h3>
+				<ReleaseProcessesDiff release={release} prevRelease={prev} />
+				<h3>Environment Variables</h3>
+				<KeyValueDiff prev={prev ? prev.getEnvMap() : new jspb.Map([])} next={release.getEnvMap()} />
+				<h3>Metadata</h3>
+				<KeyValueDiff prev={prev ? prev.getLabelsMap() : new jspb.Map([])} next={release.getLabelsMap()} />
+			</Box>
+			<Box fill="horizontal" direction="row" align="end" gap="small" justify="between">
+				<Button
+					type="submit"
+					disabled={!!currentRelease && release.getName() === currentRelease.getName()}
+					primary
+					label="Rollback to release"
+				/>
+				<Button type="button" label="Close" onClick={handleCloseBtnClick} />
+			</Box>
+		</Box>
 	);
 }
