@@ -7,8 +7,14 @@ import { Grid, Box, BoxProps, Text } from 'grommet';
 import ifDev from './ifDev';
 import ProcessScale from './ProcessScale';
 import RightOverlay from './RightOverlay';
-import ExpandedRelease from './ExpandedRelease';
-import ExpandedScaleRequestComponent from './ExpandedScaleRequest';
+import ExpandedRelease, {
+	Action as ExpandedReleaseAction,
+	ActionType as ExpandedReleaseActionType
+} from './ExpandedRelease';
+import ExpandedScaleRequestComponent, {
+	Action as ExpandedScaleRequestAction,
+	ActionType as ExpandedScaleRequestActionType
+} from './ExpandedScaleRequest';
 import { default as useRouter } from './useRouter';
 import { useAppWithDispatch, Action as AppAction, ActionType as AppActionType } from './useApp';
 import {
@@ -38,6 +44,7 @@ import ReleaseComponent from './Release';
 import WindowedListState from './WindowedListState';
 import WindowedList, { WindowedListItem } from './WindowedList';
 import protoMapDiff, { Diff, DiffOp, DiffOption } from './util/protoMapDiff';
+import protoMapReplace from './util/protoMapReplace';
 import isActionType from './util/isActionType';
 import roundedDate from './util/roundedDate';
 
@@ -51,7 +58,6 @@ enum ActionType {
 	SET_SELECTED_ITEM = 'ReleaseHistory__SET_SELECTED_ITEM',
 	CLEAR_SELECTION = 'ReleaseHistory__CLEAR_SELECTION',
 	SELECT_RESOURCE = 'ReleaseHistory__SELECT_RESOURCE',
-	SET_NEXT_SCALE = 'ReleaseHistory__SET_NEXT_SCALE',
 	SET_NEXT_RELEASE_NAME = 'ReleaseHistory__SET_NEXT_RELEASE_NAME',
 	SET_WINDOW = 'ReleaseHistory__SET_WINDOW',
 	SET_PANE_HEIGHT = 'ReleaseHistory__SET_PANE_HEIGHT'
@@ -77,11 +83,6 @@ interface SelectResourceAction {
 	selection: ReleaseSelection | ScaleSelection;
 }
 
-interface SetNextScaleAction {
-	type: ActionType.SET_NEXT_SCALE;
-	scale: CreateScaleRequest | null;
-}
-
 interface SetNextReleaseNameAction {
 	type: ActionType.SET_NEXT_RELEASE_NAME;
 	name: string;
@@ -103,13 +104,14 @@ type Action =
 	| SetSelectedItemAction
 	| ClearSelectionAction
 	| SelectResourceAction
-	| SetNextScaleAction
 	| SetNextReleaseNameAction
 	| SetWindowAction
 	| SetPaneHeightAction
 	| AppAction
 	| AppScaleAction
 	| ReleaseHistoryAction
+	| ExpandedReleaseAction
+	| ExpandedScaleRequestAction
 	| CreateScaleRequestAction
 	| CreateDeploymentAction;
 
@@ -228,10 +230,6 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 				nextState.selection = action.selection;
 				return nextState;
 
-			case ActionType.SET_NEXT_SCALE:
-				nextState.nextScale = action.scale;
-				return nextState;
-
 			case ActionType.SET_NEXT_RELEASE_NAME:
 				nextState.nextReleaseName = action.name;
 				return nextState;
@@ -278,7 +276,34 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 				nextState.currentScaleLoading = action.loading;
 				return nextState;
 			// useAppScale END
-			//
+
+			// <ExpandedRelease> START
+			case ExpandedReleaseActionType.DEPLOY_RELEASE:
+				nextState.isDeploying = true;
+				nextState.nextReleaseName = action.releaseName;
+				return nextState;
+
+			case ExpandedReleaseActionType.CLOSE:
+				nextState.selection = null;
+				return nextState;
+			// <ExpandedRelease> END
+
+			// <ExpandedScaleRequest> START
+			case ExpandedScaleRequestActionType.DEPLOY_SCALE:
+				nextState.isDeploying = true;
+				nextState.nextScale = ((s) => {
+					const nextScale = new CreateScaleRequest();
+					protoMapReplace(nextScale.getProcessesMap(), s.getNewProcessesMap());
+					protoMapReplace(nextScale.getTagsMap(), s.getNewTagsMap());
+					return nextScale;
+				})(action.scale);
+				return nextState;
+
+			case ExpandedScaleRequestActionType.CLOSE:
+				nextState.selection = null;
+				return nextState;
+			// <ExpandedScaleRequest> END
+
 			// <CreateScaleRequestComponent> START
 			case CreateScaleRequestActionType.SET_ERROR:
 				nextState.createScaleRequestError = action.error;
@@ -287,15 +312,13 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 			case CreateScaleRequestActionType.CANCEL:
 				return reducer(prevState, [
 					{ type: ActionType.SET_DEPLOY_STATUS, isDeploying: false },
-					{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' },
-					{ type: ActionType.SET_NEXT_SCALE, scale: null }
+					{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' }
 				]);
 
 			case CreateScaleRequestActionType.CREATED:
 				return reducer(prevState, [
 					{ type: ActionType.SET_DEPLOY_STATUS, isDeploying: false },
-					{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' },
-					{ type: ActionType.SET_NEXT_SCALE, scale: null }
+					{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' }
 				]);
 			// <CreateScaleRequestComponent> END
 
@@ -307,15 +330,13 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 			case CreateDeploymentActionType.CANCEL:
 				return reducer(prevState, [
 					{ type: ActionType.SET_DEPLOY_STATUS, isDeploying: false },
-					{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' },
-					{ type: ActionType.SET_NEXT_SCALE, scale: null }
+					{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' }
 				]);
 
 			case CreateDeploymentActionType.CREATED:
 				return reducer(prevState, [
 					{ type: ActionType.SET_DEPLOY_STATUS, isDeploying: false },
-					{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' },
-					{ type: ActionType.SET_NEXT_SCALE, scale: null }
+					{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' }
 				]);
 			// <CreateDeployment> END
 
@@ -680,8 +701,7 @@ function ReleaseHistory({ appName }: Props) {
 	const handleDeployCancel = () => {
 		dispatch([
 			{ type: ActionType.SET_DEPLOY_STATUS, isDeploying: false },
-			{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' },
-			{ type: ActionType.SET_NEXT_SCALE, scale: null }
+			{ type: ActionType.SET_NEXT_RELEASE_NAME, name: '' }
 		]);
 	};
 
@@ -780,12 +800,13 @@ function ReleaseHistory({ appName }: Props) {
 			{selection ? (
 				<RightOverlay onClose={handleSelectionCancel}>
 					{selection.type === SelectionType.SCALE ? (
-						<ExpandedScaleRequestComponent appName={appName} scale={selection.scale} />
+						<ExpandedScaleRequestComponent appName={appName} scale={selection.scale} dispatch={dispatch} />
 					) : (
 						<ExpandedRelease
 							appName={appName}
 							release={selection.release}
 							prevRelease={selection.prevRelease || undefined}
+							dispatch={dispatch}
 						/>
 					)}
 				</RightOverlay>
@@ -793,10 +814,7 @@ function ReleaseHistory({ appName }: Props) {
 
 			{isDeploying ? (
 				<RightOverlay onClose={handleDeployCancel}>
-					{selectedResourceType === SelectedResourceType.ScaleRequest &&
-					nextReleaseName &&
-					nextReleaseName === currentReleaseName &&
-					nextScale ? (
+					{nextScale ? (
 						<CreateScaleRequestComponent appName={appName} nextScale={nextScale} dispatch={dispatch} />
 					) : (
 						<CreateDeployment appName={appName} releaseName={nextReleaseName} dispatch={dispatch} />
