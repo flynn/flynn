@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -17,9 +18,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/go-units"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/testutils"
 	router "github.com/flynn/flynn/router/types"
@@ -1753,4 +1756,79 @@ func (s *S) TestHTTPLoadBalance(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(string(body), Not(Equals), backendID)
 	}
+}
+
+// TestHTTPBuffer tests that the router buffers response bodies to
+// minimise the effect of slow clients on backends.
+func (s *S) TestHTTPBuffer(c *C) {
+	// start a backend that notifies when its response has been fully
+	// written
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	defer ln.Close()
+	notify := make(chan error)
+	expectedBody := random.Bytes(100 * 1024 * 1024)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			notify <- err
+			return
+		}
+		defer conn.Close()
+		_, err = http.ReadRequest(bufio.NewReader(conn))
+		if err != nil {
+			notify <- err
+			return
+		}
+		header := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n", len(expectedBody))
+		if _, err := io.WriteString(conn, header); err != nil {
+			notify <- err
+			return
+		}
+		for i := 0; i < 1024; i++ {
+			from := i * 100 * 1024
+			to := (i + 1) * 100 * 1024
+			fmt.Println(time.Now().Format(time.StampMilli), "writing chunk:", units.BytesSize(float64(from)), units.BytesSize(float64(to)))
+			if _, err := conn.Write(expectedBody[from:to]); err != nil {
+				notify <- err
+				return
+			}
+		}
+		if _, err := io.Copy(conn, bytes.NewReader(expectedBody)); err != nil {
+			notify <- err
+			return
+		}
+		notify <- nil
+	}()
+
+	// start a listener that routes to the backend
+	l := s.newHTTPListener(c)
+	defer l.Close()
+	s.addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, ln.Addr().String())
+
+	// make a HTTP request but don't read the body
+	conn, err := net.Dial("tcp", l.Addrs[0])
+	c.Assert(err, IsNil)
+	defer conn.Close()
+	req, err := http.NewRequest("GET", "http://example.com", nil)
+	c.Assert(err, IsNil)
+	c.Assert(req.Write(conn), IsNil)
+
+	// check the backend wrote the response that is now in the router's buffer
+	select {
+	case err := <-notify:
+		c.Assert(err, IsNil)
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for backend to write the response")
+	}
+
+	// read the response
+	res, err := http.ReadResponse(bufio.NewReader(conn), req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+	c.Assert(res.StatusCode, Equals, http.StatusOK)
+	actualBody, err := ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	c.Assert(bytes.Equal(actualBody, expectedBody), Equals, true)
 }
