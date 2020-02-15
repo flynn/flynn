@@ -1,0 +1,1 @@
+web: puma --log-requests --bind tcp://0.0.0.0:${PORT} --threads 1:4
