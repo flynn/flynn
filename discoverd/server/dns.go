@@ -9,11 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/keepalive"
 	"github.com/flynn/flynn/pkg/random"
+	reuseport "github.com/kavu/go_reuseport"
 	"github.com/miekg/dns"
-	"github.com/vanillahsu/go_reuseport"
 )
 
 type DNSStore interface {

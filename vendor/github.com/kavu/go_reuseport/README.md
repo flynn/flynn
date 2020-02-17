@@ -1,6 +1,7 @@
 # GO_REUSEPORT
 
 [![Build Status](https://travis-ci.org/kavu/go_reuseport.png?branch=master)](https://travis-ci.org/kavu/go_reuseport)
+[![codecov](https://codecov.io/gh/kavu/go_reuseport/branch/master/graph/badge.svg)](https://codecov.io/gh/kavu/go_reuseport)
 [![GoDoc](https://godoc.org/github.com/kavu/go_reuseport?status.png)](https://godoc.org/github.com/kavu/go_reuseport)
 
 **GO_REUSEPORT** is a little expirement to create a `net.Listener` that supports [SO_REUSEPORT](http://lwn.net/Articles/542629/) socket option.
@@ -23,9 +24,7 @@ import (
 )
 
 func main() {
-  runtime.GOMAXPROCS(runtime.NumCPU())
-
-  listener, err := reuseport.NewReusablePortListener("tcp4", "localhost:8881")
+  listener, err := reuseport.Listen("tcp", "localhost:8881")
   if err != nil {
     panic(err)
   }
@@ -41,7 +40,7 @@ func main() {
 }
 ```
 
-Now you can run several instances of this tint server without `Address already in use` errors.
+Now you can run several instances of this tiny server without `Address already in use` errors.
 
 ## Thanks
 

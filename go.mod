@@ -54,6 +54,7 @@ require (
 	github.com/julienschmidt/httprouter v0.0.0-20140925104356-46807412fe50
 	github.com/jvatic/asset-matrix-go v0.0.0-20190524161137-550750b01e75
 	github.com/kardianos/osext v0.0.0-20150223151934-ccfcd0245381
+	github.com/kavu/go_reuseport v1.4.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kr/binarydist v0.0.0-20120828065244-9955b0ab8708 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
@@ -67,6 +68,7 @@ require (
 	github.com/mistifyio/go-zfs v0.0.0-20141209150540-dda1f4cd04dc
 	github.com/mitchellh/go-homedir v0.0.0-20140913165950-7d2d8c8a4e07
 	github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618 // indirect
+	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
 	github.com/olekukonko/ts v0.0.0-20140412220145-ecf753e7c962 // indirect
 	github.com/opencontainers/runc v1.0.0-rc8
@@ -82,7 +84,6 @@ require (
 	github.com/stevvooe/resumable v0.0.0-20150521211217-51ad44105773
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
 	github.com/tent/canonical-json-go v0.0.0-20130607151641-96e4ba3a7613
-	github.com/vanillahsu/go_reuseport v0.0.0-20140603073948-087e013b0a0c
 	github.com/vishvananda/netlink v0.0.0-20170502164845-1e045880fbc2
 	github.com/vishvananda/netns v0.0.0-20170219233438-54f0e4339ce7 // indirect
 	golang.org/x/crypto v0.0.0-20190911031432-227b76d455e7
