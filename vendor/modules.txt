@@ -157,6 +157,8 @@ github.com/julienschmidt/httprouter
 github.com/jvatic/asset-matrix-go
 # github.com/kardianos/osext v0.0.0-20150223151934-ccfcd0245381
 github.com/kardianos/osext
+# github.com/kavu/go_reuseport v1.4.0
+github.com/kavu/go_reuseport
 # github.com/konsorten/go-windows-terminal-sequences v1.0.2
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/kr/binarydist v0.0.0-20120828065244-9955b0ab8708
@@ -231,8 +233,6 @@ github.com/stevvooe/resumable/sha512
 github.com/syndtr/gocapability/capability
 # github.com/tent/canonical-json-go v0.0.0-20130607151641-96e4ba3a7613
 github.com/tent/canonical-json-go
-# github.com/vanillahsu/go_reuseport v0.0.0-20140603073948-087e013b0a0c
-github.com/vanillahsu/go_reuseport
 # github.com/vishvananda/netlink v0.0.0-20170502164845-1e045880fbc2
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
