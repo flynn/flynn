@@ -456,12 +456,6 @@ interface ReleaseHistoryDateHeaderProps extends BoxProps {
 	date: Date;
 }
 
-/* function isWindow(obj: any): obj is Window { */
-/* 	if (obj === window) return true; */
-/* 	return false; */
-/* } */
-
-// TODO(jvatic): BUG: if this is rendered yesterday than it will incorrectly show "Today"
 function ReleaseHistoryDateHeader({ date, ...boxProps }: ReleaseHistoryDateHeaderProps) {
 	const dateString = useDateString(date);
 	// NOTE: We need to unset min-height for the <Box /> below as it is otherwise
