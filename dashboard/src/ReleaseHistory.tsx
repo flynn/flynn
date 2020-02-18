@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Route } from 'react-router-dom';
 import * as timestamp_pb from 'google-protobuf/google/protobuf/timestamp_pb';
 import styled from 'styled-components';
 
@@ -30,7 +31,15 @@ import useErrorHandler from './useErrorHandler';
 import useWithCancel from './useWithCancel';
 import useDateString from './useDateString';
 import { listDeploymentsRequestFilterType, ReleaseHistoryItem } from './client';
-import { App, Release, ReleaseType, ReleaseTypeMap, ScaleRequest, CreateScaleRequest } from './generated/controller_pb';
+import {
+	App,
+	Release,
+	ExpandedDeployment,
+	ReleaseType,
+	ReleaseTypeMap,
+	ScaleRequest,
+	CreateScaleRequest
+} from './generated/controller_pb';
 import Loading from './Loading';
 import CreateDeployment, {
 	Action as CreateDeploymentAction,
@@ -56,8 +65,6 @@ enum SelectedResourceType {
 enum ActionType {
 	SET_DEPLOY_STATUS = 'ReleaseHistory__SET_DEPLOY_STATUS',
 	SET_SELECTED_ITEM = 'ReleaseHistory__SET_SELECTED_ITEM',
-	CLEAR_SELECTION = 'ReleaseHistory__CLEAR_SELECTION',
-	SELECT_RESOURCE = 'ReleaseHistory__SELECT_RESOURCE',
 	SET_NEXT_RELEASE_NAME = 'ReleaseHistory__SET_NEXT_RELEASE_NAME',
 	SET_WINDOW = 'ReleaseHistory__SET_WINDOW',
 	SET_PANE_HEIGHT = 'ReleaseHistory__SET_PANE_HEIGHT'
@@ -72,15 +79,6 @@ interface SetSelectedItemAction {
 	type: ActionType.SET_SELECTED_ITEM;
 	name: string;
 	resourceType?: SelectedResourceType;
-}
-
-interface ClearSelectionAction {
-	type: ActionType.CLEAR_SELECTION;
-}
-
-interface SelectResourceAction {
-	type: ActionType.SELECT_RESOURCE;
-	selection: ReleaseSelection | ScaleSelection;
 }
 
 interface SetNextReleaseNameAction {
@@ -102,8 +100,6 @@ interface SetPaneHeightAction {
 type Action =
 	| SetDeployStatusAction
 	| SetSelectedItemAction
-	| ClearSelectionAction
-	| SelectResourceAction
 	| SetNextReleaseNameAction
 	| SetWindowAction
 	| SetPaneHeightAction
@@ -144,8 +140,6 @@ interface State {
 	paneHeight: number;
 	selectedScaleRequestDiff: Diff<string, number>;
 
-	selection: ReleaseSelection | ScaleSelection | null;
-
 	// useApp
 	app: App | null;
 	appLoading: boolean;
@@ -180,8 +174,6 @@ function initialState(): State {
 		length: 0,
 		paneHeight: 400,
 		selectedScaleRequestDiff: emptyScaleRequestDiff,
-
-		selection: null,
 
 		// useApp
 		app: null,
@@ -220,14 +212,6 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 				if (action.resourceType) {
 					nextState.selectedResourceType = action.resourceType;
 				}
-				return nextState;
-
-			case ActionType.CLEAR_SELECTION:
-				nextState.selection = null;
-				return nextState;
-
-			case ActionType.SELECT_RESOURCE:
-				nextState.selection = action.selection;
 				return nextState;
 
 			case ActionType.SET_NEXT_RELEASE_NAME:
@@ -282,10 +266,6 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 				nextState.isDeploying = true;
 				nextState.nextReleaseName = action.releaseName;
 				return nextState;
-
-			case ExpandedReleaseActionType.CLOSE:
-				nextState.selection = null;
-				return nextState;
 			// <ExpandedRelease> END
 
 			// <ExpandedScaleRequest> START
@@ -297,10 +277,6 @@ function reducer(prevState: State, actions: Action | Action[]): State {
 					protoMapReplace(nextScale.getTagsMap(), s.getNewTagsMap());
 					return nextScale;
 				})(action.scale);
-				return nextState;
-
-			case ExpandedScaleRequestActionType.CLOSE:
-				nextState.selection = null;
 				return nextState;
 			// <ExpandedScaleRequest> END
 
@@ -377,7 +353,7 @@ interface MapHistoryProps<T> {
 	length: number;
 	items: ReleaseHistoryItem[];
 	renderDate: (key: string, date: Date) => T;
-	renderRelease: (key: string, releases: [Release, Release | null], index: number) => T;
+	renderRelease: (key: string, releases: [Release, Release | null, ExpandedDeployment], index: number) => T;
 	renderScale: (key: string, scaleRequest: ScaleRequest, index: number) => T;
 }
 
@@ -410,7 +386,7 @@ function mapHistory<T>({
 			const r = d.getNewRelease() || null;
 			const pr = d.getOldRelease() || null;
 			date = roundedDate((d.getCreateTime() as timestamp_pb.Timestamp).toDate());
-			el = renderRelease(_last(d.getName().split('/')), [r as Release, pr], i);
+			el = renderRelease(_last(d.getName().split('/')), [r as Release, pr, d], i);
 		}
 
 		if (prevDate === null || date < prevDate) {
@@ -502,19 +478,22 @@ function ReleaseHistoryDateHeader({ date, ...boxProps }: ReleaseHistoryDateHeade
 interface ReleaseHistoryReleaseProps extends BoxProps {
 	selected: boolean;
 	isCurrent: boolean;
-	release: Release;
-	prevRelease: Release | null;
+	deployment: ExpandedDeployment;
 	dispatch: Dispatcher;
 }
 
 const ReleaseHistoryRelease = React.memo(
 	React.forwardRef(function ReleaseHistoryRelease(
-		{ release, prevRelease, selected, isCurrent, dispatch, ...boxProps }: ReleaseHistoryReleaseProps,
+		{ deployment, selected, isCurrent, dispatch, ...boxProps }: ReleaseHistoryReleaseProps,
 		ref: any
 	) {
+		const release = deployment.getNewRelease();
+		const prevRelease = deployment.getOldRelease() || null;
+		const { urlParams, history } = useRouter();
 		const handleClick = React.useCallback(() => {
-			dispatch({ type: ActionType.SELECT_RESOURCE, selection: { type: SelectionType.RELEASE, release, prevRelease } });
-		}, [release, prevRelease, dispatch]);
+			history.push({ pathname: `/${deployment.getName()}`, search: urlParams.toString() });
+		}, [deployment, urlParams, history]);
+		if (release === undefined) return null;
 		return (
 			<SelectableBox ref={ref} selected={selected} highlighted={isCurrent} {...boxProps} onClick={handleClick}>
 				<ReleaseComponent release={release} prevRelease={prevRelease} />
@@ -524,10 +503,7 @@ const ReleaseHistoryRelease = React.memo(
 	function areEqual(prevProps: ReleaseHistoryReleaseProps, nextProps: ReleaseHistoryReleaseProps) {
 		if (prevProps.selected !== nextProps.selected) return false;
 		if (prevProps.isCurrent !== nextProps.isCurrent) return false;
-		if (prevProps.release.getName() !== nextProps.release.getName()) return false;
-		if ((prevProps.prevRelease || new Release()).getName() !== (nextProps.prevRelease || new Release()).getName()) {
-			return false;
-		}
+		if (prevProps.deployment.getName() !== nextProps.deployment.getName()) return false;
 		return true;
 	}
 );
@@ -546,9 +522,10 @@ const ReleaseHistoryScale = React.memo(
 		{ scaleRequest: s, selected, isCurrent, currentReleaseName, dispatch, ...boxProps }: ReleaseHistoryScaleProps,
 		ref: any
 	) {
+		const { urlParams, history } = useRouter();
 		const handleClick = React.useCallback(() => {
-			dispatch({ type: ActionType.SELECT_RESOURCE, selection: { type: SelectionType.SCALE, scale: s } });
-		}, [s, dispatch]);
+			history.push({ pathname: `/${s.getName()}`, search: urlParams.toString() });
+		}, [s, urlParams, history]);
 
 		const diff = protoMapDiff(s.getOldProcessesMap(), s.getNewProcessesMap(), DiffOption.INCLUDE_UNCHANGED);
 
@@ -601,15 +578,11 @@ function ReleaseHistory({ appName }: Props) {
 		{
 			isDeploying,
 			selectedItemName,
-			selectedResourceType,
 			nextScale,
 			nextReleaseName,
 			startIndex,
 			length,
 			paneHeight,
-			selectedScaleRequestDiff,
-
-			selection,
 
 			// useApp
 			app,
@@ -658,7 +631,11 @@ function ReleaseHistory({ appName }: Props) {
 		dispatch({ type: ActionType.SET_SELECTED_ITEM, name: currentReleaseName });
 	}, [currentReleaseName]);
 
-	const { urlParams } = useRouter();
+	const {
+		urlParams,
+		match: { path: parentRoutePath },
+		history
+	} = useRouter();
 	const releasesListFilters = [urlParams.getAll('rhf'), ['code', 'env', 'scale']].find((i) => i.length > 0) as string[];
 
 	const rhf = releasesListFilters;
@@ -695,7 +672,7 @@ function ReleaseHistory({ appName }: Props) {
 	);
 
 	const handleSelectionCancel = () => {
-		dispatch({ type: ActionType.CLEAR_SELECTION });
+		history.push({ pathname: `/${appName}`, search: urlParams.toString() });
 	};
 
 	const handleDeployCancel = () => {
@@ -797,20 +774,17 @@ function ReleaseHistory({ appName }: Props) {
 
 	return (
 		<>
-			{selection ? (
+			<Route path={`${parentRoutePath}/deployments/:deploymentID`}>
 				<RightOverlay onClose={handleSelectionCancel}>
-					{selection.type === SelectionType.SCALE ? (
-						<ExpandedScaleRequestComponent appName={appName} scale={selection.scale} dispatch={dispatch} />
-					) : (
-						<ExpandedRelease
-							appName={appName}
-							release={selection.release}
-							prevRelease={selection.prevRelease || undefined}
-							dispatch={dispatch}
-						/>
-					)}
+					<ExpandedRelease dispatch={dispatch} />
 				</RightOverlay>
-			) : null}
+			</Route>
+
+			<Route path={`${parentRoutePath}/releases/:releaseID/scales/:scaleRequestID`}>
+				<RightOverlay onClose={handleSelectionCancel}>
+					<ExpandedScaleRequestComponent dispatch={dispatch} />
+				</RightOverlay>
+			</Route>
 
 			{isDeploying ? (
 				<RightOverlay onClose={handleDeployCancel}>
@@ -845,7 +819,7 @@ function ReleaseHistory({ appName }: Props) {
 							length,
 							items,
 							renderDate: (key, date) => <ReleaseHistoryDateHeader key={key} date={date} tag="li" margin="xsmall" />,
-							renderRelease: (key, [r, p], index) => (
+							renderRelease: (key, [r, p, d], index) => (
 								<WindowedListItem key={key} index={index} {...windowedListItemProps}>
 									{(ref) => (
 										<ReleaseHistoryRelease
@@ -853,8 +827,7 @@ function ReleaseHistory({ appName }: Props) {
 											tag="li"
 											flex={false}
 											margin={{ bottom: 'small' }}
-											release={r}
-											prevRelease={p}
+											deployment={d}
 											selected={selectedItemName === r.getName()}
 											isCurrent={currentReleaseName === r.getName()}
 											dispatch={dispatch}

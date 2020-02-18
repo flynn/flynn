@@ -57,8 +57,8 @@ export default function useRouter<TParams = {}>(): UseRouterObejct<TParams> {
 				nextUrlParams = new URLSearchParams(path.split('?')[1] || '');
 			} else {
 				path = pathOrLocation.pathname || '';
-				pathname = path;
-				nextUrlParams = new URLSearchParams(location.search);
+				pathname = urlForPath(path).pathname;
+				nextUrlParams = new URLSearchParams(pathOrLocation.search);
 			}
 
 			let protectedParamsChanged = false;
@@ -71,9 +71,12 @@ export default function useRouter<TParams = {}>(): UseRouterObejct<TParams> {
 				if (protectedParamsChanged) break;
 			}
 
+			const isSubpath = pathname.startsWith(location.pathname + '/');
+			const isParent = location.pathname.startsWith(pathname + '/');
+			const isParam = pathname === location.pathname;
 			if (
 				navProtectionEnabled() &&
-				(pathname !== location.pathname || protectedParamsChanged) &&
+				(!(isSubpath || isParent || isParam) || (isParam && protectedParamsChanged)) &&
 				!confirmNavigation()
 			) {
 				// let the caller know navigation was canceled
@@ -87,7 +90,7 @@ export default function useRouter<TParams = {}>(): UseRouterObejct<TParams> {
 			// let the caller know navigation has proceeded
 			return true;
 		},
-		[location.pathname, location.search, urlParams]
+		[location.pathname, urlParams]
 	);
 
 	// Override the history object's push and replace to insert navigation
