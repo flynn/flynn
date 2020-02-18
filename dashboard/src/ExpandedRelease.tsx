@@ -1,12 +1,27 @@
 import * as React from 'react';
 import * as jspb from 'google-protobuf';
 import { Box, Button } from 'grommet';
-import { Release } from './generated/controller_pb';
+import { Release, ExpandedDeployment } from './generated/controller_pb';
 import KeyValueDiff from './KeyValueDiff';
 import ExternalAnchor from './ExternalAnchor';
 import ReleaseProcessesDiff from './ReleaseProcessesDiff';
 import isActionType from './util/isActionType';
-import useApp from './useApp';
+import useRouter from './useRouter';
+import useDeploymentWithDispatch, {
+	Action as DeploymentAction,
+	ActionType as DeploymentActionType,
+	State as DeploymentState,
+	reducer as deploymentReducer,
+	initialState as initialDeploymentState
+} from './useDeployment';
+import {
+	useAppWithDispatch,
+	Action as AppAction,
+	ActionType as AppActionType,
+	State as AppState,
+	reducer as appReducer,
+	initialState as initialAppState
+} from './useApp';
 import useMergeDispatch from './useMergeDispatch';
 import {
 	useAppReleaseWithDispatch,
@@ -16,11 +31,11 @@ import {
 	initialState as initialAppReleaseState,
 	reducer as appReleaseReducer
 } from './useAppRelease';
+import Loading from './Loading';
 
 export enum ActionType {
 	// parent component should handle these actions
-	DEPLOY_RELEASE = 'ExpandedRelease__DEPLOY_RELEASE',
-	CLOSE = 'ExpandedRelease__CLOSE'
+	DEPLOY_RELEASE = 'ExpandedRelease__DEPLOY_RELEASE'
 }
 
 interface DeployReleaseAction {
@@ -28,25 +43,33 @@ interface DeployReleaseAction {
 	releaseName: string;
 }
 
-interface CloseAction {
-	type: ActionType.CLOSE;
-}
-
-export type Action = DeployReleaseAction | CloseAction | AppReleaseAction;
+export type Action = DeployReleaseAction | AppAction | AppReleaseAction | DeploymentAction;
 
 type Dispatcher = (actions: Action | Action[]) => void;
 
 export interface State {
+	// useApp
+	appState: AppState;
+
 	// useAppRelease
 	currentReleaseState: AppReleaseState;
+
+	// useDeployment
+	deploymentState: DeploymentState;
 }
 
 type Reducer = (prevState: State, actions: Action | Action[]) => State;
 
 export function initialState(): State {
 	return {
+		// useApp
+		appState: initialAppState(),
+
 		// useAppRelease
-		currentReleaseState: initialAppReleaseState()
+		currentReleaseState: initialAppReleaseState(),
+
+		// useDeployment
+		deploymentState: initialDeploymentState()
 	};
 }
 
@@ -58,9 +81,21 @@ export function reducer(prevState: State, actions: Action | Action[]): State {
 		const nextState = Object.assign({}, prevState);
 		switch (action.type) {
 			default:
+				// useApp
+				if (isActionType<AppAction>(AppActionType, action)) {
+					nextState.appState = appReducer(prevState.appState, action);
+					return nextState;
+				}
+
 				// useAppRelease
 				if (isActionType<AppReleaseAction>(AppReleaseActionType, action)) {
 					nextState.currentReleaseState = appReleaseReducer(prevState.currentReleaseState, action);
+					return nextState;
+				}
+
+				// useDeployment
+				if (isActionType<DeploymentAction>(DeploymentActionType, action)) {
+					nextState.deploymentState = deploymentReducer(prevState.deploymentState, action);
 					return nextState;
 				}
 
@@ -74,23 +109,36 @@ export function reducer(prevState: State, actions: Action | Action[]): State {
 }
 
 interface Props {
-	appName: string;
-	release: Release;
-	prevRelease?: Release;
 	dispatch: Dispatcher;
 }
 
-export default function ExpandedRelease({ appName, release, prevRelease: prev, dispatch: callerDispatch }: Props) {
+export default function ExpandedRelease({ dispatch: callerDispatch }: Props) {
+	const {
+		urlParams,
+		match: { params: matchParams },
+		history
+	} = useRouter();
+
+	const { appID, deploymentID } = matchParams;
+	const appName = `apps/${appID}`;
+	const deploymentName = `${appName}/${deploymentID}`;
+
 	const [
 		{
-			currentReleaseState: { release: currentRelease }
+			appState: { app, loading: appLoading },
+			currentReleaseState: { release: currentRelease, loading: currentReleaseLoading },
+			deploymentState: { deployment: deploymentOrNull, loading: deploymentLoading }
 		},
 		localDispatch
 	] = React.useReducer(reducer, initialState());
+	const deployment = deploymentOrNull || new ExpandedDeployment();
 	const dispatch = useMergeDispatch(localDispatch, callerDispatch);
+	useAppWithDispatch(appName, dispatch);
 	useAppReleaseWithDispatch(appName, dispatch);
+	useDeploymentWithDispatch(deploymentName, dispatch);
 
-	const { app } = useApp(appName);
+	const release = deployment.getNewRelease() || new Release();
+	const prevRelease = deployment.getOldRelease();
 
 	const releaseID = release.getName().replace(appName + '/releases/', '');
 	const createTime = ((ts) => (ts ? ts.toDate() : null))(release.getCreateTime());
@@ -122,8 +170,8 @@ export default function ExpandedRelease({ appName, release, prevRelease: prev, d
 	}
 	if (baseGithubURL) {
 		githubURL = `${baseGithubURL}/commit/${gitCommit(release)}`;
-		if (prev) {
-			githubCompareURL = `${baseGithubURL}/compare/${gitCommit(prev)}...${gitCommit(release)}`;
+		if (prevRelease) {
+			githubCompareURL = `${baseGithubURL}/compare/${gitCommit(prevRelease)}...${gitCommit(release)}`;
 		}
 	}
 
@@ -138,10 +186,12 @@ export default function ExpandedRelease({ appName, release, prevRelease: prev, d
 	const handleCloseBtnClick = React.useCallback(
 		(e: React.SyntheticEvent) => {
 			e.preventDefault();
-			dispatch({ type: ActionType.CLOSE });
+			history.push({ pathname: `/${appName}`, search: urlParams.toString() });
 		},
-		[dispatch]
+		[appName, urlParams, history]
 	);
+
+	if (appLoading || currentReleaseLoading || deploymentLoading) return <Loading />;
 
 	return (
 		<Box tag="form" fill direction="column" onSubmit={handleSubmit} gap="small" justify="between">
@@ -171,11 +221,14 @@ export default function ExpandedRelease({ appName, release, prevRelease: prev, d
 					</>
 				) : null}
 				<h3>Processes</h3>
-				<ReleaseProcessesDiff release={release} prevRelease={prev} />
+				<ReleaseProcessesDiff release={release} prevRelease={prevRelease} />
 				<h3>Environment Variables</h3>
-				<KeyValueDiff prev={prev ? prev.getEnvMap() : new jspb.Map([])} next={release.getEnvMap()} />
+				<KeyValueDiff prev={prevRelease ? prevRelease.getEnvMap() : new jspb.Map([])} next={release.getEnvMap()} />
 				<h3>Metadata</h3>
-				<KeyValueDiff prev={prev ? prev.getLabelsMap() : new jspb.Map([])} next={release.getLabelsMap()} />
+				<KeyValueDiff
+					prev={prevRelease ? prevRelease.getLabelsMap() : new jspb.Map([])}
+					next={release.getLabelsMap()}
+				/>
 			</Box>
 			<Box fill="horizontal" direction="row" align="end" gap="small" justify="between">
 				<Button
