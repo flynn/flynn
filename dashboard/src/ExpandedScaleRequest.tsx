@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Grid, Box, Button, Text } from 'grommet';
 import { ScaleRequest } from './generated/controller_pb';
 import ProcessScale, { Action as ProcessScaleAction } from './ProcessScale';
-import protoMapDiff, { DiffOp, DiffOption } from './util/protoMapDiff';
+import protoMapDiff, { Diff, DiffOp, DiffOption } from './util/protoMapDiff';
 import useRouter from './useRouter';
 import isActionType from './util/isActionType';
 import useMergeDispatch from './useMergeDispatch';
@@ -13,6 +13,14 @@ import useScaleWithDispatch, {
 	reducer as scaleReducer,
 	initialState as initialScaleState
 } from './useScale';
+import {
+	useAppScaleWithDispatch,
+	Action as AppScaleAction,
+	ActionType as AppScaleActionType,
+	State as AppScaleState,
+	reducer as appScaleReducer,
+	initialState as initialAppScaleState
+} from './useAppScale';
 import Loading from './Loading';
 
 export enum ActionType {
@@ -25,21 +33,36 @@ interface DeployScaleAction {
 	scale: ScaleRequest;
 }
 
-export type Action = DeployScaleAction | ProcessScaleAction | ScaleAction;
+export type Action = DeployScaleAction | ProcessScaleAction | ScaleAction | AppScaleAction;
 
 type Dispatcher = (actions: Action | Action[]) => void;
 
 export interface State {
-	// useScale START
+	// useScale
 	scaleState: ScaleState;
-	// useScale END
+
+	// useAppScale
+	currentScaleState: AppScaleState;
+
+	// true if scaleState.scale different from currentScaleState.scale
+	hasChanges: boolean;
+
+	diff: Diff<string, number>;
 }
 
 type Reducer = (prevState: State, actions: Action | Action[]) => State;
 
 export function initialState(): State {
 	return {
-		scaleState: initialScaleState()
+		// useScale
+		scaleState: initialScaleState(),
+
+		// useAppScale
+		currentScaleState: initialAppScaleState(),
+
+		hasChanges: false,
+
+		diff: []
 	};
 }
 
@@ -51,8 +74,14 @@ export function reducer(prevState: State, actions: Action | Action[]): State {
 		const nextState = Object.assign({}, prevState);
 		switch (action.type) {
 			default:
+				// useScale
 				if (isActionType<ScaleAction>(ScaleActionType, action)) {
 					nextState.scaleState = scaleReducer(prevState.scaleState, action);
+					return nextState;
+				}
+				// useAppScale
+				if (isActionType<AppScaleAction>(AppScaleActionType, action)) {
+					nextState.currentScaleState = appScaleReducer(prevState.currentScaleState, action);
 					return nextState;
 				}
 				return prevState;
@@ -60,6 +89,30 @@ export function reducer(prevState: State, actions: Action | Action[]): State {
 	}, prevState);
 
 	if (nextState === prevState) return prevState;
+
+	(() => {
+		const {
+			currentScaleState: { scale: currentScale },
+			scaleState: { scale: nextScale }
+		} = nextState;
+		if (prevState.currentScaleState.scale === currentScale && prevState.scaleState.scale === nextScale) {
+			return;
+		}
+		if (!currentScale || !nextScale) return;
+		const diff = protoMapDiff(currentScale.getNewProcessesMap(), nextScale.getNewProcessesMap());
+		nextState.hasChanges = diff.length > 0;
+	})();
+
+	(() => {
+		const {
+			scaleState: { scale: s }
+		} = nextState;
+		if (prevState.scaleState.scale === s) {
+			return;
+		}
+		if (!s) return;
+		nextState.diff = protoMapDiff(s.getOldProcessesMap(), s.getNewProcessesMap(), DiffOption.INCLUDE_UNCHANGED);
+	})();
 
 	return nextState;
 }
@@ -76,7 +129,9 @@ export default function({ dispatch: callerDispatch }: Props) {
 	} = useRouter();
 	const [
 		{
-			scaleState: { scale, loading: scaleLoading }
+			scaleState: { scale, loading: scaleLoading },
+			hasChanges,
+			diff
 		},
 		localDispatch
 	] = React.useReducer(reducer, initialState());
@@ -88,10 +143,7 @@ export default function({ dispatch: callerDispatch }: Props) {
 	const releaseName = `${appName}/releases/${releaseID}`;
 	const scaleRequestName = `${releaseName}/scales/${scaleRequestID}`;
 	useScaleWithDispatch(scaleRequestName, dispatch);
-
-	// TODO(jvatic): move this into reducer
-	const diff = protoMapDiff(s.getOldProcessesMap(), s.getNewProcessesMap(), DiffOption.INCLUDE_UNCHANGED);
-	const hasChanges = true; // TODO(jvatic): make this reflect the diff with the current app formation via useAppScale
+	useAppScaleWithDispatch(appName, dispatch);
 
 	const handleSubmit = React.useCallback(
 		(e: React.SyntheticEvent) => {
