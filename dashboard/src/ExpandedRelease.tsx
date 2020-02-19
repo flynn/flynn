@@ -1,6 +1,7 @@
 import * as React from 'react';
 import * as jspb from 'google-protobuf';
-import { Box, Button } from 'grommet';
+import { Box } from 'grommet';
+import Button from './Button';
 import { Release, ExpandedDeployment } from './generated/controller_pb';
 import Notification from './Notification';
 import KeyValueDiff from './KeyValueDiff';

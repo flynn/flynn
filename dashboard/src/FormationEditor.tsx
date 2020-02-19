@@ -1,6 +1,7 @@
 import * as React from 'react';
 import * as jspb from 'google-protobuf';
-import { Grid, Box, Button, Text } from 'grommet';
+import { Grid, Box, Text } from 'grommet';
+import Button from './Button';
 
 import useClient from './useClient';
 import {

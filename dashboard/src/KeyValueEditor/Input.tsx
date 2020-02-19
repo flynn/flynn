@@ -1,7 +1,8 @@
 import * as React from 'react';
 import fz from 'fz';
 import { StatusWarning as WarningIcon, Update as UpdateIcon } from 'grommet-icons';
-import { Stack, Box, Button, TextArea } from 'grommet';
+import { Stack, Box, TextArea } from 'grommet';
+import Button from '../Button';
 import { TextInput } from '../GrommetTextInput';
 import useDebouncedInputOnChange from '../useDebouncedInputOnChange';
 import { default as useStringValidation, StringValidator } from '../useStringValidation';

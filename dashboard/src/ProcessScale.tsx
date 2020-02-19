@@ -1,7 +1,8 @@
 import * as React from 'react';
 import styled from 'styled-components';
 import { Add as AddIcon, FormSubtract as FormSubtractIcon } from 'grommet-icons';
-import { Text, Box, BoxProps, Button, CheckBox } from 'grommet';
+import { Text, Box, BoxProps, CheckBox } from 'grommet';
+import Button from './Button';
 import useMergeDispatch from './useMergeDispatch';
 import ifDev from './ifDev';
 
