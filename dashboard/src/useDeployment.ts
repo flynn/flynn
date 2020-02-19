@@ -1,6 +1,6 @@
 import * as React from 'react';
 import useClient from './useClient';
-import { setNameFilters, setPageSize } from './client';
+import { setNameFilters, setPageSize, setStreamCreates, setStreamUpdates } from './client';
 import { ExpandedDeployment, StreamDeploymentsResponse } from './generated/controller_pb';
 
 export enum ActionType {
@@ -72,16 +72,6 @@ export function reducer(prevState: State, actions: Action | Action[]): State {
 export default function useDeploymentWithDispatch(deploymentName: string, dispatch: Dispatcher) {
 	const client = useClient();
 	React.useEffect(() => {
-		// support being called with empty name
-		// (see <CreateDeployment />)
-		if (!deploymentName) {
-			dispatch([
-				{ type: ActionType.SET_DEPLOYMENT, deployment: null },
-				{ type: ActionType.SET_ERROR, error: null },
-				{ type: ActionType.SET_LOADING, loading: false }
-			]);
-			return;
-		}
 		const cancel = client.streamDeployments(
 			(res: StreamDeploymentsResponse, error: Error | null) => {
 				if (error) {
@@ -91,14 +81,24 @@ export default function useDeploymentWithDispatch(deploymentName: string, dispat
 					]);
 					return;
 				}
+				const deployment = res.getDeploymentsList()[0] || null;
+				if (!deployment) {
+					dispatch([
+						{ type: ActionType.SET_ERROR, error: new Error(`deployment (${deploymentName}) not found`) },
+						{ type: ActionType.SET_LOADING, loading: false }
+					]);
+					return;
+				}
 				dispatch([
-					{ type: ActionType.SET_DEPLOYMENT, deployment: res.getDeploymentsList()[0] || null },
+					{ type: ActionType.SET_DEPLOYMENT, deployment },
 					{ type: ActionType.SET_ERROR, error: null },
 					{ type: ActionType.SET_LOADING, loading: false }
 				]);
 			},
 			setNameFilters(deploymentName),
-			setPageSize(1)
+			setPageSize(1),
+			setStreamCreates(),
+			setStreamUpdates()
 		);
 		return cancel;
 	}, [deploymentName, client, dispatch]);
