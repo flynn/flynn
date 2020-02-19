@@ -1513,6 +1513,13 @@
     "@types/history" "*"
     "@types/react" "*"
 
+"@types/react-timeago@^4.1.1":
+  version "4.1.1"
+  resolved "https://registry.yarnpkg.com/@types/react-timeago/-/react-timeago-4.1.1.tgz#14c24cb8c1299379d9c2941ca3373f849d8bc78a"
+  integrity sha512-Rokr09qNqkKXpKwrDVYzGz/mGlmgX5ZdxAJToUehMyRHXEwtXUUNaAZur5RoZ5JtukBwXKzDevS72Axtjm+yKg==
+  dependencies:
+    "@types/react" "*"
+
 "@types/react@*", "@types/react@^16.9.0":
   version "16.9.17"
   resolved "https://registry.yarnpkg.com/@types/react/-/react-16.9.17.tgz#58f0cc0e9ec2425d1441dd7b623421a867aa253e"
@@ -5408,6 +5415,11 @@ internal-ip@^4.3.0:
   dependencies:
     default-gateway "^4.2.0"
     ipaddr.js "^1.9.0"
+
+intl-relative-time-format@^1.0.7:
+  version "1.0.7"
+  resolved "https://registry.yarnpkg.com/intl-relative-time-format/-/intl-relative-time-format-1.0.7.tgz#6b0794cde8a32d92f43215f479e37e76b7224252"
+  integrity sha512-Zc+qbaimFjS5LuKNksb+fJACtpbuhmvKGd/vRGB7gapEEc+XUCPLOy2qYDueuaLwdYf7n4xYMqMqJ/7XX8aRZw==
 
 invariant@^2.2.2, invariant@^2.2.4:
   version "2.2.4"
