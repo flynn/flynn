@@ -259,6 +259,7 @@ export default function AppsListNav(props: Props) {
 		<>
 			<Box margin={{ bottom: 'xsmall', left: 'xsmall', right: 'xsmall' }} flex={false}>
 				<TextInput
+					type="search"
 					placeholder="Filter apps..."
 					value={filterText}
 					onChange={handleFilterTextChange}
