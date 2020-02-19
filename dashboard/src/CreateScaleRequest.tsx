@@ -5,6 +5,7 @@ import Button from './Button';
 
 import useClient from './useClient';
 import useMergeDispatch from './useMergeDispatch';
+import { DirtyNotification } from './useDirtyTracking';
 import {
 	useAppReleaseWithDispatch,
 	State as AppReleaseState,
@@ -259,6 +260,8 @@ export default function CreateScaleRequestComponent(props: Props) {
 	return (
 		<Box tag="form" fill direction="column" onSubmit={handleSubmit} gap="small" justify="between">
 			<Box>
+				<DirtyNotification />
+
 				<h3>Review Changes</h3>
 
 				<ProcessesDiff margin="small" scale={scale} nextScale={nextScale} release={release} dispatch={dispatch} />

@@ -32,6 +32,7 @@ import {
 	reducer as appReleaseReducer
 } from './useAppRelease';
 import useNavProtection from './useNavProtection';
+import useDirtyTracking from './useDirtyTracking';
 
 interface Props {
 	appName: string;
@@ -169,13 +170,22 @@ export default function EnvEditor(props: Props) {
 	useAppReleaseWithDispatch(appName, dispatch);
 
 	const [enableNavProtection, disableNavProtection] = useNavProtection();
+	const [setDirty, unsetDirty] = useDirtyTracking();
 	React.useEffect(() => {
 		if (data && data.hasChanges) {
 			enableNavProtection();
+			setDirty();
 		} else {
 			disableNavProtection();
+			unsetDirty();
 		}
-	}, [data, disableNavProtection, enableNavProtection]);
+	}, [data, disableNavProtection, enableNavProtection, setDirty, unsetDirty]);
+	React.useEffect(() => {
+		return () => {
+			disableNavProtection();
+			unsetDirty();
+		};
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const handleError = useErrorHandler();
 	React.useEffect(() => {

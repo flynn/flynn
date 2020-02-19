@@ -14,6 +14,7 @@ import {
 import isActionType from './util/isActionType';
 import useRouter from './useRouter';
 import { NavProtectionContext, buildNavProtectionContext } from './useNavProtection';
+import { Context as DirtyTrackingContext, buildContext as buildDirtyTrackingContext } from './useDirtyTracking';
 
 import useErrorHandler from './useErrorHandler';
 import Notification from './Notification';
@@ -247,6 +248,7 @@ interface AppComponentPanelProps {
 }
 
 const AppComponentPanel = ({ label, defaultActive, index, children }: AppComponentPanelProps) => {
+	const dirtyTrackingContext = buildDirtyTrackingContext(label);
 	const navProtectionContext = React.useMemo(
 		() => buildNavProtectionContext(defaultActive ? `hs=${index}` : `s=${index}`),
 		[defaultActive, index]
@@ -254,7 +256,9 @@ const AppComponentPanel = ({ label, defaultActive, index, children }: AppCompone
 	return (
 		<AccordionPanel label={label}>
 			<React.Suspense fallback={<Loading />}>
-				<NavProtectionContext.Provider value={navProtectionContext}>{children}</NavProtectionContext.Provider>
+				<DirtyTrackingContext.Provider value={dirtyTrackingContext}>
+					<NavProtectionContext.Provider value={navProtectionContext}>{children}</NavProtectionContext.Provider>
+				</DirtyTrackingContext.Provider>
 			</React.Suspense>
 		</AccordionPanel>
 	);

@@ -24,6 +24,7 @@ import isActionType from './util/isActionType';
 import useWithCancel from './useWithCancel';
 import useErrorHandler from './useErrorHandler';
 import useNavProtection from './useNavProtection';
+import useDirtyTracking from './useDirtyTracking';
 import Loading from './Loading';
 import RightOverlay from './RightOverlay';
 import CreateScaleRequestComponent, {
@@ -313,16 +314,25 @@ export default function FormationEditor(props: Props) {
 	}, [scaleError, releaseError, handleError]);
 
 	const [enableNavProtection, disableNavProtection] = useNavProtection();
+	const [setDirty, unsetDirty] = useDirtyTracking();
 	React.useEffect(
 		() => {
 			if (hasChanges) {
 				enableNavProtection();
+				setDirty();
 			} else {
 				disableNavProtection();
+				unsetDirty();
 			}
 		},
 		[hasChanges] // eslint-disable-line react-hooks/exhaustive-deps
 	);
+	React.useEffect(() => {
+		return () => {
+			disableNavProtection();
+			unsetDirty();
+		};
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 	function handleSubmit(e: React.SyntheticEvent) {
 		e.preventDefault();

@@ -6,6 +6,7 @@ import Button from './Button';
 import { Release } from './generated/controller_pb';
 import useClient from './useClient';
 import useMergeDispatch from './useMergeDispatch';
+import { DirtyNotification } from './useDirtyTracking';
 import {
 	useAppReleaseWithDispatch,
 	State as AppReleaseState,
@@ -231,6 +232,8 @@ export default function CreateDeployment(props: Props): ReturnType<React.FC<Prop
 	return (
 		<Box tag="form" fill direction="column" onSubmit={handleFormSubmit} gap="small" justify="between">
 			<Box>
+				<DirtyNotification />
+
 				<h3>Review Changes</h3>
 				<ReleaseComponent release={(nextRelease || newRelease) as Release} prevRelease={currentRelease} />
 			</Box>
