@@ -43,9 +43,27 @@ export const TextInput = React.forwardRef(
 			setSuggestionsOpen(false);
 		}, []);
 
+		const escPressRef = React.useMemo(() => ({ current: 0 }), []);
 		const onKeyDown = React.useCallback(
 			(event: React.KeyboardEvent) => {
 				if (!ref.current) return;
+
+				// double press <esc> to clear input
+				if (event.keyCode === 27) {
+					escPressRef.current++;
+					if (escPressRef.current === 2) {
+						escPressRef.current = 0;
+						ref.current.value = '';
+
+						const onChange = rest.onChange;
+						if (onChange) {
+							onChange(event);
+						}
+					}
+				} else {
+					escPressRef.current = 0;
+				}
+
 				if (!suggestionsOpen) return;
 				if (!(event.ctrlKey && (event.keyCode === 74 || event.keyCode === 75))) {
 					// return unless ctr-j or ctr-k
@@ -60,7 +78,7 @@ export const TextInput = React.forwardRef(
 				eventObj.keyCode = nextKeyCode;
 				ref.current.dispatchEvent(eventObj);
 			},
-			[ref, suggestionsOpen]
+			[rest.onChange, escPressRef, ref, suggestionsOpen]
 		);
 
 		return (
