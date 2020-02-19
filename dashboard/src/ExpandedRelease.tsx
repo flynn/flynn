@@ -143,7 +143,7 @@ export default function ExpandedRelease({ dispatch: callerDispatch }: Props) {
 	const prevRelease = deployment.getOldRelease();
 
 	const releaseID = release.getName().replace(appName + '/releases/', '');
-	const createTime = ((ts) => (ts ? ts.toDate() : null))(release.getCreateTime());
+	const createTime = ((ts) => (ts ? ts.toDate() : null))(deployment.getCreateTime());
 
 	const labels = release.getLabelsMap();
 	const appMeta = app ? app.getLabelsMap() : new jspb.Map([]);

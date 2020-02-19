@@ -56,6 +56,7 @@ import protoMapDiff, { Diff, DiffOp, DiffOption } from './util/protoMapDiff';
 import protoMapReplace from './util/protoMapReplace';
 import isActionType from './util/isActionType';
 import roundedDate from './util/roundedDate';
+import timestampToDate from './util/timestampToDate';
 
 enum SelectedResourceType {
 	Release = 1,
@@ -490,7 +491,11 @@ const ReleaseHistoryRelease = React.memo(
 		if (release === undefined) return null;
 		return (
 			<SelectableBox ref={ref} selected={selected} highlighted={isCurrent} {...boxProps} onClick={handleClick}>
-				<ReleaseComponent release={release} prevRelease={prevRelease} />
+				<ReleaseComponent
+					timestamp={timestampToDate(deployment.getCreateTime())}
+					release={release}
+					prevRelease={prevRelease}
+				/>
 			</SelectableBox>
 		);
 	}),

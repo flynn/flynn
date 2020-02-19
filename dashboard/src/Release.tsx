@@ -7,18 +7,21 @@ import KeyValueDiff from './KeyValueDiff';
 import TimeAgo from './TimeAgo';
 
 export interface ReleaseProps {
+	timestamp?: Date;
 	release: Release;
 	prevRelease?: Release | null;
 }
 
-function ReleaseComponent({ release, prevRelease: prev }: ReleaseProps) {
-	const createTime = ((createTime) => (createTime ? createTime.toDate() : undefined))(release.getCreateTime());
-
+function ReleaseComponent({
+	release,
+	prevRelease: prev,
+	timestamp = ((createTime) => (createTime ? createTime.toDate() : undefined))(release.getCreateTime())
+}: ReleaseProps) {
 	return (
 		<Box flex="grow">
-			{createTime ? (
+			{timestamp ? (
 				<>
-					<TimeAgo date={createTime} />
+					<TimeAgo date={timestamp} />
 					<br />
 				</>
 			) : null}
