@@ -4,7 +4,7 @@ import { Box } from 'grommet';
 
 import { Release } from './generated/controller_pb';
 import KeyValueDiff from './KeyValueDiff';
-import useRelativeTimeString from './useRelativeTimeString';
+import TimeAgo from './TimeAgo';
 
 export interface ReleaseProps {
 	release: Release;
@@ -13,13 +13,12 @@ export interface ReleaseProps {
 
 function ReleaseComponent({ release, prevRelease: prev }: ReleaseProps) {
 	const createTime = ((createTime) => (createTime ? createTime.toDate() : undefined))(release.getCreateTime());
-	const relativeTimeString = useRelativeTimeString(createTime || new Date());
 
 	return (
 		<Box flex="grow">
-			{relativeTimeString ? (
+			{createTime ? (
 				<>
-					{relativeTimeString}
+					<TimeAgo date={createTime} />
 					<br />
 				</>
 			) : null}
