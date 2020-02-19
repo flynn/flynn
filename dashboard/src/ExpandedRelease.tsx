@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as jspb from 'google-protobuf';
 import { Box, Button } from 'grommet';
 import { Release, ExpandedDeployment } from './generated/controller_pb';
+import Notification from './Notification';
 import KeyValueDiff from './KeyValueDiff';
 import ExternalAnchor from './ExternalAnchor';
 import ReleaseProcessesDiff from './ReleaseProcessesDiff';
@@ -121,16 +122,17 @@ export default function ExpandedRelease({ dispatch: callerDispatch }: Props) {
 
 	const { appID, deploymentID } = matchParams;
 	const appName = `apps/${appID}`;
-	const deploymentName = `${appName}/${deploymentID}`;
+	const deploymentName = `${appName}/deployments/${deploymentID}`;
 
 	const [
 		{
-			appState: { app, loading: appLoading },
-			currentReleaseState: { release: currentRelease, loading: currentReleaseLoading },
-			deploymentState: { deployment: deploymentOrNull, loading: deploymentLoading }
+			appState: { app, loading: appLoading, error: appError },
+			currentReleaseState: { release: currentRelease, loading: currentReleaseLoading, error: currentReleaseError },
+			deploymentState: { deployment: deploymentOrNull, loading: deploymentLoading, error: deploymentError }
 		},
 		localDispatch
 	] = React.useReducer(reducer, initialState());
+	const error = appError || currentReleaseError || deploymentError;
 	const deployment = deploymentOrNull || new ExpandedDeployment();
 	const dispatch = useMergeDispatch(localDispatch, callerDispatch);
 	useAppWithDispatch(appName, dispatch);
@@ -192,6 +194,10 @@ export default function ExpandedRelease({ dispatch: callerDispatch }: Props) {
 	);
 
 	if (appLoading || currentReleaseLoading || deploymentLoading) return <Loading />;
+
+	if (error) {
+		return <Notification message={error.message} status="warning" margin="small" />;
+	}
 
 	return (
 		<Box tag="form" fill direction="column" onSubmit={handleSubmit} gap="small" justify="between">
