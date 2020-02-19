@@ -3,6 +3,7 @@ import * as jspb from 'google-protobuf';
 import { Checkmark as CheckmarkIcon } from 'grommet-icons';
 import { Box } from 'grommet';
 import Button from './Button';
+import { DirtyNotification } from './useDirtyTracking';
 import {
 	useAppWithDispatch,
 	State as AppState,
@@ -14,6 +15,7 @@ import {
 import useClient from './useClient';
 import useWithCancel from './useWithCancel';
 import useNavProtection from './useNavProtection';
+import useDirtyTracking from './useDirtyTracking';
 import useErrorHandler from './useErrorHandler';
 import Loading from './Loading';
 import KeyValueEditor, {
@@ -199,13 +201,22 @@ function MetadataEditor(props: Props) {
 	}, [appError, handleError]);
 
 	const [enableNavProtection, disableNavProtection] = useNavProtection();
+	const [setDirty, unsetDirty] = useDirtyTracking();
 	React.useEffect(() => {
 		if (data && data.hasChanges) {
 			enableNavProtection();
+			setDirty();
 		} else {
 			disableNavProtection();
+			unsetDirty();
 		}
-	}, [data, disableNavProtection, enableNavProtection]);
+	}, [data, disableNavProtection, enableNavProtection, setDirty, unsetDirty]);
+	React.useEffect(() => {
+		return () => {
+			disableNavProtection();
+			unsetDirty();
+		};
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const handleConfirmSubmit = React.useCallback(
 		(event: React.SyntheticEvent) => {
@@ -245,6 +256,8 @@ function MetadataEditor(props: Props) {
 		return (
 			<Box tag="form" fill direction="column" onSubmit={handleConfirmSubmit}>
 				<Box flex="grow">
+					<DirtyNotification />
+
 					<h3>Review Changes</h3>
 					<KeyValueDiff prev={app.getLabelsMap()} next={new jspb.Map(getEntries(data))} />
 				</Box>

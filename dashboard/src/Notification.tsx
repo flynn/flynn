@@ -34,7 +34,7 @@ const StyledText = styled(Text)`
 	color: var(--black);
 `;
 
-export default ({ message, status, onClose, ...rest }: NotificationProps) => (
+export default ({ message, status, onClose, ...rest }: NotificationProps): ReturnType<React.FC> => (
 	<Box
 		direction="row"
 		pad="small"
