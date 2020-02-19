@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { Box, Button, Form, FormField, TextInput } from 'grommet';
+import { Box, Form, FormField, TextInput } from 'grommet';
+import Button from './Button';
 
 import useClient from './useClient';
 import useWithCancel from './useWithCancel';

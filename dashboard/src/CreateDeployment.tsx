@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Checkmark as CheckmarkIcon } from 'grommet-icons';
-import { Box, Button } from 'grommet';
+import { Box } from 'grommet';
+import Button from './Button';
 
 import { Release } from './generated/controller_pb';
 import useClient from './useClient';

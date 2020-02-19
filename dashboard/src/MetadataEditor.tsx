@@ -1,7 +1,8 @@
 import * as React from 'react';
 import * as jspb from 'google-protobuf';
 import { Checkmark as CheckmarkIcon } from 'grommet-icons';
-import { Box, Button } from 'grommet';
+import { Box } from 'grommet';
+import Button from './Button';
 import {
 	useAppWithDispatch,
 	State as AppState,

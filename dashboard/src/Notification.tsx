@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Box, BoxProps, Text, Button } from 'grommet';
+import { Box, BoxProps, Text } from 'grommet';
+import Button from './Button';
 import {
 	StatusCritical,
 	StatusDisabled,

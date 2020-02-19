@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { Box, Button } from 'grommet';
+import { Box } from 'grommet';
 import { Checkmark as CheckmarkIcon } from 'grommet-icons';
+import Button from './Button';
 
 import useClient from './useClient';
 import useMergeDispatch from './useMergeDispatch';

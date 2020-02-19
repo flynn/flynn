@@ -1,7 +1,8 @@
 import * as React from 'react';
 
 import { Checkmark as CheckmarkIcon, StatusWarning as WarningIcon } from 'grommet-icons';
-import { Box, Button } from 'grommet';
+import { Box } from 'grommet';
+import Button from '../Button';
 import Notification from '../Notification';
 import copyToClipboard from '../util/copyToClipboard';
 import {

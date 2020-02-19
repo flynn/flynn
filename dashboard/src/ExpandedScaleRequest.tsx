@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Grid, Box, Button, Text } from 'grommet';
+import { Grid, Box, Text } from 'grommet';
+import Button from './Button';
 import { ScaleRequest } from './generated/controller_pb';
 import ProcessScale, { Action as ProcessScaleAction } from './ProcessScale';
 import protoMapDiff, { Diff, DiffOp, DiffOption } from './util/protoMapDiff';
