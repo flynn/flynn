@@ -115,7 +115,10 @@ var preparedStatements = map[string]string{
 	"certificate_insert":                        certificateInsertQuery,
 	"route_certificate_delete_by_route_id":      routeCertificateDeleteByRouteIDQuery,
 	"route_certificate_insert":                  routeCertificateInsertQuery,
+	"tls_key_list":                              tlsKeyListQuery,
+	"tls_key_select":                            tlsKeySelectQuery,
 	"tls_key_insert":                            tlsKeyInsertQuery,
+	"tls_key_delete":                            tlsKeyDeleteQuery,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
@@ -697,9 +700,17 @@ WHERE http_route_id = $1`
 	routeCertificateInsertQuery = `
 INSERT INTO route_certificates (http_route_id, certificate_id)
 VALUES ($1, $2)`
+	tlsKeyListQuery = `
+SELECT k.id, k.algorithm, k.key, ARRAY(SELECT id FROM certificates WHERE key_id = k.id), k.created_at FROM tls_keys AS k
+ORDER BY k.created_at DESC`
+	tlsKeySelectQuery = `
+SELECT k.id, k.algorithm, k.key, ARRAY(SELECT id FROM certificates WHERE key_id = k.id), k.created_at FROM tls_keys AS k
+WHERE k.id = $1`
 	tlsKeyInsertQuery = `
 INSERT INTO tls_keys (id, algorithm, key)
 VALUES ($1, $2, $3)
 ON CONFLICT (id) DO UPDATE SET key = $3
 RETURNING created_at`
+	tlsKeyDeleteQuery = `
+DELETE FROM tls_keys WHERE id = $1`
 )

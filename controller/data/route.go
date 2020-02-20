@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -359,7 +360,7 @@ func (r *RouteRepo) addRouteCertWithTx(tx *postgres.DBTx, route *router.Route) e
 	return nil
 }
 
-func (r *RouteRepo) addKey(tx *postgres.DBTx, keyPEM []byte) (*router.Key, error) {
+func (r *RouteRepo) addKey(tx dbOrTx, keyPEM []byte) (*router.Key, error) {
 	key, err := router.NewKey(bytes.Trim(keyPEM, " \n"))
 	if err != nil {
 		return nil, err
@@ -372,6 +373,89 @@ func (r *RouteRepo) addKey(tx *postgres.DBTx, keyPEM []byte) (*router.Key, error
 	).Scan(&key.CreatedAt); err != nil {
 		return nil, err
 	}
+	return key, nil
+}
+
+func (r *RouteRepo) AddKey(keyDER []byte) (*router.Key, error) {
+	var keyPEM bytes.Buffer
+	if err := pem.Encode(&keyPEM, &pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}); err != nil {
+		return nil, err
+	}
+	return r.addKey(r.db, keyPEM.Bytes())
+}
+
+func (r *RouteRepo) ListKeys() ([]*router.Key, error) {
+	rows, err := r.db.Query("tls_key_list")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []*router.Key
+	for rows.Next() {
+		key, err := scanKey(rows)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+func scanKey(s postgres.Scanner) (*router.Key, error) {
+	var (
+		key   router.Key
+		algo  string
+		certs string
+	)
+	if err := s.Scan(
+		&key.ID,
+		&algo,
+		&key.Key,
+		&certs,
+		&key.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+	key.Algorithm = router.KeyAlgorithm(algo)
+	key.Certificates = splitPGStringArray(certs)
+	return &key, nil
+}
+
+func (r *RouteRepo) DeleteKey(name string) (*router.Key, error) {
+	// start a transaction
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	// get the key
+	key, err := scanKey(tx.QueryRow("tls_key_select", strings.TrimPrefix(name, "tls-keys/")))
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// ensure the key is not referenced by any certificates
+	if len(key.Certificates) > 0 {
+		tx.Rollback()
+		return nil, fmt.Errorf("cannot delete key as it is referenced by the following certificates: %s", strings.Join(key.Certificates, ", "))
+	}
+
+	// delete the key
+	if err := tx.Exec("tls_key_delete", key.ID); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// commit the transaction
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	// return the key
 	return key, nil
 }
 

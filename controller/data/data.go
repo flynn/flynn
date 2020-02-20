@@ -82,6 +82,12 @@ func toCursorID(t *time.Time) *string {
 	return typeconv.StringPtr(strconv.FormatInt(t.UnixNano()/1000, 10))
 }
 
+type dbOrTx interface {
+	rowQueryer
+
+	Exec(query string, args ...interface{}) error
+}
+
 type rowQueryer interface {
 	Query(query string, args ...interface{}) (*pgx.Rows, error)
 	QueryRow(query string, args ...interface{}) postgres.Scanner

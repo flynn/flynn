@@ -4,6 +4,8 @@ package flynn.api.v1;
 
 option go_package = 'api';
 
+import "google/protobuf/timestamp.proto";
+
 // Flynn Router gRPC API v1
 service Router {
   // SetRoutes takes a desired list of routes for a set of apps, calculates the
@@ -19,6 +21,18 @@ service Router {
 
   // ListAppRoutes list routes for a set of apps.
   rpc ListAppRoutes(ListAppRoutesRequest) returns (ListAppRoutesResponse);
+
+  // Lists TLS keys that can be referenced by static certificates.
+  rpc ListKeys(ListKeysRequest) returns (ListKeysResponse) {}
+
+  // Creates a TLS key. If the key already exists, it will be returned instead
+  // of creating a duplicate, making the method idempotent.
+  rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse) {}
+
+  // Deletes a TLS key. The key must not be referenced by any routes. This
+  // method is idempotent and will not return an error if the specified key has
+  // already been deleted.
+  rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse) {}
 }
 
 // SetRoutesRequest is a request to set a list of app routes.
@@ -65,6 +79,41 @@ message ListAppRoutesResponse {
   // state is the state of the returned routes that can be used as the
   // expected_state in a subsequent call to SetRoutes.
   bytes state = 2;
+}
+
+// A request to list TLS keys.
+message ListKeysRequest {
+}
+
+// A response containing a list of TLS keys.
+message ListKeysResponse {
+  // The TLS keys.
+  repeated Key keys = 1;
+}
+
+// A request to create a new TLS key.
+message CreateKeyRequest {
+  // Required. The private key data. It must be DER-encoded PKCS#1 (RSA),
+  // PKCS#8 (RSA/ECC), or SEC1 (ECC).
+  bytes private_key = 1;
+}
+
+// A response containing a TLS key that was created.
+message CreateKeyResponse {
+  // The TLS key that was created.
+  Key key = 1;
+}
+
+// A request to delete a TLS key.
+message DeleteKeyRequest {
+  // Required. The TLS key resource name in the format `tls-keys/{KEY_ID}`
+  string name = 1;
+}
+
+// A response containing a TLS key that was deleted.
+message DeleteKeyResponse {
+  // The TLS key that was deleted.
+  Key key = 1;
 }
 
 // RouteConfig is used to define routes in route config files.
@@ -192,4 +241,34 @@ message Route {
     // A TCP route configuration.
     TCP tcp = 6;
   }
+}
+
+// A TLS key.
+message Key {
+  // A TLS key algorithm.
+  enum Algorithm {
+    // Default value.
+    KEY_ALG_UNSPECIFIED = 0;
+
+    // NIST ECC P-256 curve
+    KEY_ALG_ECC_P256 = 1;
+
+    // 2048-bit RSA
+    KEY_ALG_RSA_2048 = 2;
+
+    // 4096-bit RSA
+    KEY_ALG_RSA_4096 = 3;
+  }
+
+  // The unique identifier of this TLS key.
+  string name = 1;
+
+  // The algorithm used by this TLS key.
+  Algorithm algorithm = 2;
+
+  // The certificates that reference this TLS key.
+  repeated string certificates = 3;
+
+  // The timestamp when this TLS key was created.
+  google.protobuf.Timestamp create_time = 4;
 }

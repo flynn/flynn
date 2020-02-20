@@ -14,6 +14,7 @@ import (
 	host "github.com/flynn/flynn/host/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/version"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/golang/protobuf/ptypes"
 	durpb "github.com/golang/protobuf/ptypes/duration"
 	tspb "github.com/golang/protobuf/ptypes/timestamp"
@@ -743,4 +744,21 @@ func NewJobState(from ct.JobState) DeploymentEvent_JobState {
 		return DeploymentEvent_FAILED
 	}
 	return DeploymentEvent_PENDING
+}
+
+func NewKey(from *router.Key) *Key {
+	key := &Key{
+		Name:         path.Join("tls-keys", from.ID),
+		Certificates: from.Certificates, // TODO: these should be 'certificates/{CERTIFICATE_ID}'
+		CreateTime:   NewTimestamp(&from.CreatedAt),
+	}
+	switch from.Algorithm {
+	case router.KeyAlgorithm_ECC_P256:
+		key.Algorithm = Key_KEY_ALG_ECC_P256
+	case router.KeyAlgorithm_RSA_2048:
+		key.Algorithm = Key_KEY_ALG_RSA_2048
+	case router.KeyAlgorithm_RSA_4096:
+		key.Algorithm = Key_KEY_ALG_RSA_4096
+	}
+	return key
 }

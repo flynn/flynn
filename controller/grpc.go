@@ -1006,3 +1006,37 @@ outer:
 	// return the response
 	return res, nil
 }
+
+func (g *grpcAPI) ListKeys(ctx context.Context, req *api.ListKeysRequest) (*api.ListKeysResponse, error) {
+	keys, err := g.routeRepo.ListKeys()
+	if err != nil {
+		return nil, err
+	}
+	apiKeys := make([]*api.Key, len(keys))
+	for i, key := range keys {
+		apiKeys[i] = api.NewKey(key)
+	}
+	return &api.ListKeysResponse{
+		Keys: apiKeys,
+	}, nil
+}
+
+func (g *grpcAPI) CreateKey(ctx context.Context, req *api.CreateKeyRequest) (*api.CreateKeyResponse, error) {
+	key, err := g.routeRepo.AddKey(req.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	return &api.CreateKeyResponse{
+		Key: api.NewKey(key),
+	}, nil
+}
+
+func (g *grpcAPI) DeleteKey(ctx context.Context, req *api.DeleteKeyRequest) (*api.DeleteKeyResponse, error) {
+	key, err := g.routeRepo.DeleteKey(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	return &api.DeleteKeyResponse{
+		Key: api.NewKey(key),
+	}, nil
+}
