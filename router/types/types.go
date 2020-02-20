@@ -1,7 +1,18 @@
 package router
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -19,6 +30,154 @@ type Certificate struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt is the time this cert was last updated.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+}
+
+// KeyAlgorithm is the algorithm used by a TLS key
+type KeyAlgorithm string
+
+const (
+	// KeyAlgorithm_ECC_P256 represents the NIST ECC P-256 curve
+	KeyAlgorithm_ECC_P256 KeyAlgorithm = "ecc-p256"
+
+	// KeyAlgorithm_RSA_2048 represents RSA with 2048-bit keys
+	KeyAlgorithm_RSA_2048 KeyAlgorithm = "rsa-2048"
+
+	// KeyAlgorithm_RSA_4096 represents RSA with 4096-bit keys
+	KeyAlgorithm_RSA_4096 KeyAlgorithm = "rsa-4096"
+)
+
+// NewKey parses the private key contained in the given PEM-encoded data.
+//
+// The data is expected to contain a DER-encoded PKCS#1 (RSA), PKCS#8 (RSA/ECC),
+// or SEC1 (ECC) private key, and the key must use either the RSA 2048 bit, RSA
+// 4096 bit or ECC P256 key algorithm.
+//
+// The returned key's ID is a hex encoded sha256 digest of the PKIX encoded
+// public key.
+func NewKey(pemData []byte) (*Key, error) {
+	// decode the PEM block
+	var (
+		keyData []byte
+		skipped []string
+	)
+	for {
+		var block *pem.Block
+		block, pemData = pem.Decode(pemData)
+		if block == nil {
+			break
+		}
+		if block.Type == "PRIVATE KEY" || strings.HasSuffix(block.Type, " PRIVATE KEY") {
+			keyData = block.Bytes
+			break
+		}
+		skipped = append(skipped, block.Type)
+	}
+	if keyData == nil {
+		if len(skipped) > 0 {
+			return nil, fmt.Errorf("missing PRIVATE KEY block in PEM input, got %s", strings.Join(skipped, ", "))
+		}
+		return nil, errors.New("invalid PEM data")
+	}
+
+	// parse the private key from the contained DER data
+	privKey, err := parsePrivateKey(keyData)
+	if err != nil {
+		return nil, err
+	}
+
+	// determine the key ID and type
+	var (
+		keyID   string
+		keyAlgo KeyAlgorithm
+	)
+	switch k := privKey.(type) {
+	case *rsa.PrivateKey:
+		var err error
+		keyID, err = KeyID(&k.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+		size := k.N.BitLen()
+		switch size {
+		case 2048:
+			keyAlgo = KeyAlgorithm_RSA_2048
+		case 4096:
+			keyAlgo = KeyAlgorithm_RSA_4096
+		default:
+			return nil, fmt.Errorf("unsupported RSA key size: %d", size)
+		}
+	case *ecdsa.PrivateKey:
+		var err error
+		keyID, err = KeyID(&k.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+		switch k.Curve {
+		case elliptic.P256():
+			keyAlgo = KeyAlgorithm_ECC_P256
+		default:
+			return nil, fmt.Errorf("unsupported ECDSA curve: %v", k.Curve)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported key type %T, expected RSA or ECC", privKey)
+	}
+
+	// return the Key
+	return &Key{
+		ID:        keyID,
+		Algorithm: keyAlgo,
+		Key:       keyData,
+	}, nil
+}
+
+// KeyID return a hex encoded sha256 digest of the PKIX encoding of the given
+// public key
+func KeyID(pubKey interface{}) (string, error) {
+	switch pubKey.(type) {
+	case *rsa.PublicKey, *ecdsa.PublicKey:
+	default:
+		return "", fmt.Errorf("unsupported key type %T, expected RSA or ECC", pubKey)
+	}
+	data, err := x509.MarshalPKIXPublicKey(pubKey)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
+	if key, err := x509.ParsePKCS1PrivateKey(der); err == nil {
+		return key, nil
+	}
+	if key, err := x509.ParsePKCS8PrivateKey(der); err == nil {
+		switch key := key.(type) {
+		case *rsa.PrivateKey, *ecdsa.PrivateKey:
+			return key, nil
+		default:
+			return nil, fmt.Errorf("unsupported PKCS#8 private key %T, expected RSA or ECC", key)
+		}
+	}
+	if key, err := x509.ParseECPrivateKey(der); err == nil {
+		return key, nil
+	}
+	return nil, errors.New("failed to parse private key (tried PKCS#1, PKCS#8 and SEC1)")
+}
+
+type Key struct {
+	// ID is the unique ID of this key
+	ID string `json:"id,omitempty"`
+
+	// Algorithm is the key algorithm used by this key
+	Algorithm KeyAlgorithm `json:"algorithm,omitempty"`
+
+	// Certificates contains the IDs of certificates using this key
+	Certificates []string `json:"certificates,omitempty"`
+
+	// CreatedAt is the time this key was created
+	CreatedAt time.Time `json:"created_at,omitempty"`
+
+	Key []byte `json:"-"`
 }
 
 // Route is a struct that combines the fields of HTTPRoute and TCPRoute

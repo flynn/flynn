@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"strings"
 	"time"
 
@@ -81,14 +82,15 @@ func (s *S) TestCreateHTTPRouteWithCertificate(c *C) {
 	c.Assert(route.Certificate, Not(IsNil))
 	c.Assert(route.Certificate.ID, Not(Equals), "")
 	c.Assert(route.Certificate.Cert, Equals, tlsCert.Cert)
-	c.Assert(route.Certificate.Key, Equals, tlsCert.PrivateKey)
+	assertPEMKeysEqual(c, route.Certificate.Key, tlsCert.PrivateKey)
 	c.Assert(route.Certificate.CreatedAt, Not(IsNil))
 	c.Assert(route.Certificate.UpdatedAt, Not(IsNil))
 
 	gotRoute, err := s.c.GetRoute(app.ID, route.FormattedID())
 	c.Assert(err, IsNil)
 	c.Assert(gotRoute.Certificate, Not(IsNil))
-	c.Assert(gotRoute.Certificate, DeepEquals, route.Certificate)
+	c.Assert(gotRoute.Certificate.Cert, Equals, route.Certificate.Cert)
+	assertPEMKeysEqual(c, gotRoute.Certificate.Key, route.Certificate.Key)
 }
 
 func (s *S) TestCreateHTTPRouteWithInvalidCertificate(c *C) {
@@ -261,7 +263,7 @@ func (s *S) TestListRoutes(c *C) {
 
 	c.Assert(routes[0].Certificate, Not(IsNil))
 	c.Assert(routes[0].Certificate.Cert, Equals, strings.TrimSuffix(tlsCert.Cert, "\n"))
-	c.Assert(routes[0].Certificate.Key, Equals, strings.TrimSuffix(tlsCert.PrivateKey, "\n"))
+	assertPEMKeysEqual(c, routes[0].Certificate.Key, tlsCert.PrivateKey)
 
 	routes, err = s.c.AppRouteList(app1.ID)
 	c.Assert(err, IsNil)
@@ -612,4 +614,12 @@ func (s *GRPCSuite) TestSetRoutes(c *C) {
 	assertRoutes(newRoute1, newRoute5, newRoute3)
 	res = applyRoutes(res.AppliedToState)
 	assertNoRoutes()
+}
+
+func assertPEMKeysEqual(c *C, key1, key2 string) {
+	block1, _ := pem.Decode([]byte(key1))
+	c.Assert(block1, NotNil)
+	block2, _ := pem.Decode([]byte(key2))
+	c.Assert(block2, NotNil)
+	c.Assert(block1.Bytes, DeepEquals, block2.Bytes)
 }

@@ -323,11 +323,15 @@ func (r *RouteRepo) addTCP(tx *postgres.DBTx, route *router.Route) error {
 }
 
 func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) error {
+	key, err := r.addKey(tx, []byte(cert.Key))
+	if err != nil {
+		return err
+	}
 	tlsCertSHA256 := sha256.Sum256([]byte(cert.Cert))
 	if err := tx.QueryRow(
 		"certificate_insert",
 		cert.Cert,
-		cert.Key,
+		key.ID,
 		tlsCertSHA256[:],
 	).Scan(&cert.ID, &cert.CreatedAt, &cert.UpdatedAt); err != nil {
 		return err
@@ -353,6 +357,22 @@ func (r *RouteRepo) addRouteCertWithTx(tx *postgres.DBTx, route *router.Route) e
 		return err
 	}
 	return nil
+}
+
+func (r *RouteRepo) addKey(tx *postgres.DBTx, keyPEM []byte) (*router.Key, error) {
+	key, err := router.NewKey(bytes.Trim(keyPEM, " \n"))
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.QueryRow(
+		"tls_key_insert",
+		key.ID,
+		string(key.Algorithm),
+		key.Key,
+	).Scan(&key.CreatedAt); err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 func (r *RouteRepo) Get(typ, id string) (*router.Route, error) {
@@ -387,7 +407,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 		certID        *string
 		certRoutes    *string
 		certCert      *string
-		certKey       *string
+		certKey       []byte
 		certCreatedAt *time.Time
 		certUpdatedAt *time.Time
 	)
@@ -415,10 +435,14 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 	}
 	route.Type = "http"
 	if certID != nil {
+		var keyPEM bytes.Buffer
+		if err := pem.Encode(&keyPEM, &pem.Block{Type: "PRIVATE KEY", Bytes: certKey}); err != nil {
+			return nil, err
+		}
 		route.Certificate = &router.Certificate{
 			ID:        *certID,
 			Cert:      *certCert,
-			Key:       *certKey,
+			Key:       keyPEM.String(),
 			Routes:    splitPGStringArray(*certRoutes),
 			CreatedAt: *certCreatedAt,
 			UpdatedAt: *certUpdatedAt,

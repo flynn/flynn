@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/flynn/flynn/pkg/postgres"
+	router "github.com/flynn/flynn/router/types"
 )
 
 // RouterMigrationStart is the ID of the migration that starts the router
@@ -967,6 +968,7 @@ DROP TRIGGER check_http_route_update ON http_routes;
 DROP TRIGGER check_http_route_drain_backends ON tcp_routes;
 DROP TRIGGER set_tcp_route_port ON tcp_routes;
 	`)
+	migrations.AddSteps(51, migrateTLSKeys)
 }
 
 func MigrateDB(db *postgres.DB) error {
@@ -1114,4 +1116,80 @@ func migrateProcessData(tx *postgres.DBTx) error {
 		}
 	}
 	return nil
+}
+
+// migrateTLSKeys moves TLS keys out of the certificates table into a separate
+// tls_keys table
+func migrateTLSKeys(tx *postgres.DBTx) error {
+	// add tls_keys table
+	if err := tx.Exec(`
+CREATE TABLE tls_key_algorithms (
+  name text PRIMARY KEY
+);
+INSERT INTO tls_key_algorithms (name) VALUES ('ecc-p256'), ('rsa-2048'), ('rsa-4096');
+
+CREATE TABLE tls_keys (
+  id         text        PRIMARY KEY,
+  algorithm  text        NOT NULL REFERENCES tls_key_algorithms (name),
+  key        bytea       NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE certificates ADD COLUMN key_id text;
+	`); err != nil {
+		return err
+	}
+
+	// load existing certificates
+	type cert struct {
+		id  string
+		key string
+	}
+	rows, err := tx.Query("SELECT id, key FROM certificates")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var certs []*cert
+	for rows.Next() {
+		var c cert
+		if err := rows.Scan(
+			&c.id,
+			&c.key,
+		); err != nil {
+			return err
+		}
+		certs = append(certs, &c)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// populate tls_keys table
+	for _, cert := range certs {
+		key, err := router.NewKey([]byte(cert.key))
+		if err != nil {
+			// if we can't parse the key, the router won't be able
+			// to use it, so we may as well delete it
+			tx.Exec("DELETE FROM route_certificates WHERE certificate_id = $1", cert.id)
+			tx.Exec("DELETE FROM certificates WHERE id = $1", cert.id)
+			continue
+		}
+		if err := tx.Exec(
+			"INSERT INTO tls_keys (id, algorithm, key) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+			key.ID, string(key.Algorithm), key.Key,
+		); err != nil {
+			return err
+		}
+		if err := tx.Exec("UPDATE certificates SET key_id = $1 WHERE id = $2", key.ID, cert.id); err != nil {
+			return err
+		}
+	}
+
+	// ensure key_id is set on certificates
+	return tx.Exec(`
+ALTER TABLE certificates ALTER COLUMN key_id SET NOT NULL;
+ALTER TABLE certificates ADD CONSTRAINT key_id_fkey FOREIGN KEY (key_id) REFERENCES tls_keys (id);
+ALTER TABLE certificates DROP COLUMN key;
+	`)
 }
