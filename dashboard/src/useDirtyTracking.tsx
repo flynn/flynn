@@ -57,9 +57,12 @@ export default function useDirtyTracking(): [() => void, () => void] {
 		state.dirtyKeys.delete(ctx.key);
 		ctx.dirty = false;
 	}, [ctx]);
-	React.useEffect(() => {
-		// call unsetDirty when component unmounted
-		return unsetDirty();
-	}, [unsetDirty]);
+	React.useEffect(
+		() => {
+			// call unsetDirty when component unmounted
+			return unsetDirty();
+		},
+		[] // eslint-disable-line react-hooks/exhaustive-deps
+	);
 	return [setDirty, unsetDirty];
 }
