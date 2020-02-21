@@ -311,6 +311,10 @@ func formatRouteConfig(route *api.Route) string {
 	}
 	lines = append(lines, service)
 
+	if r.Certificate != nil {
+		lines = append(lines, "certificate: "+r.Certificate.ID)
+	}
+
 	if r.Sticky {
 		lines = append(lines, "sticky sessions: true")
 	}

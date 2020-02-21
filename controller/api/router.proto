@@ -182,6 +182,12 @@ message Route {
     bool drain_backends = 3;
   }
 
+  // The TLS configuration for a route.
+  message TLS {
+    // Required. The certificate to use for TLS handshakes with this route.
+    Certificate certificate = 1;
+  }
+
   message HTTP {
     // Sticky session configuration. Currently there are no configuration options.
     message StickySessions {}
@@ -201,10 +207,13 @@ message Route {
     // target.
     string path = 2;
 
+    // The TLS configuration for the route.
+    TLS tls = 3;
+
     // Enables best-effort session-backend stickiness using an encrypted cookie set
     // and managed by the router that will send requests containing the cookie to
     // the same backend instance. Incompatible with RedirectTarget.
-    StickySessions sticky_sessions = 3;
+    StickySessions sticky_sessions = 4;
   }
 
   message TCP {
@@ -271,4 +280,13 @@ message Key {
 
   // The timestamp when this TLS key was created.
   google.protobuf.Timestamp create_time = 4;
+}
+
+// An existing TLS certificate.
+message Certificate {
+  // Required. A list of DER-encoded X.509 certificates, composing a chain of
+  // exactly one leaf (non-CA/intermediate) certificate followed by zero or
+  // more intermediate CA certificates that may be used to form a valid trust
+  // chain from client platform trusted roots to the leaf.
+  repeated bytes chain = 1;
 }

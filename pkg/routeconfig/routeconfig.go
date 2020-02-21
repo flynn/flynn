@@ -3,6 +3,7 @@ package routeconfig
 import (
 	"bytes"
 	"context"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/flynn/flynn/controller/data"
 	router "github.com/flynn/flynn/router/types"
 	"github.com/stripe/skycfg"
+	"go.starlark.net/starlark"
 )
 
 // Load loads app routes from the given route config
@@ -26,9 +28,14 @@ func Load(in io.Reader) ([]*api.AppRoutes, error) {
 	// initialise a skycfg FileReader to read the route config
 	r := &fileReader{config: data}
 
+	// define skycfg globals
+	globals := starlark.StringDict{
+		"cert_chain_from_pem": starlark.NewBuiltin("cert_chain_from_pem", certChainFromPEM),
+	}
+
 	// load the config using skycfg
 	ctx := context.Background()
-	config, err := skycfg.Load(ctx, "main", skycfg.WithFileReader(r))
+	config, err := skycfg.Load(ctx, "main", skycfg.WithFileReader(r), skycfg.WithGlobals(globals))
 	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %s", err)
 	}
@@ -122,6 +129,11 @@ def routes(ctx):
 	path = "{{ .Path }}",
 	{{- end }}
 	target = service("{{ .Service }}"{{ if .Leader }}, leader = True{{ end }}{{ if not .DrainBackends }}, drain_backends = False{{ end }}),
+	{{- if .Certificate }}
+	certificate = static_certificate('''
+{{ .Certificate.Cert }}
+	'''),
+	{{- end }}
 	{{- if .Sticky }}
 	sticky = True,
 	{{- end }}
@@ -165,7 +177,7 @@ def app_routes(v):
 
   return appRoutes
 
-def http_route(domain, target, path = "/", sticky = False, disable_keep_alives = False):
+def http_route(domain, target, path = "/", certificate = None, sticky = False, disable_keep_alives = False):
   route = apiv1.Route(
     http = apiv1.Route.HTTP(
       domain = domain,
@@ -174,6 +186,9 @@ def http_route(domain, target, path = "/", sticky = False, disable_keep_alives =
     service_target = target,
     disable_keep_alives = disable_keep_alives,
   )
+
+  if certificate:
+    route.http.tls = apiv1.Route.TLS(certificate)
 
   if sticky:
     route.http.sticky_sessions = apiv1.Route.HTTP.StickySessions()
@@ -197,7 +212,32 @@ def service(name, leader = False, drain_backends = True):
     leader = leader,
     drain_backends = drain_backends,
   )
+
+def static_certificate(chainPEM):
+  return apiv1.Certificate(
+    chain = cert_chain_from_pem(chainPEM),
+  )
 `[1:]))
+
+func certChainFromPEM(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var chainPEM string
+	if err := starlark.UnpackArgs(fn.Name(), args, kwargs, "chainPEM", &chainPEM); err != nil {
+		return nil, err
+	}
+	pemData := []byte(chainPEM)
+	var chain []starlark.Value
+	for {
+		var block *pem.Block
+		block, pemData = pem.Decode(pemData)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			chain = append(chain, starlark.String(block.Bytes))
+		}
+	}
+	return starlark.NewList(chain), nil
+}
 
 // Data is used to render the config template
 type Data struct {

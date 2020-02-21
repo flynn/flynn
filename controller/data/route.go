@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -324,15 +325,45 @@ func (r *RouteRepo) addTCP(tx *postgres.DBTx, route *router.Route) error {
 }
 
 func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) error {
-	key, err := r.addKey(tx, []byte(cert.Key))
-	if err != nil {
-		return err
+	var keyID string
+	if cert.Key != "" {
+		key, err := r.addKey(tx, []byte(cert.Key))
+		if err != nil {
+			return err
+		}
+		keyID = key.ID
+	}
+	if keyID == "" {
+		// determine the expected key ID from the public key in the
+		// leaf certificate (that we expect to be contained in the
+		// first PEM block)
+		block, _ := pem.Decode([]byte(cert.Cert))
+		if block == nil {
+			return hh.ValidationErr("certificate", "invalid PEM data")
+		}
+		x509Cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", err))
+		}
+		keyID, err = router.KeyID(x509Cert.PublicKey)
+		if err != nil {
+			return hh.ValidationErr("certificate", err.Error())
+		}
+		key, err := scanKey(tx.QueryRow("tls_key_select", keyID))
+		if err != nil {
+			return hh.ValidationErr("certificate", fmt.Sprintf("key not found: %s", keyID))
+		}
+		var keyPEM bytes.Buffer
+		if err := pem.Encode(&keyPEM, &pem.Block{Type: "PRIVATE KEY", Bytes: key.Key}); err != nil {
+			return err
+		}
+		cert.Key = keyPEM.String()
 	}
 	tlsCertSHA256 := sha256.Sum256([]byte(cert.Cert))
 	if err := tx.QueryRow(
 		"certificate_insert",
 		cert.Cert,
-		key.ID,
+		keyID,
 		tlsCertSHA256[:],
 	).Scan(&cert.ID, &cert.CreatedAt, &cert.UpdatedAt); err != nil {
 		return err
@@ -1046,8 +1077,17 @@ func routesMatchForUpdate(existing *router.Route, desired *api.Route) bool {
 // configuration as a desired route that has been identified as being an update
 // of the existing route
 func routesEqualForUpdate(existing *router.Route, desired *api.Route) bool {
-	// check HTTP routes for a change in stickiness
+	// check HTTP routes for a change in certificate or stickiness
 	if config, ok := desired.Config.(*api.Route_Http); ok {
+		if config.Http.Tls == nil {
+			if existing.Certificate != nil {
+				return false
+			}
+		} else {
+			if !certificatesEqual(existing.Certificate, config.Http.Tls.Certificate) {
+				return false
+			}
+		}
 		if existing.Sticky == (config.Http.StickySessions == nil) {
 			return false
 		}
@@ -1058,6 +1098,38 @@ func routesEqualForUpdate(existing *router.Route, desired *api.Route) bool {
 		existing.Leader == desired.ServiceTarget.Leader &&
 		existing.DrainBackends == desired.ServiceTarget.DrainBackends &&
 		existing.DisableKeepAlives == desired.DisableKeepAlives
+}
+
+func certificatesEqual(existing *router.Certificate, desired *api.Certificate) bool {
+	if existing == nil {
+		return desired == nil
+	}
+	if desired == nil {
+		return existing == nil
+	}
+
+	pemData := []byte(existing.Cert)
+	var existingChain [][]byte
+	for {
+		var block *pem.Block
+		block, pemData = pem.Decode(pemData)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			existingChain = append(existingChain, block.Bytes)
+		}
+	}
+
+	if len(desired.Chain) != len(existingChain) {
+		return false
+	}
+	for i, desiredCert := range desired.Chain {
+		if !bytes.Equal(desiredCert, existingChain[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // ToAPIRoute converts a router.Route to an api.Route
@@ -1082,6 +1154,26 @@ func ToAPIRoute(route *router.Route) *api.Route {
 			Domain: route.Domain,
 			Path:   route.Path,
 		}}
+		if route.Certificate != nil {
+			pemData := []byte(route.Certificate.Cert)
+			var chain [][]byte
+			for {
+				var block *pem.Block
+				block, pemData = pem.Decode(pemData)
+				if block == nil {
+					break
+				}
+				if block.Type == "CERTIFICATE" {
+					chain = append(chain, block.Bytes)
+				}
+			}
+			tls := &api.Route_TLS{
+				Certificate: &api.Certificate{
+					Chain: chain,
+				},
+			}
+			r.Config.(*api.Route_Http).Http.Tls = tls
+		}
 		if route.Sticky {
 			r.Config.(*api.Route_Http).Http.StickySessions = &api.Route_HTTP_StickySessions{}
 		}
@@ -1109,6 +1201,19 @@ func ToRouterRoute(appID string, route *api.Route) *router.Route {
 		r.Type = "http"
 		r.Domain = config.Http.Domain
 		r.Path = config.Http.Path
+		if tls := config.Http.Tls; tls != nil && tls.Certificate != nil {
+			chain := tls.Certificate.Chain
+			certs := make([]string, len(chain))
+			for i, certDER := range chain {
+				certs[i] = string(pem.EncodeToMemory(&pem.Block{
+					Type:  "CERTIFICATE",
+					Bytes: certDER,
+				}))
+			}
+			r.Certificate = &router.Certificate{
+				Cert: strings.Join(certs, "\n"),
+			}
+		}
 		r.Sticky = config.Http.StickySessions != nil
 	case *api.Route_Tcp:
 		r.Type = "tcp"

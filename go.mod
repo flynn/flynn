@@ -87,6 +87,7 @@ require (
 	github.com/vanillahsu/go_reuseport v0.0.0-20140603073948-087e013b0a0c
 	github.com/vishvananda/netlink v0.0.0-20170502164845-1e045880fbc2
 	github.com/vishvananda/netns v0.0.0-20170219233438-54f0e4339ce7 // indirect
+	go.starlark.net v0.0.0-20190604130855-6ddc71c0ba77
 	golang.org/x/crypto v0.0.0-20190911031432-227b76d455e7
 	golang.org/x/net v0.0.0-20190918130420-a8b05e9114ab
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
