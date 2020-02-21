@@ -50,3 +50,8 @@ code {
 h4 {
 	margin: 0.5em;
 }
+
+* {
+  outline: none !important;
+  box-shadow: none !important;
+}
