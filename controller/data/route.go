@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -336,21 +335,7 @@ func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) e
 		keyID = key.ID
 	}
 	if keyID == "" {
-		// determine the expected key ID from the public key in the
-		// leaf certificate (that we expect to be contained in the
-		// first PEM block)
-		block, _ := pem.Decode([]byte(cert.Cert))
-		if block == nil {
-			return hh.ValidationErr("certificate", "invalid PEM data")
-		}
-		x509Cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", err))
-		}
-		keyID, err = router.KeyID(x509Cert.PublicKey)
-		if err != nil {
-			return hh.ValidationErr("certificate", err.Error())
-		}
+		keyID = router.CertificateKeyID([]byte(cert.Cert))
 		key, err := scanKey(tx.QueryRow("tls_key_select", keyID))
 		if err != nil {
 			return hh.ValidationErr("certificate", fmt.Sprintf("key not found: %s", keyID))
@@ -957,12 +942,24 @@ func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.R
 
 	// validate the certificate if set
 	cert := route.Certificate
-	if cert != nil && len(cert.Cert) > 0 && len(cert.Key) > 0 {
+	if cert != nil && len(cert.Cert) > 0 {
 		cert.Cert = strings.Trim(cert.Cert, " \n")
-		cert.Key = strings.Trim(cert.Key, " \n")
 
-		if _, err := tls.X509KeyPair([]byte(cert.Cert), []byte(cert.Key)); err != nil {
-			return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", err))
+		// if the certificate has an explicit key, then check that it
+		// matches the certificate, otherwise check that the expected
+		// key ID exists in the database
+		if cert.Key != "" {
+			cert.Key = strings.Trim(cert.Key, " \n")
+
+			if _, err := tls.X509KeyPair([]byte(cert.Cert), []byte(cert.Key)); err != nil {
+				return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", err))
+			}
+		} else {
+			keyID := router.CertificateKeyID([]byte(cert.Cert))
+
+			if _, err := scanKey(r.db.QueryRow("tls_key_select", keyID)); err != nil {
+				return hh.ValidationErr("certificate", fmt.Sprintf("key not found: %s", keyID))
+			}
 		}
 	}
 

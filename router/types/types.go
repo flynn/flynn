@@ -166,6 +166,30 @@ func KeyID(pubKey interface{}) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// CertificateKeyID returns the expected key ID for the public key contained in
+// the given chain's leaf certificate (which is expected to be the first
+// CERTIFICATE PEM block)
+func CertificateKeyID(chainPEM []byte) string {
+	var leafDER []byte
+	for {
+		var block *pem.Block
+		block, chainPEM = pem.Decode(chainPEM)
+		if block == nil {
+			return ""
+		}
+		if block.Type == "CERTIFICATE" {
+			leafDER = block.Bytes
+			break
+		}
+	}
+	cert, err := x509.ParseCertificate(leafDER)
+	if err != nil {
+		return ""
+	}
+	keyID, _ := KeyID(cert.PublicKey)
+	return keyID
+}
+
 func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
 	if key, err := x509.ParsePKCS1PrivateKey(der); err == nil {
 		return key, nil
