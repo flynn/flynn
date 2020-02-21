@@ -116,23 +116,6 @@ message DeleteKeyResponse {
   Key key = 1;
 }
 
-// RouteConfig is used to define routes in route config files.
-message RouteConfig {
-  enum Version {
-    // Unused/invalid default value.
-    VERSION_UNSPECIFIED = 0;
-
-    // VERSION_1 represents route config v1.
-    VERSION_1 = 1;
-  }
-
-  // version is the version of a route config.
-  Version version = 1;
-
-  // app_routes are the app routes that the route config defines.
-  repeated AppRoutes app_routes = 2;
-}
-
 // AppRoutes is a list of desired routes for an app.
 message AppRoutes {
   // app is an identifier for the app.

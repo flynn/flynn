@@ -45,19 +45,15 @@ func Load(in io.Reader) ([]*api.AppRoutes, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error parsing config file: %s", err)
 	}
-	if len(msgs) != 1 {
-		return nil, fmt.Errorf("error parsing config file: expected main to return a single protocol message, got %d", len(msgs))
+	appRoutes := make([]*api.AppRoutes, len(msgs))
+	for i, msg := range msgs {
+		v, ok := msg.(*api.AppRoutes)
+		if !ok {
+			return nil, fmt.Errorf("error parsing config file: expected return value %d to be api.AppRoutes, got %T", i, msg)
+		}
+		appRoutes[i] = v
 	}
-	routeConfig, ok := msgs[0].(*api.RouteConfig)
-	if !ok {
-		return nil, fmt.Errorf("error parsing config file: expected main to return RouteConfig, got %T", msgs[0])
-	}
-	switch routeConfig.Version {
-	case api.RouteConfig_VERSION_1:
-		return routeConfig.AppRoutes, nil
-	default:
-		return nil, fmt.Errorf("error parsing config file: unexpected version %s, only %s is supported", routeConfig.Version, api.RouteConfig_VERSION_1)
-	}
+	return appRoutes, nil
 }
 
 // Generate generates route config based on the given app routes
@@ -109,28 +105,27 @@ var configTemplate = template.Must(template.New("routes.cfg").Parse(`
 # The file uses the Starlark configuration language (https://github.com/bazelbuild/starlark)
 # and is processed using the Skycfg extension library (https://github.com/stripe/skycfg).
 #
-# A 'main' function must be defined that returns a single element list containing an
-# apiv1.RouteConfig protocol message that represents the routes that should exist
-# for a set of apps.
+# A 'main' function must be defined that returns a list of flynn.api.v1.AppRoutes protocol messages
+# that represent the routes that should exist for a set of apps.
 
-apiv1 = proto.package("flynn.api.v1")
+# load the v1 config helpers
+load("flynn.routeconfig.v1", "config")
 
-# routes returns a dict mapping app names to the list of routes that should exist for
-# each app.
-def routes(ctx):
-  return {
+# return the routes
+def main(ctx):
+  return config.app_routes({
     {{ range .AppRoutes -}}
     "{{ .App }}": [
       {{- range .Routes -}}
       {{- if eq .Type "http" }}
-      http_route(
+      config.http_route(
 	domain = "{{ .Domain }}",
 	{{- if not (eq .Path "/") }}
 	path = "{{ .Path }}",
 	{{- end }}
-	target = service("{{ .Service }}"{{ if .Leader }}, leader = True{{ end }}{{ if not .DrainBackends }}, drain_backends = False{{ end }}),
+	target = config.service("{{ .Service }}"{{ if .Leader }}, leader = True{{ end }}{{ if not .DrainBackends }}, drain_backends = False{{ end }}),
 	{{- if .Certificate }}
-	certificate = static_certificate('''
+	certificate = config.static_certificate('''
 {{ .Certificate.Cert }}
 	'''),
 	{{- end }}
@@ -143,9 +138,9 @@ def routes(ctx):
       ),
       {{- end -}}
       {{- if eq .Type "tcp" }}
-      tcp_route(
+      config.tcp_route(
 	port   = {{ .Port }},
-	target = service("{{ .Service }}"{{ if .Leader }}, leader = True{{ end }}{{ if not .DrainBackends }}, drain_backends = False{{ end }}),
+	target = config.service("{{ .Service }}"{{ if .Leader }}, leader = True{{ end }}{{ if not .DrainBackends }}, drain_backends = False{{ end }}),
 	{{- if .DisableKeepAlives }}
 	disable_keep_alives = True,
 	{{- end }}
@@ -154,15 +149,11 @@ def routes(ctx):
       {{- end }}
     ],
     {{- end }}
-  }
+  })
+`[1:]))
 
-def main(ctx):
-  return [
-    apiv1.RouteConfig(
-      version = apiv1.RouteConfig.Version.VERSION_1,
-      app_routes = app_routes(routes(ctx)),
-    ),
-  ]
+const v1Config = `
+apiv1 = proto.package("flynn.api.v1")
 
 def app_routes(v):
   appRoutes = []
@@ -188,7 +179,9 @@ def http_route(domain, target, path = "/", certificate = None, sticky = False, d
   )
 
   if certificate:
-    route.http.tls = apiv1.Route.TLS(certificate)
+    route.http.tls = apiv1.Route.TLS(
+      certificate = certificate,
+    )
 
   if sticky:
     route.http.sticky_sessions = apiv1.Route.HTTP.StickySessions()
@@ -217,7 +210,15 @@ def static_certificate(chainPEM):
   return apiv1.Certificate(
     chain = cert_chain_from_pem(chainPEM),
   )
-`[1:]))
+
+config = struct(
+  app_routes         = app_routes,
+  http_route         = http_route,
+  tcp_route          = tcp_route,
+  service            = service,
+  static_certificate = static_certificate,
+)
+`
 
 func certChainFromPEM(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var chainPEM string
@@ -260,8 +261,12 @@ func (f *fileReader) Resolve(ctx context.Context, name, fromPath string) (string
 }
 
 func (f *fileReader) ReadFile(ctx context.Context, path string) ([]byte, error) {
-	if path == "main" {
+	switch path {
+	case "main":
 		return f.config, nil
+	case "flynn.routeconfig.v1":
+		return []byte(v1Config), nil
+	default:
+		return nil, fmt.Errorf("file not found: %s", path)
 	}
-	return nil, fmt.Errorf("file not found: %s", path)
 }
