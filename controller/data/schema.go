@@ -969,6 +969,7 @@ DROP TRIGGER check_http_route_drain_backends ON tcp_routes;
 DROP TRIGGER set_tcp_route_port ON tcp_routes;
 	`)
 	migrations.AddSteps(51, migrateTLSKeys)
+	migrations.AddSteps(52, migrateCertificateIDs)
 }
 
 func MigrateDB(db *postgres.DB) error {
@@ -1191,5 +1192,76 @@ ALTER TABLE certificates ADD COLUMN key_id text;
 ALTER TABLE certificates ALTER COLUMN key_id SET NOT NULL;
 ALTER TABLE certificates ADD CONSTRAINT key_id_fkey FOREIGN KEY (key_id) REFERENCES tls_keys (id);
 ALTER TABLE certificates DROP COLUMN key;
+	`)
+}
+
+func migrateCertificateIDs(tx *postgres.DBTx) error {
+	// add the a new_id column that will become the primary key
+	if err := tx.Exec(`
+ALTER TABLE certificates ADD COLUMN new_id text;
+	`); err != nil {
+		return err
+	}
+
+	// load existing certificates
+	type cert struct {
+		id   string
+		cert string
+	}
+	rows, err := tx.Query("SELECT id, cert FROM certificates")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var certs []*cert
+	for rows.Next() {
+		var c cert
+		if err := rows.Scan(
+			&c.id,
+			&c.cert,
+		); err != nil {
+			return err
+		}
+		certs = append(certs, &c)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// insert the new_id
+	for _, cert := range certs {
+		certID := router.CertificateID([]byte(cert.cert))
+		if certID == "" {
+			// if we can't parse the certificate, the router won't be able
+			// to use it, so we may as well delete it
+			tx.Exec("DELETE FROM route_certificates WHERE certificate_id = $1", cert.id)
+			tx.Exec("DELETE FROM certificates WHERE id = $1", cert.id)
+			continue
+		}
+		if err := tx.Exec(
+			"UPDATE certificates SET new_id = $1 WHERE id = $2",
+			certID, cert.id,
+		); err != nil {
+			return err
+		}
+	}
+
+	// make new_id the primary key
+	return tx.Exec(`
+-- we must indicate that new_id is unique before updating the route_certificates foreign key
+CREATE UNIQUE INDEX certificates_new_id ON certificates (new_id);
+
+-- update the route_certificates foreign key
+ALTER TABLE route_certificates DROP CONSTRAINT route_certificates_certificate_id_fkey;
+ALTER TABLE route_certificates ALTER COLUMN certificate_id TYPE text;
+UPDATE route_certificates AS r SET certificate_id = c.new_id FROM certificates AS c WHERE c.id::text = r.certificate_id;
+ALTER TABLE route_certificates ADD CONSTRAINT route_certificates_certificate_id_fkey FOREIGN KEY (certificate_id) REFERENCES certificates (new_id);
+
+-- now make new_id the primary key
+ALTER TABLE certificates DROP CONSTRAINT certificates_pkey;
+ALTER TABLE certificates ADD PRIMARY KEY (new_id);
+ALTER TABLE certificates DROP COLUMN id;
+ALTER TABLE certificates DROP COLUMN cert_sha256;
+ALTER TABLE certificates RENAME COLUMN new_id TO id;
 	`)
 }

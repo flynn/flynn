@@ -325,6 +325,8 @@ func (r *RouteRepo) addTCP(tx *postgres.DBTx, route *router.Route) error {
 }
 
 func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) error {
+	cert.ID = router.CertificateID([]byte(cert.Cert))
+
 	var keyID string
 	if cert.Key != "" {
 		key, err := r.addKey(tx, []byte(cert.Key))
@@ -359,13 +361,12 @@ func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) e
 		}
 		cert.Key = keyPEM.String()
 	}
-	tlsCertSHA256 := sha256.Sum256([]byte(cert.Cert))
 	if err := tx.QueryRow(
 		"certificate_insert",
+		cert.ID,
 		cert.Cert,
 		keyID,
-		tlsCertSHA256[:],
-	).Scan(&cert.ID, &cert.CreatedAt, &cert.UpdatedAt); err != nil {
+	).Scan(&cert.CreatedAt, &cert.UpdatedAt); err != nil {
 		return err
 	}
 	for _, rid := range cert.Routes {
@@ -1203,15 +1204,17 @@ func ToRouterRoute(appID string, route *api.Route) *router.Route {
 		r.Path = config.Http.Path
 		if tls := config.Http.Tls; tls != nil && tls.Certificate != nil {
 			chain := tls.Certificate.Chain
-			certs := make([]string, len(chain))
+			certsPEM := make([][]byte, len(chain))
 			for i, certDER := range chain {
-				certs[i] = string(pem.EncodeToMemory(&pem.Block{
+				certsPEM[i] = pem.EncodeToMemory(&pem.Block{
 					Type:  "CERTIFICATE",
 					Bytes: certDER,
-				}))
+				})
 			}
+			chainPEM := bytes.Join(certsPEM, []byte("\n"))
 			r.Certificate = &router.Certificate{
-				Cert: strings.Join(certs, "\n"),
+				ID:   router.CertificateID(chainPEM),
+				Cert: string(chainPEM),
 			}
 		}
 		r.Sticky = config.Http.StickySessions != nil

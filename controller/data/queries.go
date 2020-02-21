@@ -690,10 +690,10 @@ RETURNING id, parent_ref, service, port, leader, drain_backends, created_at, upd
 UPDATE tcp_routes SET deleted_at = now()
 WHERE id = $1`
 	certificateInsertQuery = `
-INSERT INTO certificates (cert, key_id, cert_sha256)
+INSERT INTO certificates (id, cert, key_id)
 VALUES ($1, $2, $3)
-ON CONFLICT (cert_sha256) WHERE deleted_at IS NULL DO UPDATE SET cert_sha256 = $3
-RETURNING id, created_at, updated_at`
+ON CONFLICT (id) WHERE deleted_at IS NULL DO UPDATE SET cert = $2
+RETURNING created_at, updated_at`
 	routeCertificateDeleteByRouteIDQuery = `
 DELETE FROM route_certificates
 WHERE http_route_id = $1`

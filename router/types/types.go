@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -30,6 +31,25 @@ type Certificate struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt is the time this cert was last updated.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+}
+
+func CertificateID(pemData []byte) string {
+	var chain [][]byte
+	for {
+		var block *pem.Block
+		block, pemData = pem.Decode(pemData)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			chain = append(chain, block.Bytes)
+		}
+	}
+	if len(chain) == 0 {
+		return ""
+	}
+	digest := sha256.Sum256(bytes.Join(chain, []byte{}))
+	return hex.EncodeToString(digest[:])
 }
 
 // KeyAlgorithm is the algorithm used by a TLS key
