@@ -970,6 +970,29 @@ DROP TRIGGER set_tcp_route_port ON tcp_routes;
 	`)
 	migrations.AddSteps(51, migrateTLSKeys)
 	migrations.AddSteps(52, migrateTLSCertificates)
+	migrations.Add(53, `
+ALTER TABLE certificates RENAME TO static_certificates;
+
+CREATE TABLE managed_certificate_statuses (
+  name text PRIMARY KEY
+);
+INSERT INTO managed_certificate_statuses (name) VALUES ('pending'), ('issued'), ('failed');
+
+CREATE TABLE managed_certificates (
+  domain         text        PRIMARY KEY NOT NULL,
+  certificate_id bytea       REFERENCES static_certificates (id),
+  status         text        NOT NULL REFERENCES managed_certificate_statuses (name),
+  errors         jsonb       NOT NULL DEFAULT '[]'::jsonb,
+  order_url      text        NOT NULL DEFAULT '',
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  deleted_at     timestamptz
+);
+
+ALTER TABLE http_routes ADD COLUMN managed_certificate_domain text REFERENCES managed_certificates (domain);
+
+INSERT INTO event_types (name) VALUES ('managed_certificate');
+	`)
 }
 
 func MigrateDB(db *postgres.DB) error {

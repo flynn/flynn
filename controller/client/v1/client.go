@@ -959,6 +959,34 @@ func (c *Client) StreamSinks(since *time.Time, output chan *ct.Sink) (stream.Str
 	return c.Stream("GET", "/sinks?since="+t, nil, output)
 }
 
+func (c *Client) StreamManagedCertificates(output chan *ct.ManagedCertificate) (stream.Stream, error) {
+	events := make(chan *ct.Event)
+	go convertEvents(events, output)
+	opts := ct.StreamEventsOptions{
+		ObjectTypes: []ct.EventType{ct.EventTypeManagedCertificate},
+	}
+	return c.StreamEvents(opts, events)
+}
+
+func (c *Client) UpdateManagedCertificate(managedCert *ct.ManagedCertificate) error {
+	// create the certificate key if set
+	if cert := managedCert.Certificate; cert != nil && len(cert.Key) > 0 {
+		req := api.CreateKeyRequest{
+			PrivateKey: cert.Key,
+		}
+		var res api.CreateKeyResponse
+		if err := c.Invoke("flynn.api.v1.Router/CreateKey", &req, &res); err != nil {
+			return err
+		}
+	}
+	// update the managed certificate
+	req := api.UpdateManagedCertificateRequest{
+		Certificate: api.NewManagedCertificate(managedCert),
+	}
+	var res api.UpdateManagedCertificateResponse
+	return c.Invoke("flynn.api.v1.Router/UpdateManagedCertificate", &req, &res)
+}
+
 // Invoke invokes the given gRPC method using the grpc-web protocol.
 //
 // See https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md

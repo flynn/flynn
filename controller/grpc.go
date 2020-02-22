@@ -1050,3 +1050,13 @@ func (g *grpcAPI) DeleteKey(ctx context.Context, req *api.DeleteKeyRequest) (*ap
 		Key: api.NewKey(key),
 	}, nil
 }
+
+func (g *grpcAPI) UpdateManagedCertificate(ctx context.Context, req *api.UpdateManagedCertificateRequest) (*api.UpdateManagedCertificateResponse, error) {
+	managedCert := req.Certificate.ControllerType()
+	if err := g.routeRepo.UpdateManagedCertificate(managedCert); err != nil {
+		return nil, err
+	}
+	return &api.UpdateManagedCertificateResponse{
+		Certificate: api.NewManagedCertificate(managedCert),
+	}, nil
+}

@@ -770,9 +770,25 @@ func NewRoute(from *router.Route) *Route {
 			Domain: from.Domain,
 			Path:   from.Path,
 		}}
-		if from.Certificate != nil {
+		if domain := from.ManagedCertificateDomain; domain != nil {
+			managedCert := &ManagedCertificate{Domain: *domain}
+			if from.Certificate != nil {
+				managedCert.Certificate = NewStaticCertificate(from.Certificate)
+			}
 			r.Config.(*Route_Http).Http.Tls = &Route_TLS{
-				Certificate: NewCertificate(from.Certificate),
+				Certificate: &Certificate{
+					Certificate: &Certificate_Managed{
+						Managed: managedCert,
+					},
+				},
+			}
+		} else if from.Certificate != nil {
+			r.Config.(*Route_Http).Http.Tls = &Route_TLS{
+				Certificate: &Certificate{
+					Certificate: &Certificate_Static{
+						Static: NewStaticCertificate(from.Certificate),
+					},
+				},
 			}
 		}
 		if from.Sticky {
@@ -810,8 +826,18 @@ func (r *Route) RouterType() *router.Route {
 		route.Domain = config.Http.Domain
 		route.Path = config.Http.Path
 		if tls := config.Http.Tls; tls != nil && tls.Certificate != nil {
-			route.Certificate = &router.Certificate{
-				Chain: tls.Certificate.Chain,
+			switch v := tls.Certificate.Certificate.(type) {
+			case *Certificate_Static:
+				route.Certificate = &router.Certificate{
+					Chain: v.Static.Chain,
+				}
+			case *Certificate_Managed:
+				route.ManagedCertificateDomain = &v.Managed.Domain
+				if v.Managed.Certificate != nil {
+					route.Certificate = &router.Certificate{
+						Chain: v.Managed.Certificate.Chain,
+					}
+				}
 			}
 		}
 		route.Sticky = config.Http.StickySessions != nil
@@ -855,25 +881,25 @@ var (
 	ocspMustStapleValue    = []byte{0x30, 0x03, 0x02, 0x01, 0x05}
 )
 
-func NewCertificate(from *router.Certificate) (cert *Certificate) {
-	cert = &Certificate{
+func NewStaticCertificate(from *router.Certificate) (cert *StaticCertificate) {
+	cert = &StaticCertificate{
 		Chain:      from.Chain,
 		NoStrict:   from.NoStrict,
-		Status:     Certificate_STATUS_VALID,
+		Status:     StaticCertificate_STATUS_VALID,
 		CreateTime: NewTimestamp(&from.CreatedAt),
 	}
 
 	// load the certificate chain
 	chain, err := x509.ParseCertificates(bytes.Join(cert.Chain, []byte{}))
 	if err != nil {
-		cert.Status = Certificate_STATUS_INVALID
+		cert.Status = StaticCertificate_STATUS_INVALID
 		cert.StatusDetail = err.Error()
 		return
 	}
 
 	// load the leaf certificate
 	if len(chain) == 0 {
-		cert.Status = Certificate_STATUS_INVALID
+		cert.Status = StaticCertificate_STATUS_INVALID
 		cert.StatusDetail = "missing leaf certificate"
 		return
 	}
@@ -904,7 +930,7 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 	// determine the key algorithm
 	keyAlgo, err := router.KeyAlgorithm(leafCert.PublicKey)
 	if err != nil {
-		cert.Status = Certificate_STATUS_INVALID
+		cert.Status = StaticCertificate_STATUS_INVALID
 		cert.StatusDetail = err.Error()
 		return
 	}
@@ -920,7 +946,7 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 	// set the Domains from SAN values
 	cert.Domains = leafCert.DNSNames
 	if len(cert.Domains) == 0 {
-		cert.Status = Certificate_STATUS_INVALID
+		cert.Status = StaticCertificate_STATUS_INVALID
 		cert.StatusDetail = "missing Subject Alternative Name"
 		return
 	}
@@ -934,7 +960,7 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 		}
 	}
 	if !hasServerAuth {
-		cert.Status = Certificate_STATUS_INVALID
+		cert.Status = StaticCertificate_STATUS_INVALID
 		cert.StatusDetail = "leaf certificate must have the serverAuth EKU"
 		return
 	}
@@ -957,7 +983,7 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 		}
 	}
 	if !supportedSigAlgo(leafCert) {
-		cert.Status = Certificate_STATUS_INVALID
+		cert.Status = StaticCertificate_STATUS_INVALID
 		cert.StatusDetail = fmt.Sprintf("leaf certificate uses unsupported signature algorithm %s", leafCert.SignatureAlgorithm)
 		return
 	}
@@ -966,7 +992,7 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 			child := chain[i]
 			parent := chain[i+1]
 			if !bytes.Equal(child.RawIssuer, parent.RawSubject) {
-				cert.Status = Certificate_STATUS_INVALID
+				cert.Status = StaticCertificate_STATUS_INVALID
 				cert.StatusDetail = fmt.Sprintf(
 					"the issuer of chain certificate %d (%q) does not match the subject of chain certificate %d (%q)",
 					i, child.Issuer, i+1, parent.Subject,
@@ -974,7 +1000,7 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 				return
 			}
 			if !parent.IsCA {
-				cert.Status = Certificate_STATUS_INVALID
+				cert.Status = StaticCertificate_STATUS_INVALID
 				cert.StatusDetail = fmt.Sprintf(
 					"chain certificate %d (%q) does not have the CA attribute set",
 					i+1, parent.Subject,
@@ -990,13 +1016,13 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 					}
 				}
 				if !hasServerAuth {
-					cert.Status = Certificate_STATUS_INVALID
+					cert.Status = StaticCertificate_STATUS_INVALID
 					cert.StatusDetail = fmt.Sprintf("chain certificate %d (%q) must have either the serverAuth or anyExtendedKeyUsage EKU", i+1, parent.Subject)
 					return
 				}
 			}
 			if !supportedSigAlgo(parent) {
-				cert.Status = Certificate_STATUS_INVALID
+				cert.Status = StaticCertificate_STATUS_INVALID
 				cert.StatusDetail = fmt.Sprintf("chain certificate %d (%q) uses unsupported signature algorithm %s", i+1, parent.Subject, parent.SignatureAlgorithm)
 				return
 			}
@@ -1005,12 +1031,68 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 
 	// check for expired or not yet valid status
 	if leafCert.NotAfter.Before(time.Now()) {
-		cert.Status = Certificate_STATUS_EXPIRED
+		cert.Status = StaticCertificate_STATUS_EXPIRED
 		cert.StatusDetail = fmt.Sprintf("certificate expired on %s", leafCert.NotAfter)
 	} else if leafCert.NotBefore.After(time.Now()) {
-		cert.Status = Certificate_STATUS_FUTURE_NOT_BEFORE
+		cert.Status = StaticCertificate_STATUS_FUTURE_NOT_BEFORE
 		cert.StatusDetail = fmt.Sprintf("certificate is not valid until %s", leafCert.NotBefore)
 	}
 
 	return
+}
+
+func NewManagedCertificate(from *ct.ManagedCertificate) *ManagedCertificate {
+	cert := &ManagedCertificate{
+		Domain: from.Domain,
+	}
+	switch from.Status {
+	case ct.ManagedCertificateStatusPending:
+		cert.Status = ManagedCertificate_STATUS_PENDING
+	case ct.ManagedCertificateStatusIssued:
+		cert.Status = ManagedCertificate_STATUS_ISSUED
+	case ct.ManagedCertificateStatusFailed:
+		cert.Status = ManagedCertificate_STATUS_FAILED
+	}
+	if len(from.Errors) > 0 {
+		cert.Errors = make([]*ManagedCertificate_Error, len(from.Errors))
+		for i, err := range from.Errors {
+			cert.Errors[i] = &ManagedCertificate_Error{
+				Type:   err.Type,
+				Detail: err.Detail,
+			}
+		}
+	}
+	if from.Certificate != nil {
+		cert.Certificate = NewStaticCertificate(from.Certificate)
+	}
+	return cert
+}
+
+func (c *ManagedCertificate) ControllerType() *ct.ManagedCertificate {
+	cert := &ct.ManagedCertificate{
+		Domain: c.Domain,
+	}
+	switch c.Status {
+	case ManagedCertificate_STATUS_PENDING:
+		cert.Status = ct.ManagedCertificateStatusPending
+	case ManagedCertificate_STATUS_ISSUED:
+		cert.Status = ct.ManagedCertificateStatusIssued
+	case ManagedCertificate_STATUS_FAILED:
+		cert.Status = ct.ManagedCertificateStatusFailed
+	}
+	if len(c.Errors) > 0 {
+		cert.Errors = make([]*ct.ManagedCertificateError, len(c.Errors))
+		for i, err := range c.Errors {
+			cert.Errors[i] = &ct.ManagedCertificateError{
+				Type:   err.Type,
+				Detail: err.Detail,
+			}
+		}
+	}
+	if c.Certificate != nil {
+		cert.Certificate = &router.Certificate{
+			Chain: c.Certificate.Chain,
+		}
+	}
+	return cert
 }

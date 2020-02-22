@@ -36,6 +36,9 @@ service Router {
   // method is idempotent and will not return an error if the specified key has
   // already been deleted.
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse) {}
+
+  // Updates a managed certificate.
+  rpc UpdateManagedCertificate(UpdateManagedCertificateRequest) returns (UpdateManagedCertificateResponse) {}
 }
 
 // SetRoutesRequest is a request to set a list of app routes.
@@ -129,6 +132,18 @@ message DeleteKeyRequest {
 message DeleteKeyResponse {
   // The TLS key that was deleted.
   Key key = 1;
+}
+
+// A request to update a managed certificate.
+message UpdateManagedCertificateRequest {
+  // The managed certificate to update.
+  ManagedCertificate certificate = 1;
+}
+
+// A response containing a managed certificate that was updated.
+message UpdateManagedCertificateResponse {
+  // The managed certificate that was updated.
+  ManagedCertificate certificate = 1;
 }
 
 // AppRoutes is a list of desired routes for an app.
@@ -280,8 +295,16 @@ message Key {
   google.protobuf.Timestamp create_time = 4;
 }
 
-// An existing TLS certificate.
 message Certificate {
+  oneof certificate {
+    ManagedCertificate managed = 1;
+
+    StaticCertificate static = 2;
+  }
+}
+
+// An existing TLS certificate.
+message StaticCertificate {
   // The status of the certificate.
   enum Status {
     // Unused/invalid default value.
@@ -363,4 +386,50 @@ message Certificate {
 
   // The timestamp when this certificate was created.
   google.protobuf.Timestamp create_time = 14;
+}
+
+// An automatically provisioned TLS certificate.
+message ManagedCertificate {
+  // The issuance status of the managed certificate.
+  enum Status {
+    // Unused/invalid default value.
+    STATUS_UNSPECIFIED = 0;
+
+    // The initial state of a managed certificate, pending validation or
+    // issuance, can transition to ISSUED or FAILED.
+    STATUS_PENDING = 1;
+
+    // The certificate has been successfully validated and issued.
+    STATUS_ISSUED = 2;
+
+    // Certificate issuance failed. Check errors for details.
+    STATUS_FAILED = 3;
+  }
+
+  // An error encountered during certificate issuance.
+  message Error {
+    // The error type, usually one specified by ACME.
+    string type = 1;
+
+    // Human-readable error details.
+    string detail = 2;
+  }
+
+  // The domain included in this certificate as a Subject Alternative Name.
+  string domain = 1;
+
+  // The certificate issuance status. The initial value is PENDING.
+  Status status = 2;
+
+  // Errors encountered during issuance, if any. This will only be populated if
+  // the status is FAILED.
+  repeated Error errors = 3;
+
+  // The current certificate details. This will not be set until the certificate
+  // is issued.
+  StaticCertificate certificate = 4;
+
+  // The timestamp of the last modification of this resource. It is modified
+  // each time at least one field is changed.
+  google.protobuf.Timestamp update_time = 5;
 }

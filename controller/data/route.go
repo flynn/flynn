@@ -310,6 +310,11 @@ func (r *RouteRepo) addTx(tx *postgres.DBTx, route *router.Route) error {
 }
 
 func (r *RouteRepo) addHTTP(tx *postgres.DBTx, route *router.Route) error {
+	if domain := route.ManagedCertificateDomain; domain != nil {
+		if err := r.addManagedCert(tx, *domain); err != nil {
+			return err
+		}
+	}
 	if err := tx.QueryRow(
 		"http_route_insert",
 		route.ParentRef,
@@ -321,6 +326,7 @@ func (r *RouteRepo) addHTTP(tx *postgres.DBTx, route *router.Route) error {
 		route.Sticky,
 		route.Path,
 		route.DisableKeepAlives,
+		route.ManagedCertificateDomain,
 	).Scan(&route.ID, &route.Path, &route.CreatedAt, &route.UpdatedAt); err != nil {
 		return err
 	}
@@ -385,6 +391,78 @@ func (r *RouteRepo) addRouteCertWithTx(tx *postgres.DBTx, route *router.Route) e
 		return err
 	}
 	return nil
+}
+
+func scanManagedCertificate(s postgres.Scanner) (*ct.ManagedCertificate, error) {
+	var (
+		managedCert         ct.ManagedCertificate
+		status              string
+		staticCertID        *string
+		staticCertRoutes    *string
+		staticCertChain     [][]byte
+		staticCertKey       []byte
+		staticCertStrict    *bool
+		staticCertCreatedAt *time.Time
+		staticCertUpdatedAt *time.Time
+	)
+	if err := s.Scan(
+		&managedCert.Domain,
+		&managedCert.OrderURL,
+		&status,
+		&managedCert.Errors,
+		&staticCertID,
+		&staticCertRoutes,
+		&staticCertChain,
+		&staticCertKey,
+		&staticCertStrict,
+		&staticCertCreatedAt,
+		&staticCertUpdatedAt,
+		&managedCert.CreatedAt,
+		&managedCert.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	managedCert.Status = ct.ManagedCertificateStatus(status)
+	if staticCertID != nil {
+		managedCert.Certificate = &router.Certificate{
+			Chain:     staticCertChain,
+			Key:       staticCertKey,
+			Routes:    splitPGStringArray(*staticCertRoutes),
+			NoStrict:  !*staticCertStrict,
+			CreatedAt: *staticCertCreatedAt,
+			UpdatedAt: *staticCertUpdatedAt,
+		}
+	}
+	return &managedCert, nil
+}
+
+func (r *RouteRepo) addManagedCert(tx *postgres.DBTx, domain string) error {
+	// explicitly check if the managed certificate already exists rather than
+	// using an UPSERT query to avoid duplicate events
+	_, err := scanManagedCertificate(tx.QueryRow("managed_certificate_select", domain))
+	if err == nil {
+		return nil
+	} else if err != pgx.ErrNoRows {
+		return err
+	}
+	managedCert := &ct.ManagedCertificate{
+		Domain: domain,
+		Status: ct.ManagedCertificateStatusPending,
+	}
+	if err := tx.QueryRow(
+		"managed_certificate_insert",
+		managedCert.Domain,
+		string(managedCert.Status),
+	).Scan(
+		&managedCert.CreatedAt,
+		&managedCert.UpdatedAt,
+	); err != nil {
+		return err
+	}
+	return CreateEvent(tx.Exec, &ct.Event{
+		ObjectID:   managedCert.Domain,
+		ObjectType: ct.EventTypeManagedCertificate,
+	}, managedCert)
 }
 
 func (r *RouteRepo) addKey(tx dbOrTx, keyDER []byte) (*router.Key, error) {
@@ -564,6 +642,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 		&route.Sticky,
 		&route.Path,
 		&route.DisableKeepAlives,
+		&route.ManagedCertificateDomain,
 		&route.CreatedAt,
 		&route.UpdatedAt,
 		&certID,
@@ -730,6 +809,11 @@ func (r *RouteRepo) updateTx(tx *postgres.DBTx, route *router.Route) error {
 }
 
 func (r *RouteRepo) updateHTTP(tx *postgres.DBTx, route *router.Route) error {
+	if domain := route.ManagedCertificateDomain; domain != nil {
+		if err := r.addManagedCert(tx, *domain); err != nil {
+			return err
+		}
+	}
 	if err := tx.QueryRow(
 		"http_route_update",
 		route.ParentRef,
@@ -740,6 +824,7 @@ func (r *RouteRepo) updateHTTP(tx *postgres.DBTx, route *router.Route) error {
 		route.Path,
 		route.DrainBackends,
 		route.DisableKeepAlives,
+		route.ManagedCertificateDomain,
 		route.ID,
 		route.Domain,
 	).Scan(
@@ -753,6 +838,7 @@ func (r *RouteRepo) updateHTTP(tx *postgres.DBTx, route *router.Route) error {
 		&route.Sticky,
 		&route.Path,
 		&route.DisableKeepAlives,
+		&route.ManagedCertificateDomain,
 		&route.CreatedAt,
 		&route.UpdatedAt,
 	); err != nil {
@@ -822,6 +908,75 @@ func (r *RouteRepo) deleteTx(tx *postgres.DBTx, route *router.Route) error {
 		return err
 	}
 	return r.createEvent(tx, route, ct.EventTypeRouteDeletion)
+}
+
+func (r *RouteRepo) UpdateManagedCertificate(cert *ct.ManagedCertificate) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	var staticCertID *[]byte
+	if cert.Certificate != nil {
+		if err := r.addCertWithTx(tx, cert.Certificate); err != nil {
+			tx.Rollback()
+			return err
+		}
+		id := cert.Certificate.ID().Bytes()
+		staticCertID = &id
+	}
+	if err := tx.QueryRow(
+		"managed_certificate_update",
+		staticCertID,
+		cert.Status,
+		cert.Errors,
+		cert.Domain,
+	).Scan(&cert.CreatedAt, &cert.UpdatedAt); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if staticCertID != nil {
+		rows, err := tx.Query("http_route_list_by_managed_cert_domain", cert.Domain)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		defer rows.Close()
+		var routes []*router.Route
+		for rows.Next() {
+			route, err := scanHTTPRoute(rows)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+			routes = append(routes, route)
+		}
+		if err := rows.Err(); err != nil {
+			tx.Rollback()
+			return err
+		}
+		for _, route := range routes {
+			route.Certificate = cert.Certificate
+			if err := r.updateTx(tx, route); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+	}
+	hash := md5.New()
+	io.WriteString(hash, cert.Domain)
+	io.WriteString(hash, string(cert.Status))
+	io.WriteString(hash, cert.CreatedAt.String())
+	io.WriteString(hash, cert.UpdatedAt.String())
+	uniqueID := fmt.Sprintf("%x", hash.Sum(nil))
+	if err := CreateEvent(tx.Exec, &ct.Event{
+		ObjectID:   cert.Domain,
+		ObjectType: ct.EventTypeManagedCertificate,
+		UniqueID:   uniqueID,
+	}, cert); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *RouteRepo) createEvent(tx *postgres.DBTx, route *router.Route, typ ct.EventType) error {
@@ -992,6 +1147,14 @@ func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.R
 		route.Certificate = cert
 	}
 
+	// check the managed certificate domain matches the route's domain
+	if domain := route.ManagedCertificateDomain; domain != nil {
+		// TODO: support wildcards
+		if *domain != route.Domain {
+			return hh.ValidationErr("managed_certificate", fmt.Sprintf("domain %q does not match the route's domain %q", *domain, route.Domain))
+		}
+	}
+
 	// validate the certificate if set
 	cert := route.Certificate
 	if cert != nil && len(cert.Chain) > 0 {
@@ -1017,9 +1180,9 @@ func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.R
 			}
 		}
 
-		apiCert := api.NewCertificate(cert)
-		if apiCert.Status == api.Certificate_STATUS_INVALID && !cert.NoStrict {
-			return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", apiCert.StatusDetail))
+		staticCert := api.NewStaticCertificate(cert)
+		if staticCert.Status == api.StaticCertificate_STATUS_INVALID && !cert.NoStrict {
+			return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", staticCert.StatusDetail))
 		}
 	}
 
@@ -1138,12 +1301,26 @@ func routesEqualForUpdate(existing *router.Route, desired *api.Route) bool {
 	// check HTTP routes for a change in certificate or stickiness
 	if config, ok := desired.Config.(*api.Route_Http); ok {
 		if config.Http.Tls == nil {
-			if existing.Certificate != nil {
+			// TODO: test removing a certificate from a route
+			if existing.Certificate != nil || existing.ManagedCertificateDomain != nil {
 				return false
 			}
 		} else {
-			if !certificatesEqual(existing.Certificate, config.Http.Tls.Certificate) {
-				return false
+			switch v := config.Http.Tls.Certificate.Certificate.(type) {
+			case *api.Certificate_Managed:
+				if existing.ManagedCertificateDomain == nil {
+					return false
+				}
+				if *existing.ManagedCertificateDomain != v.Managed.Domain {
+					return false
+				}
+			case *api.Certificate_Static:
+				if existing.ManagedCertificateDomain != nil {
+					return false
+				}
+				if !certificatesEqual(existing.Certificate, v.Static) {
+					return false
+				}
 			}
 		}
 		if existing.Sticky == (config.Http.StickySessions == nil) {
@@ -1158,7 +1335,7 @@ func routesEqualForUpdate(existing *router.Route, desired *api.Route) bool {
 		existing.DisableKeepAlives == desired.DisableKeepAlives
 }
 
-func certificatesEqual(existing *router.Certificate, desired *api.Certificate) bool {
+func certificatesEqual(existing *router.Certificate, desired *api.StaticCertificate) bool {
 	if existing == nil {
 		return desired == nil
 	}

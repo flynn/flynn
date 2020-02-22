@@ -506,6 +506,7 @@ const (
 	EventTypeSink                    EventType = "sink"
 	EventTypeSinkDeletion            EventType = "sink_deletion"
 	EventTypeVolume                  EventType = "volume"
+	EventTypeManagedCertificate      EventType = "managed_certificate"
 
 	// EventTypeDeprecatedScale is a deprecated event which is emitted for
 	// old clients waiting for formations to be scaled (new clients should
@@ -790,4 +791,34 @@ type LabelFilterExpression struct {
 	Op     LabelFilterExpressionOp `json:"op"`
 	Key    string                  `json:"key"`
 	Values []string                `json:"values"`
+}
+
+type ManagedCertificateStatus string
+
+const (
+	ManagedCertificateStatusPending ManagedCertificateStatus = "pending"
+	ManagedCertificateStatusIssued  ManagedCertificateStatus = "issued"
+	ManagedCertificateStatusFailed  ManagedCertificateStatus = "failed"
+)
+
+type ManagedCertificate struct {
+	Domain      string                     `json:"domain,omitempty"`
+	OrderURL    string                     `json:"order_url,omitempty"`
+	Status      ManagedCertificateStatus   `json:"status,omitempty"`
+	Errors      []*ManagedCertificateError `json:"errors,omitempty"`
+	Certificate *router.Certificate        `json:"certificate,omitempty"`
+	CreatedAt   *time.Time                 `json:"created_at,omitempty"`
+	UpdatedAt   *time.Time                 `json:"updated_at,omitempty"`
+}
+
+func (c *ManagedCertificate) AddError(typ, detail string) {
+	c.Errors = append(c.Errors, &ManagedCertificateError{
+		Type:   typ,
+		Detail: detail,
+	})
+}
+
+type ManagedCertificateError struct {
+	Type   string `json:"type"`
+	Detail string `json:"detail"`
 }

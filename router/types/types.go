@@ -413,6 +413,10 @@ type Route struct {
 	// Certificate contains TLSCert and TLSKey
 	Certificate *Certificate `json:"certificate,omitempty"`
 
+	// ManagedCertificateDomain is the domain of the route's associated
+	// managed certificate
+	ManagedCertificateDomain *string `json:"managed_certificate_domain,omitempty"`
+
 	// Deprecated in favor of Certificate
 	LegacyTLSCert string `json:"tls_cert,omitempty"`
 	LegacyTLSKey  string `json:"tls_key,omitempty"`

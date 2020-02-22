@@ -102,6 +102,8 @@ type Client interface {
 	DeleteSink(sinkID string) (*ct.Sink, error)
 	ListSinks() ([]*ct.Sink, error)
 	StreamSinks(since *time.Time, output chan *ct.Sink) (stream.Stream, error)
+	StreamManagedCertificates(output chan *ct.ManagedCertificate) (stream.Stream, error)
+	UpdateManagedCertificate(managedCert *ct.ManagedCertificate) error
 	Invoke(method string, in, out proto.Message) error
 }
 
