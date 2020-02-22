@@ -10,7 +10,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 	log "github.com/inconshreveable/log15"
 )
 
@@ -81,8 +81,8 @@ func maybeRedactBody(req *http.Request, buf *bytes.Buffer) {
 		if route.Type != "http" {
 			return
 		}
-		if route.Certificate != nil && route.Certificate.Key != "" {
-			route.Certificate.Key = redactedPlaceholder
+		if route.Certificate != nil && route.Certificate.Key != nil {
+			route.Certificate.SetRedactJSONKey(redactedPlaceholder)
 		}
 		if route.LegacyTLSKey != "" {
 			route.LegacyTLSKey = redactedPlaceholder

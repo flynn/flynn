@@ -7,7 +7,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/tlscert"
-	"github.com/flynn/flynn/router/types"
+	router "github.com/flynn/flynn/router/types"
 )
 
 type AddRouteAction struct {
@@ -45,8 +45,8 @@ func (a *AddRouteAction) Run(s *State) error {
 				return err
 			}
 			route.Certificate = &router.Certificate{
-				Cert: cert.Cert,
-				Key:  cert.PrivateKey,
+				Chain: cert.Chain(),
+				Key:   cert.PrivateKeyDER(),
 			}
 		}
 		a.Route = route.ToRoute()

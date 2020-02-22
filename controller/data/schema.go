@@ -969,7 +969,7 @@ DROP TRIGGER check_http_route_drain_backends ON tcp_routes;
 DROP TRIGGER set_tcp_route_port ON tcp_routes;
 	`)
 	migrations.AddSteps(51, migrateTLSKeys)
-	migrations.AddSteps(52, migrateCertificateIDs)
+	migrations.AddSteps(52, migrateTLSCertificates)
 }
 
 func MigrateDB(db *postgres.DB) error {
@@ -1168,7 +1168,7 @@ ALTER TABLE certificates ADD COLUMN key_id text;
 
 	// populate tls_keys table
 	for _, cert := range certs {
-		key, err := router.NewKey([]byte(cert.key))
+		key, err := router.NewKeyFromPEM([]byte(cert.key))
 		if err != nil {
 			// if we can't parse the key, the router won't be able
 			// to use it, so we may as well delete it
@@ -1195,10 +1195,12 @@ ALTER TABLE certificates DROP COLUMN key;
 	`)
 }
 
-func migrateCertificateIDs(tx *postgres.DBTx) error {
-	// add the a new_id column that will become the primary key
+// migrateTLSCertificates converts the id column to be a digest of the
+// certificate chain and stores the chain as a DER-encoded byte array
+func migrateTLSCertificates(tx *postgres.DBTx) error {
 	if err := tx.Exec(`
 ALTER TABLE certificates ADD COLUMN new_id text;
+ALTER TABLE certificates ADD COLUMN chain bytea[];
 	`); err != nil {
 		return err
 	}
@@ -1228,25 +1230,25 @@ ALTER TABLE certificates ADD COLUMN new_id text;
 		return err
 	}
 
-	// insert the new_id
-	for _, cert := range certs {
-		certID := router.CertificateID([]byte(cert.cert))
-		if certID == "" {
+	// populate new_id and chain
+	for _, c := range certs {
+		cert, err := router.NewCertificateFromPEM([]byte(c.cert))
+		if err != nil {
 			// if we can't parse the certificate, the router won't be able
 			// to use it, so we may as well delete it
-			tx.Exec("DELETE FROM route_certificates WHERE certificate_id = $1", cert.id)
-			tx.Exec("DELETE FROM certificates WHERE id = $1", cert.id)
+			tx.Exec("DELETE FROM route_certificates WHERE certificate_id = $1", c.id)
+			tx.Exec("DELETE FROM certificates WHERE id = $1", c.id)
 			continue
 		}
 		if err := tx.Exec(
-			"UPDATE certificates SET new_id = $1 WHERE id = $2",
-			certID, cert.id,
+			"UPDATE certificates SET new_id = $1, chain = $2 WHERE id = $3",
+			cert.ID, cert.Chain, c.id,
 		); err != nil {
 			return err
 		}
 	}
 
-	// make new_id the primary key
+	// make new_id the primary key and drop the cert column
 	return tx.Exec(`
 -- we must indicate that new_id is unique before updating the route_certificates foreign key
 CREATE UNIQUE INDEX certificates_new_id ON certificates (new_id);
@@ -1263,5 +1265,8 @@ ALTER TABLE certificates ADD PRIMARY KEY (new_id);
 ALTER TABLE certificates DROP COLUMN id;
 ALTER TABLE certificates DROP COLUMN cert_sha256;
 ALTER TABLE certificates RENAME COLUMN new_id TO id;
+
+-- drop the cert column
+ALTER TABLE certificates DROP COLUMN cert;
 	`)
 }

@@ -333,11 +333,15 @@ func (m *migration) appMaybeCreateRoute(appID string, oldRoute *router.Route, ro
 		Service:       oldRoute.Service,
 		DrainBackends: oldRoute.DrainBackends,
 	}
-	if oldRoute.Certificate != nil && oldRoute.Certificate.Cert == strings.TrimSpace(m.dm.OldTLSCert.Cert) {
-		route.Certificate = &router.Certificate{
-			Cert: m.dm.TLSCert.Cert,
-			Key:  m.dm.TLSCert.PrivateKey,
+	if oldRoute.Certificate != nil && oldRoute.Certificate.ChainPEM() == strings.TrimSpace(m.dm.OldTLSCert.Cert) {
+		cert, err := router.NewCertificateFromKeyPair(
+			[]byte(m.dm.TLSCert.Cert),
+			[]byte(m.dm.TLSCert.PrivateKey),
+		)
+		if err != nil {
+			return err
 		}
+		route.Certificate = cert
 	} else {
 		route.Certificate = oldRoute.Certificate
 	}

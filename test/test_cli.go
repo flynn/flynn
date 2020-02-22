@@ -556,8 +556,8 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Domain, c.Equals, "example.com")
 	t.Assert(r.Certificate, c.NotNil)
-	t.Assert(r.Certificate.Cert, c.Equals, strings.Trim(cert.Cert, "\n"))
-	t.Assert(r.Certificate.Key, c.Equals, strings.Trim(cert.PrivateKey, "\n"))
+	t.Assert(r.Certificate.ChainPEM(), c.Equals, strings.Trim(cert.Cert, "\n"))
+	t.Assert(r.Certificate.KeyPEM(), c.Equals, strings.Trim(cert.PrivateKey, "\n"))
 
 	// flynn route update tls cert
 	cert, err = tlscert.Generate([]string{"example.com"})
@@ -572,8 +572,8 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Domain, c.Equals, "example.com")
 	t.Assert(r.Certificate, c.NotNil)
-	t.Assert(r.Certificate.Cert, c.Equals, strings.Trim(cert.Cert, "\n"))
-	t.Assert(r.Certificate.Key, c.Equals, strings.Trim(cert.PrivateKey, "\n"))
+	t.Assert(r.Certificate.ChainPEM(), c.Equals, strings.Trim(cert.Cert, "\n"))
+	t.Assert(r.Certificate.KeyPEM(), c.Equals, strings.Trim(cert.PrivateKey, "\n"))
 
 	// flynn route remove
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)

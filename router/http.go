@@ -209,8 +209,8 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	r := &httpRoute{HTTPRoute: route}
 	cert := r.Certificate
 
-	if cert != nil && cert.Cert != "" && cert.Key != "" {
-		kp, err := tls.X509KeyPair([]byte(cert.Cert), []byte(cert.Key))
+	if cert != nil && cert.Chain != nil && cert.Key != nil {
+		kp, err := tls.X509KeyPair([]byte(cert.ChainPEM()), []byte(cert.KeyPEM()))
 		if err != nil {
 			return err
 		}

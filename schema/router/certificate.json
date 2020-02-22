@@ -11,9 +11,9 @@
     "id": {
       "$ref": "/schema/common#/definitions/id"
     },
-    "cert": {
+    "chain": {
       "type": "string",
-      "description": "TLS public certificate."
+      "description": "TLS certificate chain."
     },
     "key": {
       "type": "string",
@@ -31,6 +31,10 @@
     },
     "updated_at": {
       "$ref": "/schema/common#/definitions/updated_at"
+    },
+    "cert": {
+      "type": "string",
+      "description": "Deprecated in favor of chain."
     }
   }
 }

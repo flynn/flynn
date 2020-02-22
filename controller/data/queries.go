@@ -634,7 +634,7 @@ RETURNING created_at, updated_at`
 	volumeDecommissionQuery = `
 UPDATE volumes SET updated_at = now(), decommissioned_at = now() WHERE app_id = $1 AND volume_id = $2 RETURNING updated_at, decommissioned_at`
 	httpRouteListQuery = `
-SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.disable_keep_alives, r.created_at, r.updated_at, c.id, ARRAY(SELECT http_route_id FROM route_certificates WHERE certificate_id = c.id), c.cert, k.key, c.created_at, c.updated_at FROM http_routes as r
+SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.disable_keep_alives, r.created_at, r.updated_at, c.id, ARRAY(SELECT http_route_id FROM route_certificates WHERE certificate_id = c.id), c.chain, k.key, c.created_at, c.updated_at FROM http_routes as r
 LEFT OUTER JOIN route_certificates AS rc on r.id = rc.http_route_id
 LEFT OUTER JOIN certificates AS c ON c.id = rc.certificate_id
 LEFT OUTER JOIN tls_keys AS k ON k.id = c.key_id
@@ -642,7 +642,7 @@ WHERE r.deleted_at IS NULL
 ORDER BY r.domain, r.path`
 	httpRouteListForUpdateQuery   = httpRouteListQuery + " FOR UPDATE OF r"
 	httpRouteListByParentRefQuery = `
-SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.disable_keep_alives, r.created_at, r.updated_at, c.id, ARRAY(SELECT http_route_id FROM route_certificates WHERE certificate_id = c.id), c.cert, k.key, c.created_at, c.updated_at FROM http_routes as r
+SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.disable_keep_alives, r.created_at, r.updated_at, c.id, ARRAY(SELECT http_route_id FROM route_certificates WHERE certificate_id = c.id), c.chain, k.key, c.created_at, c.updated_at FROM http_routes as r
 LEFT OUTER JOIN route_certificates AS rc on r.id = rc.http_route_id
 LEFT OUTER JOIN certificates AS c ON c.id = rc.certificate_id
 LEFT OUTER JOIN tls_keys AS k ON k.id = c.key_id
@@ -654,7 +654,7 @@ INSERT INTO http_routes (parent_ref, service, port, leader, drain_backends, doma
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING id, path, created_at, updated_at`
 	httpRouteSelectQuery = `
-SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.disable_keep_alives, r.created_at, r.updated_at, c.id, ARRAY(SELECT http_route_id FROM route_certificates WHERE certificate_id = c.id), c.cert, k.key, c.created_at, c.updated_at FROM http_routes as r
+SELECT r.id, r.parent_ref, r.service, r.port, r.leader, r.drain_backends, r.domain, r.sticky, r.path, r.disable_keep_alives, r.created_at, r.updated_at, c.id, ARRAY(SELECT http_route_id FROM route_certificates WHERE certificate_id = c.id), c.chain, k.key, c.created_at, c.updated_at FROM http_routes as r
 LEFT OUTER JOIN route_certificates AS rc on r.id = rc.http_route_id
 LEFT OUTER JOIN certificates AS c ON c.id = rc.certificate_id
 LEFT OUTER JOIN tls_keys AS k ON k.id = c.key_id
@@ -690,9 +690,9 @@ RETURNING id, parent_ref, service, port, leader, drain_backends, created_at, upd
 UPDATE tcp_routes SET deleted_at = now()
 WHERE id = $1`
 	certificateInsertQuery = `
-INSERT INTO certificates (id, cert, key_id)
+INSERT INTO certificates (id, chain, key_id)
 VALUES ($1, $2, $3)
-ON CONFLICT (id) WHERE deleted_at IS NULL DO UPDATE SET cert = $2
+ON CONFLICT (id) WHERE deleted_at IS NULL DO UPDATE SET chain = $2
 RETURNING created_at, updated_at`
 	routeCertificateDeleteByRouteIDQuery = `
 DELETE FROM route_certificates

@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/tls"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -324,32 +323,26 @@ func (r *RouteRepo) addTCP(tx *postgres.DBTx, route *router.Route) error {
 }
 
 func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) error {
-	cert.ID = router.CertificateID([]byte(cert.Cert))
-
 	var keyID string
-	if cert.Key != "" {
-		key, err := r.addKey(tx, []byte(cert.Key))
+	if len(cert.Key) > 0 {
+		key, err := r.addKey(tx, cert.Key)
 		if err != nil {
 			return err
 		}
 		keyID = key.ID
 	}
 	if keyID == "" {
-		keyID = router.CertificateKeyID([]byte(cert.Cert))
+		keyID = cert.KeyID()
 		key, err := scanKey(tx.QueryRow("tls_key_select", keyID))
 		if err != nil {
 			return hh.ValidationErr("certificate", fmt.Sprintf("key not found: %s", keyID))
 		}
-		var keyPEM bytes.Buffer
-		if err := pem.Encode(&keyPEM, &pem.Block{Type: "PRIVATE KEY", Bytes: key.Key}); err != nil {
-			return err
-		}
-		cert.Key = keyPEM.String()
+		cert.Key = key.Key
 	}
 	if err := tx.QueryRow(
 		"certificate_insert",
-		cert.ID,
-		cert.Cert,
+		cert.ID(),
+		cert.Chain,
 		keyID,
 	).Scan(&cert.CreatedAt, &cert.UpdatedAt); err != nil {
 		return err
@@ -358,7 +351,7 @@ func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) e
 		if err := tx.Exec("route_certificate_delete_by_route_id", rid); err != nil {
 			return err
 		}
-		if err := tx.Exec("route_certificate_insert", rid, cert.ID); err != nil {
+		if err := tx.Exec("route_certificate_insert", rid, cert.ID()); err != nil {
 			return err
 		}
 	}
@@ -367,7 +360,7 @@ func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) e
 
 func (r *RouteRepo) addRouteCertWithTx(tx *postgres.DBTx, route *router.Route) error {
 	cert := route.Certificate
-	if cert == nil || (len(cert.Cert) == 0 && len(cert.Key) == 0) {
+	if cert == nil || (len(cert.Chain) == 0 && len(cert.Key) == 0) {
 		return nil
 	}
 	cert.Routes = []string{route.ID}
@@ -377,8 +370,8 @@ func (r *RouteRepo) addRouteCertWithTx(tx *postgres.DBTx, route *router.Route) e
 	return nil
 }
 
-func (r *RouteRepo) addKey(tx dbOrTx, keyPEM []byte) (*router.Key, error) {
-	key, err := router.NewKey(bytes.Trim(keyPEM, " \n"))
+func (r *RouteRepo) addKey(tx dbOrTx, keyDER []byte) (*router.Key, error) {
+	key, err := router.NewKey(keyDER)
 	if err != nil {
 		return nil, err
 	}
@@ -394,11 +387,7 @@ func (r *RouteRepo) addKey(tx dbOrTx, keyPEM []byte) (*router.Key, error) {
 }
 
 func (r *RouteRepo) AddKey(keyDER []byte) (*router.Key, error) {
-	var keyPEM bytes.Buffer
-	if err := pem.Encode(&keyPEM, &pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}); err != nil {
-		return nil, err
-	}
-	return r.addKey(r.db, keyPEM.Bytes())
+	return r.addKey(r.db, keyDER)
 }
 
 func (r *RouteRepo) ListKeys() ([]*router.Key, error) {
@@ -507,7 +496,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 		route         router.Route
 		certID        *string
 		certRoutes    *string
-		certCert      *string
+		certChain     [][]byte
 		certKey       []byte
 		certCreatedAt *time.Time
 		certUpdatedAt *time.Time
@@ -527,7 +516,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 		&route.UpdatedAt,
 		&certID,
 		&certRoutes,
-		&certCert,
+		&certChain,
 		&certKey,
 		&certCreatedAt,
 		&certUpdatedAt,
@@ -536,14 +525,9 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 	}
 	route.Type = "http"
 	if certID != nil {
-		var keyPEM bytes.Buffer
-		if err := pem.Encode(&keyPEM, &pem.Block{Type: "PRIVATE KEY", Bytes: certKey}); err != nil {
-			return nil, err
-		}
 		route.Certificate = &router.Certificate{
-			ID:        *certID,
-			Cert:      *certCert,
-			Key:       keyPEM.String(),
+			Chain:     certChain,
+			Key:       certKey,
 			Routes:    splitPGStringArray(*certRoutes),
 			CreatedAt: *certCreatedAt,
 			UpdatedAt: *certUpdatedAt,
@@ -934,29 +918,28 @@ func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.R
 		if route.Certificate != nil {
 			return hh.ValidationErr("certificate", "cannot be set along with the deprecated tls_cert and tls_key")
 		}
-		route.Certificate = &router.Certificate{
-			Cert: route.LegacyTLSCert,
-			Key:  route.LegacyTLSKey,
+		cert, err := router.NewCertificateFromKeyPair(
+			[]byte(route.LegacyTLSCert),
+			[]byte(route.LegacyTLSKey),
+		)
+		if err != nil {
+			return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", err))
 		}
+		route.Certificate = cert
 	}
 
 	// validate the certificate if set
 	cert := route.Certificate
-	if cert != nil && len(cert.Cert) > 0 {
-		cert.Cert = strings.Trim(cert.Cert, " \n")
-
+	if cert != nil && len(cert.Chain) > 0 {
 		// if the certificate has an explicit key, then check that it
 		// matches the certificate, otherwise check that the expected
 		// key ID exists in the database
-		if cert.Key != "" {
-			cert.Key = strings.Trim(cert.Key, " \n")
-
-			if _, err := tls.X509KeyPair([]byte(cert.Cert), []byte(cert.Key)); err != nil {
+		if cert.Key != nil {
+			if _, err := tls.X509KeyPair([]byte(cert.ChainPEM()), []byte(cert.KeyPEM())); err != nil {
 				return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", err))
 			}
 		} else {
-			keyID := router.CertificateKeyID([]byte(cert.Cert))
-
+			keyID := cert.KeyID()
 			if _, err := scanKey(r.db.QueryRow("tls_key_select", keyID)); err != nil {
 				return hh.ValidationErr("certificate", fmt.Sprintf("key not found: %s", keyID))
 			}
@@ -1106,24 +1089,11 @@ func certificatesEqual(existing *router.Certificate, desired *api.Certificate) b
 		return existing == nil
 	}
 
-	pemData := []byte(existing.Cert)
-	var existingChain [][]byte
-	for {
-		var block *pem.Block
-		block, pemData = pem.Decode(pemData)
-		if block == nil {
-			break
-		}
-		if block.Type == "CERTIFICATE" {
-			existingChain = append(existingChain, block.Bytes)
-		}
-	}
-
-	if len(desired.Chain) != len(existingChain) {
+	if len(desired.Chain) != len(existing.Chain) {
 		return false
 	}
 	for i, desiredCert := range desired.Chain {
-		if !bytes.Equal(desiredCert, existingChain[i]) {
+		if !bytes.Equal(desiredCert, existing.Chain[i]) {
 			return false
 		}
 	}
@@ -1153,21 +1123,9 @@ func ToAPIRoute(route *router.Route) *api.Route {
 			Path:   route.Path,
 		}}
 		if route.Certificate != nil {
-			pemData := []byte(route.Certificate.Cert)
-			var chain [][]byte
-			for {
-				var block *pem.Block
-				block, pemData = pem.Decode(pemData)
-				if block == nil {
-					break
-				}
-				if block.Type == "CERTIFICATE" {
-					chain = append(chain, block.Bytes)
-				}
-			}
 			tls := &api.Route_TLS{
 				Certificate: &api.Certificate{
-					Chain: chain,
+					Chain: route.Certificate.Chain,
 				},
 			}
 			r.Config.(*api.Route_Http).Http.Tls = tls
@@ -1200,18 +1158,8 @@ func ToRouterRoute(appID string, route *api.Route) *router.Route {
 		r.Domain = config.Http.Domain
 		r.Path = config.Http.Path
 		if tls := config.Http.Tls; tls != nil && tls.Certificate != nil {
-			chain := tls.Certificate.Chain
-			certsPEM := make([][]byte, len(chain))
-			for i, certDER := range chain {
-				certsPEM[i] = pem.EncodeToMemory(&pem.Block{
-					Type:  "CERTIFICATE",
-					Bytes: certDER,
-				})
-			}
-			chainPEM := bytes.Join(certsPEM, []byte("\n"))
 			r.Certificate = &router.Certificate{
-				ID:   router.CertificateID(chainPEM),
-				Cert: string(chainPEM),
+				Chain: tls.Certificate.Chain,
 			}
 		}
 		r.Sticky = config.Http.StickySessions != nil

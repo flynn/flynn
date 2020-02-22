@@ -126,7 +126,7 @@ def main(ctx):
 	target = config.service("{{ .Service }}"{{ if .Leader }}, leader = True{{ end }}{{ if not .DrainBackends }}, drain_backends = False{{ end }}),
 	{{- if .Certificate }}
 	certificate = config.static_certificate('''
-{{ .Certificate.Cert }}
+{{ .Certificate.ChainPEM }}
 	'''),
 	{{- end }}
 	{{- if .Sticky }}

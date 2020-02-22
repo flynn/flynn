@@ -19,37 +19,175 @@ import (
 
 // Certificate describes a TLS certificate for one or more routes
 type Certificate struct {
-	// ID is the unique ID of this Certificate
-	ID string `json:"id,omitempty"`
 	// Routes contains the IDs of routes assigned to this cert
-	Routes []string `json:"routes,omitempty"`
-	// TLSCert is the optional TLS public certificate. It is only used for HTTP routes.
-	Cert string `json:"cert,omitempty"`
-	// TLSCert is the optional TLS private key. It is only used for HTTP routes.
-	Key string `json:"key,omitempty"`
+	Routes []string
+	// Chain is the DER-encoded TLS certificate chain.
+	Chain [][]byte
+	// Key is the DER-encoded TLS private key.
+	Key []byte
 	// CreatedAt is the time this cert was created.
-	CreatedAt time.Time `json:"created_at,omitempty"`
+	CreatedAt time.Time
 	// UpdatedAt is the time this cert was last updated.
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	UpdatedAt time.Time
+
+	// redactJSONKey when set will appear as the "key" field when the
+	// certificate is encoded as JSON
+	redactJSONKey string
 }
 
-func CertificateID(pemData []byte) string {
-	var chain [][]byte
+// ID returns the unique ID of this Certificate
+func (c *Certificate) ID() string {
+	digest := sha256.Sum256(bytes.Join(c.Chain, []byte{}))
+	return hex.EncodeToString(digest[:])
+}
+
+func (c *Certificate) SetRedactJSONKey(s string) {
+	c.redactJSONKey = s
+}
+
+type certificateJSON struct {
+	ID             string    `json:"id,omitempty"`
+	Routes         []string  `json:"routes,omitempty"`
+	Chain          string    `json:"chain,omitempty"`
+	Key            string    `json:"key,omitempty"`
+	CreatedAt      time.Time `json:"created_at,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at,omitempty"`
+	DeprecatedCert string    `json:"cert,omitempty"`
+}
+
+func (c *Certificate) MarshalJSON() ([]byte, error) {
+	key := c.redactJSONKey
+	if key == "" {
+		key = c.KeyPEM()
+	}
+	return json.Marshal(&certificateJSON{
+		ID:             c.ID(),
+		Routes:         c.Routes,
+		Chain:          c.ChainPEM(),
+		DeprecatedCert: c.ChainPEM(),
+		Key:            key,
+		CreatedAt:      c.CreatedAt,
+		UpdatedAt:      c.UpdatedAt,
+	})
+}
+
+func (c *Certificate) UnmarshalJSON(data []byte) error {
+	var cert certificateJSON
+	if err := json.Unmarshal(data, &cert); err != nil {
+		return err
+	}
+	if cert.Chain == "" && cert.DeprecatedCert != "" {
+		cert.Chain = cert.DeprecatedCert
+	}
+	chainPEM := []byte(cert.Chain)
+	var chainDER [][]byte
 	for {
 		var block *pem.Block
-		block, pemData = pem.Decode(pemData)
+		block, chainPEM = pem.Decode(chainPEM)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			chainDER = append(chainDER, block.Bytes)
+		}
+	}
+	keyPEM := []byte(cert.Key)
+	var keyDER []byte
+	for {
+		var block *pem.Block
+		block, keyPEM = pem.Decode(keyPEM)
+		if block == nil {
+			break
+		}
+		if block.Type == "PRIVATE KEY" || strings.HasSuffix(block.Type, " PRIVATE KEY") {
+			keyDER = block.Bytes
+			break
+		}
+	}
+	*c = Certificate{
+		Routes:    cert.Routes,
+		Chain:     chainDER,
+		Key:       keyDER,
+		CreatedAt: cert.CreatedAt,
+		UpdatedAt: cert.UpdatedAt,
+	}
+	return nil
+}
+
+func NewCertificateFromKeyPair(chainPEM, keyPEM []byte) (*Certificate, error) {
+	cert, err := NewCertificateFromPEM(chainPEM)
+	if err != nil {
+		return nil, err
+	}
+	key, err := NewKeyFromPEM(keyPEM)
+	if err != nil {
+		return nil, err
+	}
+	cert.Key = key.Key
+	return cert, nil
+}
+
+func NewCertificateFromPEM(chainPEM []byte) (*Certificate, error) {
+	var (
+		chain   [][]byte
+		skipped []string
+	)
+	for {
+		var block *pem.Block
+		block, chainPEM = pem.Decode(chainPEM)
 		if block == nil {
 			break
 		}
 		if block.Type == "CERTIFICATE" {
 			chain = append(chain, block.Bytes)
+			continue
 		}
+		skipped = append(skipped, block.Type)
 	}
 	if len(chain) == 0 {
+		if len(skipped) > 0 {
+			return nil, fmt.Errorf("missing CERTIFICATE block in PEM input, got %s", strings.Join(skipped, ", "))
+		}
+		return nil, errors.New("invalid PEM data")
+	}
+	return &Certificate{Chain: chain}, nil
+}
+
+// KeyID returns the expected key ID for the certificate's public key
+func (c *Certificate) KeyID() string {
+	if len(c.Chain) == 0 {
 		return ""
 	}
-	digest := sha256.Sum256(bytes.Join(chain, []byte{}))
-	return hex.EncodeToString(digest[:])
+	cert, err := x509.ParseCertificate(c.Chain[0])
+	if err != nil {
+		return ""
+	}
+	keyID, _ := KeyID(cert.PublicKey)
+	return keyID
+}
+
+func (c *Certificate) ChainPEM() string {
+	if len(c.Chain) == 0 {
+		return ""
+	}
+	chain := make([]string, len(c.Chain))
+	for i, cert := range c.Chain {
+		chain[i] = string(pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: cert,
+		}))
+	}
+	return strings.Join(chain, "\n")
+}
+
+func (c *Certificate) KeyPEM() string {
+	if len(c.Key) == 0 {
+		return ""
+	}
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: c.Key,
+	}))
 }
 
 // KeyAlgorithm is the algorithm used by a TLS key
@@ -66,46 +204,49 @@ const (
 	KeyAlgorithm_RSA_4096 KeyAlgorithm = "rsa-4096"
 )
 
-// NewKey parses the private key contained in the given PEM-encoded data.
-//
-// The data is expected to contain a DER-encoded PKCS#1 (RSA), PKCS#8 (RSA/ECC),
-// or SEC1 (ECC) private key, and the key must use either the RSA 2048 bit, RSA
-// 4096 bit or ECC P256 key algorithm.
-//
-// The returned key's ID is a hex encoded sha256 digest of the PKIX encoded
-// public key.
-func NewKey(pemData []byte) (*Key, error) {
-	// decode the PEM block
+// NewKeyFromPEM returns the key contained in the given PEM-encoded data.
+func NewKeyFromPEM(keyPEM []byte) (*Key, error) {
 	var (
-		keyData []byte
+		keyDER  []byte
 		skipped []string
 	)
 	for {
 		var block *pem.Block
-		block, pemData = pem.Decode(pemData)
+		block, keyPEM = pem.Decode(keyPEM)
 		if block == nil {
 			break
 		}
 		if block.Type == "PRIVATE KEY" || strings.HasSuffix(block.Type, " PRIVATE KEY") {
-			keyData = block.Bytes
+			keyDER = block.Bytes
 			break
 		}
 		skipped = append(skipped, block.Type)
 	}
-	if keyData == nil {
+	if keyDER == nil {
 		if len(skipped) > 0 {
 			return nil, fmt.Errorf("missing PRIVATE KEY block in PEM input, got %s", strings.Join(skipped, ", "))
 		}
 		return nil, errors.New("invalid PEM data")
 	}
+	return NewKey(keyDER)
+}
 
-	// parse the private key from the contained DER data
-	privKey, err := parsePrivateKey(keyData)
+// NewKey parses the private key contained in the given DER-encoded data.
+//
+// The data is expected to contain a PKCS#1 (RSA), PKCS#8 (RSA/ECC), or SEC1
+// (ECC) private key, and the key must use either the RSA 2048 bit, RSA 4096
+// bit or ECC P256 key algorithm.
+//
+// The returned key's ID is a hex encoded sha256 digest of the PKIX encoded
+// public key.
+func NewKey(keyDER []byte) (*Key, error) {
+	// parse the private key from the DER-encoded data
+	privKey, err := parsePrivateKey(keyDER)
 	if err != nil {
 		return nil, err
 	}
 
-	// determine the key ID and type
+	// determine the key ID and algorithm
 	var (
 		keyID   string
 		keyAlgo KeyAlgorithm
@@ -139,14 +280,14 @@ func NewKey(pemData []byte) (*Key, error) {
 			return nil, fmt.Errorf("unsupported ECDSA curve: %v", k.Curve)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported key type %T, expected RSA or ECC", privKey)
+		return nil, fmt.Errorf("unsupported key algorithm %T, expected RSA or ECC", privKey)
 	}
 
 	// return the Key
 	return &Key{
 		ID:        keyID,
 		Algorithm: keyAlgo,
-		Key:       keyData,
+		Key:       keyDER,
 	}, nil
 }
 
@@ -164,30 +305,6 @@ func KeyID(pubKey interface{}) (string, error) {
 	}
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:]), nil
-}
-
-// CertificateKeyID returns the expected key ID for the public key contained in
-// the given chain's leaf certificate (which is expected to be the first
-// CERTIFICATE PEM block)
-func CertificateKeyID(chainPEM []byte) string {
-	var leafDER []byte
-	for {
-		var block *pem.Block
-		block, chainPEM = pem.Decode(chainPEM)
-		if block == nil {
-			return ""
-		}
-		if block.Type == "CERTIFICATE" {
-			leafDER = block.Bytes
-			break
-		}
-	}
-	cert, err := x509.ParseCertificate(leafDER)
-	if err != nil {
-		return ""
-	}
-	keyID, _ := KeyID(cert.PublicKey)
-	return keyID
 }
 
 func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {

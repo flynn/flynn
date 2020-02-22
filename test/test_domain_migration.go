@@ -112,7 +112,7 @@ func (s *DomainMigrationSuite) migrateDomain(t *c.C, client controller.Client, d
 	}
 	t.Assert(route, c.Not(c.IsNil))
 	t.Assert(route.Domain, c.Equals, fmt.Sprintf("controller.%s", dm.Domain))
-	t.Assert(route.Certificate.Cert, c.Equals, strings.TrimSuffix(cert.Cert, "\n"))
+	t.Assert(route.Certificate.ChainPEM(), c.Equals, strings.TrimSuffix(cert.Cert, "\n"))
 
 	var doPing func(string, int)
 	doPing = func(component string, retriesRemaining int) {

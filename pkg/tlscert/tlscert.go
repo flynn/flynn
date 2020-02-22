@@ -1,6 +1,7 @@
 package tlscert
 
 import (
+	"encoding/pem"
 	"fmt"
 
 	"github.com/flynn/flynn/pkg/certgen"
@@ -12,6 +13,27 @@ type Cert struct {
 	Pin    string `json:"pin"`
 
 	PrivateKey string `json:"key"`
+}
+
+func (c *Cert) Chain() [][]byte {
+	chainPEM := []byte(c.Cert + "\n" + c.CACert)
+	var chain [][]byte
+	for {
+		var block *pem.Block
+		block, chainPEM = pem.Decode(chainPEM)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			chain = append(chain, block.Bytes)
+		}
+	}
+	return chain
+}
+
+func (c *Cert) PrivateKeyDER() []byte {
+	block, _ := pem.Decode([]byte(c.PrivateKey))
+	return block.Bytes
 }
 
 func (c *Cert) String() string {

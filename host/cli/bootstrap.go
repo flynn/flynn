@@ -961,8 +961,8 @@ WARN:
 		for _, r := range routes {
 			if r.Domain == fmt.Sprintf("controller.%s", data.Controller.Release.Env["DEFAULT_ROUTE_DOMAIN"]) {
 				state.StepData["controller-cert"] = &tlscert.Cert{
-					Cert:       r.Certificate.Cert,
-					PrivateKey: r.Certificate.Key,
+					Cert:       r.Certificate.ChainPEM(),
+					PrivateKey: r.Certificate.KeyPEM(),
 				}
 				break
 			}
