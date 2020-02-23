@@ -25,6 +25,9 @@ type Certificate struct {
 	Chain [][]byte
 	// Key is the DER-encoded TLS private key.
 	Key []byte
+	// NoStrict is whether to skip performing strict checks on the
+	// certificate
+	NoStrict bool
 	// CreatedAt is the time this cert was created.
 	CreatedAt time.Time
 	// UpdatedAt is the time this cert was last updated.
@@ -190,18 +193,18 @@ func (c *Certificate) KeyPEM() string {
 	}))
 }
 
-// KeyAlgorithm is the algorithm used by a TLS key
-type KeyAlgorithm string
+// KeyAlgo is the algorithm used by a TLS key
+type KeyAlgo string
 
 const (
-	// KeyAlgorithm_ECC_P256 represents the NIST ECC P-256 curve
-	KeyAlgorithm_ECC_P256 KeyAlgorithm = "ecc-p256"
+	// KeyAlgo_ECC_P256 represents the NIST ECC P-256 curve
+	KeyAlgo_ECC_P256 KeyAlgo = "ecc-p256"
 
-	// KeyAlgorithm_RSA_2048 represents RSA with 2048-bit keys
-	KeyAlgorithm_RSA_2048 KeyAlgorithm = "rsa-2048"
+	// KeyAlgo_RSA_2048 represents RSA with 2048-bit keys
+	KeyAlgo_RSA_2048 KeyAlgo = "rsa-2048"
 
-	// KeyAlgorithm_RSA_4096 represents RSA with 4096-bit keys
-	KeyAlgorithm_RSA_4096 KeyAlgorithm = "rsa-4096"
+	// KeyAlgo_RSA_4096 represents RSA with 4096-bit keys
+	KeyAlgo_RSA_4096 KeyAlgo = "rsa-4096"
 )
 
 // NewKeyFromPEM returns the key contained in the given PEM-encoded data.
@@ -249,7 +252,7 @@ func NewKey(keyDER []byte) (*Key, error) {
 	// determine the key ID and algorithm
 	var (
 		keyID   string
-		keyAlgo KeyAlgorithm
+		keyAlgo KeyAlgo
 	)
 	switch k := privKey.(type) {
 	case *rsa.PrivateKey:
@@ -258,14 +261,9 @@ func NewKey(keyDER []byte) (*Key, error) {
 		if err != nil {
 			return nil, err
 		}
-		size := k.N.BitLen()
-		switch size {
-		case 2048:
-			keyAlgo = KeyAlgorithm_RSA_2048
-		case 4096:
-			keyAlgo = KeyAlgorithm_RSA_4096
-		default:
-			return nil, fmt.Errorf("unsupported RSA key size: %d", size)
+		keyAlgo, err = KeyAlgorithm(&k.PublicKey)
+		if err != nil {
+			return nil, err
 		}
 	case *ecdsa.PrivateKey:
 		var err error
@@ -273,14 +271,12 @@ func NewKey(keyDER []byte) (*Key, error) {
 		if err != nil {
 			return nil, err
 		}
-		switch k.Curve {
-		case elliptic.P256():
-			keyAlgo = KeyAlgorithm_ECC_P256
-		default:
-			return nil, fmt.Errorf("unsupported ECDSA curve: %v", k.Curve)
+		keyAlgo, err = KeyAlgorithm(&k.PublicKey)
+		if err != nil {
+			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("unsupported key algorithm %T, expected RSA or ECC", privKey)
+		return nil, fmt.Errorf("unsupported key %T, expected RSA or ECC", privKey)
 	}
 
 	// return the Key
@@ -291,7 +287,7 @@ func NewKey(keyDER []byte) (*Key, error) {
 	}, nil
 }
 
-// KeyID return a hex encoded sha256 digest of the PKIX encoding of the given
+// KeyID returns a hex encoded sha256 digest of the PKIX encoding of the given
 // public key
 func KeyID(pubKey interface{}) (string, error) {
 	switch pubKey.(type) {
@@ -305,6 +301,32 @@ func KeyID(pubKey interface{}) (string, error) {
 	}
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:]), nil
+}
+
+// KeyAlgorithm returns the key algorithm of the given public key
+func KeyAlgorithm(pubKey interface{}) (keyAlgo KeyAlgo, err error) {
+	switch k := pubKey.(type) {
+	case *rsa.PublicKey:
+		size := k.N.BitLen()
+		switch size {
+		case 2048:
+			keyAlgo = KeyAlgo_RSA_2048
+		case 4096:
+			keyAlgo = KeyAlgo_RSA_4096
+		default:
+			err = fmt.Errorf("unsupported RSA key size: %d", size)
+		}
+	case *ecdsa.PublicKey:
+		switch k.Curve {
+		case elliptic.P256():
+			keyAlgo = KeyAlgo_ECC_P256
+		default:
+			err = fmt.Errorf("unsupported ECDSA curve: %v", k.Curve)
+		}
+	default:
+		err = fmt.Errorf("unsupported key %T, expected RSA or ECC", pubKey)
+	}
+	return
 }
 
 func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
@@ -330,7 +352,7 @@ type Key struct {
 	ID string `json:"id,omitempty"`
 
 	// Algorithm is the key algorithm used by this key
-	Algorithm KeyAlgorithm `json:"algorithm,omitempty"`
+	Algorithm KeyAlgo `json:"algorithm,omitempty"`
 
 	// Certificates contains the IDs of certificates using this key
 	Certificates []string `json:"certificates,omitempty"`

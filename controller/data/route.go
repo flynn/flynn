@@ -344,6 +344,7 @@ func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) e
 		cert.ID(),
 		cert.Chain,
 		keyID,
+		!cert.NoStrict,
 	).Scan(&cert.CreatedAt, &cert.UpdatedAt); err != nil {
 		return err
 	}
@@ -425,7 +426,7 @@ func scanKey(s postgres.Scanner) (*router.Key, error) {
 	); err != nil {
 		return nil, err
 	}
-	key.Algorithm = router.KeyAlgorithm(algo)
+	key.Algorithm = router.KeyAlgo(algo)
 	key.Certificates = splitPGStringArray(certs)
 	return &key, nil
 }
@@ -498,6 +499,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 		certRoutes    *string
 		certChain     [][]byte
 		certKey       []byte
+		certStrict    *bool
 		certCreatedAt *time.Time
 		certUpdatedAt *time.Time
 	)
@@ -518,6 +520,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 		&certRoutes,
 		&certChain,
 		&certKey,
+		&certStrict,
 		&certCreatedAt,
 		&certUpdatedAt,
 	); err != nil {
@@ -529,6 +532,7 @@ func scanHTTPRoute(s postgres.Scanner) (*router.Route, error) {
 			Chain:     certChain,
 			Key:       certKey,
 			Routes:    splitPGStringArray(*certRoutes),
+			NoStrict:  !*certStrict,
 			CreatedAt: *certCreatedAt,
 			UpdatedAt: *certUpdatedAt,
 		}
@@ -936,13 +940,19 @@ func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.R
 		// key ID exists in the database
 		if cert.Key != nil {
 			if _, err := tls.X509KeyPair([]byte(cert.ChainPEM()), []byte(cert.KeyPEM())); err != nil {
-				return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", err))
+				msg := fmt.Sprintf("is invalid: %s", strings.TrimPrefix(err.Error(), "tls: "))
+				return hh.ValidationErr("certificate", msg)
 			}
 		} else {
 			keyID := cert.KeyID()
 			if _, err := scanKey(r.db.QueryRow("tls_key_select", keyID)); err != nil {
 				return hh.ValidationErr("certificate", fmt.Sprintf("key not found: %s", keyID))
 			}
+		}
+
+		apiCert := api.NewCertificate(cert)
+		if apiCert.Status == api.Certificate_STATUS_INVALID && !cert.NoStrict {
+			return hh.ValidationErr("certificate", fmt.Sprintf("is invalid: %s", apiCert.StatusDetail))
 		}
 	}
 
@@ -1123,12 +1133,9 @@ func ToAPIRoute(route *router.Route) *api.Route {
 			Path:   route.Path,
 		}}
 		if route.Certificate != nil {
-			tls := &api.Route_TLS{
-				Certificate: &api.Certificate{
-					Chain: route.Certificate.Chain,
-				},
+			r.Config.(*api.Route_Http).Http.Tls = &api.Route_TLS{
+				Certificate: api.NewCertificate(route.Certificate),
 			}
-			r.Config.(*api.Route_Http).Http.Tls = tls
 		}
 		if route.Sticky {
 			r.Config.(*api.Route_Http).Http.StickySessions = &api.Route_HTTP_StickySessions{}

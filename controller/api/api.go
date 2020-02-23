@@ -1,7 +1,11 @@
 package api
 
 import (
+	"bytes"
 	context "context"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/asn1"
 	fmt "fmt"
 	"os"
 	"path"
@@ -753,12 +757,123 @@ func NewKey(from *router.Key) *Key {
 		CreateTime:   NewTimestamp(&from.CreatedAt),
 	}
 	switch from.Algorithm {
-	case router.KeyAlgorithm_ECC_P256:
+	case router.KeyAlgo_ECC_P256:
 		key.Algorithm = Key_KEY_ALG_ECC_P256
-	case router.KeyAlgorithm_RSA_2048:
+	case router.KeyAlgo_RSA_2048:
 		key.Algorithm = Key_KEY_ALG_RSA_2048
-	case router.KeyAlgorithm_RSA_4096:
+	case router.KeyAlgo_RSA_4096:
 		key.Algorithm = Key_KEY_ALG_RSA_4096
 	}
 	return key
+}
+
+var (
+	tlsFeatureExtensionOID = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 24}
+	ocspMustStapleValue    = []byte{0x30, 0x03, 0x02, 0x01, 0x05}
+)
+
+func NewCertificate(from *router.Certificate) (cert *Certificate) {
+	cert = &Certificate{
+		Chain:      from.Chain,
+		NoStrict:   from.NoStrict,
+		Status:     Certificate_STATUS_VALID,
+		CreateTime: NewTimestamp(&from.CreatedAt),
+	}
+
+	// load the certificate chain
+	chain, err := x509.ParseCertificates(bytes.Join(cert.Chain, []byte{}))
+	if err != nil {
+		cert.Status = Certificate_STATUS_INVALID
+		cert.StatusDetail = err.Error()
+		return
+	}
+
+	// load the leaf certificate
+	if len(chain) == 0 {
+		cert.Status = Certificate_STATUS_INVALID
+		cert.StatusDetail = "missing leaf certificate"
+		return
+	}
+	leafCert := chain[0]
+
+	// set Issuer and validity times
+	cert.Issuer = leafCert.Issuer.String()
+	cert.NotBefore = NewTimestamp(&leafCert.NotBefore)
+	cert.NotAfter = NewTimestamp(&leafCert.NotAfter)
+
+	// check if OCSP Must-Staple is set
+	for _, ext := range leafCert.Extensions {
+		if ext.Id.Equal(tlsFeatureExtensionOID) && bytes.Equal(ext.Value, ocspMustStapleValue) {
+			cert.OcspMustStaple = true
+			break
+		}
+	}
+
+	// generate fingerprints
+	fingerprint := func(data []byte) []byte {
+		s := sha256.Sum256(data)
+		return s[:]
+	}
+	cert.LeafFingerprint = fingerprint(leafCert.RawTBSCertificate)
+	cert.SpkiFingerprint = fingerprint(leafCert.RawSubjectPublicKeyInfo)
+	cert.ChainFingerprint = fingerprint(bytes.Join(cert.Chain, []byte{}))
+
+	// determine the key algorithm
+	keyAlgo, err := router.KeyAlgorithm(leafCert.PublicKey)
+	if err != nil {
+		cert.Status = Certificate_STATUS_INVALID
+		cert.StatusDetail = err.Error()
+		return
+	}
+	switch keyAlgo {
+	case router.KeyAlgo_ECC_P256:
+		cert.KeyAlgorithm = Key_KEY_ALG_ECC_P256
+	case router.KeyAlgo_RSA_2048:
+		cert.KeyAlgorithm = Key_KEY_ALG_RSA_2048
+	case router.KeyAlgo_RSA_4096:
+		cert.KeyAlgorithm = Key_KEY_ALG_RSA_4096
+	}
+
+	// set the Domains from SAN values
+	cert.Domains = leafCert.DNSNames
+	if len(cert.Domains) == 0 {
+		cert.Status = Certificate_STATUS_INVALID
+		cert.StatusDetail = "missing Subject Alternative Name"
+		return
+	}
+
+	// validate the chain
+	if len(chain) > 0 {
+		for i := 0; i < len(chain)-1; i++ {
+			child := chain[i]
+			parent := chain[i+1]
+			if !bytes.Equal(child.RawIssuer, parent.RawSubject) {
+				cert.Status = Certificate_STATUS_INVALID
+				cert.StatusDetail = fmt.Sprintf(
+					"the issuer of chain certificate %d (%q) does not match the subject of chain certificate %d (%q)",
+					i, child.Issuer, i+1, parent.Subject,
+				)
+				return
+			}
+			if !parent.IsCA {
+				cert.Status = Certificate_STATUS_INVALID
+				cert.StatusDetail = fmt.Sprintf(
+					"chain certificate %d (%q) does not have the CA attribute set",
+					i+1, parent.Subject,
+				)
+				return
+			}
+		}
+	}
+
+	// check for expired or not yet valid status
+	if leafCert.NotAfter.Before(time.Now()) {
+		cert.Status = Certificate_STATUS_EXPIRED
+		cert.StatusDetail = fmt.Sprintf("certificate expired on %s", leafCert.NotAfter)
+	} else if leafCert.NotBefore.After(time.Now()) {
+		cert.Status = Certificate_STATUS_FUTURE_NOT_BEFORE
+		cert.StatusDetail = fmt.Sprintf("certificate is not valid until %s", leafCert.NotBefore)
+	}
+
+	return
 }

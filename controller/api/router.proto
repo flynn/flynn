@@ -267,9 +267,85 @@ message Key {
 
 // An existing TLS certificate.
 message Certificate {
+  // The status of the certificate.
+  enum Status {
+    // Unused/invalid default value.
+    STATUS_UNSPECIFIED = 0;
+
+    // The certificate is valid.
+    STATUS_VALID = 1;
+
+    // The certificate has expired.
+    STATUS_EXPIRED = 2;
+
+    // The certificate has been revoked.
+    STATUS_REVOKED = 3;
+
+    // The certificate is not valid yet.
+    STATUS_FUTURE_NOT_BEFORE = 4;
+
+    // The chain is invalid due to issues like issuer/subject mismatch,
+    // unsatisfied constraints, and intermediate expiry.
+    STATUS_INVALID = 5;
+  }
+
   // Required. A list of DER-encoded X.509 certificates, composing a chain of
   // exactly one leaf (non-CA/intermediate) certificate followed by zero or
   // more intermediate CA certificates that may be used to form a valid trust
   // chain from client platform trusted roots to the leaf.
   repeated bytes chain = 1;
+
+  // By default a variety of checks are performed before creating
+  // a certificate. When no_strict is set to true, the certificate chain will
+  // be accepted as-is with no modification, and without performing additional
+  // checks. When set, the only preconditions are that the leaf certificate
+  // must be the first certificate in the chain.
+  bool no_strict = 2;
+
+  // The unique DNS names included in the leaf certificate Subject
+  // Alternative Names.
+  repeated string domains = 3;
+
+  // The status of the certificate chain. This reflects revocation and
+  // validation errors in the chain, it does not indicate compatiblity with any
+  // client or platform.
+  Status status = 4;
+
+  // A human-readable status description, only set when the status is not VALID.
+  string status_detail = 5;
+
+  // The issuer organization of the leaf certificate.
+  string issuer = 6;
+
+  // The key algorithm used in the leaf certificate.
+  Key.Algorithm key_algorithm = 7;
+
+  // The notBefore timestamp from the leaf certificate, indicating the start of
+  // the validity period.
+  google.protobuf.Timestamp not_before = 8;
+
+  // The notBefore timestamp from the leaf certificate, when the leaf
+  // certificate expires.
+  google.protobuf.Timestamp not_after = 9;
+
+  // When true, a TLS Feature extension is included which specifies that an OCSP
+  // staple must be included in all TLS handshakes with this certificate.
+  bool ocsp_must_staple = 10;
+
+  // The SHA-256 hash of the DER-encoded leaf certificate. Multiple certificate
+  // resources may have the same fingerprint if they have a different chain.
+  bytes leaf_fingerprint = 11;
+
+  // The SHA-256 hash of the DER-encoded leaf certificate Subject Public Key
+  // Information. Multiple certificate resources will have the same fingerprint
+  // if they share the same keypair.
+  bytes spki_fingerprint = 12;
+
+  // An opaque 32-byte fingerprint that uniquely identifies the certificate
+  // chain. This is used internally for duplicate detection, and will be the
+  // same if a certificate is deleted and recreated with the exact same chain.
+  bytes chain_fingerprint = 13;
+
+  // The timestamp when this certificate was created.
+  google.protobuf.Timestamp create_time = 14;
 }

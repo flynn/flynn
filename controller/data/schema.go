@@ -1196,11 +1196,17 @@ ALTER TABLE certificates DROP COLUMN key;
 }
 
 // migrateTLSCertificates converts the id column to be a digest of the
-// certificate chain and stores the chain as a DER-encoded byte array
+// certificate chain, stores the chain as a DER-encoded byte array and
+// adds a strict column for controlling certificate validation
 func migrateTLSCertificates(tx *postgres.DBTx) error {
 	if err := tx.Exec(`
 ALTER TABLE certificates ADD COLUMN new_id text;
 ALTER TABLE certificates ADD COLUMN chain bytea[];
+
+-- add the strict column which defaults to true but set to false for existing
+-- certificates since we didn't perform strict checks when they were added.
+ALTER TABLE certificates ADD COLUMN strict bool NOT NULL DEFAULT true;
+UPDATE certificates SET strict = false;
 	`); err != nil {
 		return err
 	}
