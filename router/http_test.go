@@ -222,8 +222,8 @@ func (s *S) TestAddHTTPRouteWithExistingCert(c *C) {
 		Domain:  domain,
 		Service: "test",
 		Certificate: &router.Certificate{
-			Cert: tlsCert.Cert,
-			Key:  tlsCert.PrivateKey,
+			Chain: tlsCert.Chain(),
+			Key:   tlsCert.PrivateKeyDER(),
 		},
 	}.ToRoute())
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
@@ -260,8 +260,8 @@ func (s *S) TestUpdateCert(c *C) {
 	tlsCert := testutils.RefreshTLSConfigForDomain(domain)
 	r.Certificate = &router.Certificate{
 		Routes: []string{r.ID},
-		Cert:   tlsCert.Cert,
-		Key:    tlsCert.PrivateKey,
+		Chain:  tlsCert.Chain(),
+		Key:    tlsCert.PrivateKeyDER(),
 	}
 	wait := waitForEvent(c, l, "set", "")
 	s.store.update(r)
@@ -309,8 +309,8 @@ func (s *S) addHTTPRouteForDomain(domain string, c *C, l *HTTPListener) *router.
 		Domain:  domain,
 		Service: "test",
 		Certificate: &router.Certificate{
-			Cert: cert.Cert,
-			Key:  cert.PrivateKey,
+			Chain: cert.Chain(),
+			Key:   cert.PrivateKeyDER(),
 		},
 	}.ToRoute())
 }
