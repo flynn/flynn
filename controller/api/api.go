@@ -842,8 +842,43 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 		return
 	}
 
-	// validate the chain
-	if len(chain) > 0 {
+	// check the leaf cert has the serverAuth EKU
+	hasServerAuth := false
+	for _, eku := range leafCert.ExtKeyUsage {
+		if eku == x509.ExtKeyUsageServerAuth {
+			hasServerAuth = true
+			break
+		}
+	}
+	if !hasServerAuth {
+		cert.Status = Certificate_STATUS_INVALID
+		cert.StatusDetail = "leaf certificate must have the serverAuth EKU"
+		return
+	}
+
+	// validate the chain by checking:
+	//
+	// - the issuer always matches the subject of the next certificate in the chain exactly
+	// - the CA attribute is set on all except the leaf
+	// - each certificate in the chain either has no EKU, serverAuth, or anyExtendedKeyUsage
+	// - all signatures in the chain use a SHA-2 hash algorithm
+	supportedSigAlgo := func(cert *x509.Certificate) bool {
+		switch cert.SignatureAlgorithm {
+		case x509.SHA256WithRSA, x509.SHA384WithRSA, x509.SHA512WithRSA,
+			x509.ECDSAWithSHA256, x509.ECDSAWithSHA384, x509.ECDSAWithSHA512,
+			x509.SHA256WithRSAPSS, x509.SHA384WithRSAPSS, x509.SHA512WithRSAPSS,
+			x509.DSAWithSHA256:
+			return true
+		default:
+			return false
+		}
+	}
+	if !supportedSigAlgo(leafCert) {
+		cert.Status = Certificate_STATUS_INVALID
+		cert.StatusDetail = fmt.Sprintf("leaf certificate uses unsupported signature algorithm %s", leafCert.SignatureAlgorithm)
+		return
+	}
+	if len(chain) > 1 {
 		for i := 0; i < len(chain)-1; i++ {
 			child := chain[i]
 			parent := chain[i+1]
@@ -861,6 +896,25 @@ func NewCertificate(from *router.Certificate) (cert *Certificate) {
 					"chain certificate %d (%q) does not have the CA attribute set",
 					i+1, parent.Subject,
 				)
+				return
+			}
+			if len(parent.ExtKeyUsage) > 0 {
+				hasServerAuth := false
+				for _, eku := range parent.ExtKeyUsage {
+					if eku == x509.ExtKeyUsageServerAuth || eku == x509.ExtKeyUsageAny {
+						hasServerAuth = true
+						break
+					}
+				}
+				if !hasServerAuth {
+					cert.Status = Certificate_STATUS_INVALID
+					cert.StatusDetail = fmt.Sprintf("chain certificate %d (%q) must have either the serverAuth or anyExtendedKeyUsage EKU", i+1, parent.Subject)
+					return
+				}
+			}
+			if !supportedSigAlgo(parent) {
+				cert.Status = Certificate_STATUS_INVALID
+				cert.StatusDetail = fmt.Sprintf("chain certificate %d (%q) uses unsupported signature algorithm %s", i+1, parent.Subject, parent.SignatureAlgorithm)
 				return
 			}
 		}
