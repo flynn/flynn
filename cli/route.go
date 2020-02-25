@@ -312,7 +312,7 @@ func formatRouteConfig(route *api.Route) string {
 	lines = append(lines, service)
 
 	if r.Certificate != nil {
-		lines = append(lines, "certificate: "+r.Certificate.ID())
+		lines = append(lines, "certificate: "+r.Certificate.ID().String())
 	}
 
 	if r.Sticky {

@@ -17,6 +17,44 @@ import (
 	"time"
 )
 
+// ID is a slice of bytes used to identify TLS certificates and keys that
+// encodes as a base64url string
+type ID []byte
+
+// Equals returns true if the ID equals the other ID
+func (id ID) Equals(other ID) bool {
+	return bytes.Equal(id, other)
+}
+
+// String returns the ID as a base64url encoded string
+func (id ID) String() string {
+	return base64.RawURLEncoding.EncodeToString(id)
+}
+
+// Bytes converts the ID to a slice of bytes
+func (id ID) Bytes() []byte {
+	return []byte(id)
+}
+
+// MarshalJSON encodes the ID as a JSON string
+func (id ID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(id.String())
+}
+
+// UnmarshalJSON decodes the ID from a JSON string
+func (id *ID) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	idBytes, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	*id = ID(idBytes)
+	return nil
+}
+
 // Certificate describes a TLS certificate for one or more routes
 type Certificate struct {
 	// Routes contains the IDs of routes assigned to this cert
@@ -39,9 +77,9 @@ type Certificate struct {
 }
 
 // ID returns the unique ID of this Certificate
-func (c *Certificate) ID() string {
+func (c *Certificate) ID() ID {
 	digest := sha256.Sum256(bytes.Join(c.Chain, []byte{}))
-	return base64.RawURLEncoding.EncodeToString(digest[:])
+	return ID(digest[:])
 }
 
 func (c *Certificate) SetRedactJSONKey(s string) {
@@ -64,7 +102,7 @@ func (c *Certificate) MarshalJSON() ([]byte, error) {
 		key = c.KeyPEM()
 	}
 	return json.Marshal(&certificateJSON{
-		ID:             c.ID(),
+		ID:             c.ID().String(),
 		Routes:         c.Routes,
 		Chain:          c.ChainPEM(),
 		DeprecatedCert: c.ChainPEM(),
@@ -157,13 +195,13 @@ func NewCertificateFromPEM(chainPEM []byte) (*Certificate, error) {
 }
 
 // KeyID returns the expected key ID for the certificate's public key
-func (c *Certificate) KeyID() string {
+func (c *Certificate) KeyID() ID {
 	if len(c.Chain) == 0 {
-		return ""
+		return nil
 	}
 	cert, err := x509.ParseCertificate(c.Chain[0])
 	if err != nil {
-		return ""
+		return nil
 	}
 	keyID, _ := KeyID(cert.PublicKey)
 	return keyID
@@ -243,8 +281,7 @@ func NewKeyFromPEM(keyPEM []byte) (*Key, error) {
 // (ECC) private key, and the key must use either the RSA 2048 bit, RSA 4096
 // bit or ECC P256 key algorithm.
 //
-// The returned key's ID is a hex encoded sha256 digest of the PKIX encoded
-// public key.
+// The returned key's ID is the sha256 digest of the PKIX encoded public key.
 func NewKey(keyDER []byte) (*Key, error) {
 	// parse the private key from the DER-encoded data
 	privKey, err := parsePrivateKey(keyDER)
@@ -254,7 +291,7 @@ func NewKey(keyDER []byte) (*Key, error) {
 
 	// determine the key ID and algorithm
 	var (
-		keyID   string
+		keyID   ID
 		keyAlgo KeyAlgo
 	)
 	switch k := privKey.(type) {
@@ -290,20 +327,19 @@ func NewKey(keyDER []byte) (*Key, error) {
 	}, nil
 }
 
-// KeyID returns a base64url encoded sha256 digest of the PKIX encoding of the
-// given public key
-func KeyID(pubKey interface{}) (string, error) {
+// KeyID returns the sha256 digest of the PKIX encoding of the given public key
+func KeyID(pubKey interface{}) (ID, error) {
 	switch pubKey.(type) {
 	case *rsa.PublicKey, *ecdsa.PublicKey:
 	default:
-		return "", fmt.Errorf("unsupported key type %T, expected RSA or ECC", pubKey)
+		return nil, fmt.Errorf("unsupported key type %T, expected RSA or ECC", pubKey)
 	}
 	data, err := x509.MarshalPKIXPublicKey(pubKey)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	digest := sha256.Sum256(data)
-	return base64.RawURLEncoding.EncodeToString(digest[:]), nil
+	return ID(digest[:]), nil
 }
 
 // KeyAlgorithm returns the key algorithm of the given public key
@@ -352,13 +388,13 @@ func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
 
 type Key struct {
 	// ID is the unique ID of this key
-	ID string `json:"id,omitempty"`
+	ID ID `json:"id,omitempty"`
 
 	// Algorithm is the key algorithm used by this key
 	Algorithm KeyAlgo `json:"algorithm,omitempty"`
 
 	// Certificates contains the IDs of certificates using this key
-	Certificates []string `json:"certificates,omitempty"`
+	Certificates []ID `json:"certificates,omitempty"`
 
 	// CreatedAt is the time this key was created
 	CreatedAt time.Time `json:"created_at,omitempty"`

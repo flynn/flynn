@@ -337,7 +337,7 @@ func (r *RouteRepo) addTCP(tx *postgres.DBTx, route *router.Route) error {
 }
 
 func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) error {
-	var keyID string
+	var keyID router.ID
 	if len(cert.Key) > 0 {
 		key, err := r.addKey(tx, cert.Key)
 		if err != nil {
@@ -345,9 +345,9 @@ func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) e
 		}
 		keyID = key.ID
 	}
-	if keyID == "" {
+	if keyID == nil {
 		keyID = cert.KeyID()
-		key, err := scanKey(tx.QueryRow("tls_key_select", keyID))
+		key, err := scanKey(tx.QueryRow("tls_key_select", keyID.Bytes()))
 		if err != nil {
 			return hh.ValidationErr("certificate", fmt.Sprintf("key not found: %s", keyID))
 		}
@@ -355,9 +355,9 @@ func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) e
 	}
 	if err := tx.QueryRow(
 		"certificate_insert",
-		cert.ID(),
+		cert.ID().Bytes(),
 		cert.Chain,
-		keyID,
+		keyID.Bytes(),
 		!cert.NoStrict,
 	).Scan(&cert.CreatedAt, &cert.UpdatedAt); err != nil {
 		return err
@@ -366,7 +366,7 @@ func (r *RouteRepo) addCertWithTx(tx *postgres.DBTx, cert *router.Certificate) e
 		if err := tx.Exec("route_certificate_delete_by_route_id", rid); err != nil {
 			return err
 		}
-		if err := tx.Exec("route_certificate_insert", rid, cert.ID()); err != nil {
+		if err := tx.Exec("route_certificate_insert", rid, cert.ID().Bytes()); err != nil {
 			return err
 		}
 	}
@@ -392,7 +392,7 @@ func (r *RouteRepo) addKey(tx dbOrTx, keyDER []byte) (*router.Key, error) {
 	}
 	if err := tx.QueryRow(
 		"tls_key_insert",
-		key.ID,
+		key.ID.Bytes(),
 		string(key.Algorithm),
 		key.Key,
 	).Scan(&key.CreatedAt); err != nil {
@@ -440,11 +440,12 @@ func (r *RouteRepo) listKeys(db dbOrTx, forUpdate bool) ([]*router.Key, error) {
 func scanKey(s postgres.Scanner) (*router.Key, error) {
 	var (
 		key   router.Key
+		id    []byte
 		algo  string
-		certs string
+		certs [][]byte
 	)
 	if err := s.Scan(
-		&key.ID,
+		&id,
 		&algo,
 		&key.Key,
 		&certs,
@@ -452,12 +453,21 @@ func scanKey(s postgres.Scanner) (*router.Key, error) {
 	); err != nil {
 		return nil, err
 	}
+	key.ID = router.ID(id)
 	key.Algorithm = router.KeyAlgo(algo)
-	key.Certificates = splitPGStringArray(certs)
+	key.Certificates = make([]router.ID, len(certs))
+	for i, id := range certs {
+		key.Certificates[i] = router.ID(id)
+	}
 	return &key, nil
 }
 
 func (r *RouteRepo) DeleteKey(name string) (*router.Key, error) {
+	id, err := router.NewID(strings.TrimPrefix(name, "tls-keys/"))
+	if err != nil {
+		return nil, hh.ValidationErr("name", fmt.Sprintf("is invalid: %s", err))
+	}
+
 	// start a transaction
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -465,7 +475,7 @@ func (r *RouteRepo) DeleteKey(name string) (*router.Key, error) {
 	}
 
 	// get the key
-	key, err := scanKey(tx.QueryRow("tls_key_select_for_update", strings.TrimPrefix(name, "tls-keys/")))
+	key, err := scanKey(tx.QueryRow("tls_key_select_for_update", id.Bytes()))
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -474,11 +484,15 @@ func (r *RouteRepo) DeleteKey(name string) (*router.Key, error) {
 	// ensure the key is not referenced by any certificates
 	if len(key.Certificates) > 0 {
 		tx.Rollback()
-		return nil, fmt.Errorf("cannot delete key as it is referenced by the following certificates: %s", strings.Join(key.Certificates, ", "))
+		certs := make([]string, len(key.Certificates))
+		for i, certID := range key.Certificates {
+			certs[i] = certID.String()
+		}
+		return nil, fmt.Errorf("cannot delete key as it is referenced by the following certificates: %s", strings.Join(certs, ", "))
 	}
 
 	// delete the key
-	if err := tx.Exec("tls_key_delete", key.ID); err != nil {
+	if err := tx.Exec("tls_key_delete", key.ID.Bytes()); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
@@ -983,7 +997,7 @@ func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.R
 			keyID := cert.KeyID()
 			found := false
 			for _, key := range existingKeys {
-				if key.ID == keyID {
+				if key.ID.Equals(keyID) {
 					found = true
 					break
 				}

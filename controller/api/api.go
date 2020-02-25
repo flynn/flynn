@@ -752,9 +752,8 @@ func NewJobState(from ct.JobState) DeploymentEvent_JobState {
 
 func NewKey(from *router.Key) *Key {
 	key := &Key{
-		Name:         path.Join("tls-keys", from.ID),
-		Certificates: from.Certificates, // TODO: these should be 'certificates/{CERTIFICATE_ID}'
-		CreateTime:   NewTimestamp(&from.CreatedAt),
+		Name:       path.Join("tls-keys", from.ID.String()),
+		CreateTime: NewTimestamp(&from.CreatedAt),
 	}
 	switch from.Algorithm {
 	case router.KeyAlgo_ECC_P256:
@@ -763,6 +762,12 @@ func NewKey(from *router.Key) *Key {
 		key.Algorithm = Key_KEY_ALG_RSA_2048
 	case router.KeyAlgo_RSA_4096:
 		key.Algorithm = Key_KEY_ALG_RSA_4096
+	}
+	if len(from.Certificates) > 0 {
+		key.Certificates = make([]string, len(from.Certificates))
+		for i, certID := range from.Certificates {
+			key.Certificates[i] = path.Join("certificates", certID.String())
+		}
 	}
 	return key
 }

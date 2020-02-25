@@ -1130,13 +1130,13 @@ CREATE TABLE tls_key_algorithms (
 INSERT INTO tls_key_algorithms (name) VALUES ('ecc-p256'), ('rsa-2048'), ('rsa-4096');
 
 CREATE TABLE tls_keys (
-  id         text        PRIMARY KEY,
+  id         bytea       PRIMARY KEY,
   algorithm  text        NOT NULL REFERENCES tls_key_algorithms (name),
   key        bytea       NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE certificates ADD COLUMN key_id text;
+ALTER TABLE certificates ADD COLUMN key_id bytea;
 	`); err != nil {
 		return err
 	}
@@ -1200,7 +1200,7 @@ ALTER TABLE certificates DROP COLUMN key;
 // adds a strict column for controlling certificate validation
 func migrateTLSCertificates(tx *postgres.DBTx) error {
 	if err := tx.Exec(`
-ALTER TABLE certificates ADD COLUMN new_id text;
+ALTER TABLE certificates ADD COLUMN new_id bytea;
 ALTER TABLE certificates ADD COLUMN chain bytea[];
 
 -- add the strict column which defaults to true but set to false for existing
@@ -1261,8 +1261,8 @@ CREATE UNIQUE INDEX certificates_new_id ON certificates (new_id);
 
 -- update the route_certificates foreign key
 ALTER TABLE route_certificates DROP CONSTRAINT route_certificates_certificate_id_fkey;
-ALTER TABLE route_certificates ALTER COLUMN certificate_id TYPE text;
-UPDATE route_certificates AS r SET certificate_id = c.new_id FROM certificates AS c WHERE c.id::text = r.certificate_id;
+ALTER TABLE route_certificates ALTER COLUMN certificate_id TYPE bytea USING certificate_id::text::bytea;
+UPDATE route_certificates AS r SET certificate_id = c.new_id FROM certificates AS c WHERE c.id::text = convert_from(r.certificate_id, 'utf-8');
 ALTER TABLE route_certificates ADD CONSTRAINT route_certificates_certificate_id_fkey FOREIGN KEY (certificate_id) REFERENCES certificates (new_id);
 
 -- now make new_id the primary key
