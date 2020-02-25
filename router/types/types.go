@@ -8,7 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -41,7 +41,7 @@ type Certificate struct {
 // ID returns the unique ID of this Certificate
 func (c *Certificate) ID() string {
 	digest := sha256.Sum256(bytes.Join(c.Chain, []byte{}))
-	return hex.EncodeToString(digest[:])
+	return base64.RawURLEncoding.EncodeToString(digest[:])
 }
 
 func (c *Certificate) SetRedactJSONKey(s string) {
@@ -287,8 +287,8 @@ func NewKey(keyDER []byte) (*Key, error) {
 	}, nil
 }
 
-// KeyID returns a hex encoded sha256 digest of the PKIX encoding of the given
-// public key
+// KeyID returns a base64url encoded sha256 digest of the PKIX encoding of the
+// given public key
 func KeyID(pubKey interface{}) (string, error) {
 	switch pubKey.(type) {
 	case *rsa.PublicKey, *ecdsa.PublicKey:
@@ -300,7 +300,7 @@ func KeyID(pubKey interface{}) (string, error) {
 		return "", err
 	}
 	digest := sha256.Sum256(data)
-	return hex.EncodeToString(digest[:]), nil
+	return base64.RawURLEncoding.EncodeToString(digest[:]), nil
 }
 
 // KeyAlgorithm returns the key algorithm of the given public key
