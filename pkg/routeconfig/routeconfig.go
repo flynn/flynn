@@ -83,7 +83,7 @@ func Generate(apps []string, appRoutes []*api.AppRoutes) ([]byte, error) {
 
 // configTemplate is the template used to generate a route config file from
 // existing app routes
-var configTemplate = template.Must(template.New("routes.cfg").Parse(`
+var configTemplate = template.Must(template.New("routes.star").Parse(`
 # FLYNN ROUTE CONFIG
 # ------------------
 #
@@ -93,11 +93,11 @@ var configTemplate = template.Must(template.New("routes.cfg").Parse(`
 # To ensure the routes defined in this file exist (and that routes not defined in this file don't
 # exist), apply it by running:
 #
-#     flynn route config apply path/to/routes.cfg
+#     flynn route config apply path/to/routes.star
 #
 # To re-generate this route config based on routes that exist for a list of apps:
 #
-#     flynn route config generate app1 app2 app3 > path/to/routes.cfg
+#     flynn route config generate app1 app2 app3 > path/to/routes.star
 #
 # STRUCTURE
 # ---------
@@ -108,10 +108,8 @@ var configTemplate = template.Must(template.New("routes.cfg").Parse(`
 # A 'main' function must be defined that returns a list of flynn.api.v1.AppRoutes protocol messages
 # that represent the routes that should exist for a set of apps.
 
-# load the v1 config helpers
 load("flynn.routeconfig.v1", "config")
 
-# return the routes
 def main(ctx):
   return config.app_routes({
     {{ range .AppRoutes -}}
