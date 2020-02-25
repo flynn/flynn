@@ -107,6 +107,79 @@ var configTemplate = template.Must(template.New("routes.star").Parse(`
 #
 # A 'main' function must be defined that returns a list of flynn.api.v1.AppRoutes protocol messages
 # that represent the routes that should exist for a set of apps.
+#
+# The config object loaded from 'flynn.routeconfig.v1' provides the following helper functions:
+#
+# - app_routes(appRoutesDict)
+#
+#   Constructs a flynn.api.v1.AppRoutes message from a dict that maps app names to a list of routes
+#   for that app (typically used as the return value of the 'main' function).
+#
+#   Example:
+#
+#     config.app_routes({
+#       "app": [
+#         config.http_route(...),
+#         config.http_route(...),
+#         config.tcp_route(...),
+#       ],
+#       "other-app": [
+#         config.http_route(...),
+#         config.http_route(...),
+#       ],
+#     })
+#
+#
+# - http_route(domain, target, path = "/", certificate = None, sticky = False, disable_keep_alives = False)
+#
+#   Constructs a flynn.api.v1.Route message with an HTTP config.
+#
+#   Example:
+#
+#     config.http_route(
+#       domain = "app.example.com",
+#       target = config.service("app-web"),
+#     )
+#
+#
+# - tcp_route(port, target, disable_keep_alives = False)
+#
+#   Constructs a flynn.api.v1.Route message with a TCP config.
+#
+#   Example:
+#
+#     config.tcp_route(
+#       port = 2222,
+#       target = config.service("app-ssh"),
+#     )
+#
+#
+# - service(name, leader = False, drain_backends = True)
+#
+#   Constructs a flynn.api.v1.Route.ServiceTarget for the given service name.
+#
+#   Example:
+#
+#     config.service("app-web")
+#
+#
+# - static_certificate(chainPEM)
+#
+#   Constructs a flynn.api.v1.Certificate for the given PEM-encoded certificate chain.
+#
+#   Example:
+#
+#     config.static_certificate('''
+#     -----BEGIN CERTIFICATE-----
+#     MIIFQDCCAyigAwIBAgIUYuDdusMZWAHIu5Yo9B3p9UnDrv8wDQYJKoZIhvcNAQEL
+#     BQAwHzEdMBsGA1UEAwwUYXBwLjEubG9jYWxmbHlubi5jb20wHhcNMjAwMjIxMDMy
+#     MzIzWhcNMjEwMjIwMDMyMzIzWjAfMR0wGwYDVQQDDBRhcHAuMS5sb2NhbGZseW5u
+#     ...
+#     uUjr1QImCEyKqZOeKfHw4gC3wnhPQoihvrYBaBcnY5opVPsnqDV1EJ590CCBIe6g
+#     1OJ5R9ReGVG6Nl8XggBPJ76AmgvtFeqzmLCnAtJRNN0XoLe4gHpBVIew7QMLGFiT
+#     WnUX2A==
+#     -----END CERTIFICATE-----
+#     ''')
 
 load("flynn.routeconfig.v1", "config")
 
