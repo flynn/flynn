@@ -81,7 +81,7 @@ func (s *S) TestCreateHTTPRouteWithCertificate(c *C) {
 	c.Assert(route.Certificate, Not(IsNil))
 	c.Assert(route.Certificate.ID, Not(Equals), "")
 	c.Assert(route.Certificate.Chain, DeepEquals, tlsCert.Chain())
-	c.Assert(route.Certificate.Key, DeepEquals, tlsCert.PrivateKeyDER())
+	c.Assert(route.Certificate.Key, IsNil)
 	c.Assert(route.Certificate.CreatedAt, Not(IsNil))
 	c.Assert(route.Certificate.UpdatedAt, Not(IsNil))
 
@@ -89,7 +89,7 @@ func (s *S) TestCreateHTTPRouteWithCertificate(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(gotRoute.Certificate, Not(IsNil))
 	c.Assert(gotRoute.Certificate.Chain, DeepEquals, route.Certificate.Chain)
-	c.Assert(gotRoute.Certificate.Key, DeepEquals, route.Certificate.Key)
+	c.Assert(gotRoute.Certificate.Key, IsNil)
 }
 
 func (s *S) TestCreateHTTPRouteWithInvalidCertificate(c *C) {
@@ -262,7 +262,7 @@ func (s *S) TestListRoutes(c *C) {
 
 	c.Assert(routes[0].Certificate, Not(IsNil))
 	c.Assert(routes[0].Certificate.Chain, DeepEquals, tlsCert.Chain())
-	c.Assert(routes[0].Certificate.Key, DeepEquals, tlsCert.PrivateKeyDER())
+	c.Assert(routes[0].Certificate.Key, IsNil)
 
 	routes, err = s.c.AppRouteList(app1.ID)
 	c.Assert(err, IsNil)

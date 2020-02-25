@@ -21,6 +21,15 @@ import (
 // encodes as a base64url string
 type ID []byte
 
+// NewID decodes an ID from the given base64url encoded string
+func NewID(encoded string) (ID, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, err
+	}
+	return ID(decoded), nil
+}
+
 // Equals returns true if the ID equals the other ID
 func (id ID) Equals(other ID) bool {
 	return bytes.Equal(id, other)
@@ -47,11 +56,11 @@ func (id *ID) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
-	idBytes, err := base64.RawURLEncoding.DecodeString(s)
+	newID, err := NewID(s)
 	if err != nil {
 		return err
 	}
-	*id = ID(idBytes)
+	*id = newID
 	return nil
 }
 
@@ -70,10 +79,6 @@ type Certificate struct {
 	CreatedAt time.Time
 	// UpdatedAt is the time this cert was last updated.
 	UpdatedAt time.Time
-
-	// redactJSONKey when set will appear as the "key" field when the
-	// certificate is encoded as JSON
-	redactJSONKey string
 }
 
 // ID returns the unique ID of this Certificate
@@ -82,31 +87,23 @@ func (c *Certificate) ID() ID {
 	return ID(digest[:])
 }
 
-func (c *Certificate) SetRedactJSONKey(s string) {
-	c.redactJSONKey = s
-}
-
 type certificateJSON struct {
 	ID             string    `json:"id,omitempty"`
 	Routes         []string  `json:"routes,omitempty"`
 	Chain          string    `json:"chain,omitempty"`
-	Key            string    `json:"key,omitempty"`
+	KeyID          string    `json:"key_id,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitempty"`
 	UpdatedAt      time.Time `json:"updated_at,omitempty"`
 	DeprecatedCert string    `json:"cert,omitempty"`
 }
 
 func (c *Certificate) MarshalJSON() ([]byte, error) {
-	key := c.redactJSONKey
-	if key == "" {
-		key = c.KeyPEM()
-	}
 	return json.Marshal(&certificateJSON{
 		ID:             c.ID().String(),
 		Routes:         c.Routes,
 		Chain:          c.ChainPEM(),
 		DeprecatedCert: c.ChainPEM(),
-		Key:            key,
+		KeyID:          c.KeyID().String(),
 		CreatedAt:      c.CreatedAt,
 		UpdatedAt:      c.UpdatedAt,
 	})
@@ -132,23 +129,9 @@ func (c *Certificate) UnmarshalJSON(data []byte) error {
 			chainDER = append(chainDER, block.Bytes)
 		}
 	}
-	keyPEM := []byte(cert.Key)
-	var keyDER []byte
-	for {
-		var block *pem.Block
-		block, keyPEM = pem.Decode(keyPEM)
-		if block == nil {
-			break
-		}
-		if block.Type == "PRIVATE KEY" || strings.HasSuffix(block.Type, " PRIVATE KEY") {
-			keyDER = block.Bytes
-			break
-		}
-	}
 	*c = Certificate{
 		Routes:    cert.Routes,
 		Chain:     chainDER,
-		Key:       keyDER,
 		CreatedAt: cert.CreatedAt,
 		UpdatedAt: cert.UpdatedAt,
 	}

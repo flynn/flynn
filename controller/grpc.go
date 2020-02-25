@@ -1021,6 +1021,16 @@ func (g *grpcAPI) ListKeys(ctx context.Context, req *api.ListKeysRequest) (*api.
 	}, nil
 }
 
+func (g *grpcAPI) GetKey(ctx context.Context, req *api.GetKeyRequest) (*api.GetKeyResponse, error) {
+	key, err := g.routeRepo.GetKey(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	return &api.GetKeyResponse{
+		PrivateKey: key.Key,
+	}, nil
+}
+
 func (g *grpcAPI) CreateKey(ctx context.Context, req *api.CreateKeyRequest) (*api.CreateKeyResponse, error) {
 	key, err := g.routeRepo.AddKey(req.PrivateKey)
 	if err != nil {

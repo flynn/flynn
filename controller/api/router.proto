@@ -25,6 +25,9 @@ service Router {
   // Lists TLS keys that can be referenced by static certificates.
   rpc ListKeys(ListKeysRequest) returns (ListKeysResponse) {}
 
+  // Gets a TLS private key.
+  rpc GetKey(GetKeyRequest) returns (GetKeyResponse) {}
+
   // Creates a TLS key. If the key already exists, it will be returned instead
   // of creating a duplicate, making the method idempotent.
   rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse) {}
@@ -89,6 +92,18 @@ message ListKeysRequest {
 message ListKeysResponse {
   // The TLS keys.
   repeated Key keys = 1;
+}
+
+// A request to get a TLS private key.
+message GetKeyRequest {
+  // Required. The name of the TLS key to get in the format `tls-keys/{KEY_ID}`
+  string name = 1;
+}
+
+// A response containing a TLS private key.
+message GetKeyResponse {
+  // The DER-encoded TLS private key.
+  bytes private_key = 1;
 }
 
 // A request to create a new TLS key.

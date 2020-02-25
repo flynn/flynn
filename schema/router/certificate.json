@@ -15,9 +15,9 @@
       "type": "string",
       "description": "TLS certificate chain."
     },
-    "key": {
+    "key_id": {
       "type": "string",
-      "description": "TLS private key."
+      "description": "ID of the certificate's private key"
     },
     "routes": {
       "type": "array",
@@ -35,6 +35,10 @@
     "cert": {
       "type": "string",
       "description": "Deprecated in favor of chain."
+    },
+    "key": {
+      "type": "string",
+      "description": "Deprecated in favour of key_id"
     }
   }
 }

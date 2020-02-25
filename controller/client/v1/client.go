@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/controller/api"
 	ct "github.com/flynn/flynn/controller/types"
 	logagg "github.com/flynn/flynn/logaggregator/types"
 	"github.com/flynn/flynn/pkg/httpclient"
@@ -440,6 +441,17 @@ func (c *Client) GetRoute(appID string, routeID string) (*router.Route, error) {
 
 // CreateRoute creates a new route for the specified app.
 func (c *Client) CreateRoute(appID string, route *router.Route) error {
+	// explicitly create TLS key if set as it will not be included in the
+	// route JSON
+	if route.Certificate != nil && len(route.Certificate.Key) > 0 {
+		req := api.CreateKeyRequest{
+			PrivateKey: route.Certificate.Key,
+		}
+		var res api.CreateKeyResponse
+		if err := c.Invoke("flynn.api.v1.Router/CreateKey", &req, &res); err != nil {
+			return err
+		}
+	}
 	return c.Post(fmt.Sprintf("/apps/%s/routes", appID), route, route)
 }
 

@@ -80,6 +80,13 @@ func (s *Syncer) handleUpdate(h SyncHandler, event *router.Event) error {
 	var err error
 	switch event.Event {
 	case router.EventTypeRouteSet:
+		if cert := event.Route.Certificate; cert != nil {
+			key, err := s.store.PrivateKey(cert.KeyID())
+			if err != nil {
+				return err
+			}
+			cert.Key = key
+		}
 		err = h.Set(event.Route)
 	case router.EventTypeRouteRemove:
 		err = h.Remove(event.Route.ID)

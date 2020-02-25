@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -53,6 +54,7 @@ func (d *discoverdWrapper) Cleanup() {
 type testStore struct {
 	routesMtx sync.Mutex
 	routes    map[string]*router.Route
+	keys      map[string][]byte
 
 	streamsMtx sync.Mutex
 	streams    map[chan *router.Event]*stream.Basic
@@ -61,6 +63,7 @@ type testStore struct {
 func newTestStore() *testStore {
 	return &testStore{
 		routes:  make(map[string]*router.Route),
+		keys:    make(map[string][]byte),
 		streams: make(map[chan *router.Event]*stream.Basic),
 	}
 }
@@ -85,6 +88,16 @@ func (t *testStore) Watch(ch chan *router.Event) (stream.Stream, error) {
 	return s, nil
 }
 
+func (t *testStore) PrivateKey(id router.ID) ([]byte, error) {
+	t.routesMtx.Lock()
+	key, ok := t.keys[id.String()]
+	t.routesMtx.Unlock()
+	if !ok {
+		return nil, fmt.Errorf("key not found: %s", id)
+	}
+	return key, nil
+}
+
 func (t *testStore) add(r *router.Route) {
 	if r.ID == "" {
 		r.ID = random.UUID()
@@ -94,6 +107,9 @@ func (t *testStore) add(r *router.Route) {
 	}
 	t.routesMtx.Lock()
 	t.routes[r.ID] = r
+	if r.Certificate != nil {
+		t.keys[r.Certificate.KeyID().String()] = r.Certificate.Key
+	}
 	t.routesMtx.Unlock()
 	t.emit(&router.Event{
 		Event: router.EventTypeRouteSet,
@@ -105,6 +121,9 @@ func (t *testStore) add(r *router.Route) {
 func (t *testStore) update(r *router.Route) {
 	t.routesMtx.Lock()
 	t.routes[r.ID] = r
+	if r.Certificate != nil {
+		t.keys[r.Certificate.KeyID().String()] = r.Certificate.Key
+	}
 	t.routesMtx.Unlock()
 	t.emit(&router.Event{
 		Event: router.EventTypeRouteSet,

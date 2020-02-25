@@ -437,6 +437,14 @@ func (r *RouteRepo) listKeys(db dbOrTx, forUpdate bool) ([]*router.Key, error) {
 	return keys, nil
 }
 
+func (r *RouteRepo) GetKey(name string) (*router.Key, error) {
+	id, err := router.NewID(strings.TrimPrefix(name, "tls-keys/"))
+	if err != nil {
+		return nil, hh.ValidationErr("name", fmt.Sprintf("is invalid: %s", err))
+	}
+	return scanKey(r.db.QueryRow("tls_key_select", id.Bytes()))
+}
+
 func scanKey(s postgres.Scanner) (*router.Key, error) {
 	var (
 		key   router.Key

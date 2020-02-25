@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/resource"
 	host "github.com/flynn/flynn/host/types"
@@ -192,7 +191,7 @@ func Error(err error) error {
 		return status.New(toStatusCode(e.Code), e.Message).Err()
 	}
 	code := codes.Unknown
-	if err == controller.ErrNotFound {
+	if err == ct.ErrNotFound {
 		code = codes.NotFound
 	}
 	switch err.(type) {
@@ -770,6 +769,12 @@ func NewKey(from *router.Key) *Key {
 		}
 	}
 	return key
+}
+
+func NewGetKeyRequest(id router.ID) *GetKeyRequest {
+	return &GetKeyRequest{
+		Name: path.Join("tls-keys", id.String()),
+	}
 }
 
 var (

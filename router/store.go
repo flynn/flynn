@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 
+	"github.com/flynn/flynn/controller/api"
 	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	discoverd "github.com/flynn/flynn/discoverd/client"
@@ -13,6 +14,7 @@ import (
 type Store interface {
 	List() ([]*router.Route, error)
 	Watch(ch chan *router.Event) (stream.Stream, error)
+	PrivateKey(id router.ID) ([]byte, error)
 }
 
 func NewControllerStore() (*ControllerStore, error) {
@@ -79,6 +81,15 @@ func (c *ControllerStore) Watch(ch chan *router.Event) (stream.Stream, error) {
 		}
 	}()
 	return routeStream, nil
+}
+
+func (c *ControllerStore) PrivateKey(id router.ID) ([]byte, error) {
+	req := api.NewGetKeyRequest(id)
+	var res api.GetKeyResponse
+	if err := c.client.Invoke("flynn.api.v1.Router/GetKey", req, &res); err != nil {
+		return nil, err
+	}
+	return res.PrivateKey, nil
 }
 
 func (c *ControllerStore) toRouterEventType(typ ct.EventType) router.EventType {
