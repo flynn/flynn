@@ -173,14 +173,17 @@ func (c *Certificate) ChainPEM() string {
 	if len(c.Chain) == 0 {
 		return ""
 	}
-	chain := make([]string, len(c.Chain))
+	var chain strings.Builder
 	for i, cert := range c.Chain {
-		chain[i] = string(pem.EncodeToMemory(&pem.Block{
+		pem.Encode(&chain, &pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: cert,
-		}))
+		})
+		if i != len(c.Chain)-1 {
+			chain.WriteString("\n")
+		}
 	}
-	return strings.Join(chain, "\n")
+	return chain.String()
 }
 
 func (c *Certificate) KeyPEM() string {
