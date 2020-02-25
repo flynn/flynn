@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn/controller/api"
 	controller "github.com/flynn/flynn/controller/client"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/go-docopt"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/olekukonko/tablewriter"
@@ -84,14 +83,14 @@ func runTLSKeyAdd(args *docopt.Args, client controller.Client) error {
 	if err != nil {
 		return err
 	}
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return errors.New("failed to find any PEM data in key input")
+	key, err := router.NewKeyFromPEM(data)
+	if err != nil {
+		return err
 	}
 
 	// create the key
 	req := api.CreateKeyRequest{
-		PrivateKey: block.Bytes,
+		PrivateKey: key.Key,
 	}
 	var res api.CreateKeyResponse
 	if err := client.Invoke("flynn.api.v1.Router/CreateKey", &req, &res); err != nil {
