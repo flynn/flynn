@@ -116,7 +116,9 @@ var preparedStatements = map[string]string{
 	"route_certificate_delete_by_route_id":      routeCertificateDeleteByRouteIDQuery,
 	"route_certificate_insert":                  routeCertificateInsertQuery,
 	"tls_key_list":                              tlsKeyListQuery,
+	"tls_key_list_for_update":                   tlsKeyListForUpdateQuery,
 	"tls_key_select":                            tlsKeySelectQuery,
+	"tls_key_select_for_update":                 tlsKeySelectForUpdateQuery,
 	"tls_key_insert":                            tlsKeyInsertQuery,
 	"tls_key_delete":                            tlsKeyDeleteQuery,
 }
@@ -703,10 +705,12 @@ VALUES ($1, $2)`
 	tlsKeyListQuery = `
 SELECT k.id, k.algorithm, k.key, ARRAY(SELECT id FROM certificates WHERE key_id = k.id), k.created_at FROM tls_keys AS k
 ORDER BY k.created_at DESC`
-	tlsKeySelectQuery = `
+	tlsKeyListForUpdateQuery = tlsKeyListQuery + " FOR UPDATE"
+	tlsKeySelectQuery        = `
 SELECT k.id, k.algorithm, k.key, ARRAY(SELECT id FROM certificates WHERE key_id = k.id), k.created_at FROM tls_keys AS k
 WHERE k.id = $1`
-	tlsKeyInsertQuery = `
+	tlsKeySelectForUpdateQuery = tlsKeySelectQuery + " FOR UPDATE"
+	tlsKeyInsertQuery          = `
 INSERT INTO tls_keys (id, algorithm, key)
 VALUES ($1, $2, $3)
 ON CONFLICT (id) DO UPDATE SET key = $3

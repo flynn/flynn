@@ -64,8 +64,12 @@ func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []by
 		if err != nil {
 			return nil, nil, err
 		}
+		existingKeys, err := r.ListKeys()
+		if err != nil {
+			return nil, nil, err
+		}
 		state := RouteState(existingRoutes)
-		changes, err := r.set(nil, routes, existingRoutes)
+		changes, err := r.set(nil, routes, existingRoutes, existingKeys)
 		return changes, state, err
 	}
 
@@ -77,6 +81,11 @@ func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []by
 	}
 
 	existingRoutes, err := r.listForUpdate(tx, "")
+	if err != nil {
+		tx.Rollback()
+		return nil, nil, err
+	}
+	existingKeys, err := r.listKeysForUpdate(tx)
 	if err != nil {
 		tx.Rollback()
 		return nil, nil, err
@@ -94,7 +103,7 @@ func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []by
 	}
 
 	// set the routes and return the changes
-	changes, err := r.set(tx, routes, existingRoutes)
+	changes, err := r.set(tx, routes, existingRoutes, existingKeys)
 	if err != nil {
 		tx.Rollback()
 		return nil, nil, err
@@ -102,7 +111,7 @@ func (r *RouteRepo) Set(routes []*api.AppRoutes, dryRun bool, expectedState []by
 	return changes, currentState, tx.Commit()
 }
 
-func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, existingRoutes []*router.Route) ([]*api.RouteChange, error) {
+func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, existingRoutes []*router.Route, existingKeys []*router.Key) ([]*api.RouteChange, error) {
 	// determine which routes we are going to create, update or delete for each
 	// app first so that we can then apply them in the order we want to (e.g.
 	// we want to process all deletes before updates and creates to support
@@ -178,7 +187,7 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 	// (e.g. so a domain can be deleted from one app and added to another
 	// in the same request)
 	for _, routeToDelete := range deletes {
-		if err := r.validate(routeToDelete, existingRoutes, routeOpDelete); err != nil {
+		if err := r.validate(routeToDelete, existingRoutes, existingKeys, routeOpDelete); err != nil {
 			return nil, err
 		}
 		// actually perform the delete if we have a db transaction
@@ -205,7 +214,7 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 
 	// process updates
 	for _, u := range updates {
-		if err := r.validate(u.updatedRoute, existingRoutes, routeOpUpdate); err != nil {
+		if err := r.validate(u.updatedRoute, existingRoutes, existingKeys, routeOpUpdate); err != nil {
 			return nil, err
 		}
 		// actually perform the update if we have a db transaction
@@ -235,7 +244,7 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 
 	// process creates
 	for _, newRoute := range creates {
-		if err := r.validate(newRoute, existingRoutes, routeOpCreate); err != nil {
+		if err := r.validate(newRoute, existingRoutes, existingKeys, routeOpCreate); err != nil {
 			return nil, err
 		}
 		// actually perform the create if we have a db transaction
@@ -266,7 +275,12 @@ func (r *RouteRepo) Add(route *router.Route) error {
 		tx.Rollback()
 		return err
 	}
-	if err := r.validate(route, existingRoutes, routeOpCreate); err != nil {
+	existingKeys, err := r.listKeysForUpdate(tx)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := r.validate(route, existingRoutes, existingKeys, routeOpCreate); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -392,7 +406,19 @@ func (r *RouteRepo) AddKey(keyDER []byte) (*router.Key, error) {
 }
 
 func (r *RouteRepo) ListKeys() ([]*router.Key, error) {
-	rows, err := r.db.Query("tls_key_list")
+	return r.listKeys(r.db, false)
+}
+
+func (r *RouteRepo) listKeysForUpdate(tx *postgres.DBTx) ([]*router.Key, error) {
+	return r.listKeys(tx, true)
+}
+
+func (r *RouteRepo) listKeys(db dbOrTx, forUpdate bool) ([]*router.Key, error) {
+	query := "tls_key_list"
+	if forUpdate {
+		query += "_for_update"
+	}
+	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +465,7 @@ func (r *RouteRepo) DeleteKey(name string) (*router.Key, error) {
 	}
 
 	// get the key
-	key, err := scanKey(tx.QueryRow("tls_key_select", strings.TrimPrefix(name, "tls-keys/")))
+	key, err := scanKey(tx.QueryRow("tls_key_select_for_update", strings.TrimPrefix(name, "tls-keys/")))
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -644,7 +670,12 @@ func (r *RouteRepo) Update(route *router.Route) error {
 		tx.Rollback()
 		return err
 	}
-	if err := r.validate(route, existingRoutes, routeOpUpdate); err != nil {
+	existingKeys, err := r.listKeysForUpdate(tx)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := r.validate(route, existingRoutes, existingKeys, routeOpUpdate); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -737,7 +768,12 @@ func (r *RouteRepo) Delete(route *router.Route) error {
 		tx.Rollback()
 		return err
 	}
-	if err := r.validate(route, existingRoutes, routeOpDelete); err != nil {
+	existingKeys, err := r.listKeysForUpdate(tx)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := r.validate(route, existingRoutes, existingKeys, routeOpDelete); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -831,10 +867,10 @@ const (
 
 // validate validates the given route against the list of existing routes for
 // the given operation
-func (r *RouteRepo) validate(route *router.Route, existingRoutes []*router.Route, op routeOp) error {
+func (r *RouteRepo) validate(route *router.Route, existingRoutes []*router.Route, existingKeys []*router.Key, op routeOp) error {
 	switch route.Type {
 	case "http":
-		return r.validateHTTP(route, existingRoutes, op)
+		return r.validateHTTP(route, existingRoutes, existingKeys, op)
 	case "tcp":
 		return r.validateTCP(route, existingRoutes, op)
 	default:
@@ -843,7 +879,7 @@ func (r *RouteRepo) validate(route *router.Route, existingRoutes []*router.Route
 }
 
 // validateHTTP validates an HTTP route
-func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.Route, op routeOp) error {
+func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.Route, existingKeys []*router.Key, op routeOp) error {
 	if op == routeOpDelete {
 		// If we are removing a default route ensure no dependent routes left
 		if route.Path == "/" {
@@ -945,7 +981,14 @@ func (r *RouteRepo) validateHTTP(route *router.Route, existingRoutes []*router.R
 			}
 		} else {
 			keyID := cert.KeyID()
-			if _, err := scanKey(r.db.QueryRow("tls_key_select", keyID)); err != nil {
+			found := false
+			for _, key := range existingKeys {
+				if key.ID == keyID {
+					found = true
+					break
+				}
+			}
+			if !found {
 				return hh.ValidationErr("certificate", fmt.Sprintf("key not found: %s", keyID))
 			}
 		}
