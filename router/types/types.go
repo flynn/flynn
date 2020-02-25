@@ -383,7 +383,7 @@ func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
 	if key, err := x509.ParseECPrivateKey(der); err == nil {
 		return key, nil
 	}
-	return nil, errors.New("failed to parse private key (tried PKCS#1, PKCS#8 and SEC1)")
+	return nil, errors.New("failed to parse private key (tried PKCS#1, PKCS#8, and SEC1)")
 }
 
 type Key struct {

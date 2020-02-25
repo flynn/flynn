@@ -148,7 +148,7 @@ func runRouteConfigGenerate(args *docopt.Args, client controller.Client) error {
 	if len(apps) == 0 {
 		app, err := app()
 		if err != nil {
-			return errors.New("no app found, run from a repo with a flynn remote, specify one with -a or pass a list of apps on the command line")
+			return errors.New("no app found, run from a repo with a flynn remote, specify one with -a, or pass a list of apps on the command line")
 		}
 		apps = []string{app}
 	}
