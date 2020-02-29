@@ -992,7 +992,7 @@ outer:
 		allRoutes = append(allRoutes, routes...)
 		apiRoutes := make([]*api.Route, len(routes))
 		for i, route := range routes {
-			apiRoutes[i] = data.ToAPIRoute(route)
+			apiRoutes[i] = api.NewRoute(route)
 		}
 		res.AppRoutes[i] = &api.AppRoutes{
 			App:    "apps/" + app.ID,

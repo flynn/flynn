@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 	"strings"
 	"time"
 
@@ -153,8 +152,9 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 
 					// track this as an update if the configuration differs
 					if !routesEqualForUpdate(existingRoute, desiredRoute) {
-						update := ToRouterRoute(app.ID, desiredRoute)
+						update := desiredRoute.RouterType()
 						update.ID = existingRoute.ID
+						update.ParentRef = existingRoute.ParentRef
 						updates = append(updates, &routeUpdate{
 							existingRoute: existingRoute,
 							updatedRoute:  update,
@@ -176,7 +176,9 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 			if _, ok := exists[route]; ok {
 				continue
 			}
-			creates = append(creates, ToRouterRoute(app.ID, route))
+			newRoute := route.RouterType()
+			newRoute.ParentRef = ct.RouteParentRefPrefix + appID
+			creates = append(creates, newRoute)
 		}
 	}
 
@@ -198,7 +200,7 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 		}
 		changes = append(changes, &api.RouteChange{
 			Action: api.RouteChange_ACTION_DELETE,
-			Before: ToAPIRoute(routeToDelete),
+			Before: api.NewRoute(routeToDelete),
 		})
 		// remove the deleted route from the existing routes so it no
 		// longer affects validations
@@ -225,8 +227,8 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 		}
 		changes = append(changes, &api.RouteChange{
 			Action: api.RouteChange_ACTION_UPDATE,
-			Before: ToAPIRoute(u.existingRoute),
-			After:  ToAPIRoute(u.updatedRoute),
+			Before: api.NewRoute(u.existingRoute),
+			After:  api.NewRoute(u.updatedRoute),
 		})
 		// replace the existing route with the updated one in
 		// the existing routes so that it affects future
@@ -255,7 +257,7 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 		}
 		changes = append(changes, &api.RouteChange{
 			Action: api.RouteChange_ACTION_CREATE,
-			After:  ToAPIRoute(newRoute),
+			After:  api.NewRoute(newRoute),
 		})
 		// add the new route to the existing routes so that
 		// it affects future validations
@@ -1173,71 +1175,4 @@ func certificatesEqual(existing *router.Certificate, desired *api.Certificate) b
 		}
 	}
 	return true
-}
-
-// ToAPIRoute converts a router.Route to an api.Route
-func ToAPIRoute(route *router.Route) *api.Route {
-	r := &api.Route{
-		ServiceTarget: &api.Route_ServiceTarget{
-			ServiceName:   route.Service,
-			Leader:        route.Leader,
-			DrainBackends: route.DrainBackends,
-		},
-		DisableKeepAlives: route.DisableKeepAlives,
-	}
-	if route.ID != "" {
-		r.Name = path.Join(
-			strings.TrimPrefix(route.ParentRef, "controller/"),
-			"routes", route.ID,
-		)
-	}
-	switch route.Type {
-	case "http":
-		r.Config = &api.Route_Http{Http: &api.Route_HTTP{
-			Domain: route.Domain,
-			Path:   route.Path,
-		}}
-		if route.Certificate != nil {
-			r.Config.(*api.Route_Http).Http.Tls = &api.Route_TLS{
-				Certificate: api.NewCertificate(route.Certificate),
-			}
-		}
-		if route.Sticky {
-			r.Config.(*api.Route_Http).Http.StickySessions = &api.Route_HTTP_StickySessions{}
-		}
-	case "tcp":
-		r.Config = &api.Route_Tcp{Tcp: &api.Route_TCP{
-			Port: &api.Route_TCPPort{Port: uint32(route.Port)},
-		}}
-	}
-	return r
-}
-
-// ToRouterRoute converts an api.Route into a router.Route
-func ToRouterRoute(appID string, route *api.Route) *router.Route {
-	r := &router.Route{
-		ParentRef:         ct.RouteParentRefPrefix + appID,
-		DisableKeepAlives: route.DisableKeepAlives,
-	}
-	if t := route.ServiceTarget; t != nil {
-		r.Service = t.ServiceName
-		r.Leader = t.Leader
-		r.DrainBackends = t.DrainBackends
-	}
-	switch config := route.Config.(type) {
-	case *api.Route_Http:
-		r.Type = "http"
-		r.Domain = config.Http.Domain
-		r.Path = config.Http.Path
-		if tls := config.Http.Tls; tls != nil && tls.Certificate != nil {
-			r.Certificate = &router.Certificate{
-				Chain: tls.Certificate.Chain,
-			}
-		}
-		r.Sticky = config.Http.StickySessions != nil
-	case *api.Route_Tcp:
-		r.Type = "tcp"
-		r.Port = int32(config.Tcp.Port.Port)
-	}
-	return r
 }

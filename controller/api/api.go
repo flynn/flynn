@@ -749,6 +749,79 @@ func NewJobState(from ct.JobState) DeploymentEvent_JobState {
 	return DeploymentEvent_PENDING
 }
 
+func NewRoute(from *router.Route) *Route {
+	r := &Route{
+		ServiceTarget: &Route_ServiceTarget{
+			ServiceName:   from.Service,
+			Leader:        from.Leader,
+			DrainBackends: from.DrainBackends,
+		},
+		DisableKeepAlives: from.DisableKeepAlives,
+	}
+	if from.ID != "" {
+		r.Name = path.Join(
+			strings.TrimPrefix(from.ParentRef, "controller/"),
+			"routes", from.ID,
+		)
+	}
+	switch from.Type {
+	case "http":
+		r.Config = &Route_Http{Http: &Route_HTTP{
+			Domain: from.Domain,
+			Path:   from.Path,
+		}}
+		if from.Certificate != nil {
+			r.Config.(*Route_Http).Http.Tls = &Route_TLS{
+				Certificate: NewCertificate(from.Certificate),
+			}
+		}
+		if from.Sticky {
+			r.Config.(*Route_Http).Http.StickySessions = &Route_HTTP_StickySessions{}
+		}
+	case "tcp":
+		r.Config = &Route_Tcp{Tcp: &Route_TCP{
+			Port: &Route_TCPPort{Port: uint32(from.Port)},
+		}}
+	}
+	return r
+}
+
+func (r *Route) RouterType() *router.Route {
+	route := &router.Route{
+		DisableKeepAlives: r.DisableKeepAlives,
+	}
+	if r.Name != "" {
+		nameParts := strings.SplitN(r.Name, "/", 4)
+		if len(nameParts) > 1 {
+			route.ParentRef = ct.RouteParentRefPrefix + nameParts[1]
+		}
+		if len(nameParts) > 3 {
+			route.ID = nameParts[3]
+		}
+	}
+	if t := r.ServiceTarget; t != nil {
+		route.Service = t.ServiceName
+		route.Leader = t.Leader
+		route.DrainBackends = t.DrainBackends
+	}
+	switch config := r.Config.(type) {
+	case *Route_Http:
+		route.Type = "http"
+		route.Domain = config.Http.Domain
+		route.Path = config.Http.Path
+		if tls := config.Http.Tls; tls != nil && tls.Certificate != nil {
+			route.Certificate = &router.Certificate{
+				Chain: tls.Certificate.Chain,
+			}
+		}
+		route.Sticky = config.Http.StickySessions != nil
+	case *Route_Tcp:
+		route.Type = "tcp"
+		route.Port = int32(config.Tcp.Port.Port)
+	}
+	return route
+}
+
 func NewKey(from *router.Key) *Key {
 	key := &Key{
 		Name:       path.Join("tls-keys", from.ID.String()),

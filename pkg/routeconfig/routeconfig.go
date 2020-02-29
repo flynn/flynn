@@ -11,7 +11,6 @@ import (
 	"text/template"
 
 	"github.com/flynn/flynn/controller/api"
-	"github.com/flynn/flynn/controller/data"
 	router "github.com/flynn/flynn/router/types"
 	"github.com/stripe/skycfg"
 	"go.starlark.net/starlark"
@@ -67,7 +66,7 @@ func Generate(apps []string, appRoutes []*api.AppRoutes) ([]byte, error) {
 	for i, app := range apps {
 		routes := make([]*router.Route, len(appRoutes[i].Routes))
 		for j, route := range appRoutes[i].Routes {
-			routes[j] = data.ToRouterRoute(app, route)
+			routes[j] = route.RouterType()
 		}
 		tmplData.AppRoutes[i] = &AppRoutes{
 			App:    app,

@@ -14,7 +14,6 @@ import (
 
 	"github.com/flynn/flynn/controller/api"
 	controller "github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/pkg/routeconfig"
 	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/go-docopt"
@@ -267,13 +266,13 @@ func printRouteChanges(changes []*api.RouteChange) {
 		switch change.Action {
 		case api.RouteChange_ACTION_CREATE:
 			action = "CREATE"
-			route = data.ToRouterRoute("", change.After)
+			route = change.After.RouterType()
 		case api.RouteChange_ACTION_UPDATE:
 			action = "UPDATE"
-			route = data.ToRouterRoute("", change.After)
+			route = change.After.RouterType()
 		case api.RouteChange_ACTION_DELETE:
 			action = "DELETE"
-			route = data.ToRouterRoute("", change.Before)
+			route = change.Before.RouterType()
 		}
 
 		var routeDesc string
@@ -299,7 +298,7 @@ func formatRouteConfig(route *api.Route) string {
 		return "-"
 	}
 
-	r := data.ToRouterRoute("", route)
+	r := route.RouterType()
 	var lines []string
 
 	service := "service: " + r.Service
