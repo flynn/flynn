@@ -15,8 +15,12 @@ type Cert struct {
 	PrivateKey string `json:"key"`
 }
 
+func (c *Cert) ChainPEM() string {
+	return c.Cert + "\n" + c.CACert
+}
+
 func (c *Cert) Chain() [][]byte {
-	chainPEM := []byte(c.Cert + "\n" + c.CACert)
+	chainPEM := []byte(c.ChainPEM())
 	var chain [][]byte
 	for {
 		var block *pem.Block
