@@ -725,6 +725,7 @@
             "test/apps/signal":         "/bin/signal",
             "test/apps/ish":            "/bin/ish",
             "test/apps/partial-logger": "/bin/partial-logger",
+            "test/apps/http":           "/bin/http",
             "test/apps/http-blocker":   "/bin/http-blocker",
             "test/apps/oom":            "/bin/oom",
             "test/apps/proxy":          "/bin/proxy"

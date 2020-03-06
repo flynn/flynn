@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/sha512"
+	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -26,8 +28,10 @@ import (
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/attempt"
 	hh "github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlscert"
+	router "github.com/flynn/flynn/router/types"
 	"github.com/flynn/flynn/tarreceive/utils"
 	c "github.com/flynn/go-check"
 )
@@ -1463,4 +1467,113 @@ func (s *CLISuite) TestDockerExportImport(t *c.C) {
 	// wait for it to start
 	_, err = s.discoverdClient(t).Instances(importApp+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
+}
+
+func (s *CLISuite) TestRouteConfigApply(t *c.C) {
+	// create an app
+	app := s.newCliTestApp(t)
+	defer app.cleanup()
+	t.Assert(app.flynn("scale", "web=1"), Succeeds)
+
+	// create a tmp dir for the route config
+	tmpDir, err := ioutil.TempDir("", "flynn-route-config-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+	configPath := filepath.Join(tmpDir, "routes.star")
+
+	// construct a simple route config
+	domain := random.String(32) + ".dev"
+	writeConfig := func(config string) {
+		t.Assert(ioutil.WriteFile(configPath, []byte(config), 0644), c.IsNil)
+	}
+	writeConfig(`
+load("flynn.routeconfig.v1", "config")
+
+def main(ctx):
+  return config.app_routes({
+    "` + app.name + `": [
+      config.http_route(
+	domain = "` + domain + `",
+	target = config.service("` + app.name + `-web"),
+      ),
+    ],
+  })
+	`)
+
+	// apply the route config
+	apply := func() *CmdResult {
+		cmd := app.flynnCmd("route", "config", "apply", configPath)
+		cmd.Stdin = strings.NewReader("yes\n")
+		return run(t, cmd)
+	}
+	t.Assert(apply(), Succeeds)
+
+	// check the route was created
+	req, err := http.NewRequest("GET", "http://"+routerIP, nil)
+	t.Assert(err, c.IsNil)
+	req.Host = domain
+	res, err := http.DefaultClient.Do(req)
+	t.Assert(err, c.IsNil)
+	res.Body.Close()
+	t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+
+	// check HTTPS requests use the cluster's default TLS certificate
+	checkHTTPS := func(pin string) {
+		pinBytes, err := base64.StdEncoding.DecodeString(pin)
+		t.Assert(err, c.IsNil)
+		pinConf := &pinned.Config{
+			Pin:    pinBytes,
+			Config: &tls.Config{ServerName: domain},
+		}
+		client := &http.Client{Transport: &http.Transport{DialTLS: pinConf.Dial}}
+		req, err := http.NewRequest("GET", "https://"+routerIP, nil)
+		t.Assert(err, c.IsNil)
+		req.Host = domain
+		res, err := client.Do(req)
+		t.Assert(err, c.IsNil)
+		res.Body.Close()
+		t.Assert(res.StatusCode, c.Equals, http.StatusOK)
+	}
+	checkHTTPS(s.clusterConf(t).TLSPin)
+
+	// add a static certificate to the route config
+	cert, err := tlscert.Generate([]string{domain})
+	t.Assert(err, c.IsNil)
+	writeConfig(`
+load("flynn.routeconfig.v1", "config")
+
+def main(ctx):
+  return config.app_routes({
+    "` + app.name + `": [
+      config.http_route(
+	domain = "` + domain + `",
+	target = config.service("` + app.name + `-web"),
+	certificate = config.static_certificate('''` + cert.ChainPEM() + `'''),
+      ),
+    ],
+  })
+	`)
+
+	// check we get an error as the TLS key doesn't exist
+	cmd := apply()
+	t.Assert(cmd, c.Not(Succeeds))
+	key, err := router.NewKey(cert.PrivateKeyDER())
+	t.Assert(err, c.IsNil)
+	t.Assert(cmd, OutputContains, fmt.Sprintf("key not found: %s", key.ID))
+
+	// check HTTPS requests still use the cluster's default TLS certificate
+	checkHTTPS(s.clusterConf(t).TLSPin)
+
+	// upload the TLS key
+	keyFile := filepath.Join(tmpDir, "key.pem")
+	t.Assert(ioutil.WriteFile(keyFile, []byte(cert.PrivateKey), 0644), c.IsNil)
+	t.Assert(app.flynn("tls-key", "add", keyFile), Succeeds)
+
+	// applying the route config should now succeed
+	t.Assert(apply(), Succeeds)
+
+	// check HTTPS requests now use the static certificate
+	checkHTTPS(cert.Pin)
 }

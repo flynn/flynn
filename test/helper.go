@@ -391,6 +391,16 @@ func (h *Helper) createAppWithClient(t *c.C, client controller.Client) (*ct.App,
 	release := &ct.Release{
 		ArtifactIDs: []string{h.createArtifactWithClient(t, "test-apps", client).ID},
 		Processes: map[string]ct.ProcessType{
+			"web": {
+				Args: []string{"/bin/http"},
+				Ports: []ct.Port{{
+					Proto: "tcp",
+					Service: &host.Service{
+						Name:   app.Name + "-web",
+						Create: true,
+					},
+				}},
+			},
 			"echoer": {
 				Args:    []string{"/bin/echoer"},
 				Service: "echo-service",
