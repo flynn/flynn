@@ -19,6 +19,7 @@ require (
 	github.com/dgryski/go-skip32 v0.0.0-20131221203938-6cc5a8b574de
 	github.com/docker/go-units v0.3.0
 	github.com/dustin/go-humanize v1.0.0
+	github.com/eggsampler/acme/v3 v3.1.0
 	github.com/flynn/go-check v0.0.0-20150613200214-592122021381
 	github.com/flynn/go-docopt v0.0.0-20140912013429-f6dd2ebbb31e
 	github.com/flynn/go-p9p v0.0.0-20170717161903-42f7901ca21a
@@ -60,13 +61,15 @@ require (
 	github.com/kr/pty v1.1.8
 	github.com/krolaw/dhcp4 v0.0.0-20180925202202-7cead472c414
 	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
+	github.com/letsencrypt/pebble v1.0.2-0.20191211224738-295d9c1182f2
 	github.com/mattn/go-colorable v0.0.0-20140924234614-043ae1629135
 	github.com/mattn/go-isatty v0.0.0-20151211000621-56b76bdf51f7 // indirect
-	github.com/miekg/dns v0.0.0-20160726032027-db96a2b759cd
+	github.com/miekg/dns v1.1.15
 	github.com/minio/minio-go v0.0.0-20170324230031-29b05151452a
 	github.com/mistifyio/go-zfs v0.0.0-20141209150540-dda1f4cd04dc
 	github.com/mitchellh/go-homedir v0.0.0-20140913165950-7d2d8c8a4e07
 	github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618 // indirect
+	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/olekukonko/ts v0.0.0-20140412220145-ecf753e7c962 // indirect
