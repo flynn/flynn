@@ -177,7 +177,7 @@ func (r *RouteRepo) set(tx *postgres.DBTx, desiredAppRoutes []*api.AppRoutes, ex
 				continue
 			}
 			newRoute := route.RouterType()
-			newRoute.ParentRef = ct.RouteParentRefPrefix + appID
+			newRoute.ParentRef = ct.RouteParentRefPrefix + app.ID
 			creates = append(creates, newRoute)
 		}
 	}
