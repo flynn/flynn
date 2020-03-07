@@ -460,6 +460,14 @@
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
   },
   {
+    "id": "acme-account",
+    "action": "gen-acme-account",
+    "directory_url": "{{ getenv \"ACME_DIRECTORY_URL\" }}",
+    "key": "{{ getenv \"ACME_ACCOUNT_KEY\" }}",
+    "contacts": "{{ getenv \"ACME_ACCOUNT_CONTACTS\" }}",
+    "terms_of_service_agreed": "{{ getenv \"ACME_TERMS_OF_SERVICE_AGREED\" }}"
+  },
+  {
     "id": "router",
     "action": "deploy-app",
     "app": {
@@ -480,11 +488,23 @@
           "args": ["/bin/flynn-router", "-http-port", "80", "-https-port", "443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
           "omni": true,
           "service": "router-api"
+        },
+        "acme": {
+          "args": ["/bin/flynn-acme"],
+          "service": "router-acme-responder",
+          "ports": [{ "proto": "tcp" }],
+          "env": {
+            "DIRECTORY_URL": "{{ (index .StepData \"acme-account\").DirectoryURL }}",
+            "ACCOUNT_KEY": "{{ (index .StepData \"acme-account\").Key }}",
+            "ACCOUNT_CONTACTS": "{{ getenv \"ACME_ACCOUNT_CONTACTS\" }}",
+            "TERMS_OF_SERVICE_AGREED": "{{ getenv \"ACME_TERMS_OF_SERVICE_AGREED\" }}"
+          }
         }
       }
     },
     "processes": {
-      "app": 1
+      "app": 1,
+      "acme": 1
     }
   },
   {

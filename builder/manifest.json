@@ -333,7 +333,8 @@
       "base": "busybox",
       "layers": [{
         "gobuild": {
-          "router": "/bin/flynn-router"
+          "router":               "/bin/flynn-router",
+          "router/acme/cmd/acme": "/bin/flynn-acme"
         },
         "copy": {
           "util/ca-certs/ca-certs.pem": "/etc/ssl/certs/ca-certs.pem"
