@@ -164,7 +164,8 @@ var configTemplate = template.Must(template.New("routes.star").Parse(`
 #
 # - static_certificate(chainPEM)
 #
-#   Constructs a flynn.api.v1.Certificate for the given PEM-encoded certificate chain.
+#   Constructs a flynn.api.v1.Certificate containing a StaticCertificate for
+#   the given PEM-encoded certificate chain.
 #
 #   Example:
 #
@@ -179,6 +180,15 @@ var configTemplate = template.Must(template.New("routes.star").Parse(`
 #     WnUX2A==
 #     -----END CERTIFICATE-----
 #     ''')
+#
+# - managed_certificate(domain)
+#
+#   Constructs a flynn.api.v1.Certificate containing a ManagedCertificate for
+#   the given domain.
+#
+#   Example:
+#
+#     config.managed_certificate("app.example.com")
 
 load("flynn.routeconfig.v1", "config")
 
@@ -238,7 +248,7 @@ def app_routes(v):
 
   return appRoutes
 
-def http_route(domain, target, path = "/", certificate = None, sticky = False, disable_keep_alives = False):
+def http_route(domain, target, path = "/", auto_tls = False, certificate = None, sticky = False, disable_keep_alives = False):
   route = apiv1.Route(
     http = apiv1.Route.HTTP(
       domain = domain,
@@ -248,7 +258,11 @@ def http_route(domain, target, path = "/", certificate = None, sticky = False, d
     disable_keep_alives = disable_keep_alives,
   )
 
-  if certificate:
+  if auto_tls:
+    route.http.tls = apiv1.Route.TLS(
+      certificate = config.managed_certificate(domain),
+    )
+  elif certificate:
     route.http.tls = apiv1.Route.TLS(
       certificate = certificate,
     )
@@ -278,15 +292,25 @@ def service(name, leader = False, drain_backends = True):
 
 def static_certificate(chainPEM):
   return apiv1.Certificate(
-    chain = cert_chain_from_pem(chainPEM),
+    static = apiv1.StaticCertificate(
+      chain = cert_chain_from_pem(chainPEM),
+    ),
+  )
+
+def managed_certificate(domain):
+  return apiv1.Certificate(
+    managed = apiv1.ManagedCertificate(
+      domain = domain,
+    ),
   )
 
 config = struct(
-  app_routes         = app_routes,
-  http_route         = http_route,
-  tcp_route          = tcp_route,
-  service            = service,
-  static_certificate = static_certificate,
+  app_routes          = app_routes,
+  http_route          = http_route,
+  tcp_route           = tcp_route,
+  service             = service,
+  static_certificate  = static_certificate,
+  managed_certificate = managed_certificate,
 )
 `
 

@@ -310,6 +310,10 @@ func formatRouteConfig(route *api.Route) string {
 	}
 	lines = append(lines, service)
 
+	if r.ManagedCertificateDomain != nil {
+		lines = append(lines, "auto-tls: "+*r.ManagedCertificateDomain)
+	}
+
 	if r.Certificate != nil {
 		lines = append(lines, "certificate: "+r.Certificate.ID().String())
 	}
