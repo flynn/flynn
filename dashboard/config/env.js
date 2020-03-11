@@ -73,7 +73,9 @@ function getClientEnvironment(publicUrl) {
 		PUBLIC_CONFIG_JSON: '{}',
 		PRIVATE_CONFIG_JSON: '{}',
 
-		CONTROLLER_AUTH_KEY: process.env.CONTROLLER_AUTH_KEY
+		CONTROLLER_AUTH_KEY: process.env.CONTROLLER_AUTH_KEY,
+		OAUTH_ISSUER: process.env.OAUTH_ISSUER,
+		OAUTH_CLIENT_ID: process.env.OAUTH_CLIENT_ID
 	};
 	// Stringify all values so we can feed into Webpack DefinePlugin and use
 	// `window.DashboardConfig` in production build (the server handles
