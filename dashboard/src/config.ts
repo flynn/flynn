@@ -10,10 +10,16 @@ export interface PrivateConfig {
 	CONTROLLER_AUTH_KEY: string | null;
 }
 
+type AuthCallback = (authenticated: boolean) => void;
+
 export interface Config extends PublicConfig, PrivateConfig {
 	unsetPrivateConfig: () => void;
+	setAuthKey: (key: string | null) => void;
+	authCallback: (cb: AuthCallback) => () => void;
 	isAuthenticated: () => boolean;
 }
+
+const authCallbacks = new Set<AuthCallback>();
 
 const config: Config = {
 	CONTROLLER_HOST: process.env.CONTROLLER_HOST || ifDev(() => 'https://controller.1.localflynn.com') || '',
@@ -24,6 +30,22 @@ const config: Config = {
 
 	unsetPrivateConfig: () => {
 		config.CONTROLLER_AUTH_KEY = null;
+	},
+
+	setAuthKey: (key: string | null) => {
+		config.CONTROLLER_AUTH_KEY = key;
+
+		const isAuthenticated = config.isAuthenticated();
+		authCallbacks.forEach((cb) => {
+			cb(isAuthenticated);
+		});
+	},
+
+	authCallback: (cb: AuthCallback) => {
+		authCallbacks.add(cb);
+		return () => {
+			authCallbacks.delete(cb);
+		};
 	},
 
 	isAuthenticated: () => {

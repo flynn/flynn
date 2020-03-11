@@ -59,7 +59,9 @@ export async function generateAuthorizationURL(): Promise<string> {
 	params.set('state', await generateState());
 	params.set('client_id', Config.OAUTH_CLIENT_ID);
 	params.set('response_type', 'code');
-	const redirectURI = resolveURLPath(OAUTH_CALLBACK_PATH);
+	const redirectParams = new URLSearchParams(window.location.search);
+	redirectParams.set('path', window.location.pathname);
+	const redirectURI = resolveURLPath(OAUTH_CALLBACK_PATH, redirectParams);
 	await Store.setItem(StoreKeys.REDIRECT_URI, redirectURI);
 	params.set('redirect_uri', redirectURI);
 	return `${meta.authorization_endpoint}?${params.toString()}`;
@@ -76,7 +78,16 @@ export interface Token {
 
 type TokenCallbackFn = (token: Token | null, error: Error | null) => void;
 
-export async function getToken(responseParams: string, callback: TokenCallbackFn, abortSignal: AbortSignal) {
+export async function getToken(callback: TokenCallbackFn) {
+	const token = await Store.getToken();
+	if (token === null || token.issued_time + token.expires_in * 1000 <= Date.now()) {
+		callback(null, new Error('token not found'));
+	} else {
+		callback(token, null);
+	}
+}
+
+export async function tokenExchange(responseParams: string, callback: TokenCallbackFn, abortSignal: AbortSignal) {
 	const params = new URLSearchParams(responseParams);
 	if (!(await verifyState(params.get('state') || ''))) {
 		throw new Error(`Error verifying state param`);
@@ -98,21 +109,26 @@ export async function getToken(responseParams: string, callback: TokenCallbackFn
 	});
 	const token = await res.json();
 	if (abortSignal.aborted) return;
-	if (token.error === '') {
+	if (!token.error) {
 		token.issued_time = Date.now();
 		setTimeout(() => {
-			if (abortSignal.aborted) return;
-			refreshToken(token.refresh_token || '', callback, abortSignal);
-		}, token.expires_in - 30);
+			refreshToken(token.refresh_token || '');
+		}, (token.expires_in - 30) * 1000);
 		await Store.setToken(token);
+		await Store.removeItem(StoreKeys.CODE_VERIFIER);
+		await Store.removeItem(StoreKeys.CODE_CHALLENGE);
+		await Store.removeItem(StoreKeys.STATE);
+		await Store.removeItem(StoreKeys.REDIRECT_URI);
+		Config.setAuthKey(token.access_token || null);
 		callback(token as Token, null);
 	} else {
-		await Store.setToken(token);
+		await Store.setToken(null);
+		Config.setAuthKey(null);
 		callback(null, new Error(`Error getting auth token: ${token.error_description || token.error}`));
 	}
 }
 
-async function refreshToken(code: string, callback: TokenCallbackFn, abortSignal: AbortSignal) {
+async function refreshToken(code: string) {
 	const meta = await getServerMeta();
 	const params = new URLSearchParams('');
 	params.set('grant_type', 'refresh_token');
@@ -122,28 +138,27 @@ async function refreshToken(code: string, callback: TokenCallbackFn, abortSignal
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded'
 		},
-		body: params.toString(),
-		signal: abortSignal
+		body: params.toString()
 	});
 	const token = await res.json();
-	if (abortSignal.aborted) return;
-	if (token.error === '') {
+	if (!token.error) {
+		token.issued_time = Date.now();
 		setTimeout(() => {
-			if (abortSignal.aborted) return;
-			refreshToken(token.refresh_token || '', callback, abortSignal);
-		}, token.expires_in - 30);
+			refreshToken(token.refresh_token || '');
+		}, (token.expires_in - 30) * 1000);
 		await Store.setToken(token);
-		callback(token as Token, null);
+		Config.setAuthKey(token.access_token);
 	} else {
+		Config.setAuthKey(null);
 		await Store.setToken(null);
-		callback(null, new Error(`Error refreshing auth token: ${token.error_description || token.error}`));
+		console.error(new Error(`Error refreshing auth token: ${token.error_description || token.error}`));
 	}
 }
 
-function resolveURLPath(path: string): string {
+function resolveURLPath(path: string, params: URLSearchParams): string {
 	const a = document.createElement('a');
 	a.href = path;
-	return a.href;
+	return `${a.href}?${params.toString()}`;
 }
 
 interface ServerMetadata {

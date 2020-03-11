@@ -5,13 +5,13 @@ import { Grommet, Box, Heading } from 'grommet';
 import styled from 'styled-components';
 
 import theme from './theme';
-import Config from './config';
 import { useLocation } from 'react-router-dom';
 import Split from './Split';
 import Loading from './Loading';
 import AppsListNav from './AppsListNav';
 import { DisplayErrors } from './useErrorHandler';
 import flynnLogoPath from './flynn.svg';
+import useOAuth from './useOAuth';
 
 // DEBUG:
 import { default as client, Client } from './client';
@@ -24,7 +24,6 @@ if (typeof window !== 'undefined') {
 	window.client = client;
 }
 
-const Login = React.lazy(() => import('./Login'));
 const AppComponent = React.lazy(() => import('./AppComponent'));
 
 const StyledLogoImg = styled('img')`
@@ -46,7 +45,7 @@ function DashboardInner() {
 	React.useEffect(() => {
 		setAppName(appNameFromPath(currentPath));
 	}, [currentPath]);
-	const [authenticated, setAuthenticated] = React.useState(Config.isAuthenticated());
+	const { authenticated } = useOAuth();
 
 	return (
 		<Split>
@@ -70,7 +69,7 @@ function DashboardInner() {
 							</Route>
 						</Switch>
 					) : (
-						<Login onLoginSuccess={() => setAuthenticated(true)} />
+						<Loading />
 					)}
 				</React.Suspense>
 			</Box>
