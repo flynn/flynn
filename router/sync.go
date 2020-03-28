@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"path"
+	"sort"
 
 	router "github.com/flynn/flynn/router/types"
 	"golang.org/x/net/context"
@@ -37,6 +39,7 @@ func (s *Syncer) Sync(ctx context.Context, h SyncHandler, startc chan<- struct{}
 	if err != nil {
 		return err
 	}
+	s.sortInitialRoutes(initialRoutes)
 
 	toRemove := h.Current()
 	for _, route := range initialRoutes {
@@ -92,3 +95,19 @@ func (s *Syncer) handleUpdate(h SyncHandler, event *router.Event) error {
 	}
 	return err
 }
+
+// sortInitialRoutes sorts the given initial routes by domain and path so that
+// we process root-path routes before sub-path routes (otherwise we'd get a
+// consistency violation adding a sub-path when the root-path doesn't yet
+// exist)
+func (s *Syncer) sortInitialRoutes(routes []*router.Route) {
+	sort.Sort(sortInitialRoutes(routes))
+}
+
+type sortInitialRoutes []*router.Route
+
+func (r sortInitialRoutes) Len() int { return len(r) }
+func (r sortInitialRoutes) Less(i, j int) bool {
+	return path.Join(r[i].Domain, r[i].Path) < path.Join(r[j].Domain, r[j].Path)
+}
+func (r sortInitialRoutes) Swap(i, j int) { r[i], r[j] = r[j], r[i] }

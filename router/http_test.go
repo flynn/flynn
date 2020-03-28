@@ -103,6 +103,10 @@ func getDefaultPortsFromAddrs(l *HTTPListener) (defaultPorts []int) {
 }
 
 func (s *S) buildHTTPListener(t testutil.TestingT) *HTTPListener {
+	return s.buildHTTPListenerWithStore(t, s.store)
+}
+
+func (s *S) buildHTTPListenerWithStore(t testutil.TestingT, store *testStore) *HTTPListener {
 	cert := testutils.TLSConfigForDomain("example.com")
 	pair, err := tls.X509KeyPair([]byte(cert.Cert), []byte(cert.PrivateKey))
 	if err != nil {
@@ -112,7 +116,7 @@ func (s *S) buildHTTPListener(t testutil.TestingT) *HTTPListener {
 		Addrs:     []string{"127.0.0.1:0"},
 		TLSAddrs:  []string{"127.0.0.1:0"},
 		keypair:   pair,
-		syncer:    NewSyncer(s.store, "http"),
+		syncer:    NewSyncer(store, "http"),
 		discoverd: s.discoverd,
 	}
 
@@ -473,6 +477,50 @@ func (s *S) TestHTTPInitialSync(c *C) {
 
 	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
 	assertGet(c, "https://"+l.TLSAddrs[0], "example.com", "1")
+}
+
+// TestHTTPInitialSyncOrder checks that routes are synced correctly when
+// synced from a store that doesn't return routes in chronological order
+// (which could lead to a consistency violation if a sub-path route is seen
+// before a root path route)
+func (s *S) TestHTTPInitialSyncOrder(c *C) {
+	// create a store with a root and sub-path route
+	store := newTestStore()
+	store.add(router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "1",
+		Path:    "/",
+	}.ToRoute())
+	store.add(router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "2",
+		Path:    "/2/",
+	}.ToRoute())
+
+	// configure store.List() to return the sub-path route first
+	store.sortRouteList = func(routes []*router.Route) {
+		if routes[0].Path != "/2/" {
+			routes[0], routes[1] = routes[1], routes[0]
+		}
+	}
+
+	// start a listener
+	l := s.buildHTTPListenerWithStore(c, store)
+	c.Assert(l.Start(), IsNil)
+	l.defaultPorts = getDefaultPortsFromAddrs(l)
+	defer l.Close()
+
+	// start the backend services
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
+	defer srv2.Close()
+	discoverdRegisterHTTPService(c, l, "1", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "2", srv2.Listener.Addr().String())
+
+	// check both routes work correctly
+	assertGet(c, "http://"+l.Addrs[0], "example.com", "1")
+	assertGet(c, "http://"+l.Addrs[0]+"/2/", "example.com", "2")
 }
 
 func (s *S) TestHTTPResync(c *C) {
