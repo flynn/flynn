@@ -56,6 +56,10 @@ type testStore struct {
 
 	streamsMtx sync.Mutex
 	streams    map[chan *router.Event]*stream.Basic
+
+	// sortRouteList when set will be called to sort the list of routes
+	// returned from List()
+	sortRouteList func([]*router.Route)
 }
 
 func newTestStore() *testStore {
@@ -71,6 +75,9 @@ func (t *testStore) List() ([]*router.Route, error) {
 	routes := make([]*router.Route, 0, len(t.routes))
 	for _, r := range t.routes {
 		routes = append(routes, r)
+	}
+	if t.sortRouteList != nil {
+		t.sortRouteList(routes)
 	}
 	return routes, nil
 }
