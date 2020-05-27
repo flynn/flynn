@@ -21,24 +21,26 @@ export default function useOAuth() {
 			ac.abort();
 		};
 		if (window.location.pathname === '/oauth/callback') {
+			const oauthParams =
+				window.location.hash[0] === '?' ? window.location.hash.substr(1) : window.location.search.substr(1);
 			oauth
-				.tokenExchange(
-					window.location.hash.substr(1),
-					(token: oauth.Token | null, error: Error | null) => {
-						if (ac.signal.aborted === true) return;
-						if (error !== null) {
-							handleError(error);
-						}
+				.getOriginalPath()
+				.then((originalPath) => {
+					return oauth.tokenExchange(
+						oauthParams,
+						(token: oauth.Token | null, error: Error | null) => {
+							if (ac.signal.aborted === true) return;
+							if (error !== null) {
+								handleError(error);
+							}
 
-						if (token !== null) {
-							const params = new URLSearchParams(window.location.search);
-							const path = params.get('path') || '/';
-							params.delete('path');
-							history.replace(`${path}?${params.toString()}`);
-						}
-					},
-					ac.signal
-				)
+							if (token !== null) {
+								history.replace(originalPath || '/');
+							}
+						},
+						ac.signal
+					);
+				})
 				.catch((error) => {
 					if (ac.signal.aborted === true) return;
 					console.error(error);

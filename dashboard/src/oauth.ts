@@ -6,7 +6,8 @@ enum StoreKeys {
 	CODE_CHALLENGE = 'OAUTH_CODE_CHALLENGE',
 	STATE = 'OAUTH_STATE',
 	REDIRECT_URI = 'OAUTH_REDIRECT_URI',
-	TOKEN = 'OAUTH_TOKEN'
+	TOKEN = 'OAUTH_TOKEN',
+	ORIGINAL_PATH = 'OAUTH_ORIGINAL_PATH'
 }
 
 const Store = {
@@ -51,20 +52,31 @@ const Store = {
 
 export const OAUTH_CALLBACK_PATH = '/oauth/callback';
 
+function resolveURLPath(path: string): string {
+	const a = document.createElement('a');
+	a.href = path;
+	return a.href;
+}
+
 export async function generateAuthorizationURL(): Promise<string> {
 	const meta = await getServerMeta();
 	const params = new URLSearchParams('');
 	params.set('code_challenge', await generateCodeChallenge());
 	params.set('code_challenge_method', 'S256');
 	params.set('state', await generateState());
+	params.set('nonce', await randomString(16));
 	params.set('client_id', Config.OAUTH_CLIENT_ID);
 	params.set('response_type', 'code');
-	const redirectParams = new URLSearchParams(window.location.search);
-	redirectParams.set('path', window.location.pathname);
-	const redirectURI = resolveURLPath(OAUTH_CALLBACK_PATH, redirectParams);
+	params.set('response_mode', 'fragment');
+	await Store.setItem(StoreKeys.ORIGINAL_PATH, window.location.pathname);
+	const redirectURI = resolveURLPath(OAUTH_CALLBACK_PATH);
 	await Store.setItem(StoreKeys.REDIRECT_URI, redirectURI);
 	params.set('redirect_uri', redirectURI);
 	return `${meta.authorization_endpoint}?${params.toString()}`;
+}
+
+export async function getOriginalPath(): Promise<string> {
+	return await Store.getItem(StoreKeys.ORIGINAL_PATH);
 }
 
 export interface Token {
@@ -92,6 +104,15 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	if (!(await verifyState(params.get('state') || ''))) {
 		throw new Error(`Error verifying state param`);
 	}
+
+	if (params.get('error')) {
+		const errorCode = params.get('error') || '';
+		const error = Object.assign(new Error(`Error: ${params.get('error_description') || errorCode}`), {
+			code: errorCode
+		});
+		throw error;
+	}
+
 	const meta = await getServerMeta();
 	const res = await fetch(meta.token_endpoint, {
 		method: 'POST',
@@ -119,6 +140,7 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 		await Store.removeItem(StoreKeys.CODE_CHALLENGE);
 		await Store.removeItem(StoreKeys.STATE);
 		await Store.removeItem(StoreKeys.REDIRECT_URI);
+		await Store.removeItem(StoreKeys.ORIGINAL_PATH);
 		Config.setAuthKey(token.access_token || null);
 		callback(token as Token, null);
 	} else {
@@ -153,12 +175,6 @@ async function refreshToken(code: string) {
 		await Store.setToken(null);
 		console.error(new Error(`Error refreshing auth token: ${token.error_description || token.error}`));
 	}
-}
-
-function resolveURLPath(path: string, params: URLSearchParams): string {
-	const a = document.createElement('a');
-	a.href = path;
-	return `${a.href}?${params.toString()}`;
 }
 
 interface ServerMetadata {
