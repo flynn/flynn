@@ -114,18 +114,18 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	}
 
 	const meta = await getServerMeta();
+	const body = new URLSearchParams();
+	body.set('grant_type', 'authorization_code');
+	body.set('code', params.get('code') || '');
+	body.set('code_verifier', await Store.getItem(StoreKeys.CODE_VERIFIER));
+	body.set('redirect_uri', await Store.getItem(StoreKeys.REDIRECT_URI));
+	body.set('client_id', Config.OAUTH_CLIENT_ID);
 	const res = await fetch(meta.token_endpoint, {
 		method: 'POST',
 		headers: {
-			'Content-Type': 'application/json'
+			'Content-Type': 'application/x-www-form-urlencoded'
 		},
-		body: JSON.stringify({
-			grant_type: 'authorization_code',
-			code: params.get('code') || '',
-			code_verifier: await Store.getItem(StoreKeys.CODE_VERIFIER),
-			redirect_uri: await Store.getItem(StoreKeys.REDIRECT_URI),
-			client_id: Config.OAUTH_CLIENT_ID
-		}),
+		body: body.toString(),
 		signal: abortSignal
 	});
 	const token = await res.json();

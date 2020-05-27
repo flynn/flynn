@@ -22,7 +22,7 @@ export default function useOAuth() {
 		};
 		if (window.location.pathname === '/oauth/callback') {
 			const oauthParams =
-				window.location.hash[0] === '?' ? window.location.hash.substr(1) : window.location.search.substr(1);
+				window.location.hash[0] === '#' ? window.location.hash.substr(1) : window.location.search.substr(1);
 			oauth
 				.getOriginalPath()
 				.then((originalPath) => {
