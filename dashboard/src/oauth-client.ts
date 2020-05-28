@@ -138,7 +138,7 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	if (abortSignal.aborted) return;
 	if (!token.error) {
 		token.issued_time = Date.now();
-		token.expires_in = 30;
+		token.expires_in = 30; // TODO: remove this line
 		refreshTokenTimeout = setTimeout(() => {
 			refreshToken(token.refresh_token || '');
 		}, (token.expires_in - 30) * 1000);
