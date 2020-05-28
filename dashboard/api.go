@@ -263,13 +263,19 @@ func (api *API) ServeIndex(ctx context.Context, w http.ResponseWriter, req *http
 func (api *API) ServeConfigJs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	w.Header().Add("Content-Type", "application/javascript")
 	w.Header().Add("Cache-Control", "max-age=0")
-	configJs := `window.Function = function () { return function () { return this; }; };window.DashboardConfig = Object.assign(%s, %s);`
+
+	// the generated protobuf code uses Function('return this') to obtain a
+	// reference to the global object, so override that to eliminate use of
+	// unsafe-eval
+	unsafeEvalWorkAround := `window.Function = function () { return function () { return this; }; };`
+
+	configJs := `window.DashboardConfig = Object.assign(%s, %s);`
 	if api.IsAuthenticated(ctx) {
 		configJs = fmt.Sprintf(configJs, api.conf.PublicConfigJSON, api.conf.PrivateConfigJSON)
 	} else {
 		configJs = fmt.Sprintf(configJs, api.conf.PublicConfigJSON, "{}")
 	}
-	w.Write([]byte(configJs))
+	w.Write([]byte(fmt.Sprintf("%s%s", unsafeEvalWorkAround, configJs)))
 	w.WriteHeader(200)
 }
 
