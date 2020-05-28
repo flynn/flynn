@@ -7,11 +7,11 @@ import styled from 'styled-components';
 import theme from './theme';
 import { useLocation } from 'react-router-dom';
 import Split from './Split';
+import OAuth from './OAuth';
 import Loading from './Loading';
 import AppsListNav from './AppsListNav';
 import { DisplayErrors } from './useErrorHandler';
 import flynnLogoPath from './flynn.svg';
-import useOAuth from './useOAuth';
 
 // DEBUG:
 import { default as client, Client } from './client';
@@ -45,21 +45,26 @@ function DashboardInner() {
 	React.useEffect(() => {
 		setAppName(appNameFromPath(currentPath));
 	}, [currentPath]);
-	const { authenticated } = useOAuth();
+
+	if (window.location.pathname === '/oauth/callback') return <OAuth />;
 
 	return (
-		<Split>
-			<Box tag="aside" basis="medium" flex={false} fill>
-				<Box tag="header" pad="small" direction="row">
-					<StyledLogoImg src={flynnLogoPath} alt="Flynn Logo" />
-				</Box>
-				<Box flex>{authenticated ? <AppsListNav /> : null}</Box>
-			</Box>
+		<>
+			<OAuth />
 
-			<Box pad="xsmall" fill overflow="scroll" gap="small">
-				<DisplayErrors />
-				<React.Suspense fallback={<Loading />}>
-					{authenticated ? (
+			<Split>
+				<Box tag="aside" basis="medium" flex={false} fill>
+					<Box tag="header" pad="small" direction="row">
+						<StyledLogoImg src={flynnLogoPath} alt="Flynn Logo" />
+					</Box>
+					<Box flex>
+						<AppsListNav />
+					</Box>
+				</Box>
+
+				<Box pad="xsmall" fill overflow="scroll" gap="small">
+					<DisplayErrors />
+					<React.Suspense fallback={<Loading />}>
 						<Switch>
 							<Route path="/apps/:appID">
 								<AppComponent key={appName} name={appName} />
@@ -68,12 +73,10 @@ function DashboardInner() {
 								<Heading>Select an app to begin.</Heading>
 							</Route>
 						</Switch>
-					) : (
-						<Loading />
-					)}
-				</React.Suspense>
-			</Box>
-		</Split>
+					</React.Suspense>
+				</Box>
+			</Split>
+		</>
 	);
 }
 

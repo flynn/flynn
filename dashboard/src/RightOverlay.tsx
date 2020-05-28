@@ -18,7 +18,7 @@ const StyledLayer = styled(Layer)`
 
 export interface Props {
 	children: React.ReactNode;
-	onClose: () => void;
+	onClose?: () => void;
 }
 
 export default function RightOverlay({ children, onClose }: Props) {
