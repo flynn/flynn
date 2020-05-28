@@ -84,6 +84,7 @@ export interface Token {
 	token_type: string;
 	expires_in: number;
 	refresh_token: string;
+	refresh_token_expires_in: number;
 
 	issued_time: number;
 }
@@ -93,6 +94,11 @@ type TokenCallbackFn = (token: Token | null, error: Error | null) => void;
 export async function getToken(callback: TokenCallbackFn) {
 	const token = await Store.getToken();
 	if (token === null || token.issued_time + token.expires_in * 1000 <= Date.now()) {
+		if (token && token.issued_time + token.refresh_token_expires_in > Date.now()) {
+			await refreshToken(token.refresh_token);
+			getToken(callback);
+			return;
+		}
 		callback(null, new Error('token not found'));
 	} else {
 		callback(token, null);
@@ -116,7 +122,7 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	const meta = await getServerMeta();
 	const body = new URLSearchParams();
 	body.set('grant_type', 'authorization_code');
-	body.set('code', params.get('code') || '');
+	body.set('code', decodeURIComponent(params.get('code') || ''));
 	body.set('code_verifier', await Store.getItem(StoreKeys.CODE_VERIFIER));
 	body.set('redirect_uri', await Store.getItem(StoreKeys.REDIRECT_URI));
 	body.set('client_id', Config.OAUTH_CLIENT_ID);
@@ -132,7 +138,8 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	if (abortSignal.aborted) return;
 	if (!token.error) {
 		token.issued_time = Date.now();
-		setTimeout(() => {
+		token.expires_in = 30;
+		refreshTokenTimeout = setTimeout(() => {
 			refreshToken(token.refresh_token || '');
 		}, (token.expires_in - 30) * 1000);
 		await Store.setToken(token);
@@ -150,7 +157,10 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	}
 }
 
+let refreshTokenTimeout: ReturnType<typeof setTimeout>;
+
 async function refreshToken(code: string) {
+	clearTimeout(refreshTokenTimeout);
 	const meta = await getServerMeta();
 	const params = new URLSearchParams('');
 	params.set('grant_type', 'refresh_token');
@@ -161,11 +171,14 @@ async function refreshToken(code: string) {
 			'Content-Type': 'application/x-www-form-urlencoded'
 		},
 		body: params.toString()
+	}).catch(async (e) => {
+		await Store.clear();
+		throw e;
 	});
 	const token = await res.json();
 	if (!token.error) {
 		token.issued_time = Date.now();
-		setTimeout(() => {
+		refreshTokenTimeout = setTimeout(() => {
 			refreshToken(token.refresh_token || '');
 		}, (token.expires_in - 30) * 1000);
 		await Store.setToken(token);
