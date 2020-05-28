@@ -232,7 +232,7 @@ async function base64(input: ArrayBuffer): Promise<string> {
 		const res = (reader.result || '') as string;
 		// trim data:*/*;base64, prefix
 		const prefix = 'base64,';
-		resolve(res.slice(res.indexOf(prefix) + prefix.length));
+		resolve(res.slice(res.indexOf(prefix) + prefix.length).replace(/=+$/, ''));
 	});
 
 	reader.readAsDataURL(blob);
