@@ -9,6 +9,8 @@ function getOrigin(): string {
 	return `${window.location.protocol}//${window.location.host}`;
 }
 
+let payload = '';
+
 export default function OAuth() {
 	const handleError = useErrorHandler();
 	const { history } = useRouter();
@@ -46,8 +48,10 @@ export default function OAuth() {
 			if (event.origin !== getOrigin()) return;
 			if (event.data.action !== 'callback') return;
 
-			const oauthParams = event.data.payload;
-			console.log(oauthParams);
+			if (event.data.payload === payload) return;
+			payload = event.data.payload;
+
+			const oauthParams = payload;
 			oauth
 				.tokenExchange(
 					oauthParams,
