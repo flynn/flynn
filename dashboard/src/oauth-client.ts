@@ -109,6 +109,7 @@ export async function getToken(callback: TokenCallbackFn) {
 export async function tokenExchange(responseParams: string, callback: TokenCallbackFn, abortSignal: AbortSignal) {
 	const params = new URLSearchParams(responseParams);
 	if (!(await verifyState(params.get('state') || ''))) {
+		await Store.clear();
 		throw new Error(`Error verifying state param`);
 	}
 
@@ -117,6 +118,7 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 		const error = Object.assign(new Error(`Error: ${params.get('error_description') || errorCode}`), {
 			code: errorCode
 		});
+		await Store.clear();
 		throw error;
 	}
 
@@ -134,12 +136,17 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 		},
 		body: body.toString(),
 		signal: abortSignal
+	}).catch(async (e) => {
+		await Store.clear();
+		throw e;
 	});
-	const token = await res.json();
+	const token = await res.json().catch(async (e) => {
+		await Store.clear();
+		throw e;
+	});
 	if (abortSignal.aborted) return;
 	if (!token.error) {
 		token.issued_time = Date.now();
-		token.expires_in = 30; // TODO: remove this line
 		refreshTokenTimeout = setTimeout(() => {
 			refreshToken(token.refresh_token || '');
 		}, (token.expires_in - 30) * 1000);
@@ -152,7 +159,7 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 		Config.setAuthKey(token.access_token || null);
 		callback(token as Token, null);
 	} else {
-		await Store.setToken(null);
+		await Store.clear();
 		Config.setAuthKey(null);
 		callback(null, new Error(`Error getting auth token: ${token.error_description || token.error}`));
 	}
