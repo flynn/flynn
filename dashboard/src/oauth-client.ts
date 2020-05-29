@@ -1,4 +1,5 @@
 import Config from './config';
+import { encode as base64URLEncode } from './util/base64url';
 
 enum StoreKeys {
 	SERVER_META = 'OAUTH_META',
@@ -228,29 +229,7 @@ function codePointCompare(a: string, b: string): boolean {
 }
 
 async function base64(input: ArrayBuffer): Promise<string> {
-	let resolve: (str: string) => void;
-	let reject: (error: Error) => void;
-	const p = new Promise<string>((rs, rj) => {
-		resolve = rs;
-		reject = rj;
-	});
-
-	const blob = new Blob([input], { type: 'application/octet-binary' });
-	var reader = new FileReader();
-	reader.addEventListener('error', (e) => {
-		reader.abort();
-		reject(reader.error as Error);
-	});
-	reader.addEventListener('load', (e) => {
-		const res = (reader.result || '') as string;
-		// trim data:*/*;base64, prefix
-		const prefix = 'base64,';
-		resolve(res.slice(res.indexOf(prefix) + prefix.length).replace(/=+$/, ''));
-	});
-
-	reader.readAsDataURL(blob);
-
-	return p;
+	return Promise.resolve(base64URLEncode(String.fromCharCode(...new Uint8Array(input))));
 }
 
 async function sha256(input: string): Promise<ArrayBuffer> {
