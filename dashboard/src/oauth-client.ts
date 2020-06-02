@@ -106,6 +106,10 @@ export async function getToken(callback: TokenCallbackFn) {
 	}
 }
 
+export async function reset() {
+	await Store.clear();
+}
+
 export async function tokenExchange(responseParams: string, callback: TokenCallbackFn, abortSignal: AbortSignal) {
 	const params = new URLSearchParams(responseParams);
 	if (!(await verifyState(params.get('state') || ''))) {
