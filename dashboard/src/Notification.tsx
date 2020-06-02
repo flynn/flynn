@@ -13,6 +13,7 @@ import styled from 'styled-components';
 
 interface NotificationProps extends BoxProps {
 	onClose?: () => void;
+	onRetryClick?: () => void;
 	message: string;
 	status?: 'critical' | 'disabled' | 'ok' | 'unknown' | 'warning';
 }
@@ -34,7 +35,7 @@ const StyledText = styled(Text)`
 	color: var(--black);
 `;
 
-export default ({ message, status, onClose, ...rest }: NotificationProps): ReturnType<React.FC> => (
+export default ({ message, status, onClose, onRetryClick, ...rest }: NotificationProps): ReturnType<React.FC> => (
 	<Box
 		direction="row"
 		pad="small"
@@ -49,14 +50,19 @@ export default ({ message, status, onClose, ...rest }: NotificationProps): Retur
 			</Box>
 		) : null}
 		{message ? <StyledText>{message}</StyledText> : null}
+		{onRetryClick ? (
+			<Box margin={{ right: 'medium' }} onClick={onRetryClick}>
+				<Button primary plain={false}>
+					Retry
+				</Button>
+			</Box>
+		) : null}
 		{onClose ? (
 			<Box margin={{ right: 'medium' }} onClick={onClose}>
 				<Button>
 					<CloseIcon color="white" />
 				</Button>
 			</Box>
-		) : (
-			<div>&nbsp;</div>
-		)}
+		) : null}
 	</Box>
 );

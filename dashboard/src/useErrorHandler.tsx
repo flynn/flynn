@@ -14,9 +14,28 @@ export interface CancelableError extends Error {
 	key: Symbol;
 }
 
+function isCancelableError(error: Error): error is CancelableError {
+	if (error.hasOwnProperty('cancel') && typeof (error as CancelableError).cancel === 'function') {
+		return true;
+	}
+	return false;
+}
+
+export interface RetriableError extends Error {
+	retry: () => void;
+	key: Symbol;
+}
+
+function isRetriableError(error: Error): error is RetriableError {
+	if (error.hasOwnProperty('retry') && typeof (error as RetriableError).retry === 'function') {
+		return true;
+	}
+	return false;
+}
+
 const callbacks = new Set<() => void>();
 
-const errors = new Map<Symbol, CancelableError[]>();
+const errors = new Map<Symbol, Array<CancelableError | RetriableError>>();
 
 export function registerCallback(h: () => void): () => void {
 	callbacks.add(h);
@@ -32,31 +51,44 @@ function handleError(error: Error, key: Symbol = Symbol('useErrorHandler key(und
 		}
 		return () => {};
 	}
-	const cancelableError = Object.assign(new Error(error.message), error, {
-		cancel: () => {
-			const arr = errors.get(key);
-			if (!arr) return;
-			const index = arr.indexOf(cancelableError);
-			if (index === -1) return;
-			errors.set(key, arr.slice(0, index).concat(arr.slice(index + 1)));
-			for (let fn of callbacks) {
-				fn();
+	let wrappedError: CancelableError | RetriableError;
+	const cancel = () => {
+		const arr = errors.get(key);
+		if (!arr) return;
+		const index = arr.indexOf(wrappedError);
+		if (index === -1) return;
+		errors.set(key, arr.slice(0, index).concat(arr.slice(index + 1)));
+		for (let fn of callbacks) {
+			fn();
+		}
+	};
+	if (typeof (error as any).retry === 'function') {
+		wrappedError = Object.assign(new Error(error.message), error, {
+			key,
+			retry: () => {
+				cancel();
+				return (error as any).retry();
 			}
-		},
-		key: key
-	});
-	errors.set(key, (errors.get(key) || []).concat(cancelableError));
+		});
+	} else {
+		wrappedError = Object.assign(new Error(error.message), error, {
+			key: key,
+			cancel
+		});
+	}
+
+	errors.set(key, (errors.get(key) || []).concat(wrappedError));
 	for (let fn of callbacks) {
 		fn();
 	}
-	return cancelableError.cancel;
+	return cancel;
 }
 
-export function useErrors(): CancelableError[] {
-	const [errorsArr, setErrors] = React.useState<CancelableError[]>([]);
+export function useErrors(): Array<CancelableError | RetriableError> {
+	const [errorsArr, setErrors] = React.useState<Array<CancelableError | RetriableError>>([]);
 	React.useEffect(() => {
 		return registerCallback(() => {
-			const arr = [] as CancelableError[];
+			const arr = [] as Array<CancelableError | RetriableError>;
 			for (let v of errors.values()) {
 				arr.push(...v);
 			}
@@ -70,15 +102,26 @@ export function DisplayErrors() {
 	const errors = useErrors();
 	return (
 		<>
-			{errors.map((error: CancelableError, index: number) => (
-				<Notification
-					key={error.key.toString() + index}
-					message={error.message}
-					status="warning"
-					onClose={() => error.cancel()}
-					margin="small"
-				/>
-			))}
+			{errors.map((error: CancelableError | RetriableError, index: number) => {
+				let retry = undefined;
+				if (isRetriableError(error)) {
+					retry = () => error.retry();
+				}
+				let cancel = undefined;
+				if (isCancelableError(error)) {
+					cancel = () => error.cancel();
+				}
+				return (
+					<Notification
+						key={error.key.toString() + index}
+						message={error.message}
+						status="warning"
+						onClose={cancel}
+						onRetryClick={retry}
+						margin="small"
+					/>
+				);
+			})}
 		</>
 	);
 }
