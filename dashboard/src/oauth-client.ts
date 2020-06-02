@@ -129,6 +129,7 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	body.set('code_verifier', await Store.getItem(StoreKeys.CODE_VERIFIER));
 	body.set('redirect_uri', await Store.getItem(StoreKeys.REDIRECT_URI));
 	body.set('client_id', Config.OAUTH_CLIENT_ID);
+	body.set('audience', Config.CONTROLLER_HOST);
 	const res = await fetch(meta.token_endpoint, {
 		method: 'POST',
 		headers: {
@@ -170,15 +171,16 @@ let refreshTokenTimeout: ReturnType<typeof setTimeout>;
 async function refreshToken(code: string) {
 	clearTimeout(refreshTokenTimeout);
 	const meta = await getServerMeta();
-	const params = new URLSearchParams('');
-	params.set('grant_type', 'refresh_token');
-	params.set('code', code);
+	const body = new URLSearchParams('');
+	body.set('grant_type', 'refresh_token');
+	body.set('code', code);
+	body.set('audience', Config.CONTROLLER_HOST);
 	const res = await fetch(meta.token_endpoint, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded'
 		},
-		body: params.toString()
+		body: body.toString()
 	}).catch(async (e) => {
 		await Store.clear();
 		throw e;
