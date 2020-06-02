@@ -377,6 +377,10 @@ function convertServiceError(error: ServiceError): ErrorWithCode {
 }
 
 function buildStatusError(s: Status): ErrorWithCode {
+	if (s.code === grpc.Code.Unauthenticated) {
+		// tell config we're not authenticated
+		Config.setAuthKey(null);
+	}
 	return Object.assign(new Error(s.details), s);
 }
 
@@ -464,6 +468,17 @@ function memoizedStream<T>(
 	return [s, undefined];
 }
 
+function isRetriableStatus(status?: Status): boolean {
+	if (!status) return false;
+	switch (status.code) {
+		case grpc.Code.Unknown:
+		case grpc.Code.Unavailable:
+		case grpc.Code.Unauthenticated:
+			return true;
+	}
+	return false;
+}
+
 function retryStream<T>(init: () => ResponseStream<T>): ResponseStream<T> {
 	let nRetries = 0;
 	const maxRetires = 3;
@@ -489,10 +504,10 @@ function retryStream<T>(init: () => ResponseStream<T>): ResponseStream<T> {
 		return stream;
 	};
 	const retryOnEnd = (status?: Status) => {
-		if (status && status.code === grpc.Code.Unknown) {
+		if (isRetriableStatus(status)) {
 			// reconnect retry handler unless maxRetries reached
 			if (nRetries++ <= maxRetires) {
-				retryTimeoutId = setTimeout(() => {
+				const retryFn = () => {
 					// retry
 					stream = init();
 
@@ -504,9 +519,29 @@ function retryStream<T>(init: () => ResponseStream<T>): ResponseStream<T> {
 					});
 
 					stream.on('end', retryOnEnd);
-				}, retryTimeoutMs);
-				retryTimeoutMs += 10000;
+				};
+				if (status && status.code === grpc.Code.Unauthenticated) {
+					// tell config that we're not authenticated
+					Config.setAuthKey(null);
+
+					// retry when authenticated
+					const deleteAuthCallback = Config.authCallback((authenticated) => {
+						if (authenticated) {
+							deleteAuthCallback();
+							retryFn();
+						}
+					});
+				} else {
+					// retry after timeout
+					retryTimeoutId = setTimeout(retryFn, retryTimeoutMs);
+					retryTimeoutMs += 10000;
+				}
 			}
+		} else {
+			if (status) {
+				(handlers.get('status') || []).forEach((fn) => fn(status));
+			}
+			(handlers.get('end') || []).forEach((fn) => fn(status));
 		}
 	};
 	stream.on('data', () => {
