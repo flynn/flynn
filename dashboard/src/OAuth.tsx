@@ -11,6 +11,9 @@ function getOrigin(): string {
 
 let payload = '';
 
+let attempts = 0;
+const maxAttempts = 3;
+
 export default function OAuth() {
 	const handleError = useErrorHandler();
 	const { history } = useRouter();
@@ -18,7 +21,13 @@ export default function OAuth() {
 	React.useEffect(() => {
 		// oauth-client calls Config.setAuthKey
 		const cancel = Config.authCallback((authenticated) => {
-			setAuthenticated(authenticated);
+			if (authenticated) {
+				setAuthenticated(authenticated);
+			} else {
+				// clear token data
+				// the client probably got an unauthenticated response code
+				oauth.reset().then(() => setAuthenticated(authenticated));
+			}
 		});
 		return cancel;
 	}, []);
@@ -78,7 +87,7 @@ export default function OAuth() {
 	});
 
 	React.useEffect(() => {
-		if (authenticated || isAuthWindow) return () => {};
+		if (authenticated || isAuthWindow || attempts >= maxAttempts) return () => {};
 
 		let authWindow: ReturnType<typeof window.open>;
 
@@ -90,18 +99,20 @@ export default function OAuth() {
 
 		oauth.getToken((token: oauth.Token | null, error: Error | null) => {
 			if (ac.signal.aborted === true) return;
-			setAuthenticated(token !== null);
-			if (token === null) {
+			if (token) {
+				Config.setAuthKey(token.access_token);
+			} else {
 				oauth
 					.generateAuthorizationURL()
 					.then((url: string) => {
 						if (ac.signal.aborted === true) return;
 						authWindow = window.open(url, 'OAuth', '');
+						attempts++;
 					})
 					.catch((error) => {
 						if (ac.signal.aborted === true) return;
-						console.error(error);
 						handleError(new Error(`Error authenticating: ${error}`));
+						console.error(error);
 					});
 			}
 		});
