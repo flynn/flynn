@@ -473,10 +473,37 @@ function isRetriableStatus(status?: Status): boolean {
 	switch (status.code) {
 		case grpc.Code.Unknown:
 		case grpc.Code.Unavailable:
-		case grpc.Code.Unauthenticated:
 			return true;
 	}
 	return false;
+}
+
+function withAuth(callback: () => CancelFunc): CancelFunc {
+	const ac = new AbortController();
+	let cancelStream: CancelFunc;
+
+	const cancel = () => {
+		ac.abort();
+		if (cancelStream) cancelStream();
+	};
+
+	const maybeCallback = () => {
+		if (ac.signal.aborted) return;
+		cancelStream = callback();
+	};
+
+	if (Config.isAuthenticated()) {
+		maybeCallback();
+	}
+
+	const deleteAuthCallback = Config.authCallback((authenticated) => {
+		if (authenticated) {
+			deleteAuthCallback();
+			maybeCallback();
+		}
+	});
+
+	return cancel;
 }
 
 function retryStream<T>(init: () => ResponseStream<T>): ResponseStream<T> {
@@ -504,39 +531,23 @@ function retryStream<T>(init: () => ResponseStream<T>): ResponseStream<T> {
 		return stream;
 	};
 	const retryOnEnd = (status?: Status) => {
-		if (isRetriableStatus(status)) {
-			// reconnect retry handler unless maxRetries reached
-			if (nRetries++ <= maxRetires) {
-				const retryFn = () => {
-					// retry
-					stream = init();
+		if (isRetriableStatus(status) && nRetries <= maxRetires) {
+			const retryFn = () => {
+				// retry
+				stream = init();
 
-					// reconnect event handlers
-					handlers.forEach((fns, typ) => {
-						fns.forEach((handler) => {
-							on(typ, handler);
-						});
+				// reconnect event handlers
+				handlers.forEach((fns, typ) => {
+					fns.forEach((handler) => {
+						on(typ, handler);
 					});
+				});
 
-					stream.on('end', retryOnEnd);
-				};
-				if (status && status.code === grpc.Code.Unauthenticated) {
-					// tell config that we're not authenticated
-					Config.setAuthKey(null);
-
-					// retry when authenticated
-					const deleteAuthCallback = Config.authCallback((authenticated) => {
-						if (authenticated) {
-							deleteAuthCallback();
-							retryFn();
-						}
-					});
-				} else {
-					// retry after timeout
-					retryTimeoutId = setTimeout(retryFn, retryTimeoutMs);
-					retryTimeoutMs += 10000;
-				}
-			}
+				stream.on('end', retryOnEnd);
+			};
+			// retry after timeout
+			retryTimeoutId = setTimeout(retryFn, retryTimeoutMs);
+			retryTimeoutMs += 10000;
 		} else {
 			if (status) {
 				(handlers.get('status') || []).forEach((fn) => fn(status));
@@ -677,152 +688,160 @@ class _Client implements Client {
 	}
 
 	public streamApps(cb: AppsCallback, ...reqModifiers: RequestModifier<StreamAppsRequest>[]): CancelFunc {
-		const streamKey = reqModifiers.map((m) => m.key).join(':');
-		const [stream, lastResponse] = memoizedStream('streamApps', streamKey, {
-			init: () => {
-				return retryStream(() => {
-					const req = new StreamAppsRequest();
-					reqModifiers.forEach((m) => m(req));
-					return this._cc.streamApps(req, this.metadata());
-				});
-			},
-			mergeResponses: (prev: StreamAppsResponse | null, res: StreamAppsResponse): StreamAppsResponse => {
-				const appIndices = new Map<string, number>();
-				const apps = [] as App[];
-				(prev ? prev.getAppsList() : []).forEach((app, index) => {
-					appIndices.set(app.getName(), index);
-					apps.push(app);
-				});
-				res.getAppsList().forEach((app) => {
-					const index = appIndices.get(app.getName());
-					if (index !== undefined) {
-						if (app.getDeleteTime() !== undefined) {
-							app.setDisplayName(`${apps[index].getDisplayName()} [DELETED]`);
-						}
-						apps[index] = app;
-					} else {
+		return withAuth(() => {
+			const streamKey = reqModifiers.map((m) => m.key).join(':');
+			const [stream, lastResponse] = memoizedStream('streamApps', streamKey, {
+				init: () => {
+					return retryStream(() => {
+						const req = new StreamAppsRequest();
+						reqModifiers.forEach((m) => m(req));
+						return this._cc.streamApps(req, this.metadata());
+					});
+				},
+				mergeResponses: (prev: StreamAppsResponse | null, res: StreamAppsResponse): StreamAppsResponse => {
+					const appIndices = new Map<string, number>();
+					const apps = [] as App[];
+					(prev ? prev.getAppsList() : []).forEach((app, index) => {
+						appIndices.set(app.getName(), index);
 						apps.push(app);
-					}
-				});
-				apps.sort((a, b) => {
-					return a.getDisplayName().localeCompare(b.getDisplayName());
-				});
-				res.setAppsList(apps);
-				return res;
+					});
+					res.getAppsList().forEach((app) => {
+						const index = appIndices.get(app.getName());
+						if (index !== undefined) {
+							if (app.getDeleteTime() !== undefined) {
+								app.setDisplayName(`${apps[index].getDisplayName()} [DELETED]`);
+							}
+							apps[index] = app;
+						} else {
+							apps.push(app);
+						}
+					});
+					apps.sort((a, b) => {
+						return a.getDisplayName().localeCompare(b.getDisplayName());
+					});
+					res.setAppsList(apps);
+					return res;
+				}
+			});
+			stream.on('data', (response: StreamAppsResponse) => {
+				cb(response, null);
+			});
+			if (lastResponse) {
+				cb(lastResponse, null);
 			}
+			buildStreamErrorHandler(stream, (error: ErrorWithCode) => {
+				cb(new StreamAppsResponse(), error);
+			});
+			return buildCancelFunc(stream);
 		});
-		stream.on('data', (response: StreamAppsResponse) => {
-			cb(response, null);
-		});
-		if (lastResponse) {
-			cb(lastResponse, null);
-		}
-		buildStreamErrorHandler(stream, (error: ErrorWithCode) => {
-			cb(new StreamAppsResponse(), error);
-		});
-		return buildCancelFunc(stream);
 	}
 
 	public streamReleases(cb: ReleasesCallback, ...reqModifiers: RequestModifier<StreamReleasesRequest>[]): CancelFunc {
-		const streamKey = reqModifiers.map((m) => m.key).join(':');
-		const [stream, lastResponse] = memoizedStream('streamReleases', streamKey, {
-			init: () => {
-				return retryStream(() => {
-					const req = new StreamReleasesRequest();
-					reqModifiers.forEach((m) => m(req));
-					return this._cc.streamReleases(req, this.metadata());
-				});
-			},
-			mergeResponses: (prev: StreamReleasesResponse | null, res: StreamReleasesResponse): StreamReleasesResponse => {
-				const releaseIndices = new Map<string, number>();
-				const releases = [] as Release[];
-				(prev ? prev.getReleasesList() : []).forEach((release, index) => {
-					releaseIndices.set(release.getName(), index);
-					releases.push(release);
-				});
-				res.getReleasesList().forEach((release) => {
-					const index = releaseIndices.get(release.getName());
-					if (index !== undefined) {
-						releases[index] = release;
-					} else {
+		return withAuth(() => {
+			const streamKey = reqModifiers.map((m) => m.key).join(':');
+			const [stream, lastResponse] = memoizedStream('streamReleases', streamKey, {
+				init: () => {
+					return retryStream(() => {
+						const req = new StreamReleasesRequest();
+						reqModifiers.forEach((m) => m(req));
+						return this._cc.streamReleases(req, this.metadata());
+					});
+				},
+				mergeResponses: (prev: StreamReleasesResponse | null, res: StreamReleasesResponse): StreamReleasesResponse => {
+					const releaseIndices = new Map<string, number>();
+					const releases = [] as Release[];
+					(prev ? prev.getReleasesList() : []).forEach((release, index) => {
+						releaseIndices.set(release.getName(), index);
 						releases.push(release);
-					}
-				});
-				releases.sort((a, b) => {
-					return compareTimestamps(b.getCreateTime(), a.getCreateTime());
-				});
-				res.setReleasesList(releases);
-				return res;
+					});
+					res.getReleasesList().forEach((release) => {
+						const index = releaseIndices.get(release.getName());
+						if (index !== undefined) {
+							releases[index] = release;
+						} else {
+							releases.push(release);
+						}
+					});
+					releases.sort((a, b) => {
+						return compareTimestamps(b.getCreateTime(), a.getCreateTime());
+					});
+					res.setReleasesList(releases);
+					return res;
+				}
+			});
+			stream.on('data', (response: StreamReleasesResponse) => {
+				cb(response, null);
+			});
+			if (lastResponse) {
+				cb(lastResponse, null);
 			}
+			buildStreamErrorHandler(stream, (error: ErrorWithCode) => {
+				cb(new StreamReleasesResponse(), error);
+			});
+			return buildCancelFunc(stream);
 		});
-		stream.on('data', (response: StreamReleasesResponse) => {
-			cb(response, null);
-		});
-		if (lastResponse) {
-			cb(lastResponse, null);
-		}
-		buildStreamErrorHandler(stream, (error: ErrorWithCode) => {
-			cb(new StreamReleasesResponse(), error);
-		});
-		return buildCancelFunc(stream);
 	}
 
 	public streamScales(cb: ScaleRequestsCallback, ...reqModifiers: RequestModifier<StreamScalesRequest>[]): CancelFunc {
-		const streamKey = reqModifiers.map((m) => m.key).join(':');
-		const [stream, lastResponse] = memoizedStream('streamScales', streamKey, {
-			init: () => {
-				return retryStream(() => {
-					const req = new StreamScalesRequest();
-					reqModifiers.forEach((m) => m(req));
-					return this._cc.streamScales(req, this.metadata());
-				});
-			},
-			mergeResponses: mergeStreamScalesResponses
+		return withAuth(() => {
+			const streamKey = reqModifiers.map((m) => m.key).join(':');
+			const [stream, lastResponse] = memoizedStream('streamScales', streamKey, {
+				init: () => {
+					return retryStream(() => {
+						const req = new StreamScalesRequest();
+						reqModifiers.forEach((m) => m(req));
+						return this._cc.streamScales(req, this.metadata());
+					});
+				},
+				mergeResponses: mergeStreamScalesResponses
+			});
+			stream.on('data', (response: StreamScalesResponse) => {
+				cb(response, null);
+			});
+			if (lastResponse) {
+				cb(lastResponse, null);
+			}
+			buildStreamErrorHandler(stream, (error: ErrorWithCode) => {
+				cb(new StreamScalesResponse(), error);
+			});
+			return buildCancelFunc(stream);
 		});
-		stream.on('data', (response: StreamScalesResponse) => {
-			cb(response, null);
-		});
-		if (lastResponse) {
-			cb(lastResponse, null);
-		}
-		buildStreamErrorHandler(stream, (error: ErrorWithCode) => {
-			cb(new StreamScalesResponse(), error);
-		});
-		return buildCancelFunc(stream);
 	}
 
 	public streamDeployments(
 		cb: DeploymentsCallback,
 		...reqModifiers: RequestModifier<StreamDeploymentsRequest>[]
 	): CancelFunc {
-		const streamKey = reqModifiers.map((m) => m.key).join(':');
-		const [stream, lastResponse] = memoizedStream('streamDeployments', streamKey, {
-			init: () => {
-				return retryStream(() => {
-					const req = new StreamDeploymentsRequest();
-					reqModifiers.forEach((m) => m(req));
-					return this._cc.streamDeployments(req, this.metadata());
-				});
-			},
-			mergeResponses: mergeStreamDeploymentResponses
+		return withAuth(() => {
+			const streamKey = reqModifiers.map((m) => m.key).join(':');
+			const [stream, lastResponse] = memoizedStream('streamDeployments', streamKey, {
+				init: () => {
+					return retryStream(() => {
+						const req = new StreamDeploymentsRequest();
+						reqModifiers.forEach((m) => m(req));
+						return this._cc.streamDeployments(req, this.metadata());
+					});
+				},
+				mergeResponses: mergeStreamDeploymentResponses
+			});
+			let hasData = false;
+			stream.on('data', (response: StreamDeploymentsResponse) => {
+				hasData = true;
+				cb(response, null);
+			});
+			stream.on('end', (status?: Status) => {
+				if (hasData) return;
+				// make sure cb is called
+				cb(new StreamDeploymentsResponse(), null);
+			});
+			if (lastResponse) {
+				cb(lastResponse, null);
+			}
+			buildStreamErrorHandler(stream, (error: ErrorWithCode) => {
+				cb(new StreamDeploymentsResponse(), error);
+			});
+			return buildCancelFunc(stream);
 		});
-		let hasData = false;
-		stream.on('data', (response: StreamDeploymentsResponse) => {
-			hasData = true;
-			cb(response, null);
-		});
-		stream.on('end', (status?: Status) => {
-			if (hasData) return;
-			// make sure cb is called
-			cb(new StreamDeploymentsResponse(), null);
-		});
-		if (lastResponse) {
-			cb(lastResponse, null);
-		}
-		buildStreamErrorHandler(stream, (error: ErrorWithCode) => {
-			cb(new StreamDeploymentsResponse(), error);
-		});
-		return buildCancelFunc(stream);
 	}
 
 	public streamReleaseHistory(
@@ -830,157 +849,167 @@ class _Client implements Client {
 		scaleReqModifiers: RequestModifier<StreamScalesRequest>[] | null,
 		deploymentReqModifiers: RequestModifier<StreamDeploymentsRequest>[] | null
 	): CancelFunc {
-		let streamScalesRes: StreamScalesResponse;
-		let streamDeploymentsRes: StreamDeploymentsResponse;
-		let streamReleaseHistoryRes: StreamReleaseHistoryResponse | null = null;
+		return withAuth(() => {
+			let streamScalesRes: StreamScalesResponse;
+			let streamDeploymentsRes: StreamDeploymentsResponse;
+			let streamReleaseHistoryRes: StreamReleaseHistoryResponse | null = null;
 
-		const cancelStreamScales = scaleReqModifiers
-			? ((reqModifiers: RequestModifier<StreamScalesRequest>[]) => {
-					const stream = retryStream(() => {
-						const req = new StreamScalesRequest();
-						reqModifiers.forEach((m) => m(req));
-						return this._cc.streamScales(req, this.metadata());
-					});
-					stream.on('data', (res: StreamScalesResponse) => {
-						streamScalesRes = res;
-						if (streamReleaseHistoryRes) {
-							streamReleaseHistoryRes = streamReleaseHistoryRes.receiveStreamScalesResponse(res);
-						} else {
-							streamReleaseHistoryRes = new StreamReleaseHistoryResponse(res, streamDeploymentsRes);
-						}
-						cb(streamReleaseHistoryRes, null);
-					});
-					return stream.cancel;
-			  })(scaleReqModifiers)
-			: () => {};
+			const cancelStreamScales = scaleReqModifiers
+				? ((reqModifiers: RequestModifier<StreamScalesRequest>[]) => {
+						const stream = retryStream(() => {
+							const req = new StreamScalesRequest();
+							reqModifiers.forEach((m) => m(req));
+							return this._cc.streamScales(req, this.metadata());
+						});
+						stream.on('data', (res: StreamScalesResponse) => {
+							streamScalesRes = res;
+							if (streamReleaseHistoryRes) {
+								streamReleaseHistoryRes = streamReleaseHistoryRes.receiveStreamScalesResponse(res);
+							} else {
+								streamReleaseHistoryRes = new StreamReleaseHistoryResponse(res, streamDeploymentsRes);
+							}
+							cb(streamReleaseHistoryRes, null);
+						});
+						return stream.cancel;
+				  })(scaleReqModifiers)
+				: () => {};
 
-		const cancelStreamDeployments = deploymentReqModifiers
-			? ((reqModifiers: RequestModifier<StreamDeploymentsRequest>[]) => {
-					const stream = retryStream(() => {
-						const req = new StreamDeploymentsRequest();
-						reqModifiers.forEach((m) => m(req));
-						return this._cc.streamDeployments(req, this.metadata());
-					});
-					stream.on('data', (res: StreamDeploymentsResponse) => {
-						streamDeploymentsRes = res;
-						if (streamReleaseHistoryRes) {
-							streamReleaseHistoryRes = streamReleaseHistoryRes.receiveStreamDeploymentsResponse(res);
-						} else {
-							streamReleaseHistoryRes = new StreamReleaseHistoryResponse(streamScalesRes, res);
-						}
-						cb(streamReleaseHistoryRes, null);
-					});
-					return stream.cancel;
-			  })(deploymentReqModifiers)
-			: () => {};
+			const cancelStreamDeployments = deploymentReqModifiers
+				? ((reqModifiers: RequestModifier<StreamDeploymentsRequest>[]) => {
+						const stream = retryStream(() => {
+							const req = new StreamDeploymentsRequest();
+							reqModifiers.forEach((m) => m(req));
+							return this._cc.streamDeployments(req, this.metadata());
+						});
+						stream.on('data', (res: StreamDeploymentsResponse) => {
+							streamDeploymentsRes = res;
+							if (streamReleaseHistoryRes) {
+								streamReleaseHistoryRes = streamReleaseHistoryRes.receiveStreamDeploymentsResponse(res);
+							} else {
+								streamReleaseHistoryRes = new StreamReleaseHistoryResponse(streamScalesRes, res);
+							}
+							cb(streamReleaseHistoryRes, null);
+						});
+						return stream.cancel;
+				  })(deploymentReqModifiers)
+				: () => {};
 
-		return () => {
-			cancelStreamScales();
-			cancelStreamDeployments();
-		};
+			return () => {
+				cancelStreamScales();
+				cancelStreamDeployments();
+			};
+		});
 	}
 
 	public updateApp(app: App, cb: AppCallback): CancelFunc {
-		// TODO(jvatic): implement update_mask to include only changed fields
-		const req = new UpdateAppRequest();
-		req.setApp(app);
-		const onEndCallbacks = new Set<() => void>();
-		return buildCancelFunc(
-			Object.assign(
-				this._cc.updateApp(req, this.metadata(), (error: ServiceError | null, response: App | null) => {
-					onEndCallbacks.forEach((cb) => cb());
+		return withAuth(() => {
+			// TODO(jvatic): implement update_mask to include only changed fields
+			const req = new UpdateAppRequest();
+			req.setApp(app);
+			const onEndCallbacks = new Set<() => void>();
+			return buildCancelFunc(
+				Object.assign(
+					this._cc.updateApp(req, this.metadata(), (error: ServiceError | null, response: App | null) => {
+						onEndCallbacks.forEach((cb) => cb());
 
-					if (response && error === null) {
-						cb(response, null);
-					} else if (error) {
-						cb(new App(), convertServiceError(error));
-					} else {
-						cb(new App(), UnknownError);
+						if (response && error === null) {
+							cb(response, null);
+						} else if (error) {
+							cb(new App(), convertServiceError(error));
+						} else {
+							cb(new App(), UnknownError);
+						}
+					}),
+					{
+						on: (typ: 'end', cb: () => void) => {
+							onEndCallbacks.add(cb);
+						}
 					}
-				}),
-				{
-					on: (typ: 'end', cb: () => void) => {
-						onEndCallbacks.add(cb);
-					}
-				}
-			),
-			BuildCancelFuncOpts.CONFIRM_CANCEL
-		);
+				),
+				BuildCancelFuncOpts.CONFIRM_CANCEL
+			);
+		});
 	}
 
 	public createScale(req: CreateScaleRequest, cb: CreateScaleCallback): CancelFunc {
-		const onEndCallbacks = new Set<() => void>();
-		return buildCancelFunc(
-			Object.assign(
-				this._cc.createScale(req, this.metadata(), (error: ServiceError | null, response: ScaleRequest | null) => {
-					onEndCallbacks.forEach((cb) => cb());
+		return withAuth(() => {
+			const onEndCallbacks = new Set<() => void>();
+			return buildCancelFunc(
+				Object.assign(
+					this._cc.createScale(req, this.metadata(), (error: ServiceError | null, response: ScaleRequest | null) => {
+						onEndCallbacks.forEach((cb) => cb());
 
-					if (response && error === null) {
-						cb(response, null);
-					} else if (error) {
-						cb(new ScaleRequest(), convertServiceError(error));
-					} else {
-						cb(new ScaleRequest(), UnknownError);
+						if (response && error === null) {
+							cb(response, null);
+						} else if (error) {
+							cb(new ScaleRequest(), convertServiceError(error));
+						} else {
+							cb(new ScaleRequest(), UnknownError);
+						}
+					}),
+					{
+						on: (typ: 'end', cb: () => void) => {
+							onEndCallbacks.add(cb);
+						}
 					}
-				}),
-				{
-					on: (typ: 'end', cb: () => void) => {
-						onEndCallbacks.add(cb);
-					}
-				}
-			),
-			BuildCancelFuncOpts.CONFIRM_CANCEL
-		);
+				),
+				BuildCancelFuncOpts.CONFIRM_CANCEL
+			);
+		});
 	}
 
 	public createRelease(parentName: string, release: Release, cb: ReleaseCallback): CancelFunc {
-		const req = new CreateReleaseRequest();
-		req.setParent(parentName);
-		req.setRelease(release);
-		const onEndCallbacks = new Set<() => void>();
-		return buildCancelFunc(
-			Object.assign(
-				this._cc.createRelease(req, this.metadata(), (error: ServiceError | null, response: Release | null) => {
-					onEndCallbacks.forEach((cb) => cb());
+		return withAuth(() => {
+			const req = new CreateReleaseRequest();
+			req.setParent(parentName);
+			req.setRelease(release);
+			const onEndCallbacks = new Set<() => void>();
+			return buildCancelFunc(
+				Object.assign(
+					this._cc.createRelease(req, this.metadata(), (error: ServiceError | null, response: Release | null) => {
+						onEndCallbacks.forEach((cb) => cb());
 
-					if (response && error === null) {
-						cb(response, null);
-					} else if (error) {
-						cb(new Release(), convertServiceError(error));
-					} else {
-						cb(new Release(), UnknownError);
+						if (response && error === null) {
+							cb(response, null);
+						} else if (error) {
+							cb(new Release(), convertServiceError(error));
+						} else {
+							cb(new Release(), UnknownError);
+						}
+					}),
+					{
+						on: (typ: 'end', cb: () => void) => {
+							onEndCallbacks.add(cb);
+						}
 					}
-				}),
-				{
-					on: (typ: 'end', cb: () => void) => {
-						onEndCallbacks.add(cb);
-					}
-				}
-			),
-			BuildCancelFuncOpts.CONFIRM_CANCEL
-		);
+				),
+				BuildCancelFuncOpts.CONFIRM_CANCEL
+			);
+		});
 	}
 
 	public createDeployment(parentName: string, cb: ErrorCallback): CancelFunc {
-		const req = new CreateDeploymentRequest();
-		req.setParent(parentName);
+		return withAuth(() => {
+			const req = new CreateDeploymentRequest();
+			req.setParent(parentName);
 
-		const stream = this._cc.createDeployment(req, this.metadata());
-		stream.on('status', (s: Status) => {
-			if (s.code === grpc.Code.OK) {
-				cb(null);
-			} else {
-				cb(buildStatusError(s));
-			}
+			const stream = this._cc.createDeployment(req, this.metadata());
+			stream.on('status', (s: Status) => {
+				if (s.code === grpc.Code.OK) {
+					cb(null);
+				} else {
+					cb(buildStatusError(s));
+				}
+			});
+			stream.on('end', () => {});
+			return buildCancelFunc(stream, BuildCancelFuncOpts.CONFIRM_CANCEL);
 		});
-		stream.on('end', () => {});
-		return buildCancelFunc(stream, BuildCancelFuncOpts.CONFIRM_CANCEL);
 	}
 
 	private metadata(): grpc.Metadata {
 		const headers = new BrowserHeaders({});
 		if (Config.CONTROLLER_AUTH_KEY) {
-			headers.set('Authorization', `Basic ${btoa(['', Config.CONTROLLER_AUTH_KEY].join(':'))}`);
+			headers.set('Authorization', `Bearer ${Config.CONTROLLER_AUTH_KEY}`);
 			headers.set('Auth-Key', Config.CONTROLLER_AUTH_KEY);
 		}
 		return headers;
