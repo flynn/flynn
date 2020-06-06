@@ -593,6 +593,7 @@
            "dashboard/src/generated/google/api/*.js",
            "dashboard/src/generated/google/api/*.ts",
            "dashboard/src/util/*.ts",
+           "dashboard/src/worker/*.ts",
            "dashboard/yarn.lock"
          ],
          "limits": { "memory": "3G", "temp_disk": "3G" }
