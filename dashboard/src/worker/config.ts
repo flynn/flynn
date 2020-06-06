@@ -1,4 +1,5 @@
 import { PublicConfig } from './types';
+import { getClients } from './external';
 
 const Config: PublicConfig = {
 	CONTROLLER_HOST: '',
@@ -14,12 +15,49 @@ const configCallbacks = new Set<ConfigCallback>();
 let configLoaded = false;
 
 let primaryClientID: string | null = null;
-export function setPrimaryClientID(clientID: string) {
+function setPrimaryClientID(clientID: string) {
 	primaryClientID = clientID;
 }
 
 export function getPrimaryClientID(): string | null {
 	return primaryClientID;
+}
+
+let activeClientIDs = new Set<string>();
+export function getActiveClientIDs(): string[] {
+	return Array.from(activeClientIDs);
+}
+
+export function unsetClientIDActive(clientID: string) {
+	activeClientIDs.delete(clientID);
+	activeClientIDTimeouts.delete(clientID);
+
+	if (clientID === primaryClientID) {
+		// primary client ID is dead
+		if (activeClientIDs.size > 0) {
+			// set another one as primary
+			setPrimaryClientID(Array.from(activeClientIDs)[0]);
+		} else {
+			// TODO(jvatic): handle all clients being closed
+		}
+	}
+}
+
+let activeClientIDTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+export function setClientIDActive(clientID: string) {
+	if (!primaryClientID) {
+		setPrimaryClientID(clientID);
+	}
+	activeClientIDs.add(clientID);
+	const timeout = activeClientIDTimeouts.get(clientID);
+	if (timeout) clearTimeout(timeout);
+	// client ID expires in 2s if it doesn't ping
+	activeClientIDTimeouts.set(
+		clientID,
+		setTimeout(() => {
+			unsetClientIDActive(clientID);
+		}, 2000)
+	);
 }
 
 export function load(config: PublicConfig): boolean {

@@ -1,6 +1,12 @@
 import runtime from 'serviceworker-webpack-plugin/lib/runtime';
 import * as types from './worker/types';
 import Config from './config';
+import { handleErrorFactory, ErrorHandler, CancelFunc } from './useErrorHandler';
+import _debug from './debug';
+
+function debug(msg: string, ...args: any[]) {
+	_debug(`[serviceWorker]: ${msg}`, ...args);
+}
 
 function resolveRelativeURI(path: string): string {
 	const a = document.createElement('a');
@@ -8,7 +14,23 @@ function resolveRelativeURI(path: string): string {
 	return a.href;
 }
 
+let handleError: ErrorHandler;
+
 function init(): () => void {
+	debug('init');
+	handleError = handleErrorFactory();
+
+	const cancelAuthErrorCallback = Config.authErrorCallback((error: any) => {
+		error = Object.assign({}, error, { message: error.message });
+		// delete possible functions from the error object so it can be sent
+		delete error.retry;
+		delete error.cancel;
+		postMessage({
+			type: types.MessageType.AUTH_ERROR,
+			payload: error
+		});
+	});
+
 	postMessage({
 		type: types.MessageType.CONFIG,
 		payload: {
@@ -21,27 +43,29 @@ function init(): () => void {
 
 	// ping the service worker every second to make sure it stays active
 	const intervalID = setInterval(() => {
-		try {
-			postMessage({
+		if (
+			!postMessage({
 				type: types.MessageType.PING
-			});
-		} catch (e) {
-			console.error(e);
+			})
+		) {
+			clearInterval(intervalID);
 		}
 	}, 1000);
 
 	return () => {
+		debug('clear init state');
 		clearInterval(intervalID);
+		cancelAuthErrorCallback();
 	};
 }
 
-export async function register(): Promise<void> {
+export async function register() {
 	let promiseComplete = false;
 	return new Promise((resolve: () => void, reject: (error: Error) => void) => {
 		if ('serviceWorker' in navigator) {
 			if (navigator.serviceWorker.controller) {
 				var url = navigator.serviceWorker.controller.scriptURL;
-				console.log('[DEBUG]: serviceWorker.controller', url);
+				debug('controller', url);
 
 				if (!promiseComplete) {
 					promiseComplete = true;
@@ -49,9 +73,9 @@ export async function register(): Promise<void> {
 				}
 
 				// TODO(jvatic): do we need this?
-				navigator.serviceWorker.ready.then(function(registration) {
-					registration.update();
-				});
+				// navigator.serviceWorker.ready.then(function(registration) {
+				// 	registration.update();
+				// });
 			} else {
 				runtime.register({ scope: '/' });
 			}
@@ -59,7 +83,7 @@ export async function register(): Promise<void> {
 			let teardown: () => void;
 
 			navigator.serviceWorker.ready.then(function(registration) {
-				console.log('[DEBUG]: ServiceWorker ready', !!navigator.serviceWorker.controller);
+				debug('ready', !!navigator.serviceWorker.controller);
 				if (navigator.serviceWorker.controller) {
 					if (teardown) teardown();
 					teardown = init();
@@ -71,10 +95,10 @@ export async function register(): Promise<void> {
 			});
 
 			navigator.serviceWorker.addEventListener('controllerchange', function() {
-				console.log('[DEBUG]: ServiceWorker controllerchange');
+				debug('controllerchange');
 				if (navigator.serviceWorker.controller) {
 					var scriptURL = navigator.serviceWorker.controller.scriptURL;
-					console.log('[DEBUG]: serviceWorker.onControllerchange', scriptURL);
+					debug('controllerchange', scriptURL);
 					if (teardown) teardown();
 					teardown = init();
 					if (!promiseComplete) {
@@ -93,9 +117,14 @@ export async function register(): Promise<void> {
 	});
 }
 
+const errorsMap = new Map<string, CancelFunc>();
+
 function handleMessage(message: types.Message) {
 	switch (message.type) {
 		case types.MessageType.PONG:
+			// TODO: setup a death switch here for the worker (if it doesn't pong
+			// back when we ping we should assume it's dead and show an error message
+			// prompting a page reload)
 			break;
 
 		case types.MessageType.AUTH_REQUEST:
@@ -106,18 +135,69 @@ function handleMessage(message: types.Message) {
 			Config.setAuthKey(message.payload.access_token);
 			break;
 
+		case types.MessageType.AUTH_ERROR:
+			const authError = message.payload;
+			const cancelAuthError = handleError(
+				Object.assign(new Error(authError.message), {
+					retry: () => {
+						postMessage({
+							type: types.MessageType.CLEAR_ERROR,
+							payload: (authError as any).id
+						});
+						postMessage({
+							type: types.MessageType.RETRY_AUTH
+						});
+					}
+				})
+			);
+			if ((authError as any).id) {
+				errorsMap.set((authError as any).id, cancelAuthError);
+			}
+			debug('AUTH_ERROR', authError);
+			break;
+
 		case types.MessageType.ERROR:
-			console.error(message.payload);
+			const error = message.payload;
+			const cancelError = handleError(
+				Object.assign(new Error(error.message), {
+					cancel: () => {
+						postMessage({
+							type: types.MessageType.CLEAR_ERROR,
+							payload: (error as any).id
+						});
+					}
+				})
+			);
+			if ((error as any).id) {
+				errorsMap.set((error as any).id, cancelError);
+			}
+			debug('ERROR', error);
+			break;
+
+		case types.MessageType.CLEAR_ERROR:
+			console.log('clear error', message.payload);
+			const cancelFn = errorsMap.get(message.payload);
+			if (cancelFn) cancelFn();
 			break;
 
 		default:
-			console.log('ServiceWorker message', message);
+			console.log('message', message);
 	}
 }
 
 export function postMessage(message: types.Message) {
-	if (!navigator.serviceWorker.controller) throw new Error('postMessage: No ServiceWorker found');
+	if (!navigator.serviceWorker.controller) {
+		handleError(
+			Object.assign(new Error('postMessage: No ServiceWorker found'), {
+				retry: () => {
+					window.location.reload();
+				}
+			})
+		);
+		return false;
+	}
 	navigator.serviceWorker.controller.postMessage(message);
+	return true;
 }
 
 // type WorkerConfig = {

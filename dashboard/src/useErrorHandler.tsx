@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { grpc } from '@improbable-eng/grpc-web';
 import Notification from './Notification';
+import Config from './config';
 
-type CancelFunc = () => void;
+export type CancelFunc = () => void;
 
 export interface ErrorHandler {
 	(error: Error): CancelFunc;
@@ -45,12 +46,21 @@ export function registerCallback(h: () => void): () => void {
 }
 
 function handleError(error: Error, key: Symbol = Symbol('useErrorHandler key(undefined)')): CancelFunc {
-	if ((error as any).code === grpc.Code.Unknown) {
-		if (console && typeof console.error === 'function') {
-			console.error(error);
-		}
-		return () => {};
+	switch ((error as any).code) {
+		case grpc.Code.Unknown:
+			// only show unknown errors in the console
+			if (console && typeof console.error === 'function') {
+				console.error(error);
+			}
+			return () => {};
+		case grpc.Code.Unauthenticated:
+			// let everyone know we're unauthenticated
+			// the service worker will push it back to all clients
+			// and will be handled then
+			Config.handleAuthError(error);
+			return () => {};
 	}
+
 	let wrappedError: CancelableError | RetriableError;
 	const cancel = () => {
 		const arr = errors.get(key);
@@ -65,6 +75,7 @@ function handleError(error: Error, key: Symbol = Symbol('useErrorHandler key(und
 	if (isRetriableError(error)) {
 		wrappedError = Object.assign(new Error(error.message), error, {
 			key,
+			cancel,
 			retry: () => {
 				cancel();
 				(error as RetriableError).retry();

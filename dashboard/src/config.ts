@@ -13,15 +13,20 @@ export interface PrivateConfig {
 }
 
 type AuthCallback = (authenticated: boolean) => void;
+type AuthErrorCallback = (error: Error) => void;
+type CancelFunc = () => void;
 
 export interface Config extends PublicConfig, PrivateConfig {
 	unsetPrivateConfig: () => void;
 	setAuthKey: (key: string | null) => void;
-	authCallback: (cb: AuthCallback) => () => void;
+	authCallback: (fn: AuthCallback) => CancelFunc;
 	isAuthenticated: () => boolean;
+	authErrorCallback: (fn: AuthErrorCallback) => CancelFunc;
+	handleAuthError: (error: Error) => void;
 }
 
 const authCallbacks = new Set<AuthCallback>();
+const authErrorCallbacks = new Set<AuthErrorCallback>();
 
 const config: Config = {
 	CONTROLLER_HOST: process.env.CONTROLLER_HOST || ifDev(() => 'https://controller.1.localflynn.com') || '',
@@ -41,20 +46,34 @@ const config: Config = {
 		config.CONTROLLER_AUTH_KEY = key;
 
 		const isAuthenticated = config.isAuthenticated();
-		authCallbacks.forEach((cb) => {
-			cb(isAuthenticated);
+		authCallbacks.forEach((fn) => {
+			fn(isAuthenticated);
 		});
 	},
 
-	authCallback: (cb: AuthCallback) => {
-		authCallbacks.add(cb);
+	authCallback: (fn: AuthCallback) => {
+		authCallbacks.add(fn);
 		return () => {
-			authCallbacks.delete(cb);
+			authCallbacks.delete(fn);
 		};
 	},
 
 	isAuthenticated: () => {
 		return config.CONTROLLER_AUTH_KEY !== null;
+	},
+
+	authErrorCallback: (fn: AuthErrorCallback) => {
+		authErrorCallbacks.add(fn);
+		return () => {
+			authErrorCallbacks.delete(fn);
+		};
+	},
+
+	handleAuthError: (error: Error) => {
+		authErrorCallbacks.forEach((fn) => fn(error));
+		if (authErrorCallbacks.size === 0) {
+			throw error;
+		}
 	}
 };
 

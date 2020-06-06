@@ -474,6 +474,11 @@ function isRetriableStatus(status?: Status): boolean {
 	return false;
 }
 
+function isUnauthenticatedStatus(status?: Status): boolean {
+	if (!status) return false;
+	return status.code === grpc.Code.Unauthenticated;
+}
+
 function withAuth(callback: () => CancelFunc): CancelFunc {
 	const ac = new AbortController();
 	let cancelStream: CancelFunc;
@@ -502,63 +507,72 @@ function withAuth(callback: () => CancelFunc): CancelFunc {
 	return cancel;
 }
 
+type StreamHandlerType = 'data' | 'status' | 'end';
+
 function retryStream<T>(init: () => ResponseStream<T>): ResponseStream<T> {
 	let nRetries = 0;
 	const maxRetires = 3;
 	let retryTimeoutMs = 1000;
 	let retryTimeoutId: ReturnType<typeof setTimeout>;
 
+	let cancelFns = new Set<CancelFunc>();
 	let stream = init();
-	let hasResponse = false;
-	let handlers = new Map<'data' | 'status' | 'end', Function[]>();
-	const on = (typ: 'data' | 'status' | 'end', handler: Function): ResponseStream<T> => {
+	let handlers = new Map<StreamHandlerType, Function[]>();
+	const on = (typ: StreamHandlerType, handler: Function): ResponseStream<T> => {
 		handlers.set(typ, (handlers.get(typ) || []).concat([handler]));
-		if (typ === 'data') {
-			stream.on(typ as any, handler as any);
-		} else {
-			stream.on(typ as any, (...args) => {
-				// only call upstream 'status' and 'end' handlers when there is
-				// either a response or no more retries will occur
-				if (hasResponse || nRetries === maxRetires) {
-					handler.apply(undefined, args);
-				}
-			});
-		}
 		return stream;
+	};
+
+	const connectHandlers = (stream: ResponseStream<T>) => {
+		stream.on('data', function(...args) {
+			(handlers.get('data') || []).forEach((fn: Function) => {
+				fn.apply(undefined, args);
+			});
+		});
+
+		// retryOnEnd will call the status and end handlers
+		stream.on('end', retryOnEnd);
+	};
+
+	const retryFn = () => {
+		// re-init stream
+		stream = init();
+
+		// reconnect event handlers
+		connectHandlers(stream);
 	};
 	const retryOnEnd = (status?: Status) => {
 		if (isRetriableStatus(status) && nRetries <= maxRetires) {
-			const retryFn = () => {
-				// retry
-				stream = init();
-
-				// reconnect event handlers
-				handlers.forEach((fns, typ) => {
-					fns.forEach((handler) => {
-						on(typ, handler);
-					});
-				});
-
-				stream.on('end', retryOnEnd);
-			};
 			// retry after timeout
 			retryTimeoutId = setTimeout(retryFn, retryTimeoutMs);
 			retryTimeoutMs += 10000;
 		} else {
+			if (isUnauthenticatedStatus(status)) {
+				// retry if and when the client is authenticated before the stream is canceled
+				// for now we will still trigger the status and end events
+				const cancelAuthCallback = Config.authCallback((isAuthenticated: boolean) => {
+					if (isAuthenticated) {
+						cancelAuthCallback();
+						cancelFns.delete(cancelAuthCallback);
+						retryFn();
+					}
+				});
+				cancelFns.add(cancelAuthCallback);
+			}
+
 			if (status) {
 				(handlers.get('status') || []).forEach((fn) => fn(status));
 			}
 			(handlers.get('end') || []).forEach((fn) => fn(status));
 		}
 	};
-	stream.on('data', () => {
-		hasResponse = true;
-	});
-	stream.on('end', retryOnEnd);
+
+	connectHandlers(stream);
 
 	return {
 		on,
 		cancel: () => {
+			cancelFns.forEach((fn) => fn());
 			clearTimeout(retryTimeoutId);
 			stream.cancel();
 		}

@@ -2,7 +2,7 @@
 /* eslint no-restricted-globals: 1 */
 /* eslint-env serviceworker */
 
-import { get as dbGet, set as dbSet, clear as dbClear, del as dbDel } from 'idb-keyval';
+import { get as dbGet, set as dbSet, del as dbDel } from 'idb-keyval';
 
 import * as types from './types';
 import { getConfig } from './config';
@@ -11,56 +11,114 @@ import { postMessageAll, postMessage } from './external';
 
 const DBKeys = {
 	SERVER_META: 'servermeta',
+	AUTHORIZATION_CACHE: 'cache',
 	CALLBACK_RESPONSE: 'callbackresponse',
-	AUTH_TOKEN: 'tokens',
-	CACHE: 'cache'
+	TOKEN: 'token'
 };
+
+function dbClearAuth(): Promise<any> {
+	return Promise.all(
+		Object.values(DBKeys).map((dbKey) => {
+			return dbDel(dbKey);
+		})
+	);
+}
 
 export async function init(clientID: string) {
 	const token = await getToken();
 	if (isTokenValid(token)) {
-		postMessageAll({
+		await postMessageAll({
 			type: types.MessageType.AUTH_TOKEN,
 			payload: token as types.OAuthToken
 		});
 		return;
 	} else if (canRefreshToken(token)) {
-		// TODO: refresh token
+		try {
+			await doTokenRefresh((token as types.OAuthToken).refresh_token);
+		} catch (error) {
+			await handleError(types.MessageType.AUTH_ERROR, error);
+		}
 	} else {
-		// TODO: clear any expired auth from the database
+		// start fresh
+		await dbClearAuth();
 
 		const url = await generateAuthorizationURL();
-		postMessage(clientID, {
+		await postMessage(clientID, {
 			type: types.MessageType.AUTH_REQUEST,
 			payload: url
 		});
 	}
 }
 
+export async function handleAuthError(error: Error) {
+	// send the error to all clients where it will be displayed with the ability
+	// to retry
+	await handleError(types.MessageType.AUTH_ERROR, error);
+	// clear cached auth data
+	await dbClearAuth();
+}
+
 export async function handleAuthorizationCallback(queryString: string): Promise<void> {
-	const params = new URLSearchParams(queryString);
-	const res: types.OAuthCallbackResponse = {
-		state: params.get('state') || null,
-		code: params.get('code') || null,
-		error: params.get('error') || null,
-		error_description: params.get('error_description') || null
-	};
-	await dbSet(DBKeys.CALLBACK_RESPONSE, res);
-	await doTokenExchange(res);
+	console.log('[DEBUG]: handleAuthorizationCallback', queryString);
+	try {
+		const params = new URLSearchParams(queryString);
+		const res: types.OAuthCallbackResponse = {
+			state: params.get('state') || null,
+			code: params.get('code') || null,
+			error: params.get('error') || null,
+			error_description: params.get('error_description') || null
+		};
+		await dbSet(DBKeys.CALLBACK_RESPONSE, res);
+		await doTokenExchange(res);
+	} catch (error) {
+		await handleError(types.MessageType.AUTH_ERROR, error);
+		await dbClearAuth();
+	}
 	return;
 }
 
+let refreshTokenTimeout: ReturnType<typeof setTimeout>;
+
+// TODO(jvatic): figure out why TypeScript was giving me issue with this
+// type: types.MessageType.AUTH_ERROR | types.MessageType.ERROR
+async function handleError(type: any, error: Error) {
+	// stop the refresh token cycle
+	clearTimeout(refreshTokenTimeout);
+
+	// add an ID to errors so they can be cleared for all clients
+	const errorID = (error as any).id ? ((error as any).id as string) : await randomString(16);
+	await postMessageAll({
+		type,
+		payload: Object.assign({ message: error.message }, error, { id: errorID })
+	});
+}
+
 async function setToken(token: types.OAuthToken) {
+	clearTimeout(refreshTokenTimeout);
+
 	await postMessageAll({
 		type: types.MessageType.AUTH_TOKEN,
 		payload: token
 	});
-	await dbSet(DBKeys.AUTH_TOKEN, token);
+	await dbSet(DBKeys.TOKEN, token);
+
+	if (canRefreshToken(token)) {
+		const refreshTokenExpiresMs = token.refresh_token_expires_in * 1000;
+		const refreshDelayMs = refreshTokenExpiresMs - 10000; // refresh 10s before expires
+		refreshTokenTimeout = setTimeout(async () => {
+			try {
+				await doTokenRefresh(token.refresh_token);
+			} catch (error) {
+				await handleError(types.MessageType.AUTH_ERROR, error);
+				await dbClearAuth();
+			}
+		}, refreshDelayMs);
+	}
 }
 
 async function getToken(): Promise<types.OAuthToken | null> {
 	try {
-		const token = (await dbGet(DBKeys.AUTH_TOKEN)) || null;
+		const token = (await dbGet(DBKeys.TOKEN)) || null;
 		return token as types.OAuthToken | null;
 	} catch (e) {
 		return null;
@@ -104,7 +162,6 @@ async function getServerMeta(): Promise<ServerMetadata> {
 	const config = await getConfig();
 	const cachedServerMeta = ((await dbGet(DBKeys.SERVER_META)) as ServerMetadata) || null;
 	if (cachedServerMeta) {
-		// double check they are exact (TODO(jvatic): figure out if the IndexedDB lookup is good enough)
 		if (codePointCompare(config.OAUTH_ISSUER, cachedServerMeta.issuer)) {
 			return cachedServerMeta;
 		}
@@ -174,11 +231,11 @@ async function generateAuthorizationURL(): Promise<string> {
 	params.set('nonce', await randomString(16));
 	params.set('client_id', config.OAUTH_CLIENT_ID);
 	params.set('response_type', 'code');
-	params.set('response_mode', 'fragment');
+	params.set('response_mode', 'query');
 	const redirectURI = config.OAUTH_CALLBACK_URI;
 	params.set('redirect_uri', redirectURI);
 
-	await dbSet(DBKeys.CACHE, {
+	await dbSet(DBKeys.AUTHORIZATION_CACHE, {
 		codeVerifier,
 		codeChallenge,
 		redirectURI,
@@ -201,13 +258,12 @@ function buildError(error: TokenError, message = ''): Error {
 }
 
 async function doTokenExchange(params: types.OAuthCallbackResponse) {
-	const cachedValues = ((await dbGet(DBKeys.CACHE)) as types.OAuthCachedValues) || null;
+	const cachedValues = ((await dbGet(DBKeys.AUTHORIZATION_CACHE)) as types.OAuthCachedValues) || null;
 	if (!cachedValues) {
 		throw new Error('doTokenExchange: Error: corrupt data');
 	}
 
 	if (!(await codePointCompare(params.state || '', cachedValues.state))) {
-		await dbClear();
 		throw new Error(`Error verifying state param`);
 	}
 
@@ -216,15 +272,15 @@ async function doTokenExchange(params: types.OAuthCallbackResponse) {
 		const error = Object.assign(new Error(`Error: ${params.error_description || errorCode}`), {
 			code: errorCode
 		});
-		await dbClear();
 		throw error;
 	}
 
 	const meta = await getServerMeta();
 	const config = await getConfig();
 
-	// clear cached values
-	await dbDel(DBKeys.CACHE);
+	// clear cached values from auth redirect
+	await dbDel(DBKeys.AUTHORIZATION_CACHE);
+	await dbDel(DBKeys.CALLBACK_RESPONSE);
 
 	const body = new URLSearchParams();
 	body.set('grant_type', 'authorization_code');
@@ -240,19 +296,36 @@ async function doTokenExchange(params: types.OAuthCallbackResponse) {
 			'Content-Type': 'application/x-www-form-urlencoded'
 		},
 		body: body.toString()
-	}).catch(async (e) => {
-		await dbClear();
-		throw e;
 	});
-	const token = await res.json().catch(async (e) => {
-		await dbClear();
-		throw e;
-	});
+	const token = await res.json();
 	if (!token.error) {
 		token.issued_time = Date.now();
-		setToken(token as types.OAuthToken);
+		await setToken(token as types.OAuthToken);
 	} else {
-		await dbClear();
 		throw buildError(token as TokenError, 'Error getting auth token');
+	}
+}
+
+async function doTokenRefresh(refreshToken: string) {
+	const config = await getConfig();
+	const meta = await getServerMeta();
+	const body = new URLSearchParams('');
+	body.set('grant_type', 'refresh_token');
+	body.set('refresh_token', refreshToken);
+	body.set('client_id', config.OAUTH_CLIENT_ID);
+	body.set('audience', config.CONTROLLER_HOST);
+	const res = await fetch(meta.token_endpoint, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/x-www-form-urlencoded'
+		},
+		body: body.toString()
+	});
+	const token = await res.json();
+	if (!token.error) {
+		token.issued_time = Date.now();
+		await setToken(token as types.OAuthToken);
+	} else {
+		throw buildError(token, 'Error refreshing auth token');
 	}
 }
