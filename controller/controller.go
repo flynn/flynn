@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -8,9 +11,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/flynn/flynn/controller/authorizer"
 	"github.com/flynn/flynn/controller/data"
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
@@ -64,6 +70,31 @@ func main() {
 		name.SetSeed(s)
 	}
 
+	var tokenKey *ecdsa.PublicKey
+	if tk := os.Getenv("ACCESS_TOKEN_KEY"); tk != "" {
+		tokenKeyBytes, err := base64.URLEncoding.DecodeString(tk)
+		if err != nil {
+			log.Fatalln("error decoding ACCESS_TOKEN_KEY:", err)
+		}
+		k, err := x509.ParsePKIXPublicKey(tokenKeyBytes)
+		if err != nil {
+			log.Fatalln("error decoding ACCESS_TOKEN_KEY:", err)
+		}
+		var ok bool
+		tokenKey, ok = k.(*ecdsa.PublicKey)
+		if !ok {
+			log.Fatalf("unexpected ACCESS_TOKEN_KEY type %T, want *ecdsa.PublicKey", k)
+		}
+	}
+	tokenMaxValidity := time.Hour
+	if tv := os.Getenv("ACCESS_TOKEN_MAX_VALIDITY"); tv != "" {
+		ti, err := strconv.Atoi(tv)
+		if err != nil {
+			log.Fatalln("error parsing ACCESS_TOKEN_MAX_VALIDITY:", err)
+		}
+		tokenMaxValidity = time.Duration(ti) * time.Second
+	}
+
 	db := data.OpenAndMigrateDB(nil)
 	shutdown.BeforeExit(func() { db.Close() })
 
@@ -109,12 +140,14 @@ func main() {
 	})
 
 	handler, grpcServer, _ := appHandler(handlerConfig{
-		db:     db,
-		cc:     utils.ClusterClientWrapper(cluster.NewClient()),
-		lc:     lc,
-		keys:   strings.Split(os.Getenv("AUTH_KEY"), ","),
-		keyIDs: strings.Split(os.Getenv("AUTH_KEY_IDS"), ","),
-		caCert: []byte(os.Getenv("CA_CERT")),
+		db:               db,
+		cc:               utils.ClusterClientWrapper(cluster.NewClient()),
+		lc:               lc,
+		keys:             strings.Split(os.Getenv("AUTH_KEY"), ","),
+		keyIDs:           strings.Split(os.Getenv("AUTH_KEY_IDS"), ","),
+		tokenKey:         tokenKey,
+		tokenMaxValidity: tokenMaxValidity,
+		caCert:           []byte(os.Getenv("CA_CERT")),
 	})
 	go grpcServer.Serve(grpcListener)
 	shutdown.Fatal(http.ListenAndServe(httpAddr, handler))
@@ -125,12 +158,14 @@ type logClient interface {
 }
 
 type handlerConfig struct {
-	db     *postgres.DB
-	cc     utils.ClusterClient
-	lc     logClient
-	keys   []string
-	keyIDs []string
-	caCert []byte
+	db               *postgres.DB
+	cc               utils.ClusterClient
+	lc               logClient
+	keys             []string
+	keyIDs           []string
+	tokenKey         *ecdsa.PublicKey
+	tokenMaxValidity time.Duration
+	caCert           []byte
 }
 
 // NOTE: this is temporary until httphelper supports custom errors
@@ -189,7 +224,7 @@ func appHandler(c handlerConfig) (http.Handler, *grpc.Server, *controllerAPI) {
 		que:                 q,
 		caCert:              c.caCert,
 		config:              c,
-		authorizer:          utils.NewAuthorizer(c.keys, c.keyIDs),
+		authorizer:          authorizer.New(c.keys, c.keyIDs, c.tokenKey, c.tokenMaxValidity),
 	}
 
 	shutdown.BeforeExit(api.Shutdown)
@@ -288,7 +323,7 @@ func appHandler(c handlerConfig) (http.Handler, *grpc.Server, *controllerAPI) {
 	return httphelper.ContextInjector("controller", handler), grpcSrv, &api
 }
 
-func muxHandler(main http.Handler, grpcSrv *grpc.Server, authorizer *utils.Authorizer) http.Handler {
+func muxHandler(main http.Handler, grpcSrv *grpc.Server, authorizer *authorizer.Authorizer) http.Handler {
 	grpcWeb := grpcweb.WrapServer(grpcSrv)
 	return httphelper.CORSAllowAll.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if shutdown.IsActive() {
@@ -315,7 +350,7 @@ func muxHandler(main http.Handler, grpcSrv *grpc.Server, authorizer *utils.Autho
 		if password == "" && (strings.Contains(r.Header.Get("Accept"), "text/event-stream") || r.URL.Path == "/backup") {
 			password = r.URL.Query().Get("key")
 		}
-		auth, err := authorizer.Authorize(password)
+		auth, err := authorizer.AuthorizeKey(password)
 		if err != nil {
 			w.WriteHeader(401)
 			return
@@ -347,7 +382,7 @@ type controllerAPI struct {
 	que                 *que.Client
 	caCert              []byte
 	config              handlerConfig
-	authorizer          *utils.Authorizer
+	authorizer          *authorizer.Authorizer
 
 	eventListener    *data.EventListener
 	eventListenerMtx sync.Mutex
