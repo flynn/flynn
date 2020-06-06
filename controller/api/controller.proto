@@ -550,3 +550,21 @@ message DeploymentEvent {
 
   google.protobuf.Timestamp create_time = 5;
 }
+
+message SignedData {
+    bytes data = 1;
+
+    bytes signature = 2;
+}
+
+message AccessToken {
+    string client_id = 1;
+
+    string user_id = 2;
+
+    string user_email = 3;
+
+    google.protobuf.Timestamp issue_time = 4;
+
+    google.protobuf.Timestamp expire_time = 5;
+}
