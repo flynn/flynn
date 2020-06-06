@@ -46,12 +46,10 @@ function DashboardInner() {
 		setAppName(appNameFromPath(currentPath));
 	}, [currentPath]);
 
-	if (window.location.pathname === '/oauth/callback') return <OAuth />;
+	if (window.location.pathname === '/oauth/callback') return null; // <OAuth />
 
 	return (
 		<>
-			<OAuth />
-
 			<Split>
 				<Box tag="aside" basis="medium" flex={false} fill>
 					<Box tag="header" pad="small" direction="row">

@@ -377,10 +377,6 @@ function convertServiceError(error: ServiceError): ErrorWithCode {
 }
 
 function buildStatusError(s: Status): ErrorWithCode {
-	if (s.code === grpc.Code.Unauthenticated) {
-		// tell config we're not authenticated
-		Config.setAuthKey(null);
-	}
 	return Object.assign(new Error(s.details), s);
 }
 
