@@ -22,7 +22,7 @@ if (window.location.pathname === '/oauth/callback') {
 	if (window.opener) {
 		window.opener.postMessage({
 			type: workerTypes.MessageType.AUTH_CALLBACK,
-			payload: window.location.hash.substr(1)
+			payload: window.location.search.substr(1)
 		});
 		window.close();
 	} else {
@@ -40,7 +40,6 @@ if (window.location.pathname === '/oauth/callback') {
 			if (event.origin !== getOrigin()) return;
 			const message = event.data as workerTypes.AuthCallbackMessage;
 			if (message.type !== workerTypes.MessageType.AUTH_CALLBACK) return;
-			window.removeEventListener('message', receiveMessage);
 			serviceWorker.postMessage(message);
 		};
 		window.addEventListener('message', receiveMessage);

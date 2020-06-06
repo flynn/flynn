@@ -31,15 +31,22 @@ export interface OAuthToken {
 	issued_time: number;
 }
 
+export interface ErrorWithID extends Error {
+	id: string;
+}
+
 export enum MessageType {
-	UNKNOWN = 'MessageType__UNKNOWN',
-	CONFIG = 'MessageType__CONFIG',
-	PING = 'MessageType__PING',
-	PONG = 'MessageType__PONG',
-	AUTH_REQUEST = 'MessageType__AUTH_REQUEST',
-	AUTH_CALLBACK = 'MessageType__AUTH_CALLBACK',
-	AUTH_TOKEN = 'MessageType__AUTH_TOKEN',
-	ERROR = 'MessageType__ERROR'
+	UNKNOWN = 'UNKNOWN',
+	CONFIG = 'CONFIG',
+	PING = 'PING',
+	PONG = 'PONG',
+	RETRY_AUTH = 'RETRY_AUTH',
+	AUTH_REQUEST = 'AUTH_REQUEST',
+	AUTH_CALLBACK = 'AUTH_CALLBACK',
+	AUTH_TOKEN = 'AUTH_TOKEN',
+	AUTH_ERROR = 'AUTH_ERROR',
+	ERROR = 'ERROR',
+	CLEAR_ERROR = 'CLEAR_ERROR'
 }
 
 export interface UnknownMessage {
@@ -58,6 +65,11 @@ export interface PingMessage {
 
 export interface PongMessage {
 	type: MessageType.PONG;
+	payload: Array<string>;
+}
+
+export interface RetryAuthMessage {
+	type: MessageType.RETRY_AUTH;
 }
 
 export interface AuthRequestMessage {
@@ -75,9 +87,20 @@ export interface AuthTokenMessage {
 	payload: OAuthToken;
 }
 
+export interface AuthErrorMessage {
+	type: MessageType.AUTH_ERROR;
+	payload: ErrorWithID;
+}
+
 export interface ErrorMessage {
 	type: MessageType.ERROR;
-	payload: Error;
+	payload: ErrorWithID;
+}
+
+type ErrorID = string;
+export interface ClearErrorMessage {
+	type: MessageType.CLEAR_ERROR;
+	payload: ErrorID;
 }
 
 export type Message =
@@ -85,7 +108,10 @@ export type Message =
 	| ConfigMessage
 	| PingMessage
 	| PongMessage
+	| RetryAuthMessage
 	| AuthRequestMessage
 	| AuthCallbackMessage
 	| AuthTokenMessage
-	| ErrorMessage;
+	| AuthErrorMessage
+	| ErrorMessage
+	| ClearErrorMessage;

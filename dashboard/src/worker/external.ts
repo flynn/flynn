@@ -4,7 +4,7 @@
 
 import * as types from './types';
 
-async function getClients(): Promise<Client[]> {
+export async function getClients(): Promise<Client[]> {
 	return self.clients.matchAll();
 }
 
