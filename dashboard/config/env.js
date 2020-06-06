@@ -67,6 +67,7 @@ function getClientEnvironment(publicUrl) {
 		// This should only be used as an escape hatch. Normally you would put
 		// images into the `src` and `import` them in code to get their paths.
 		PUBLIC_URL: publicUrl,
+		WORKER_URL: `${publicUrl}/static/js/worker-bundle.js`,
 		// These are used in index.html to inject production env variables into the
 		// app via window.DashboardConfig. Set them to empty objects in development
 		// as they are not used there.

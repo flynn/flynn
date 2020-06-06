@@ -107,6 +107,7 @@ func (api *API) ContentSecurityHandler(main http.Handler) http.Handler {
 		w.Header().Add("X-Content-Type-Options", "nosniff")
 		w.Header().Add("X-Frame-Options", "DENY")
 		w.Header().Add("X-XSS-Protection", "1; mode=block")
+		w.Header().Add("Service-Worker-Allowed", "/")
 		main.ServeHTTP(w, req)
 	})
 }

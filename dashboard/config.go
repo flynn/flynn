@@ -65,6 +65,7 @@ func MustConfig() *Config {
 	conf.PublicConfig = map[string]string{
 		"CONTROLLER_HOST": fmt.Sprintf("https://%s", conf.ControllerDomain),
 		"PUBLIC_URL":      conf.InterfaceURL,
+		// TODO(jvatic): add "WORKER_URL" from the asset-manifest.json (key: files['worker-bundle.js'])
 	}
 
 	var err error

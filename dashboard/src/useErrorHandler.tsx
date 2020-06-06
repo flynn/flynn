@@ -62,12 +62,12 @@ function handleError(error: Error, key: Symbol = Symbol('useErrorHandler key(und
 			fn();
 		}
 	};
-	if (typeof (error as any).retry === 'function') {
+	if (isRetriableError(error)) {
 		wrappedError = Object.assign(new Error(error.message), error, {
 			key,
 			retry: () => {
 				cancel();
-				return (error as any).retry();
+				(error as RetriableError).retry();
 			}
 		});
 	} else {

@@ -1,6 +1,31 @@
 import Config from './config';
 import { encode as base64URLEncode } from './util/base64url';
 
+export enum ActionType {
+	ERROR = 'oauth-client__ERROR'
+}
+
+interface ErrorAction {
+	type: ActionType.ERROR;
+	error: Error;
+}
+
+export type Action = ErrorAction;
+
+export type DispatchFunc = (action: Action) => void;
+
+const dispatchFuncs = new Set<DispatchFunc>();
+export function registerDispatchFunc(fn: DispatchFunc): () => void {
+	dispatchFuncs.add(fn);
+	return () => {
+		dispatchFuncs.delete(fn);
+	};
+}
+
+function dispatch(action: Action): void {
+	dispatchFuncs.forEach((fn) => fn(action));
+}
+
 enum StoreKeys {
 	SERVER_META = 'OAUTH_META',
 	CODE_VERIFIER = 'OAUTH_CODE_VERIFIER',
@@ -110,16 +135,38 @@ export async function reset() {
 	await Store.clear();
 }
 
-export async function tokenExchange(responseParams: string, callback: TokenCallbackFn, abortSignal: AbortSignal) {
-	const params = new URLSearchParams(responseParams);
-	if (!(await verifyState(params.get('state') || ''))) {
+interface TokenError {
+	error: string;
+	error_description: string;
+}
+
+function buildError(error: TokenError, message = ''): Error {
+	return Object.assign(new Error(`${message ? message + ': ' : ''}${error.error_description || error.error}`), {
+		code: error.error,
+		description: error.error_description
+	});
+}
+
+export interface AuthorizationResponseParams {
+	state: string | null;
+	code: string | null;
+	error: string | null;
+	error_description: string | null;
+}
+
+export async function tokenExchange(
+	params: AuthorizationResponseParams,
+	callback: TokenCallbackFn,
+	abortSignal: AbortSignal
+) {
+	if (!(await verifyState(params.state || ''))) {
 		await Store.clear();
 		throw new Error(`Error verifying state param`);
 	}
 
-	if (params.get('error')) {
-		const errorCode = params.get('error') || '';
-		const error = Object.assign(new Error(`Error: ${params.get('error_description') || errorCode}`), {
+	if (params.error) {
+		const errorCode = params.error || '';
+		const error = Object.assign(new Error(`Error: ${params.error_description || errorCode}`), {
 			code: errorCode
 		});
 		await Store.clear();
@@ -129,8 +176,9 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	const meta = await getServerMeta();
 	const body = new URLSearchParams();
 	body.set('grant_type', 'authorization_code');
-	body.set('code', decodeURIComponent(params.get('code') || ''));
+	body.set('code', decodeURIComponent(params.code || ''));
 	body.set('code_verifier', await Store.getItem(StoreKeys.CODE_VERIFIER));
+	// body.set('code_verifier', 'foo');
 	body.set('redirect_uri', await Store.getItem(StoreKeys.REDIRECT_URI));
 	body.set('client_id', Config.OAUTH_CLIENT_ID);
 	body.set('audience', Config.CONTROLLER_HOST);
@@ -154,7 +202,7 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 		token.issued_time = Date.now();
 		refreshTokenTimeout = setTimeout(() => {
 			refreshToken(token.refresh_token || '');
-		}, (token.expires_in - 30) * 1000);
+		}, (token.refresh_token_expires_in - 10) * 1000);
 		await Store.setToken(token);
 		await Store.removeItem(StoreKeys.CODE_VERIFIER);
 		await Store.removeItem(StoreKeys.CODE_CHALLENGE);
@@ -166,18 +214,19 @@ export async function tokenExchange(responseParams: string, callback: TokenCallb
 	} else {
 		await Store.clear();
 		Config.setAuthKey(null);
-		callback(null, new Error(`Error getting auth token: ${token.error_description || token.error}`));
+		callback(null, buildError(token, 'Error getting auth token'));
 	}
 }
 
 let refreshTokenTimeout: ReturnType<typeof setTimeout>;
 
-async function refreshToken(code: string) {
+async function refreshToken(refresh_token: string) {
 	clearTimeout(refreshTokenTimeout);
 	const meta = await getServerMeta();
 	const body = new URLSearchParams('');
 	body.set('grant_type', 'refresh_token');
-	body.set('code', code);
+	body.set('refresh_token', refresh_token);
+	body.set('client_id', Config.OAUTH_CLIENT_ID);
 	body.set('audience', Config.CONTROLLER_HOST);
 	const res = await fetch(meta.token_endpoint, {
 		method: 'POST',
@@ -194,13 +243,13 @@ async function refreshToken(code: string) {
 		token.issued_time = Date.now();
 		refreshTokenTimeout = setTimeout(() => {
 			refreshToken(token.refresh_token || '');
-		}, (token.expires_in - 30) * 1000);
+		}, (token.refresh_token_expires_in - 10) * 1000);
 		await Store.setToken(token);
 		Config.setAuthKey(token.access_token);
 	} else {
 		Config.setAuthKey(null);
 		await Store.setToken(null);
-		console.error(new Error(`Error refreshing auth token: ${token.error_description || token.error}`));
+		dispatch({ type: ActionType.ERROR, error: buildError(token, 'Error refreshing auth token') });
 	}
 }
 

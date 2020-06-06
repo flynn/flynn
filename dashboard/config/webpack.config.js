@@ -13,7 +13,8 @@ const OptimizeCSSAssetsPlugin = require('optimize-css-assets-webpack-plugin');
 const safePostCssParser = require('postcss-safe-parser');
 const ManifestPlugin = require('webpack-manifest-plugin');
 const InterpolateHtmlPlugin = require('react-dev-utils/InterpolateHtmlPlugin');
-const WorkboxWebpackPlugin = require('workbox-webpack-plugin');
+// const WorkboxWebpackPlugin = require('workbox-webpack-plugin');
+const ServiceWorkerWebpackPlugin = require('serviceworker-webpack-plugin');
 const WatchMissingNodeModulesPlugin = require('react-dev-utils/WatchMissingNodeModulesPlugin');
 const ModuleScopePlugin = require('react-dev-utils/ModuleScopePlugin');
 const getCSSModuleLocalIdent = require('react-dev-utils/getCSSModuleLocalIdent');
@@ -135,7 +136,7 @@ module.exports = function(webpackEnv) {
 			: isEnvDevelopment && 'cheap-module-source-map',
 		// These are the "entry points" to our application.
 		// This means they will be the "root" imports that are included in JS bundle.
-		entry: [
+		entry: {
 			// Include an alternative client for WebpackDevServer. A client's job is to
 			// connect to WebpackDevServer by a socket and get notified about changes.
 			// When you save a file, the client will either apply hot updates (in case
@@ -146,13 +147,10 @@ module.exports = function(webpackEnv) {
 			// the line below with these two lines if you prefer the stock client:
 			// require.resolve('webpack-dev-server/client') + '?/',
 			// require.resolve('webpack/hot/dev-server'),
-			isEnvDevelopment && require.resolve('react-dev-utils/webpackHotDevClient'),
+			devClient: require.resolve('react-dev-utils/webpackHotDevClient'),
 			// Finally, this is your app's code:
-			paths.appIndexJs
-			// We include the app code last so that if there is a runtime error during
-			// initialization, it doesn't blow up the WebpackDevServer client, and
-			// changing JS code would still trigger a refresh.
-		].filter(Boolean),
+			app: paths.appIndexJs
+		},
 		output: {
 			// The build folder.
 			path: isEnvProduction ? paths.appBuild : undefined,
@@ -160,7 +158,9 @@ module.exports = function(webpackEnv) {
 			pathinfo: isEnvDevelopment,
 			// There will be one main bundle, and one file per asynchronous chunk.
 			// In development, it does not produce real files.
-			filename: isEnvProduction ? 'static/js/[name].[contenthash:8].js' : isEnvDevelopment && 'static/js/bundle.js',
+			filename: isEnvProduction
+				? 'static/js/[name].[contenthash:8].js'
+				: isEnvDevelopment && 'static/js/[name]-bundle.js',
 			// TODO: remove this when upgrading to webpack 5
 			futureEmitAssets: true,
 			// There are also additional JS chunk files if you use code splitting.
@@ -246,12 +246,13 @@ module.exports = function(webpackEnv) {
 			// https://twitter.com/wSokra/status/969633336732905474
 			// https://medium.com/webpack/webpack-4-code-splitting-chunk-graph-and-the-splitchunks-optimization-be739a861366
 			splitChunks: {
-				chunks: 'all',
+				chunks: (chunkName) => chunkName !== 'worker',
 				name: false
 			},
 			// Keep the runtime chunk separated to enable long term caching
 			// https://twitter.com/wSokra/status/969679223278505985
 			// https://github.com/facebook/create-react-app/issues/5358
+			// NOTE: disabled due to lack of flexability (can't be disabled for worker bundle)
 			runtimeChunk: {
 				name: (entrypoint) => `runtime-${entrypoint.name}`
 			}
@@ -488,7 +489,14 @@ module.exports = function(webpackEnv) {
 					{},
 					{
 						inject: true,
-						template: paths.appHtml
+						template: paths.appHtml,
+						chunks: [
+							isEnvDevelopment ? 'devClient' : false,
+							// We include the app code last so that if there is a runtime error during
+							// initialization, it doesn't blow up the WebpackDevServer client, and
+							// changing JS code would still trigger a refresh.
+							'app'
+						].filter(Boolean)
 					},
 					isEnvProduction
 						? {
@@ -521,8 +529,8 @@ module.exports = function(webpackEnv) {
 			// Workaround for generated protobuf code returning an unsafe eval.
 			// (e.g. google-protobuf package)
 			new webpack.DefinePlugin({
-				"Function('return this')()": 'window',
-				'Function("return this")()': 'window'
+				"Function('return this')()": '(function(){ return this; })()',
+				'Function("return this")()': '(function(){ return this; })()'
 			}),
 			// Makes some environment variables available to the JS code, for example:
 			// if (process.env.NODE_ENV === 'production') { ... }. See `./env.js`.
@@ -552,7 +560,7 @@ module.exports = function(webpackEnv) {
 			// - "files" key: Mapping of all asset filenames to their corresponding
 			//   output file so that tools can pick it up without having to parse
 			//   `index.html`
-			// - "entrypoints" key: Array of files which are included in `index.html`,
+			// - "entrypoints.app" key: Array of files which are included in `index.html`,
 			//   can be used to reconstruct the HTML if necessary
 			new ManifestPlugin({
 				fileName: 'asset-manifest.json',
@@ -562,7 +570,11 @@ module.exports = function(webpackEnv) {
 						manifest[file.name] = file.path;
 						return manifest;
 					}, seed);
-					const entrypointFiles = entrypoints.main.filter((fileName) => !fileName.endsWith('.map'));
+
+					const entrypointFiles = {};
+					Object.entries(entrypoints).forEach(([chunkName, paths]) => {
+						entrypointFiles[chunkName] = paths.filter((fileName) => !fileName.endsWith('.map'));
+					});
 
 					return {
 						files: manifestFiles,
@@ -578,22 +590,25 @@ module.exports = function(webpackEnv) {
 			new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/),
 			// Generate a service worker script that will precache, and keep up to date,
 			// the HTML & assets that are part of the Webpack build.
-			isEnvProduction &&
-				new WorkboxWebpackPlugin.GenerateSW({
-					clientsClaim: true,
-					exclude: [/\.map$/, /asset-manifest\.json$/],
-					importWorkboxFrom: 'cdn',
-					navigateFallback: publicUrl + '/index.html',
-					navigateFallbackBlacklist: [
-						// Exclude URLs starting with /_, as they're likely an API call
-						new RegExp('^/_'),
-						// Exclude any URLs whose last part seems to be a file extension
-						// as they're likely a resource and not a SPA route.
-						// URLs containing a "?" character won't be blacklisted as they're likely
-						// a route with query params (e.g. auth callbacks).
-						new RegExp('/[^/?]+\\.[^/]+$')
-					]
-				}),
+			// isEnvProduction &&
+			// 	new WorkboxWebpackPlugin.GenerateSW({
+			// 		clientsClaim: true,
+			// 		exclude: [/\.map$/, /asset-manifest\.json$/],
+			// 		importWorkboxFrom: 'cdn',
+			// 		navigateFallback: publicUrl + '/index.html',
+			// 		navigateFallbackBlacklist: [
+			// 			// Exclude URLs starting with /_, as they're likely an API call
+			// 			new RegExp('^/_'),
+			// 			// Exclude any URLs whose last part seems to be a file extension
+			// 			// as they're likely a resource and not a SPA route.
+			// 			// URLs containing a "?" character won't be blacklisted as they're likely
+			// 			// a route with query params (e.g. auth callbacks).
+			// 			new RegExp('/[^/?]+\\.[^/]+$')
+			// 		]
+			// 	}),
+			new ServiceWorkerWebpackPlugin({
+				entry: paths.appWorkerJs
+			}),
 			// TypeScript type checking
 			useTypeScript &&
 				new ForkTsCheckerWebpackPlugin({
