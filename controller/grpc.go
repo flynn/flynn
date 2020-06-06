@@ -32,28 +32,22 @@ type grpcAPI struct {
 	db *postgres.DB
 }
 
-const ctxKeyFlynnAuthKeyID = "flynn-auth-key-id"
-
 func (g *grpcAPI) authorize(ctx context.Context) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return ctx, grpc.Errorf(codes.Unauthenticated, "metadata missing")
 	}
 
-	passwords, ok := md["auth-key"]
-	if !ok || len(passwords) == 0 {
-		return ctx, grpc.Errorf(codes.Unauthenticated, "no Auth-Key provided")
+	auth := md["authorization"]
+	if len(auth) == 0 || auth[0] == "" {
+		return ctx, grpc.Errorf(codes.Unauthenticated, "no Authorization provided")
 	}
 
-	auth, err := g.authorizer.Authorize(passwords[0])
+	token, err := g.authorizer.AuthorizeToken(auth[0])
 	if err != nil {
 		return ctx, grpc.Errorf(codes.Unauthenticated, err.Error())
 	}
-
-	if auth.ID != "" {
-		ctx = context.WithValue(ctx, ctxKeyFlynnAuthKeyID, auth.ID)
-		ctx = ctxhelper.NewContextLogger(ctx, g.logger(ctx).New("authKeyID", auth.ID))
-	}
+	ctx = ctxhelper.NewContextLogger(ctx, g.logger(ctx).New("auth_token_id", token.ID, "auth_user", token.User))
 
 	return ctx, nil
 }
