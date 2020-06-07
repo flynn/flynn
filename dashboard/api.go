@@ -43,6 +43,7 @@ func NewDashboardHandler(conf *Config) http.Handler {
 
 	router.GET("/", api.WrapHandler(api.ServeIndex))
 	router.GET("/apps/*path", api.WrapHandler(api.ServeIndex))
+	router.GET("/oauth/callback", api.WrapHandler(api.ServeIndex))
 
 	router.GET("/config.js", api.WrapHandler(api.ServeConfigJs))
 
