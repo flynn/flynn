@@ -6,13 +6,14 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/gorilla/sessions"
 )
 
 type Config struct {
 	Addr              string
-	OAuthIssuerDomain string
+	OAuthDomains      []string
 	ControllerDomain  string
 	ControllerAuthKey string
 	InterfaceURL      string
@@ -64,17 +65,28 @@ func MustConfig() *Config {
 		log.Fatal("SESSION_DOMAIN is required!")
 	}
 
+	conf.OAuthDomains = strings.Split(os.Getenv("OAUTH_DOMAINS"), ",")
 	oauthIssuer := os.Getenv("OAUTH_ISSUER")
 	if oauthIssuer == "" {
 		log.Fatal("OAUTH_ISSUER is required!")
 	}
 	if u, err := url.Parse(oauthIssuer); err == nil {
-		conf.OAuthIssuerDomain = u.Host
+		hasDomain := false
+		for _, d := range conf.OAuthDomains {
+			if d == u.Host {
+				hasDomain = true
+				break
+			}
+		}
+		if !hasDomain {
+			conf.OAuthDomains = append(conf.OAuthDomains, u.Host)
+		}
 	}
 	oauthClientID := os.Getenv("OAUTH_CLIENT_ID")
 	if oauthClientID == "" {
 		log.Fatal("OAUTH_CLIENT_ID is required!")
 	}
+
 	conf.PublicConfig = map[string]string{
 		"CONTROLLER_HOST": fmt.Sprintf("https://%s", conf.ControllerDomain),
 		"PUBLIC_URL":      conf.InterfaceURL,
