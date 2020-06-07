@@ -62,10 +62,19 @@ func MustConfig() *Config {
 		log.Fatal("SESSION_DOMAIN is required!")
 	}
 
+	oauthIssuer := os.Getenv("OAUTH_ISSUER")
+	if oauthIssuer == "" {
+		log.Fatal("OAUTH_ISSUER is required!")
+	}
+	oauthClientID := os.Getenv("OAUTH_CLIENT_ID")
+	if oauthClientID == "" {
+		log.Fatal("OAUTH_CLIENT_ID is required!")
+	}
 	conf.PublicConfig = map[string]string{
 		"CONTROLLER_HOST": fmt.Sprintf("https://%s", conf.ControllerDomain),
 		"PUBLIC_URL":      conf.InterfaceURL,
-		// TODO(jvatic): add "WORKER_URL" from the asset-manifest.json (key: files['worker-bundle.js'])
+		"OAUTH_ISSUER":    oauthIssuer,
+		"OAUTH_CLIENT_ID": oauthClientID,
 	}
 
 	var err error
