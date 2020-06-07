@@ -123,7 +123,7 @@ main() {
   "${flynn_host}" run \
     --host    "${host}" \
     --bind    "${ROOT}:/src,/var/lib/flynn/layer-cache:/var/lib/flynn/layer-cache" \
-    --limits  "temp_disk=4G,memory=4G" \
+    --limits  "temp_disk=4G,memory=6G" \
     --workdir "/src" \
     "${builder_image}" \
     /src/script/flynn-builder build "${args[@]}"
