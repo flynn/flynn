@@ -678,7 +678,9 @@
         "CONTROLLER_DOMAIN": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
-        "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}"
+        "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}",
+        "OAUTH_ISSUER": "TODO",
+        "OAUTH_CLIENT_ID": "TODO"
       },
       "processes": {
         "web": {
