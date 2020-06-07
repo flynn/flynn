@@ -139,7 +139,12 @@ export default function AppComponent(props: Props) {
 					handleError(new Error(`"${app.getDisplayName()}" has been deleted!`));
 					history.push('/' + location.search);
 				} else {
-					handleError(new Error(`${app ? app.getDisplayName() : 'App(' + name + ')'}: ${appError.message}`));
+					handleError(
+						Object.assign(
+							new Error(`${app ? app.getDisplayName() : 'App(' + name + ')'}: ${appError.message}`),
+							appError
+						)
+					);
 				}
 			}
 		},
