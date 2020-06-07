@@ -43,6 +43,10 @@ export function unsetClientIDActive(clientID: string) {
 	}
 }
 
+export function hasActiveClientID(clientID: string): boolean {
+	return activeClientIDs.has(clientID);
+}
+
 let activeClientIDTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 export function setClientIDActive(clientID: string) {
 	if (!primaryClientID) {

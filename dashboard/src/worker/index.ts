@@ -5,6 +5,7 @@
 import * as types from './types';
 import {
 	load as loadConfig,
+	hasActiveClientID,
 	getPrimaryClientID,
 	setClientIDActive,
 	unsetClientIDActive,
@@ -29,6 +30,10 @@ self.addEventListener('message', function(event: any) {
 
 function handleMessage(senderID: string, message: types.Message): Promise<void> {
 	if (message.type !== types.MessageType.PING) console.log('[DEBUG]: SW handleMessage', message);
+	if (!hasActiveClientID(senderID)) {
+		// send token to new clients
+		oauthClient.sendToken(senderID);
+	}
 	setClientIDActive(senderID);
 	return self.clients.matchAll().then((clientList: Client[]) => {
 		const clientIDs = new Set<string>(clientList.map((c) => c.id));
