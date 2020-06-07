@@ -64,7 +64,9 @@ const config: Config = {
 	},
 
 	isAuthenticated: () => {
-		return isTokenValid(config.AUTH_TOKEN);
+		// TODO(jvatic): use isAuthValid once bug is fixed where it returns false
+		// but no re-auth is triggered
+		return config.AUTH_TOKEN !== null;
 	},
 
 	authErrorCallback: (fn: AuthErrorCallback) => {
