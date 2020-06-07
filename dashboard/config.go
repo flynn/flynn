@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 
 	"github.com/gorilla/sessions"
@@ -11,6 +12,7 @@ import (
 
 type Config struct {
 	Addr              string
+	OAuthIssuerDomain string
 	ControllerDomain  string
 	ControllerAuthKey string
 	InterfaceURL      string
@@ -65,6 +67,9 @@ func MustConfig() *Config {
 	oauthIssuer := os.Getenv("OAUTH_ISSUER")
 	if oauthIssuer == "" {
 		log.Fatal("OAUTH_ISSUER is required!")
+	}
+	if u, err := url.Parse(oauthIssuer); err != nil {
+		conf.OAuthIssuerDomain = u.Host
 	}
 	oauthClientID := os.Getenv("OAUTH_CLIENT_ID")
 	if oauthClientID == "" {
