@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -57,18 +58,24 @@ func (a *Authorizer) AuthorizeKey(key string) (*Token, error) {
 func (a *Authorizer) AuthorizeToken(token string) (*Token, error) {
 	b, err := base64.URLEncoding.DecodeString(token)
 	if err != nil {
-		return nil, ErrInvalid
+		return nil, fmt.Errorf("invalid token encoding")
 	}
 
 	t := &api.AccessToken{}
 	if err := protoVerifyUnmarshal(a.tokenKey, b, t); err != nil {
-		return nil, ErrInvalid
+		return nil, err
 	}
 
 	iss, _ := ptypes.Timestamp(t.IssueTime)
 	exp, _ := ptypes.Timestamp(t.ExpireTime)
-	if iss.IsZero() || exp.IsZero() || exp.Sub(iss) > a.tokenMaxValidity || time.Now().After(exp) {
-		return nil, ErrInvalid
+	if iss.IsZero() || exp.IsZero() {
+		return nil, fmt.Errorf("invalid token timestamp")
+	}
+	if exp.Sub(iss) > a.tokenMaxValidity {
+		return nil, fmt.Errorf("invalid token validity period")
+	}
+	if time.Now().After(exp) {
+		return nil, fmt.Errorf("expired token")
 	}
 
 	idBytes := sha256.Sum256(b)
@@ -81,17 +88,20 @@ func (a *Authorizer) AuthorizeToken(token string) (*Token, error) {
 func protoVerifyUnmarshal(k *ecdsa.PublicKey, b []byte, m proto.Message) error {
 	signed := &api.SignedData{}
 	if err := proto.Unmarshal(b, signed); err != nil {
-		return err
+		return fmt.Errorf("invalid signed token")
 	}
 
 	h := sha256.New()
 	h.Write(signed.Data)
 
 	if !verifyASN1(k, h.Sum(nil), signed.Signature) {
-		return ErrInvalid
+		return fmt.Errorf("incorrect signature")
 	}
 
-	return proto.Unmarshal(signed.Data, m)
+	if err := proto.Unmarshal(signed.Data, m); err != nil {
+		return fmt.Errorf("invalid token")
+	}
+	return nil
 }
 
 // This should be replaced with ecdsa.VerifyASN1 when Go 1.15 is available
