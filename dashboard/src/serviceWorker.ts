@@ -117,6 +117,19 @@ export async function register() {
 	});
 }
 
+let messageCallbacks = new Map<string, Array<(message: types.Message) => void>>();
+
+export function addEventListener(type: string, callback: (message: types.Message) => void): () => void {
+	messageCallbacks.set(type, (messageCallbacks.get(type) || []).concat(callback));
+	return () => {
+		const fns = messageCallbacks.get(type) || [];
+		const index = fns.indexOf(callback);
+		if (index !== -1) {
+			messageCallbacks.set(type, fns.slice(0, index).concat(fns.slice(index + 1)));
+		}
+	};
+}
+
 const errorsMap = new Map<string, CancelFunc>();
 
 function handleMessage(message: types.Message) {
@@ -183,6 +196,8 @@ function handleMessage(message: types.Message) {
 		default:
 			console.log('message', message);
 	}
+
+	(messageCallbacks.get(message.type) || []).forEach((fn) => fn(message));
 }
 
 export function postMessage(message: types.Message) {
