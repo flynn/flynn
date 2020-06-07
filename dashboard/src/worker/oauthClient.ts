@@ -90,9 +90,7 @@ export async function handleAuthorizationCallback(queryString: string): Promise<
 
 let refreshTokenTimeout: ReturnType<typeof setTimeout>;
 
-// TODO(jvatic): figure out why TypeScript was giving me issue with this
-// type: types.MessageType.AUTH_ERROR | types.MessageType.ERROR
-async function handleError(type: any, error: Error) {
+async function handleError(type: types.MessageType.AUTH_ERROR | types.MessageType.ERROR, error: Error) {
 	// stop the refresh token cycle
 	clearTimeout(refreshTokenTimeout);
 
