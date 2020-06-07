@@ -104,7 +104,7 @@ func (api *API) CorsHandler(main http.Handler) http.Handler {
 
 func (api *API) ContentSecurityHandler(main http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Add("Content-Security-Policy", fmt.Sprintf("default-src 'none'; connect-src 'self' %s %s; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self'; manifest-src 'self'", api.conf.ControllerDomain, api.conf.OAuthIssuerDomain))
+		w.Header().Add("Content-Security-Policy", fmt.Sprintf("default-src 'none'; connect-src 'self' %s %s; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self'; manifest-src 'self'", api.conf.ControllerDomain, strings.Join(api.conf.OAuthDomains, " ")))
 		w.Header().Add("X-Content-Type-Options", "nosniff")
 		w.Header().Add("X-Frame-Options", "DENY")
 		w.Header().Add("X-XSS-Protection", "1; mode=block")
