@@ -68,7 +68,7 @@ func MustConfig() *Config {
 	if oauthIssuer == "" {
 		log.Fatal("OAUTH_ISSUER is required!")
 	}
-	if u, err := url.Parse(oauthIssuer); err != nil {
+	if u, err := url.Parse(oauthIssuer); err == nil {
 		conf.OAuthIssuerDomain = u.Host
 	}
 	oauthClientID := os.Getenv("OAUTH_CLIENT_ID")
