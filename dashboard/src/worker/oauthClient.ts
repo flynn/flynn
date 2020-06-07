@@ -50,6 +50,17 @@ export async function init(clientID: string) {
 	}
 }
 
+export async function sendToken(clientID: string) {
+	const token = await getToken();
+	if (isTokenValid(token)) {
+		console.log('SW: sending token to', clientID);
+		await postMessage(clientID, {
+			type: types.MessageType.AUTH_TOKEN,
+			payload: token as types.OAuthToken
+		});
+	}
+}
+
 export async function handleAuthError(error: Error) {
 	// send the error to all clients where it will be displayed with the ability
 	// to retry
@@ -93,6 +104,11 @@ async function handleError(type: any, error: Error) {
 	});
 }
 
+function calcDelay(min: number, max: number, val: number): number {
+	// TODO(jvatic): make this find an inbetween state
+	return Math.max(val - max, min);
+}
+
 async function setToken(token: types.OAuthToken) {
 	clearTimeout(refreshTokenTimeout);
 
@@ -104,7 +120,10 @@ async function setToken(token: types.OAuthToken) {
 
 	if (canRefreshToken(token)) {
 		const refreshTokenExpiresMs = token.refresh_token_expires_in * 1000;
-		const refreshDelayMs = refreshTokenExpiresMs - 10000; // refresh 10s before expires
+		const minRefreshDelayMs = 5000;
+		const maxRefreshDelayMs = 20000;
+		// refresh 5 to 20 seconds before it expires
+		const refreshDelayMs = calcDelay(minRefreshDelayMs, maxRefreshDelayMs, refreshTokenExpiresMs);
 		refreshTokenTimeout = setTimeout(async () => {
 			try {
 				await doTokenRefresh(token.refresh_token);
