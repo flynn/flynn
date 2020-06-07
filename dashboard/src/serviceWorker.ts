@@ -145,7 +145,7 @@ function handleMessage(message: types.Message) {
 			break;
 
 		case types.MessageType.AUTH_TOKEN:
-			Config.setAuthKey(message.payload.access_token);
+			Config.setAuth(message.payload);
 			break;
 
 		case types.MessageType.AUTH_ERROR:

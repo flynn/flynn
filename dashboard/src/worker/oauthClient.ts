@@ -8,6 +8,7 @@ import * as types from './types';
 import { getConfig } from './config';
 import { encode as base64URLEncode } from '../util/base64url';
 import { postMessageAll, postMessage } from './external';
+import { isTokenValid, canRefreshToken } from './tokenHelpers';
 
 const DBKeys = {
 	SERVER_META: 'servermeta',
@@ -140,22 +141,6 @@ async function getToken(): Promise<types.OAuthToken | null> {
 	} catch (e) {
 		return null;
 	}
-}
-
-function isTokenValid(token: types.OAuthToken | null): boolean {
-	if (token === null) return false;
-	if (token.issued_time + token.expires_in * 1000 >= Date.now()) {
-		return true;
-	}
-	return false;
-}
-
-function canRefreshToken(token: types.OAuthToken | null): boolean {
-	if (token === null) return false;
-	if (token && token.issued_time + token.refresh_token_expires_in > Date.now()) {
-		return true;
-	}
-	return false;
 }
 
 interface ServerMetadata {

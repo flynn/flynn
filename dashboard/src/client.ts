@@ -1018,9 +1018,9 @@ class _Client implements Client {
 
 	private metadata(): grpc.Metadata {
 		const headers = new BrowserHeaders({});
-		if (Config.CONTROLLER_AUTH_KEY) {
-			headers.set('Authorization', `Bearer ${Config.CONTROLLER_AUTH_KEY}`);
-			headers.set('Auth-Key', Config.CONTROLLER_AUTH_KEY);
+		const token = Config.AUTH_TOKEN;
+		if (token) {
+			headers.set('Authorization', `${token.token_type} ${token.access_token}`);
 		}
 		return headers;
 	}

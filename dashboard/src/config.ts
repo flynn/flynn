@@ -1,4 +1,6 @@
 import ifDev from './ifDev';
+import * as types from './worker/types';
+import { isTokenValid } from './worker/tokenHelpers';
 
 export interface PublicConfig {
 	CONTROLLER_HOST: string;
@@ -17,8 +19,9 @@ type AuthErrorCallback = (error: Error) => void;
 type CancelFunc = () => void;
 
 export interface Config extends PublicConfig, PrivateConfig {
+	AUTH_TOKEN: types.OAuthToken | null;
 	unsetPrivateConfig: () => void;
-	setAuthKey: (key: string | null) => void;
+	setAuth: (token: types.OAuthToken | null) => void;
 	authCallback: (fn: AuthCallback) => CancelFunc;
 	isAuthenticated: () => boolean;
 	authErrorCallback: (fn: AuthErrorCallback) => CancelFunc;
@@ -38,12 +41,14 @@ const config: Config = {
 	PUBLIC_URL: process.env.PUBLIC_URL || '',
 	WORKER_URL: process.env.WORKER_URL || '',
 
+	AUTH_TOKEN: null,
+
 	unsetPrivateConfig: () => {
 		config.CONTROLLER_AUTH_KEY = null;
 	},
 
-	setAuthKey: (key: string | null) => {
-		config.CONTROLLER_AUTH_KEY = key;
+	setAuth: (token: types.OAuthToken | null) => {
+		config.AUTH_TOKEN = token;
 
 		const isAuthenticated = config.isAuthenticated();
 		authCallbacks.forEach((fn) => {
@@ -59,7 +64,7 @@ const config: Config = {
 	},
 
 	isAuthenticated: () => {
-		return config.CONTROLLER_AUTH_KEY !== null;
+		return isTokenValid(config.AUTH_TOKEN);
 	},
 
 	authErrorCallback: (fn: AuthErrorCallback) => {
