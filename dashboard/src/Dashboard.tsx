@@ -7,7 +7,7 @@ import styled from 'styled-components';
 import theme from './theme';
 import { useLocation } from 'react-router-dom';
 import Split from './Split';
-import OAuth from './OAuth';
+import AuthInProgressModal from './AuthInProgressModal';
 import Loading from './Loading';
 import AppsListNav from './AppsListNav';
 import { DisplayErrors } from './useErrorHandler';
@@ -46,10 +46,10 @@ function DashboardInner() {
 		setAppName(appNameFromPath(currentPath));
 	}, [currentPath]);
 
-	if (window.location.pathname === '/oauth/callback') return null; // <OAuth />
-
 	return (
 		<>
+			<AuthInProgressModal />
+
 			<Split>
 				<Box tag="aside" basis="medium" flex={false} fill>
 					<Box tag="header" pad="small" direction="row">
