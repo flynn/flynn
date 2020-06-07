@@ -43,7 +43,7 @@ func (g *grpcAPI) authorize(ctx context.Context) (context.Context, error) {
 		return ctx, grpc.Errorf(codes.Unauthenticated, "no Authorization provided")
 	}
 
-	token, err := g.authorizer.AuthorizeToken(auth[0])
+	token, err := g.authorizer.AuthorizeToken(strings.TrimPrefix(auth[0], "Bearer "))
 	if err != nil {
 		return ctx, grpc.Errorf(codes.Unauthenticated, err.Error())
 	}
