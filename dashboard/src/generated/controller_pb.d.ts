@@ -1151,6 +1151,74 @@ export namespace DeploymentEvent {
   export const JobState: JobStateMap;
 }
 
+export class SignedData extends jspb.Message {
+  getData(): Uint8Array | string;
+  getData_asU8(): Uint8Array;
+  getData_asB64(): string;
+  setData(value: Uint8Array | string): void;
+
+  getSignature(): Uint8Array | string;
+  getSignature_asU8(): Uint8Array;
+  getSignature_asB64(): string;
+  setSignature(value: Uint8Array | string): void;
+
+  serializeBinary(): Uint8Array;
+  toObject(includeInstance?: boolean): SignedData.AsObject;
+  static toObject(includeInstance: boolean, msg: SignedData): SignedData.AsObject;
+  static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+  static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+  static serializeBinaryToWriter(message: SignedData, writer: jspb.BinaryWriter): void;
+  static deserializeBinary(bytes: Uint8Array): SignedData;
+  static deserializeBinaryFromReader(message: SignedData, reader: jspb.BinaryReader): SignedData;
+}
+
+export namespace SignedData {
+  export type AsObject = {
+    data: Uint8Array | string,
+    signature: Uint8Array | string,
+  }
+}
+
+export class AccessToken extends jspb.Message {
+  getClientId(): string;
+  setClientId(value: string): void;
+
+  getUserId(): string;
+  setUserId(value: string): void;
+
+  getUserEmail(): string;
+  setUserEmail(value: string): void;
+
+  hasIssueTime(): boolean;
+  clearIssueTime(): void;
+  getIssueTime(): google_protobuf_timestamp_pb.Timestamp | undefined;
+  setIssueTime(value?: google_protobuf_timestamp_pb.Timestamp): void;
+
+  hasExpireTime(): boolean;
+  clearExpireTime(): void;
+  getExpireTime(): google_protobuf_timestamp_pb.Timestamp | undefined;
+  setExpireTime(value?: google_protobuf_timestamp_pb.Timestamp): void;
+
+  serializeBinary(): Uint8Array;
+  toObject(includeInstance?: boolean): AccessToken.AsObject;
+  static toObject(includeInstance: boolean, msg: AccessToken): AccessToken.AsObject;
+  static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+  static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+  static serializeBinaryToWriter(message: AccessToken, writer: jspb.BinaryWriter): void;
+  static deserializeBinary(bytes: Uint8Array): AccessToken;
+  static deserializeBinaryFromReader(message: AccessToken, reader: jspb.BinaryReader): AccessToken;
+}
+
+export namespace AccessToken {
+  export type AsObject = {
+    clientId: string,
+    userId: string,
+    userEmail: string,
+    issueTime?: google_protobuf_timestamp_pb.Timestamp.AsObject,
+    expireTime?: google_protobuf_timestamp_pb.Timestamp.AsObject,
+  }
+}
+
 export interface ReleaseTypeMap {
   ANY: 0;
   CODE: 1;
