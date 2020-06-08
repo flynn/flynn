@@ -94,8 +94,8 @@ export async function register() {
 				}
 			});
 
-			navigator.serviceWorker.addEventListener('controllerchange', function() {
-				debug('controllerchange');
+			navigator.serviceWorker.addEventListener('controllerchange', function(event: any) {
+				debug('controllerchange', event);
 				if (navigator.serviceWorker.controller) {
 					var scriptURL = navigator.serviceWorker.controller.scriptURL;
 					debug('controllerchange', scriptURL);
@@ -141,10 +141,12 @@ function handleMessage(message: types.Message) {
 			break;
 
 		case types.MessageType.AUTH_REQUEST:
+			debug('[handleMessage]: AUTH_REQUEST', message.payload);
 			window.open(message.payload);
 			break;
 
 		case types.MessageType.AUTH_TOKEN:
+			debug('[handleMessage]: AUTH_TOKEN', message.payload);
 			Config.setAuth(message.payload);
 			break;
 
@@ -155,7 +157,7 @@ function handleMessage(message: types.Message) {
 					retry: () => {
 						postMessage({
 							type: types.MessageType.CLEAR_ERROR,
-							payload: (authError as any).id
+							payload: [(authError as any).id]
 						});
 						postMessage({
 							type: types.MessageType.RETRY_AUTH
@@ -166,7 +168,7 @@ function handleMessage(message: types.Message) {
 			if ((authError as any).id) {
 				errorsMap.set((authError as any).id, cancelAuthError);
 			}
-			debug('AUTH_ERROR', authError);
+			debug('[handleMessage]: AUTH_ERROR', authError);
 			break;
 
 		case types.MessageType.ERROR:
@@ -176,7 +178,7 @@ function handleMessage(message: types.Message) {
 					cancel: () => {
 						postMessage({
 							type: types.MessageType.CLEAR_ERROR,
-							payload: (error as any).id
+							payload: [(error as any).id]
 						});
 					}
 				})
@@ -184,17 +186,19 @@ function handleMessage(message: types.Message) {
 			if ((error as any).id) {
 				errorsMap.set((error as any).id, cancelError);
 			}
-			debug('ERROR', error);
+			debug('[handleMessage]: ERROR', error);
 			break;
 
 		case types.MessageType.CLEAR_ERROR:
-			console.log('clear error', message.payload);
-			const cancelFn = errorsMap.get(message.payload);
-			if (cancelFn) cancelFn();
+			message.payload.forEach((errorID: string) => {
+				debug('[handleMessage]: CLEAR_ERROR', message.type, errorID);
+				const cancelFn = errorsMap.get(errorID);
+				if (cancelFn) cancelFn();
+			});
 			break;
 
 		default:
-			console.log('message', message);
+			debug('[handleMessage]: unhandled message', message);
 	}
 
 	(messageCallbacks.get(message.type) || []).forEach((fn) => fn(message));

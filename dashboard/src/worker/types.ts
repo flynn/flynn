@@ -100,7 +100,7 @@ export interface ErrorMessage {
 type ErrorID = string;
 export interface ClearErrorMessage {
 	type: MessageType.CLEAR_ERROR;
-	payload: ErrorID;
+	payload: ErrorID[];
 }
 
 export type Message =

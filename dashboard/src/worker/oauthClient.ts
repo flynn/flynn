@@ -5,10 +5,22 @@
 import { get as dbGet, set as dbSet, del as dbDel } from 'idb-keyval';
 
 import * as types from './types';
-import { getConfig } from './config';
+import { getConfig, hasActiveClientID } from './config';
 import { encode as base64URLEncode } from '../util/base64url';
 import { postMessageAll, postMessage } from './external';
 import { isTokenValid, canRefreshToken } from './tokenHelpers';
+import _debug from './debug';
+
+function debug(msg: string, ...args: any[]) {
+	_debug(`[oauthClient]: ${msg}`, ...args);
+}
+
+const clientState = {
+	authorizationInProgress: false,
+	authorizationClientID: null as string | null,
+
+	errorIDs: new Set<string>()
+};
 
 const DBKeys = {
 	SERVER_META: 'servermeta',
@@ -25,36 +37,54 @@ function dbClearAuth(): Promise<any> {
 	);
 }
 
-export async function init(clientID: string) {
+export async function initClient(clientID: string) {
 	const token = await getToken();
 	if (isTokenValid(token)) {
+		debug('[initClient]: using existing valid token', token);
+
 		await postMessageAll({
 			type: types.MessageType.AUTH_TOKEN,
 			payload: token as types.OAuthToken
 		});
 		return;
 	} else if (canRefreshToken(token)) {
+		debug('[initClient]: attempting to refresh existing token', token);
+
 		try {
 			await doTokenRefresh((token as types.OAuthToken).refresh_token);
 		} catch (error) {
 			await handleError(types.MessageType.AUTH_ERROR, error);
 		}
-	} else {
+	} else if (
+		!clientState.authorizationInProgress ||
+		(clientState.authorizationClientID && !hasActiveClientID(clientState.authorizationClientID))
+	) {
+		// if authorization is not currently in progress
+		// or the client id that triggered it is not marked active
+		if (clientState.authorizationInProgress)
+			debug('[initClient]: overridding existing authorization initiative', clientState.authorizationClientID);
+		debug('[initClient]: starting fresh');
+
 		// start fresh
 		await dbClearAuth();
 
-		const url = await generateAuthorizationURL();
+		// clear any existing error messages from the UI
+		await clearErrors();
+
+		const url = await generateAuthorizationURL(clientID);
 		await postMessage(clientID, {
 			type: types.MessageType.AUTH_REQUEST,
 			payload: url
 		});
+	} else {
+		debug('[initClient]: authorization is in progress, all clients will get the token once complete');
 	}
 }
 
 export async function sendToken(clientID: string) {
 	const token = await getToken();
 	if (isTokenValid(token)) {
-		console.log('SW: sending token to', clientID);
+		debug('sending token to', clientID);
 		await postMessage(clientID, {
 			type: types.MessageType.AUTH_TOKEN,
 			payload: token as types.OAuthToken
@@ -70,8 +100,15 @@ export async function handleAuthError(error: Error) {
 	await dbClearAuth();
 }
 
-export async function handleAuthorizationCallback(queryString: string): Promise<void> {
-	console.log('[DEBUG]: handleAuthorizationCallback', queryString);
+export async function handleAuthorizationCallback(clientID: string, queryString: string): Promise<void> {
+	debug('handleAuthorizationCallback', clientID, queryString);
+
+	if (clientID !== clientState.authorizationClientID) {
+		debug('[handleAuthorizationCallback]: [WARNING]: clientID mismatch', clientID, clientState.authorizationClientID);
+	}
+	clientState.authorizationInProgress = false;
+	clientState.authorizationClientID = null;
+
 	try {
 		const params = new URLSearchParams(queryString);
 		const res: types.OAuthCallbackResponse = {
@@ -91,12 +128,28 @@ export async function handleAuthorizationCallback(queryString: string): Promise<
 
 let refreshTokenTimeout: ReturnType<typeof setTimeout>;
 
+async function clearErrors() {
+	const errorIDs = Array.from(clientState.errorIDs);
+	debug('clearErrors', errorIDs);
+	clientState.errorIDs.clear();
+	await postMessageAll({
+		type: types.MessageType.CLEAR_ERROR,
+		payload: errorIDs
+	});
+}
+
 async function handleError(type: types.MessageType.AUTH_ERROR | types.MessageType.ERROR, error: Error) {
+	debug('handleError', type, error);
+
 	// stop the refresh token cycle
 	clearTimeout(refreshTokenTimeout);
+	// clear client state
+	clientState.authorizationInProgress = false;
+	clientState.authorizationClientID = null;
 
 	// add an ID to errors so they can be cleared for all clients
 	const errorID = (error as any).id ? ((error as any).id as string) : await randomString(16);
+	clientState.errorIDs.add(errorID);
 	await postMessageAll({
 		type,
 		payload: Object.assign({ message: error.message }, error, { id: errorID })
@@ -109,6 +162,8 @@ function calcDelay(min: number, max: number, val: number): number {
 }
 
 async function setToken(token: types.OAuthToken) {
+	debug('[setToken]', token);
+
 	clearTimeout(refreshTokenTimeout);
 
 	await postMessageAll({
@@ -123,6 +178,7 @@ async function setToken(token: types.OAuthToken) {
 		const maxRefreshDelayMs = 20000;
 		// refresh 5 to 20 seconds before it expires
 		const refreshDelayMs = calcDelay(minRefreshDelayMs, maxRefreshDelayMs, refreshTokenExpiresMs);
+		debug(`[setToken]: token will refresh in ${refreshDelayMs}ms and expires in ${refreshTokenExpiresMs}`);
 		refreshTokenTimeout = setTimeout(async () => {
 			try {
 				await doTokenRefresh(token.refresh_token);
@@ -221,7 +277,10 @@ async function generateState(): Promise<string> {
 	return state;
 }
 
-async function generateAuthorizationURL(): Promise<string> {
+async function generateAuthorizationURL(clientID: string): Promise<string> {
+	clientState.authorizationInProgress = true;
+	clientState.authorizationClientID = clientID;
+
 	const config = await getConfig();
 	const meta = await getServerMeta();
 	const params = new URLSearchParams('');
@@ -309,6 +368,8 @@ async function doTokenExchange(params: types.OAuthCallbackResponse) {
 }
 
 async function doTokenRefresh(refreshToken: string) {
+	debug('[doTokenRefresh]', refreshToken);
+
 	const config = await getConfig();
 	const meta = await getServerMeta();
 	const body = new URLSearchParams('');
@@ -325,9 +386,11 @@ async function doTokenRefresh(refreshToken: string) {
 	});
 	const token = await res.json();
 	if (!token.error) {
+		debug('[doTokenRefresh] success', token);
 		token.issued_time = Date.now();
 		await setToken(token as types.OAuthToken);
 	} else {
+		debug('[doTokenRefresh] error', token);
 		throw buildError(token, 'Error refreshing auth token');
 	}
 }
