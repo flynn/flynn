@@ -18,9 +18,25 @@ function debug(msg: string, ...args: any[]) {
 const clientState = {
 	authorizationInProgress: false,
 	authorizationClientID: null as string | null,
+	authorizationAbortController: null as AbortController | null,
 
 	errorIDs: new Set<string>()
 };
+
+function setAuthorizationInProgress(clientID: string) {
+	clientState.authorizationInProgress = true;
+	clientState.authorizationClientID = clientID;
+	clientState.authorizationAbortController = new AbortController();
+}
+
+function cancelAuthorization() {
+	if (clientState.authorizationAbortController) {
+		clientState.authorizationAbortController.abort();
+		clientState.authorizationAbortController = null;
+	}
+	clientState.authorizationInProgress = false;
+	clientState.authorizationClientID = null;
+}
 
 const DBKeys = {
 	SERVER_META: 'servermeta',
@@ -106,8 +122,6 @@ export async function handleAuthorizationCallback(clientID: string, queryString:
 	if (clientID !== clientState.authorizationClientID) {
 		debug('[handleAuthorizationCallback]: [WARNING]: clientID mismatch', clientID, clientState.authorizationClientID);
 	}
-	clientState.authorizationInProgress = false;
-	clientState.authorizationClientID = null;
 
 	try {
 		const params = new URLSearchParams(queryString);
@@ -119,6 +133,8 @@ export async function handleAuthorizationCallback(clientID: string, queryString:
 		};
 		await dbSet(DBKeys.CALLBACK_RESPONSE, res);
 		await doTokenExchange(res);
+
+		cancelAuthorization();
 	} catch (error) {
 		await handleError(types.MessageType.AUTH_ERROR, error);
 		await dbClearAuth();
@@ -144,8 +160,7 @@ async function handleError(type: types.MessageType.AUTH_ERROR | types.MessageTyp
 	// stop the refresh token cycle
 	clearTimeout(refreshTokenTimeout);
 	// clear client state
-	clientState.authorizationInProgress = false;
-	clientState.authorizationClientID = null;
+	cancelAuthorization();
 
 	// add an ID to errors so they can be cleared for all clients
 	const errorID = (error as any).id ? ((error as any).id as string) : await randomString(16);
@@ -278,8 +293,7 @@ async function generateState(): Promise<string> {
 }
 
 async function generateAuthorizationURL(clientID: string): Promise<string> {
-	clientState.authorizationInProgress = true;
-	clientState.authorizationClientID = clientID;
+	setAuthorizationInProgress(clientID);
 
 	const config = await getConfig();
 	const meta = await getServerMeta();
@@ -319,12 +333,22 @@ function buildError(error: TokenError, message = ''): Error {
 }
 
 async function doTokenExchange(params: types.OAuthCallbackResponse) {
+	const abortSignal = clientState.authorizationAbortController
+		? clientState.authorizationAbortController.signal
+		: undefined;
+
 	const cachedValues = ((await dbGet(DBKeys.AUTHORIZATION_CACHE)) as types.OAuthCachedValues) || null;
 	if (!cachedValues) {
+		if (abortSignal && abortSignal.aborted) {
+			debug('[doTokenExchange] signal aborted');
+		}
 		throw new Error('doTokenExchange: Error: corrupt data');
 	}
 
 	if (!(await codePointCompare(params.state || '', cachedValues.state))) {
+		if (abortSignal && abortSignal.aborted) {
+			debug('[doTokenExchange] signal aborted');
+		}
 		throw new Error(`Error verifying state param`);
 	}
 
@@ -339,9 +363,17 @@ async function doTokenExchange(params: types.OAuthCallbackResponse) {
 	const meta = await getServerMeta();
 	const config = await getConfig();
 
+	if (abortSignal && abortSignal.aborted) {
+		debug('[doTokenExchange] signal aborted');
+	}
+
 	// clear cached values from auth redirect
 	await dbDel(DBKeys.AUTHORIZATION_CACHE);
 	await dbDel(DBKeys.CALLBACK_RESPONSE);
+
+	if (abortSignal && abortSignal.aborted) {
+		debug('[doTokenExchange] signal aborted');
+	}
 
 	const body = new URLSearchParams();
 	body.set('grant_type', 'authorization_code');
@@ -356,9 +388,13 @@ async function doTokenExchange(params: types.OAuthCallbackResponse) {
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded'
 		},
-		body: body.toString()
+		body: body.toString(),
+		signal: abortSignal
 	});
 	const token = await res.json();
+	if (abortSignal && abortSignal.aborted) {
+		debug('[doTokenExchange] signal aborted');
+	}
 	if (!token.error) {
 		token.issued_time = Date.now();
 		await setToken(token as types.OAuthToken);
