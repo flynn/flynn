@@ -1,5 +1,4 @@
 import { PublicConfig } from './types';
-import { getClients } from './external';
 
 const Config: PublicConfig = {
 	CONTROLLER_HOST: '',
@@ -15,7 +14,7 @@ const configCallbacks = new Set<ConfigCallback>();
 let configLoaded = false;
 
 let primaryClientID: string | null = null;
-function setPrimaryClientID(clientID: string) {
+export function setPrimaryClientID(clientID: string) {
 	primaryClientID = clientID;
 }
 
@@ -38,7 +37,8 @@ export function unsetClientIDActive(clientID: string) {
 			// set another one as primary
 			setPrimaryClientID(Array.from(activeClientIDs)[0]);
 		} else {
-			// TODO(jvatic): handle all clients being closed
+			// TODO(jvatic): handle all clients being closed (any action should wait
+			// a few seconds before assuming all clients are closed)
 		}
 	}
 }
@@ -55,12 +55,12 @@ export function setClientIDActive(clientID: string) {
 	activeClientIDs.add(clientID);
 	const timeout = activeClientIDTimeouts.get(clientID);
 	if (timeout) clearTimeout(timeout);
-	// client ID expires in 2s if it doesn't ping
+	// client ID expires 100ms after the expected keep-alive ping
 	activeClientIDTimeouts.set(
 		clientID,
 		setTimeout(() => {
 			unsetClientIDActive(clientID);
-		}, 2000)
+		}, 1100)
 	);
 }
 
