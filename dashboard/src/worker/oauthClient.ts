@@ -188,12 +188,12 @@ async function setToken(token: types.OAuthToken) {
 	await dbSet(DBKeys.TOKEN, token);
 
 	if (canRefreshToken(token)) {
-		const refreshTokenExpiresMs = token.refresh_token_expires_in * 1000;
+		const expiresInMs = Math.min(token.expires_in, token.refresh_token_expires_in) * 1000;
 		const minRefreshDelayMs = 5000;
 		const maxRefreshDelayMs = 20000;
 		// refresh 5 to 20 seconds before it expires
-		const refreshDelayMs = calcDelay(minRefreshDelayMs, maxRefreshDelayMs, refreshTokenExpiresMs);
-		debug(`[setToken]: token will refresh in ${refreshDelayMs}ms and expires in ${refreshTokenExpiresMs}`);
+		const refreshDelayMs = calcDelay(minRefreshDelayMs, maxRefreshDelayMs, expiresInMs);
+		debug(`[setToken]: token will refresh in ${refreshDelayMs}ms and expires in ${expiresInMs}`);
 		refreshTokenTimeout = setTimeout(async () => {
 			try {
 				await doTokenRefresh(token.refresh_token);
