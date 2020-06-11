@@ -230,11 +230,16 @@ export default function ExpandedRelease({ dispatch: callerDispatch }: Props) {
 				<h3>Processes</h3>
 				<ReleaseProcessesDiff release={release} prevRelease={prevRelease} />
 				<h3>Environment Variables</h3>
-				<KeyValueDiff prev={prevRelease ? prevRelease.getEnvMap() : new jspb.Map([])} next={release.getEnvMap()} />
+				<KeyValueDiff
+					prev={prevRelease ? prevRelease.getEnvMap() : new jspb.Map([])}
+					next={release.getEnvMap()}
+					showAll={true}
+				/>
 				<h3>Metadata</h3>
 				<KeyValueDiff
 					prev={prevRelease ? prevRelease.getLabelsMap() : new jspb.Map([])}
 					next={release.getLabelsMap()}
+					showAll={true}
 				/>
 			</Box>
 			<Box fill="horizontal" direction="row" align="end" gap="small" justify="between">

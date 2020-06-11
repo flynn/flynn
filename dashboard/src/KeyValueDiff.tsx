@@ -26,10 +26,12 @@ const DiffLine = styled(Box)<DiffLineProps>`
 export interface KeyValueDiffProps {
 	prev: StringMap;
 	next: StringMap;
+	showAll?: boolean;
 }
 
-export default function KeyValueDiff({ prev, next }: KeyValueDiffProps) {
-	const diff = protoMapDiff(prev, next, DiffOption.INCLUDE_UNCHANGED).sort((a, b) => {
+export default function KeyValueDiff({ prev, next, showAll = false }: KeyValueDiffProps) {
+	const opts = showAll ? [DiffOption.INCLUDE_UNCHANGED] : [];
+	const diff = protoMapDiff(prev, next, ...opts).sort((a, b) => {
 		return a.key.localeCompare(b.key);
 	});
 
