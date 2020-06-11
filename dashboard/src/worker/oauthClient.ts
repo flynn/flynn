@@ -162,6 +162,9 @@ async function handleError(type: types.MessageType.AUTH_ERROR | types.MessageTyp
 	// clear client state
 	cancelAuthorization();
 
+	// clear all previous errors so we're not cluttering the UI
+	await clearErrors();
+
 	// add an ID to errors so they can be cleared for all clients
 	const errorID = (error as any).id ? ((error as any).id as string) : await randomString(16);
 	clientState.errorIDs.add(errorID);
