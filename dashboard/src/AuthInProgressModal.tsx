@@ -7,7 +7,9 @@ import RightOverlay from './RightOverlay';
 import Debounced from './Debounced';
 
 export default function AuthInProgressModal() {
-	const [authInProgress, setAuthInProgress] = React.useState(!Config.isAuthenticated());
+	// don't show modal if service workers are not enabled as they are depended upon for auth
+	const serviceWorkersEnabled = 'serviceWorker' in navigator;
+	const [authInProgress, setAuthInProgress] = React.useState(serviceWorkersEnabled ? !Config.isAuthenticated() : false);
 
 	React.useEffect(() => {
 		return addServerWorkerEventListener(types.MessageType.AUTH_REQUEST, (message: types.Message) => {

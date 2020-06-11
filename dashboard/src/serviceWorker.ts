@@ -66,12 +66,10 @@ export async function register() {
 			if (navigator.serviceWorker.controller) {
 				var url = navigator.serviceWorker.controller.scriptURL;
 				debug('controller', url);
-
 				if (!promiseComplete) {
 					promiseComplete = true;
 					resolve();
 				}
-
 				// TODO(jvatic): do we need this?
 				// navigator.serviceWorker.ready.then(function(registration) {
 				// 	registration.update();
@@ -79,11 +77,9 @@ export async function register() {
 			} else {
 				runtime.register({ scope: '/' });
 			}
-
 			let teardown: () => void;
-
 			navigator.serviceWorker.ready.then(function(registration) {
-				debug('ready', !!navigator.serviceWorker.controller);
+				debug('ready', !!navigator.serviceWorker.controller, registration);
 				if (navigator.serviceWorker.controller) {
 					if (teardown) teardown();
 					teardown = init();
@@ -93,7 +89,6 @@ export async function register() {
 					}
 				}
 			});
-
 			navigator.serviceWorker.addEventListener('controllerchange', function(event: any) {
 				debug('controllerchange', event);
 				if (navigator.serviceWorker.controller) {
@@ -107,12 +102,17 @@ export async function register() {
 					}
 				}
 			});
-
 			navigator.serviceWorker.addEventListener('message', function(event: MessageEvent) {
 				handleMessage(event.data as types.Message);
 			});
 		} else {
-			reject(new Error('ServiceWorker required and not available.'));
+			handleError = handleErrorFactory();
+			handleError(
+				new Error(
+					`Your browser does not support service workers and this app requires them.
+					 Please make sure your browser is up to date and service workers are enabled.`
+				)
+			);
 		}
 	});
 }
