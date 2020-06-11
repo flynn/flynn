@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { grpc } from '@improbable-eng/grpc-web';
 import Notification from './Notification';
+import Button from './Button';
 import Config from './config';
 
 export type CancelFunc = () => void;
@@ -48,11 +49,14 @@ export function registerCallback(h: () => void): () => void {
 function handleError(error: Error, key: Symbol = Symbol('useErrorHandler key(undefined)')): CancelFunc {
 	switch ((error as any).code) {
 		case grpc.Code.Unknown:
-			// only show unknown errors in the console
+			// show unknown errors in the console
 			if (console && typeof console.error === 'function') {
 				console.error(error);
 			}
-			return () => {};
+			// show generic error in the UI
+			error = new Error('Something went wrong.');
+			break;
+
 		case grpc.Code.Unauthenticated:
 			// let everyone know we're unauthenticated
 			// the service worker will push it back to all clients
@@ -88,7 +92,7 @@ function handleError(error: Error, key: Symbol = Symbol('useErrorHandler key(und
 		});
 	}
 
-	errors.set(key, (errors.get(key) || []).concat(wrappedError));
+	errors.set(key, [wrappedError].concat(errors.get(key) || []));
 	for (let fn of callbacks) {
 		fn();
 	}
@@ -111,28 +115,41 @@ export function useErrors(): Array<CancelableError | RetriableError> {
 
 export function DisplayErrors() {
 	const errors = useErrors();
+	const maxErrorDisplay = 2;
+	const [showAllErrors, setShowAllErrors] = React.useState(false);
+	const showMoreBtnClick = React.useCallback(() => {
+		setShowAllErrors(true);
+	}, []);
 	return (
 		<>
-			{errors.map((error: CancelableError | RetriableError, index: number) => {
-				let retry = undefined;
-				if (isRetriableError(error)) {
-					retry = () => error.retry();
-				}
-				let cancel = undefined;
-				if (isCancelableError(error)) {
-					cancel = () => error.cancel();
-				}
-				return (
-					<Notification
-						key={error.key.toString() + index}
-						message={error.message}
-						status="warning"
-						onClose={cancel}
-						onRetryClick={retry}
-						margin="small"
-					/>
-				);
-			})}
+			{errors
+				.slice(0, showAllErrors ? errors.length : maxErrorDisplay)
+				.map((error: CancelableError | RetriableError, index: number) => {
+					let retry = undefined;
+					if (isRetriableError(error)) {
+						retry = () => error.retry();
+					}
+					let cancel = undefined;
+					if (isCancelableError(error)) {
+						cancel = () => error.cancel();
+					}
+					return (
+						<Notification
+							key={error.key.toString() + index}
+							flex={false}
+							message={error.message}
+							status="warning"
+							onClose={cancel}
+							onRetryClick={retry}
+							margin="small"
+						/>
+					);
+				})}
+			{!showAllErrors && errors.length > maxErrorDisplay ? (
+				<Button onClick={showMoreBtnClick} alignSelf="end" margin="small">
+					show {errors.length - maxErrorDisplay} more errors
+				</Button>
+			) : null}
 		</>
 	);
 }
