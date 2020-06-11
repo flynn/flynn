@@ -61,7 +61,7 @@ function init(): () => void {
 
 export async function register() {
 	let promiseComplete = false;
-	return new Promise((resolve: () => void, reject: (error: Error) => void) => {
+	return new Promise(async (resolve: () => void, reject: (error: Error) => void) => {
 		if ('serviceWorker' in navigator) {
 			if (navigator.serviceWorker.controller) {
 				var url = navigator.serviceWorker.controller.scriptURL;
@@ -70,16 +70,14 @@ export async function register() {
 					promiseComplete = true;
 					resolve();
 				}
-				// TODO(jvatic): do we need this?
-				// navigator.serviceWorker.ready.then(function(registration) {
-				// 	registration.update();
-				// });
 			} else {
-				runtime.register({ scope: '/' });
+				debug('registering service worker');
+				const p = runtime.register({ scope: '/' });
+				if (p) await p;
 			}
 			let teardown: () => void;
 			navigator.serviceWorker.ready.then(function(registration) {
-				debug('ready', !!navigator.serviceWorker.controller, registration);
+				debug('ready', !!navigator.serviceWorker.controller, !!registration.active, registration);
 				if (navigator.serviceWorker.controller) {
 					if (teardown) teardown();
 					teardown = init();
@@ -87,6 +85,14 @@ export async function register() {
 						promiseComplete = true;
 						resolve();
 					}
+				} else if (registration.active) {
+					// on a hard refresh we don't get an active ServiceWorker through
+					// `navigator` but we get an inactive one through
+					// `registration.active`. sending it a message will cause it to claim
+					// all clients
+					registration.active.postMessage({
+						type: types.MessageType.PING
+					});
 				}
 			});
 			navigator.serviceWorker.addEventListener('controllerchange', function(event: any) {

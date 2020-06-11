@@ -5,7 +5,6 @@
 import * as types from './types';
 import {
 	load as loadConfig,
-	hasActiveClientID,
 	setPrimaryClientID,
 	getPrimaryClientID,
 	setClientIDActive,
@@ -39,12 +38,20 @@ self.addEventListener('message', function(event: any) {
 function handleMessage(senderID: string, message: types.Message): Promise<void> {
 	if (message.type !== types.MessageType.PING) debug('handleMessage', message);
 	setClientIDActive(senderID);
-	return self.clients.matchAll().then((clientList: Client[]) => {
+	return self.clients.matchAll().then(async (clientList: Client[]) => {
 		const clientIDs = new Set<string>(clientList.map((c) => c.id));
+		if (!clientIDs.has(senderID)) {
+			// It's not clear why this is required, but on hard refreshes the
+			// 'install' and 'activate' handles are never called
+			debug(`[handleMessage]: sender (${senderID}) not in clients list, claiming all clients`);
+			await self.clients.claim();
+			debug('[handleMessage]: clients claimed, retrying');
+			return handleMessage(senderID, message);
+		}
 		let primaryClientID = getPrimaryClientID();
 		if (!primaryClientID || !clientIDs.has(primaryClientID)) {
 			if (primaryClientID) unsetClientIDActive(primaryClientID);
-			debug(`[handleMessage]: [${message.type}]: setPrimaryClientID(${senderID})`);
+			debug(`[handleMessage]: [${message.type}]: setPrimaryClientID(${senderID}) (from ${primaryClientID})`);
 			primaryClientID = senderID;
 			setPrimaryClientID(senderID);
 		}

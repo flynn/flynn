@@ -544,7 +544,7 @@ function retryStream<T>(init: () => ResponseStream<T>): ResponseStream<T> {
 		connectHandlers(stream);
 	};
 	const retryOnEnd = (status?: Status) => {
-		if (isRetriableStatus(status) && nRetries < maxRetires) {
+		if (isRetriableStatus(status) && nRetries < maxRetires - 1) {
 			// retry after timeout
 			retryTimeoutId = setTimeout(retryFn, retryTimeoutMs);
 			retryTimeoutMs += retryTimeoutMs;
