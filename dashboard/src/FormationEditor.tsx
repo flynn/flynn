@@ -388,7 +388,7 @@ export default function FormationEditor(props: Props) {
 			) : null}
 
 			<Box as="form" onSubmit={isConfirming ? handleConfirmSubmit : handleSubmit} margin={{ bottom: 'xsmall' }}>
-				<Grid gap="xsmall" margin={{ bottom: 'xsmall' }} justify="start" columns="small">
+				<Grid gap="xsmall" margin={{ bottom: 'xsmall' }} justify="start" columns={{ count: 'fit', size: 'small' }}>
 					{processes.length === 0 ? (
 						<Text color="dark-2">&lt;No processes&gt;</Text>
 					) : (
