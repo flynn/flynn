@@ -35,7 +35,7 @@ const LabelText = styled(Text)`
 	font-size: ${(props) => (props.size === 'xsmall' ? '0.75em' : props.size === 'small' ? '1em' : '1.5em')};
 	line-height: 1.5em;
 	margin: 0 0.5em;
-	width: 10ch;
+	width: auto;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -86,6 +86,7 @@ const ScaleBoxContainer = styled(Box)`
 `;
 
 const ScaleBox = styled(Box)`
+	width: 10ch;
 	border-width: 2px;
 `;
 
