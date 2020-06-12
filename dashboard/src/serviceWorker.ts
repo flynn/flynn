@@ -94,19 +94,20 @@ export async function register() {
 						type: types.MessageType.PING
 					});
 				}
-			});
-			navigator.serviceWorker.addEventListener('controllerchange', function(event: any) {
-				debug('controllerchange', event);
-				if (navigator.serviceWorker.controller) {
-					var scriptURL = navigator.serviceWorker.controller.scriptURL;
-					debug('controllerchange', scriptURL);
-					if (teardown) teardown();
-					teardown = init();
-					if (!promiseComplete) {
-						promiseComplete = true;
-						resolve();
+
+				navigator.serviceWorker.addEventListener('controllerchange', function(event: any) {
+					debug('controllerchange', event);
+					if (navigator.serviceWorker.controller) {
+						var scriptURL = navigator.serviceWorker.controller.scriptURL;
+						debug('controllerchange', scriptURL);
+						if (teardown) teardown();
+						teardown = init();
+						if (!promiseComplete) {
+							promiseComplete = true;
+							resolve();
+						}
 					}
-				}
+				});
 			});
 			navigator.serviceWorker.addEventListener('message', function(event: MessageEvent) {
 				handleMessage(event.data as types.Message);
