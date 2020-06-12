@@ -10,6 +10,7 @@ import { encode as base64URLEncode } from '../util/base64url';
 import { postMessageAll, postMessage } from './external';
 import { isTokenValid, canRefreshToken } from './tokenHelpers';
 import _debug from './debug';
+import retryFetch from './retryFetch';
 
 function debug(msg: string, ...args: any[]) {
 	_debug(`[oauthClient]: ${msg}`, ...args);
@@ -55,13 +56,10 @@ function dbClearAuth(): Promise<any> {
 
 export async function initClient(clientID: string) {
 	const token = await getToken();
-	if (isTokenValid(token)) {
+	if (token && isTokenValid(token)) {
 		debug('[initClient]: using existing valid token', token);
-
-		await postMessageAll({
-			type: types.MessageType.AUTH_TOKEN,
-			payload: token as types.OAuthToken
-		});
+		// setToken will handle setting up the refresh cycle
+		await setToken(token);
 		return;
 	} else if (canRefreshToken(token)) {
 		debug('[initClient]: attempting to refresh existing token', token);
@@ -191,7 +189,8 @@ async function setToken(token: types.OAuthToken) {
 	await dbSet(DBKeys.TOKEN, token);
 
 	if (canRefreshToken(token)) {
-		const expiresInMs = token.expires_in * 1000;
+		const delta = Date.now() - token.issued_time;
+		const expiresInMs = token.expires_in * 1000 - delta;
 		const minRefreshDelayMs = 5000;
 		const maxRefreshDelayMs = 20000;
 		// refresh 5 to 20 seconds before it expires
@@ -244,7 +243,7 @@ async function getServerMeta(): Promise<ServerMetadata> {
 	}
 
 	const url = `${config.OAUTH_ISSUER}/.well-known/oauth-authorization-server`;
-	const res = await fetch(url);
+	const res = await retryFetch(url);
 	const meta = await res.json();
 	if (!codePointCompare(config.OAUTH_ISSUER, meta.issuer)) {
 		throw new Error(
@@ -386,7 +385,7 @@ async function doTokenExchange(params: types.OAuthCallbackResponse) {
 	body.set('redirect_uri', cachedValues.redirectURI);
 	body.set('client_id', config.OAUTH_CLIENT_ID);
 	body.set('audience', config.CONTROLLER_HOST);
-	const res = await fetch(meta.token_endpoint, {
+	const res = await retryFetch(meta.token_endpoint, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded'
@@ -416,7 +415,7 @@ async function doTokenRefresh(refreshToken: string) {
 	body.set('refresh_token', refreshToken);
 	body.set('client_id', config.OAUTH_CLIENT_ID);
 	body.set('audience', config.CONTROLLER_HOST);
-	const res = await fetch(meta.token_endpoint, {
+	const res = await retryFetch(meta.token_endpoint, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded'
