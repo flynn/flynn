@@ -34,6 +34,12 @@ import {
 	reducer as appReleaseReducer
 } from './useAppRelease';
 import Loading from './Loading';
+import styled from 'styled-components';
+
+// grommet sets min-height to 0 as a flexbox hack but it's a layout problem here
+const StyledBox = styled(Box)`
+	min-height: unset;
+`;
 
 export enum ActionType {
 	// parent component should handle these actions
@@ -202,7 +208,7 @@ export default function ExpandedRelease({ dispatch: callerDispatch }: Props) {
 
 	return (
 		<Box tag="form" fill direction="column" onSubmit={handleSubmit} gap="small" justify="between">
-			<Box>
+			<StyledBox>
 				Release {releaseID}
 				{currentRelease && release.getName() === currentRelease.getName() ? <>&nbsp;(CURRENT)</> : null}
 				{createTime ? (
@@ -241,8 +247,15 @@ export default function ExpandedRelease({ dispatch: callerDispatch }: Props) {
 					next={release.getLabelsMap()}
 					showAll={true}
 				/>
-			</Box>
-			<Box fill="horizontal" direction="row" align="end" gap="small" justify="between">
+			</StyledBox>
+			<StyledBox
+				fill="horizontal"
+				direction="row"
+				align="end"
+				gap="small"
+				justify="between"
+				margin={{ bottom: 'small' }}
+			>
 				<Button
 					type="submit"
 					disabled={!!currentRelease && release.getName() === currentRelease.getName()}
@@ -250,7 +263,7 @@ export default function ExpandedRelease({ dispatch: callerDispatch }: Props) {
 					label="Rollback to release"
 				/>
 				<Button type="button" label="Close" onClick={handleCloseBtnClick} />
-			</Box>
+			</StyledBox>
 		</Box>
 	);
 }
