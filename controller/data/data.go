@@ -58,7 +58,6 @@ func (t *PageToken) Cursor() (*time.Time, error) {
 		return nil, fmt.Errorf("error parsing cursorID %q: %s", *t.CursorID, err)
 	}
 	return typeconv.TimePtr(time.Unix(i/1000000, i%1000000*1000)), nil
-
 }
 
 func (t *PageToken) String() string {
@@ -109,6 +108,10 @@ func CreateEvent(dbExec func(string, ...interface{}) error, e *ct.Event, data in
 	if e.UniqueID != "" {
 		fields = append(fields, "unique_id")
 		args = append(args, e.UniqueID)
+	}
+	if e.DeploymentID != "" {
+		fields = append(fields, "deployment_id")
+		args = append(args, e.DeploymentID)
 	}
 	if e.Op != "" {
 		fields = append(fields, "op")

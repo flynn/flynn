@@ -950,13 +950,58 @@ CREATE TRIGGER set_tcp_route_port
 		`ALTER TABLE deployments ALTER COLUMN type SET NOT NULL`,
 	)
 	migrations.Add(48, `
-CREATE FUNCTION deployment_status(deployment_id uuid) RETURNS text AS $$
-  SELECT data->>'status' FROM events WHERE object_type = 'deployment' AND object_id::uuid = deployment_id ORDER BY created_at DESC LIMIT 1;
+CREATE FUNCTION deployment_status(d_id uuid) RETURNS text AS $$
+  SELECT data->>'status' FROM events WHERE object_type = 'deployment' AND object_id::uuid = d_id ORDER BY created_at DESC LIMIT 1;
 $$ LANGUAGE SQL;
 	`)
 	migrations.Add(49, `
 ALTER TABLE http_routes ADD COLUMN disable_keep_alives boolean NOT NULL DEFAULT false;
 	`)
+	migrations.Add(50,
+		`ALTER TABLE events ADD COLUMN deployment_id uuid REFERENCES deployments (deployment_id)`,
+		`ALTER TABLE scale_requests ADD COLUMN deployment_id uuid REFERENCES deployments (deployment_id)`,
+		`ALTER TABLE job_cache ADD COLUMN deployment_id uuid REFERENCES deployments (deployment_id)`,
+		// associate all existing job events and jobs with a deployment
+		`DO $$
+		DECLARE
+			job RECORD;
+			deployment uuid;
+		BEGIN
+			FOR job IN SELECT * FROM job_cache ORDER BY created_at DESC LOOP
+				SELECT INTO deployment deployment_id FROM deployments
+				WHERE app_id = job.app_id
+					AND (old_release_id = job.release_id OR new_release_id = job.release_id)
+					AND created_at <= job.created_at AND finished_at > job.created_at
+				ORDER BY created_at DESC
+				LIMIT 1;
+
+				IF deployment IS NOT NULL THEN
+					UPDATE job_cache SET deployment_id = deployment WHERE job_id = job.job_id;
+					UPDATE events SET deployment_id = deployment WHERE object_type = 'job' AND object_id = job.job_id::text;
+				END IF;
+			END LOOP;
+		END $$`,
+		// associate all existing scale events and scale_requests with a deployment
+		`DO $$
+		DECLARE
+			sr RECORD;
+			deployment uuid;
+		BEGIN
+			FOR sr IN SELECT * FROM scale_requests ORDER BY created_at DESC LOOP
+				SELECT INTO deployment deployment_id FROM deployments
+				WHERE app_id = sr.app_id
+					AND (old_release_id = sr.release_id OR new_release_id = sr.release_id)
+					AND created_at <= sr.created_at AND finished_at > sr.created_at
+				ORDER BY created_at DESC
+				LIMIT 1;
+
+				IF deployment IS NOT NULL THEN
+					UPDATE scale_requests SET deployment_id = deployment WHERE scale_request_id = sr.scale_request_id;
+					UPDATE events SET deployment_id = deployment WHERE object_type = 'scale_request' AND object_id = sr.scale_request_id::text;
+				END IF;
+			END LOOP;
+		END $$`,
+	)
 }
 
 func MigrateDB(db *postgres.DB) error {

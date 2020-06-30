@@ -46,9 +46,11 @@ var preparedStatements = map[string]string{
 	"deployment_update_finished_at_now":     deploymentUpdateFinishedAtNowQuery,
 	"deployment_delete":                     deploymentDeleteQuery,
 	"event_select":                          eventSelectQuery,
+	"event_select_expanded":                 eventSelectExpandedQuery,
 	"event_insert":                          eventInsertQuery,
 	"event_insert_op":                       eventInsertOpQuery,
 	"event_insert_unique":                   eventInsertUniqueQuery,
+	"event_list_page":                       eventListPageQuery,
 	"formation_list_by_app":                 formationListByAppQuery,
 	"formation_list_by_release":             formationListByReleaseQuery,
 	"formation_list_active":                 formationListActiveQuery,
@@ -62,6 +64,7 @@ var preparedStatements = map[string]string{
 	"scale_request_cancel":                  scaleRequestCancelQuery,
 	"scale_request_update":                  scaleRequestUpdateQuery,
 	"scale_request_list":                    scaleRequestListQuery,
+	"job_find_deployment":                   jobFindDeploymentQuery,
 	"job_list":                              jobListQuery,
 	"job_list_active":                       jobListActiveQuery,
 	"job_select":                            jobSelectQuery,
@@ -337,17 +340,111 @@ ORDER BY d.created_at DESC
 LIMIT $6
 `
 	eventSelectQuery = `
-SELECT event_id, app_id, object_id, object_type, data, op, created_at
+SELECT event_id, app_id, deployment_id, object_id, object_type, data, op, created_at
 FROM events WHERE event_id = $1`
+	eventSelectExpandedQuery = `
+SELECT e.event_id, e.app_id, e.object_id, e.object_type, e.data, e.op, e.created_at,
+
+	d.deployment_id, d.app_id, d.old_release_id, d.new_release_id, d.strategy, deployment_status(d.deployment_id),
+  d.processes, d.tags, d.deploy_timeout, d.deploy_batch_size, d.created_at, d.finished_at,
+  ARRAY(
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
+  ) AS old_artifact_ids, old_r.env, old_r.processes, old_r.meta, old_r.created_at,
+  ARRAY(
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
+  ) AS new_artifact_ids, new_r.env, new_r.processes, new_r.meta, new_r.created_at,
+  d.type,
+
+  j.cluster_id, j.job_id, j.host_id, j.app_id, j.release_id, j.process_type, j.state, j.meta,
+  j.exit_status, j.host_error, j.run_at, j.restarts, j.created_at, j.updated_at, j.args,
+  ARRAY(
+    SELECT job_volumes.volume_id
+    FROM job_volumes
+    WHERE job_volumes.job_id = j.job_id
+    ORDER BY job_volumes.index
+  ),
+
+	s.scale_request_id, s.app_id, s.release_id, s.state, s.old_processes, s.new_processes, s.old_tags, s.new_tags, s.created_at, s.updated_at
+FROM events e
+LEFT OUTER JOIN deployments d
+	ON d.deployment_id = e.deployment_id
+LEFT OUTER JOIN releases old_r
+  ON d.old_release_id = old_r.release_id
+LEFT OUTER JOIN releases new_r
+  ON d.new_release_id = new_r.release_id
+LEFT OUTER JOIN job_cache j
+	ON e.object_type = 'job' AND j.job_id::text = e.object_id
+LEFT OUTER JOIN scale_requests s
+	ON e.object_type = 'scale_request' AND s.scale_request_id::text = e.object_id
+WHERE e.event_id = $1
+LIMIT 1
+	`
 	eventInsertQuery = `
 INSERT INTO events (app_id, object_id, object_type, data)
 VALUES ($1, $2, $3, $4)`
 	eventInsertOpQuery = `
-INSERT INTO events (app_id, object_id, object_type, data, op)
-VALUES ($1, $2, $3, $4, $5)`
+INSERT INTO events (app_id, deployment_id, object_id, object_type, data, op)
+VALUES ($1, $2, $3, $4, $5, $6)`
 	eventInsertUniqueQuery = `
-INSERT INTO events (app_id, object_id, unique_id, object_type, data)
-VALUES ($1, $2, $3, $4, $5) ON CONFLICT (unique_id) DO NOTHING`
+INSERT INTO events (app_id, deployment_id, object_id, unique_id, object_type, data)
+VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (unique_id) DO NOTHING`
+	eventListPageQuery = `
+SELECT e.event_id, e.app_id, e.object_id, e.object_type, e.data, e.op, e.created_at,
+
+	d.deployment_id, d.app_id, d.old_release_id, d.new_release_id, d.strategy, deployment_status(d.deployment_id),
+  d.processes, d.tags, d.deploy_timeout, d.deploy_batch_size, d.created_at, d.finished_at,
+  ARRAY(
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = old_r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
+  ) AS old_artifact_ids, old_r.env, old_r.processes, old_r.meta, old_r.created_at,
+  ARRAY(
+    SELECT a.artifact_id
+    FROM release_artifacts a
+    WHERE a.release_id = new_r.release_id AND a.deleted_at IS NULL
+    ORDER BY a.index
+  ) AS new_artifact_ids, new_r.env, new_r.processes, new_r.meta, new_r.created_at,
+  d.type,
+
+  j.cluster_id, j.job_id, j.host_id, j.app_id, j.release_id, j.process_type, j.state, j.meta,
+  j.exit_status, j.host_error, j.run_at, j.restarts, j.created_at, j.updated_at, j.args,
+  ARRAY(
+    SELECT job_volumes.volume_id
+    FROM job_volumes
+    WHERE job_volumes.job_id = j.job_id
+    ORDER BY job_volumes.index
+  ),
+
+	s.scale_request_id, s.app_id, s.release_id, s.state, s.old_processes, s.new_processes, s.old_tags, s.new_tags, s.created_at, s.updated_at
+FROM events e
+LEFT OUTER JOIN deployments d
+	ON d.deployment_id = e.deployment_id
+LEFT OUTER JOIN releases old_r
+  ON d.old_release_id = old_r.release_id
+LEFT OUTER JOIN releases new_r
+  ON d.new_release_id = new_r.release_id
+LEFT OUTER JOIN job_cache j
+	ON e.object_type = 'job' AND j.job_id::text = e.object_id
+LEFT OUTER JOIN scale_requests s
+	ON e.object_type = 'scale_request' AND s.scale_request_id::text = e.object_id
+WHERE
+  CASE WHEN array_length($2::text[], 1) > 0 THEN e.app_id::text = ANY($2::text[]) ELSE true END
+AND
+	CASE WHEN array_length($3::text[], 1) > 0 THEN e.deployment_id::text = ANY($3::text[]) ELSE true END
+AND
+	CASE WHEN array_length($4::text[], 1) > 0 THEN e.object_type = ANY($4::text[]) ELSE true END
+AND
+	CASE WHEN $1::timestamptz IS NOT NULL THEN e.created_at <= $1::timestamptz ELSE true END
+ORDER BY e.created_at DESC
+LIMIT $5;
+	`
 	formationListByAppQuery = `
 SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`
@@ -448,8 +545,8 @@ WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
 WHERE app_id = $1 AND deleted_at IS NULL`
 	scaleRequestInsertQuery = `
-INSERT INTO scale_requests (scale_request_id, app_id, release_id, state, old_processes, new_processes, old_tags, new_tags)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO scale_requests (scale_request_id, app_id, release_id, deployment_id, state, old_processes, new_processes, old_tags, new_tags)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING created_at, updated_at`
 	scaleRequestCancelQuery = `
 WITH updated AS (
@@ -461,7 +558,7 @@ FROM updated
 ORDER BY created_at DESC`
 	scaleRequestUpdateQuery = `
 UPDATE scale_requests SET state = $2, updated_at = now() WHERE scale_request_id = $1
-RETURNING updated_at`
+RETURNING updated_at, deployment_id`
 	scaleRequestListQuery = `
 SELECT s.scale_request_id, s.app_id, s.release_id, s.state, s.old_processes, s.new_processes, s.old_tags, s.new_tags, s.created_at, s.updated_at
 FROM scale_requests s
@@ -478,6 +575,16 @@ AND
 ORDER BY s.created_at DESC
 LIMIT $6
 `
+
+	jobFindDeploymentQuery = `
+SELECT deployment_id FROM deployments
+WHERE app_id = $1
+	AND (old_release_id = $2 OR new_release_id = $2)
+	AND deployment_status(deployment_id) IN ('pending', 'running')
+ORDER BY created_at DESC
+LIMIT 1
+	`
+
 	jobListQuery = `
 SELECT
   cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta,
@@ -512,9 +619,9 @@ SELECT
   )
 FROM job_cache WHERE job_id = $1`
 	jobInsertQuery = `
-INSERT INTO job_cache (cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, args)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (job_id) DO UPDATE
-SET cluster_id = $1, host_id = $3, state = $7, exit_status = $9, host_error = $10, run_at = $11, restarts = $12, args = $13, updated_at = now()
+INSERT INTO job_cache (cluster_id, job_id, host_id, app_id, release_id, deployment_id, process_type, state, meta, exit_status, host_error, run_at, restarts, args)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT (job_id) DO UPDATE
+SET cluster_id = $1, host_id = $3, state = $8, exit_status = $10, host_error = $11, run_at = $12, restarts = $13, args = $14, updated_at = now()
 RETURNING created_at, updated_at`
 	jobVolumeInsertQuery = `
 INSERT INTO job_volumes (job_id, volume_id, index) VALUES ($1, $2, $3)

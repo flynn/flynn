@@ -838,3 +838,200 @@ func (MigrateSuite) TestMigrateDeploymentType(c *C) {
 		}
 	}
 }
+
+func (MigrateSuite) TestMigrateDeploymentID(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_deployment_id")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 49
+	m.migrateTo(49)
+
+	// create an app, and some releases, artifacts, deployments, jobs, and events
+	app := &ct.App{
+		ID:            random.UUID(),
+		Name:          "test-app-1",
+		Meta:          map[string]string{},
+		Strategy:      "all-at-once",
+		DeployTimeout: ct.DefaultDeployTimeout,
+	}
+	c.Assert(db.Exec(`INSERT INTO apps (app_id, name, meta, strategy, deploy_timeout) VALUES ($1, $2, $3, $4, $5) RETURNING created_at, updated_at`, app.ID, app.Name, app.Meta, app.Strategy, app.DeployTimeout), IsNil)
+
+	artifactIDs := []string{random.UUID(), random.UUID(), random.UUID()}
+	for _, artifactID := range artifactIDs {
+		c.Assert(db.Exec(`INSERT INTO artifacts (artifact_id, type, uri, meta, manifest, hashes, size, layer_url_template) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING created_at`, artifactID, "artifact-type", fmt.Sprintf("artifact://%s", artifactID), map[string]string{}, nil, nil, 1, nil), IsNil)
+	}
+
+	insertRelease := func(r *ct.Release) {
+		r.AppID = app.ID
+		c.Assert(db.Exec(`INSERT INTO releases (release_id, app_id, env, processes, meta) VALUES ($1, $2, $3, $4, $5) RETURNING created_at`, r.ID, r.AppID, r.Env, r.Processes, r.Meta), IsNil)
+		for i, artifactID := range r.ArtifactIDs {
+			c.Assert(db.Exec(`INSERT INTO release_artifacts (release_id, artifact_id, index) VALUES ($1, $2, $3)`, r.ID, artifactID, i), IsNil)
+		}
+	}
+
+	insertDeploymentEvent := func(d *ct.ExpandedDeployment, status string, op ct.EventOp) {
+		e := ct.DeploymentEvent{
+			AppID:        d.AppID,
+			DeploymentID: d.ID,
+			ReleaseID:    d.NewRelease.ID,
+			Status:       status,
+		}
+		c.Assert(db.Exec(`INSERT INTO events (app_id, object_id, object_type, data, op) VALUES ($1, $2, $3, $4, $5)`, d.AppID, d.ID, string(ct.EventTypeDeployment), e, string(op)), IsNil)
+	}
+
+	var oldReleaseID *string
+	var oldRelease *ct.Release
+	insertNewDeployment := func() *ct.ExpandedDeployment {
+		d := &ct.ExpandedDeployment{
+			ID:         random.UUID(),
+			AppID:      app.ID,
+			OldRelease: oldRelease,
+			NewRelease: &ct.Release{
+				ID:          random.UUID(),
+				ArtifactIDs: artifactIDs,
+			},
+			Type:          ct.ReleaseTypeCode,
+			Strategy:      app.Strategy,
+			Processes:     map[string]int{},
+			Tags:          map[string]map[string]string{},
+			DeployTimeout: app.DeployTimeout,
+		}
+
+		oldRelease = d.NewRelease
+		oldReleaseID = &oldRelease.ID
+
+		insertRelease(d.NewRelease)
+		c.Assert(db.Exec(`INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, type, strategy, processes, tags, deploy_timeout) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING created_at`, d.ID, d.AppID, oldReleaseID, d.NewRelease.ID, string(d.Type), d.Strategy, d.Processes, d.Tags, d.DeployTimeout), IsNil)
+		insertDeploymentEvent(d, "pending", ct.EventOpCreate)
+
+		return d
+	}
+
+	markDeploymentFinished := func(d *ct.ExpandedDeployment) {
+		insertDeploymentEvent(d, "complete", ct.EventOpUpdate)
+		c.Assert(db.Exec(`UPDATE deployments SET finished_at = now() WHERE deployment_id = $1`, d.ID), IsNil)
+	}
+
+	insertNewJob := func(appID, releaseID string) *ct.Job {
+		j := &ct.Job{
+			ID:        random.UUID(),
+			UUID:      random.UUID(),
+			HostID:    random.UUID(),
+			AppID:     appID,
+			ReleaseID: releaseID,
+			State:     ct.JobStatePending,
+		}
+		c.Assert(db.Exec(`INSERT INTO job_cache (cluster_id, job_id, host_id, app_id, release_id, state) VALUES ($1, $2, $3, $4, $5, $6)`, j.ID, j.UUID, j.HostID, j.AppID, j.ReleaseID, string(j.State)), IsNil)
+
+		c.Assert(db.Exec(`INSERT INTO events (app_id, object_id, object_type, data, op) VALUES ($1, $2, $3, $4, $5)`, j.AppID, j.UUID, string(ct.EventTypeJob), j, ct.EventOpCreate), IsNil)
+		return j
+	}
+
+	insertNewScaleRequest := func(appID, releaseID string) *ct.ScaleRequest {
+		newProcesses := map[string]int{}
+		newTags := map[string]map[string]string{}
+		sr := &ct.ScaleRequest{
+			ID:           random.UUID(),
+			AppID:        appID,
+			ReleaseID:    releaseID,
+			State:        ct.ScaleRequestStatePending,
+			OldProcesses: map[string]int{},
+			NewProcesses: &newProcesses,
+			OldTags:      map[string]map[string]string{},
+			NewTags:      &newTags,
+		}
+		c.Assert(db.Exec(`INSERT INTO scale_requests (scale_request_id, app_id, release_id, state, old_processes, new_processes, old_tags, new_tags) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, sr.ID, sr.AppID, sr.ReleaseID, string(sr.State), sr.OldProcesses, sr.NewProcesses, sr.OldTags, sr.NewTags), IsNil)
+
+		c.Assert(db.Exec(`INSERT INTO events (app_id, object_id, object_type, data, op) VALUES ($1, $2, $3, $4, $5)`, sr.AppID, sr.ID, string(ct.EventTypeScaleRequest), sr, ct.EventOpCreate), IsNil)
+		return sr
+	}
+
+	deployment1 := insertNewDeployment()
+
+	// jobs 1 and 2 should be associated with deployment1
+	job1 := insertNewJob(app.ID, deployment1.NewRelease.ID)
+	job2 := insertNewJob(app.ID, deployment1.NewRelease.ID)
+
+	// scales 1 and 2 should be associated with deployment1
+	scale1 := insertNewScaleRequest(app.ID, deployment1.NewRelease.ID)
+	scale2 := insertNewScaleRequest(app.ID, deployment1.NewRelease.ID)
+
+	markDeploymentFinished(deployment1)
+
+	// jobs 3 and 4 should not be associated with any deployment
+	job3 := insertNewJob(app.ID, deployment1.NewRelease.ID)
+	job4 := insertNewJob(app.ID, deployment1.NewRelease.ID)
+
+	// scales 3 and 4 should not be associated with any deployment
+	scale3 := insertNewScaleRequest(app.ID, deployment1.NewRelease.ID)
+	scale4 := insertNewScaleRequest(app.ID, deployment1.NewRelease.ID)
+
+	deployment2 := insertNewDeployment()
+
+	// jobs 5 and 6 should be associated with deployment2
+	job5 := insertNewJob(app.ID, deployment2.NewRelease.ID)
+	job6 := insertNewJob(app.ID, deployment2.NewRelease.ID)
+
+	// scales 5 and 6 should be associated with deployment2
+	scale5 := insertNewScaleRequest(app.ID, deployment2.NewRelease.ID)
+	scale6 := insertNewScaleRequest(app.ID, deployment2.NewRelease.ID)
+
+	markDeploymentFinished(deployment2)
+
+	// Run migration to add deployment_id to events, jobs, and scale_requests
+	m.migrateTo(50)
+
+	checkJobDeploymentID := func(jobID, expectedDeploymentID string, comment string, args ...interface{}) {
+		var deploymentID *string
+		c.Assert(db.QueryRow(`SELECT deployment_id FROM job_cache WHERE job_id = $1`, jobID).Scan(&deploymentID), IsNil)
+		if expectedDeploymentID == "" {
+			c.Assert(deploymentID, IsNil, Commentf(comment, args...))
+		} else {
+			c.Assert(deploymentID, Not(IsNil), Commentf(comment, args...))
+			c.Assert(*deploymentID, Equals, expectedDeploymentID, Commentf(comment, args...))
+		}
+
+		deploymentID = nil
+		c.Assert(db.QueryRow(`SELECT deployment_id FROM events WHERE object_id = $1 AND object_type = 'job'`, jobID).Scan(&deploymentID), IsNil)
+		if expectedDeploymentID == "" {
+			c.Assert(deploymentID, IsNil, Commentf(comment, args...))
+		} else {
+			c.Assert(deploymentID, Not(IsNil), Commentf(comment, args...))
+			c.Assert(*deploymentID, Equals, expectedDeploymentID, Commentf(comment, args...))
+		}
+	}
+
+	checkScaleRequestDeploymentID := func(scaleRequestID, expectedDeploymentID string, comment string, args ...interface{}) {
+		var deploymentID *string
+		c.Assert(db.QueryRow(`SELECT deployment_id FROM scale_requests WHERE scale_request_id = $1`, scaleRequestID).Scan(&deploymentID), IsNil)
+		if expectedDeploymentID == "" {
+			c.Assert(deploymentID, IsNil, Commentf(comment, args...))
+		} else {
+			c.Assert(deploymentID, Not(IsNil), Commentf(comment, args...))
+			c.Assert(*deploymentID, Equals, expectedDeploymentID, Commentf(comment, args...))
+		}
+
+		deploymentID = nil
+		c.Assert(db.QueryRow(`SELECT deployment_id FROM events WHERE object_id = $1 AND object_type = 'scale_request'`, scaleRequestID).Scan(&deploymentID), IsNil)
+		if expectedDeploymentID == "" {
+			c.Assert(deploymentID, IsNil, Commentf(comment, args...))
+		} else {
+			c.Assert(deploymentID, Not(IsNil), Commentf(comment, args...))
+			c.Assert(*deploymentID, Equals, expectedDeploymentID, Commentf(comment, args...))
+		}
+	}
+
+	checkJobDeploymentID(job1.UUID, deployment1.ID, "job1 = deployment1")
+	checkJobDeploymentID(job2.UUID, deployment1.ID, "job2 = deployment1")
+	checkJobDeploymentID(job3.UUID, "", "job3 = null")
+	checkJobDeploymentID(job4.UUID, "", "job4 = null")
+	checkJobDeploymentID(job5.UUID, deployment2.ID, "job5 = deployment2")
+	checkJobDeploymentID(job6.UUID, deployment2.ID, "job6 = deployment2")
+
+	checkScaleRequestDeploymentID(scale1.ID, deployment1.ID, "scale1 = deployment1")
+	checkScaleRequestDeploymentID(scale2.ID, deployment1.ID, "scale2 = deployment1")
+	checkScaleRequestDeploymentID(scale3.ID, "", "scale3 = null")
+	checkScaleRequestDeploymentID(scale4.ID, "", "scale4 = null")
+	checkScaleRequestDeploymentID(scale5.ID, deployment2.ID, "scale5 = deployment2")
+	checkScaleRequestDeploymentID(scale6.ID, deployment2.ID, "scale6 = deployment2")
+}

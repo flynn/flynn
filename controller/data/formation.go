@@ -137,11 +137,16 @@ func (r *FormationRepo) AddScaleRequest(req *ct.ScaleRequest, deleteFormation bo
 	}
 
 	// create the scale request and either insert or delete the formation
+	var deploymentID *string
+	if req.DeploymentID != "" {
+		deploymentID = &req.DeploymentID
+	}
 	err = tx.QueryRow(
 		"scale_request_insert",
 		req.ID,
 		req.AppID,
 		req.ReleaseID,
+		deploymentID,
 		string(req.State),
 		req.OldProcesses,
 		req.NewProcesses,
@@ -170,10 +175,11 @@ func (r *FormationRepo) AddScaleRequest(req *ct.ScaleRequest, deleteFormation bo
 
 	// emit a scale request event so clients know scaling has begun
 	if err := CreateEvent(tx.Exec, &ct.Event{
-		AppID:      req.AppID,
-		ObjectID:   req.ID,
-		ObjectType: ct.EventTypeScaleRequest,
-		Op:         ct.EventOpCreate,
+		AppID:        req.AppID,
+		DeploymentID: req.DeploymentID,
+		ObjectID:     req.ID,
+		ObjectType:   ct.EventTypeScaleRequest,
+		Op:           ct.EventOpCreate,
 	}, req); err != nil {
 		tx.Rollback()
 		return nil, err
@@ -181,10 +187,11 @@ func (r *FormationRepo) AddScaleRequest(req *ct.ScaleRequest, deleteFormation bo
 	// emit a scale request event for each one we canceled
 	for _, s := range canceledScaleRequests {
 		if err := CreateEvent(tx.Exec, &ct.Event{
-			AppID:      s.AppID,
-			ObjectID:   s.ID,
-			ObjectType: ct.EventTypeScaleRequestCancelation,
-			Op:         ct.EventOpUpdate,
+			AppID:        s.AppID,
+			DeploymentID: req.DeploymentID,
+			ObjectID:     s.ID,
+			ObjectType:   ct.EventTypeScaleRequestCancelation,
+			Op:           ct.EventOpUpdate,
 		}, s); err != nil {
 			tx.Rollback()
 			return nil, err
@@ -403,15 +410,20 @@ func (r *FormationRepo) UpdateScaleRequest(req *ct.ScaleRequest) error {
 	if err != nil {
 		return err
 	}
-	if err := tx.QueryRow("scale_request_update", req.ID, string(req.State)).Scan(&req.UpdatedAt); err != nil {
+	var deploymentID *string
+	if err := tx.QueryRow("scale_request_update", req.ID, string(req.State)).Scan(&req.UpdatedAt, &deploymentID); err != nil {
 		tx.Rollback()
 		return err
 	}
+	if deploymentID != nil {
+		req.DeploymentID = *deploymentID
+	}
 	if err := CreateEvent(tx.Exec, &ct.Event{
-		AppID:      req.AppID,
-		ObjectID:   req.ID,
-		ObjectType: ct.EventTypeScaleRequest,
-		Op:         ct.EventOpUpdate,
+		AppID:        req.AppID,
+		DeploymentID: req.DeploymentID,
+		ObjectID:     req.ID,
+		ObjectType:   ct.EventTypeScaleRequest,
+		Op:           ct.EventOpUpdate,
 	}, req); err != nil {
 		tx.Rollback()
 		return err

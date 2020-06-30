@@ -30,6 +30,9 @@
     "release": {
       "$ref": "/schema/controller/common#/definitions/id"
     },
+    "deployment": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
     "type": {
       "description": "process type name from the release",
       "type": "string"

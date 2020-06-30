@@ -98,6 +98,7 @@ func (d *DeployJob) Perform() error {
 
 func (d *DeployJob) scaleOldRelease(wait bool) error {
 	opts := ct.ScaleOptions{
+		DeploymentID:     d.ID,
 		Processes:        d.oldFormation.Processes,
 		Timeout:          &d.timeout,
 		Stop:             d.stop,
@@ -118,10 +119,11 @@ const newJobFailureThreshold = 5
 func (d *DeployJob) scaleNewRelease() error {
 	failures := 0
 	opts := ct.ScaleOptions{
-		Processes: d.newFormation.Processes,
-		Tags:      d.newFormation.Tags,
-		Timeout:   &d.timeout,
-		Stop:      d.stop,
+		DeploymentID: d.ID,
+		Processes:    d.newFormation.Processes,
+		Tags:         d.newFormation.Tags,
+		Timeout:      &d.timeout,
+		Stop:         d.stop,
 		JobEventCallback: func(job *ct.Job) error {
 			d.logJobEvent(job)
 			// return an error if we get more than newJobFailureThreshold

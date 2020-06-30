@@ -49,6 +49,9 @@
     "app": {
       "$ref": "/schema/controller/common#/definitions/id"
     },
+    "deployment_id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
     "object_type": {
       "$ref": "#/definitions/event_type"
     },

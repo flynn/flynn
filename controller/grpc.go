@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	fmt "fmt"
 	"net"
 	"strings"
 	"sync"
@@ -104,16 +103,12 @@ func (g *grpcAPI) logRequest(ctx context.Context, rpcMethod string) (context.Con
 	}
 }
 
-func (g *grpcAPI) subscribeEvents(appIDs []string, objectTypes []ct.EventType, objectIDs []string) (*data.EventSubscriber, error) {
+func (g *grpcAPI) subscribeEvents(opts *data.EventSubscriptionOpts) (*data.EventSubscriber, error) {
 	eventListener, err := g.maybeStartEventListener()
 	if err != nil {
 		return nil, api.NewError(err, err.Error())
 	}
-	objectTypeStrings := make([]string, len(objectTypes))
-	for i, t := range objectTypes {
-		objectTypeStrings[i] = string(t)
-	}
-	sub, err := eventListener.Subscribe(appIDs, objectTypeStrings, objectIDs)
+	sub, err := eventListener.SubscribeWithOpts(opts)
 	if err != nil {
 		return nil, api.NewError(err, err.Error())
 	}
@@ -242,7 +237,10 @@ func (g *grpcAPI) StreamApps(req *api.StreamAppsRequest, stream api.Controller_S
 	if !unary {
 		appIDs := api.ParseIDsFromNameFilters(req.GetNameFilters(), "apps")
 		var err error
-		sub, err = g.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeApp, ct.EventTypeAppDeletion, ct.EventTypeAppRelease}, nil)
+		sub, err = g.subscribeEvents(&data.EventSubscriptionOpts{
+			AppIDs:      appIDs,
+			ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeAppDeletion, ct.EventTypeAppRelease},
+		})
 		if err != nil {
 			return api.NewError(err, err.Error())
 		}
@@ -264,7 +262,7 @@ func (g *grpcAPI) StreamApps(req *api.StreamAppsRequest, stream api.Controller_S
 		return nil
 	}
 
-	maybeSendApp := func(event *ct.Event, app *api.App) {
+	maybeSendApp := func(event *ct.ExpandedEvent, app *api.App) {
 		shouldSend := false
 		if (req.StreamCreates && event.Op == ct.EventOpCreate) || (req.StreamUpdates && event.Op == ct.EventOpUpdate) || (req.StreamUpdates && event.ObjectType == ct.EventTypeAppRelease) {
 			shouldSend = api.MatchLabelFilters(app.Labels, req.GetLabelFilters())
@@ -370,10 +368,14 @@ func (g *grpcAPI) UpdateApp(ctx context.Context, req *api.UpdateAppRequest) (*ap
 func (g *grpcAPI) createScale(req *api.CreateScaleRequest) (*api.ScaleRequest, error) {
 	appID := api.ParseIDFromName(req.Parent, "apps")
 	releaseID := api.ParseIDFromName(req.Parent, "releases")
-	processes := parseDeploymentProcesses(req.Processes)
-	tags := parseDeploymentTags(req.Tags)
+	processes := parseDeploymentProcesses(req.Config.Processes)
+	tags := parseDeploymentTags(req.Config.Tags)
 
-	sub, err := g.subscribeEvents([]string{appID}, []ct.EventType{ct.EventTypeScaleRequest, ct.EventTypeScaleRequestCancelation}, nil)
+	sub, err := g.subscribeEvents(&data.EventSubscriptionOpts{
+		AppIDs:      []string{appID},
+		ObjectTypes: []ct.EventType{ct.EventTypeScaleRequest, ct.EventTypeScaleRequestCancelation},
+		ObjectIDs:   nil,
+	})
 	if err != nil {
 		return nil, api.NewError(err, err.Error())
 	}
@@ -460,7 +462,11 @@ func (g *grpcAPI) StreamScales(req *api.StreamScalesRequest, stream api.Controll
 		streamAppIDs = nil
 		streamScaleIDs = nil
 	}
-	sub, err := g.subscribeEvents(streamAppIDs, []ct.EventType{ct.EventTypeScaleRequest, ct.EventTypeScaleRequestCancelation}, streamScaleIDs)
+	sub, err := g.subscribeEvents(&data.EventSubscriptionOpts{
+		AppIDs:      streamAppIDs,
+		ObjectTypes: []ct.EventType{ct.EventTypeScaleRequest, ct.EventTypeScaleRequestCancelation},
+		ObjectIDs:   streamScaleIDs,
+	})
 	if err != nil {
 		return api.NewError(err, err.Error())
 	}
@@ -515,7 +521,7 @@ func (g *grpcAPI) StreamScales(req *api.StreamScalesRequest, stream api.Controll
 		scaleIDsMap[scaleID] = struct{}{}
 	}
 
-	unmarshalScaleRequest := func(event *ct.Event) (*api.ScaleRequest, error) {
+	unmarshalScaleRequest := func(event *ct.ExpandedEvent) (*api.ScaleRequest, error) {
 		var ctReq *ct.ScaleRequest
 		if err := json.Unmarshal(event.Data, &ctReq); err != nil {
 			return nil, api.NewError(err, err.Error())
@@ -610,7 +616,11 @@ func (g *grpcAPI) StreamReleases(req *api.StreamReleasesRequest, stream api.Cont
 	appIDs := api.ParseIDsFromNameFilters(req.NameFilters, "apps")
 	releaseIDs := api.ParseIDsFromNameFilters(req.NameFilters, "releases")
 
-	sub, err := g.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeRelease}, releaseIDs)
+	sub, err := g.subscribeEvents(&data.EventSubscriptionOpts{
+		AppIDs:      appIDs,
+		ObjectTypes: []ct.EventType{ct.EventTypeRelease},
+		ObjectIDs:   releaseIDs,
+	})
 	if err != nil {
 		return api.NewError(err, err.Error())
 	}
@@ -645,7 +655,7 @@ func (g *grpcAPI) StreamReleases(req *api.StreamReleasesRequest, stream api.Cont
 		return nil
 	}
 
-	unmarshalRelease := func(event *ct.Event) (*api.Release, error) {
+	unmarshalRelease := func(event *ct.ExpandedEvent) (*api.Release, error) {
 		var ctRelease *ct.Release
 		if err := json.Unmarshal(event.Data, &ctRelease); err != nil {
 			return nil, api.NewError(err, err.Error())
@@ -653,7 +663,7 @@ func (g *grpcAPI) StreamReleases(req *api.StreamReleasesRequest, stream api.Cont
 		return api.NewRelease(ctRelease), nil
 	}
 
-	maybeAcceptRelease := func(event *ct.Event) (release *api.Release, accepted bool) {
+	maybeAcceptRelease := func(event *ct.ExpandedEvent) (release *api.Release, accepted bool) {
 		r, err := unmarshalRelease(event)
 		if err != nil {
 			logger.Error("error unmarshalling event", "rpcMethod", "StreamReleases", "event_id", event.ID, "error", err)
@@ -793,7 +803,11 @@ func (g *grpcAPI) StreamDeployments(req *api.StreamDeploymentsRequest, stream ap
 
 	var wg sync.WaitGroup
 
-	sub, err := g.subscribeEvents(appIDs, []ct.EventType{ct.EventTypeDeployment}, deploymentIDs)
+	sub, err := g.subscribeEvents(&data.EventSubscriptionOpts{
+		AppIDs:      appIDs,
+		ObjectTypes: []ct.EventType{ct.EventTypeDeployment},
+		ObjectIDs:   deploymentIDs,
+	})
 	if err != nil {
 		return api.NewError(err, err.Error())
 	}
@@ -854,6 +868,104 @@ func (g *grpcAPI) StreamDeployments(req *api.StreamDeploymentsRequest, stream ap
 	return maybeError(sub.Err)
 }
 
+func (g *grpcAPI) listDeploymentEvents(req *api.StreamDeploymentEventsRequest) ([]*api.Event, *data.PageToken, error) {
+	pageSize := int(req.GetPageSize())
+	pageToken, err := data.ParsePageToken(req.PageToken)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if pageSize > 0 {
+		pageToken.Size = pageSize
+	} else {
+		pageSize = pageToken.Size
+	}
+
+	appIDs := api.ParseIDsFromNameFilters(req.GetNameFilters(), "apps")
+	deploymentIDs := api.ParseIDsFromNameFilters(req.GetNameFilters(), "deployments")
+	objectTypes := api.ParseEventTypeFilters(req.GetTypeFilters())
+	if len(objectTypes) == 0 {
+		objectTypes = []ct.EventType{ct.EventTypeDeployment, ct.EventTypeScaleRequest, ct.EventTypeJob}
+	}
+	ctEvents, nextPageToken, err := g.eventRepo.ListPage(data.ListEventOptions{
+		PageToken:     *pageToken,
+		AppIDs:        appIDs,
+		ObjectTypes:   objectTypes,
+		DeploymentIDs: deploymentIDs,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	events := make([]*api.Event, len(ctEvents))
+	for i, e := range ctEvents {
+		events[i] = api.NewEvent(e)
+	}
+
+	return events, nextPageToken, nil
+}
+
+func (g *grpcAPI) StreamDeploymentEvents(req *api.StreamDeploymentEventsRequest, stream api.Controller_StreamDeploymentEventsServer) (err error) {
+	defer (func() {
+		if err != nil {
+			err = api.NewError(err, err.Error())
+		}
+	})()
+
+	unary := !req.StreamCreates
+
+	var sub *data.EventSubscriber
+	if !unary {
+		appIDs := api.ParseIDsFromNameFilters(req.GetNameFilters(), "apps")
+		deploymentIDs := api.ParseIDsFromNameFilters(req.GetNameFilters(), "deployments")
+		objectTypes := api.ParseEventTypeFilters(req.GetTypeFilters())
+		if len(objectTypes) == 0 {
+			objectTypes = []ct.EventType{ct.EventTypeDeployment, ct.EventTypeScaleRequest, ct.EventTypeJob}
+		}
+		sub, err = g.subscribeEvents(&data.EventSubscriptionOpts{
+			AppIDs:        appIDs,
+			ObjectTypes:   objectTypes,
+			DeploymentIDs: deploymentIDs,
+		})
+		if err != nil {
+			return
+		}
+		defer sub.Close()
+	}
+
+	events, nextPageToken, err := g.listDeploymentEvents(req)
+	if err != nil {
+		return
+	}
+
+	stream.Send(&api.StreamDeploymentEventsResponse{
+		Events:        events,
+		NextPageToken: nextPageToken.String(),
+		PageComplete:  true,
+	})
+
+	if sub == nil {
+		return
+	}
+
+	for {
+		select {
+		case event, ok := <-sub.Events:
+			if !ok {
+				err = sub.Err
+				return
+			}
+
+			stream.Send(&api.StreamDeploymentEventsResponse{
+				Events: []*api.Event{api.NewEvent(event)},
+			})
+		case <-stream.Context().Done():
+			err = stream.Context().Err()
+			return
+		}
+	}
+}
+
 func parseDeploymentTags(from map[string]*api.DeploymentProcessTags) map[string]map[string]string {
 	to := make(map[string]map[string]string, len(from))
 	for k, v := range from {
@@ -871,61 +983,71 @@ func parseDeploymentProcesses(from map[string]int32) map[string]int {
 }
 
 func (g *grpcAPI) CreateDeployment(req *api.CreateDeploymentRequest, ds api.Controller_CreateDeploymentServer) error {
-	appID := api.ParseIDFromName(req.Parent, "apps")
-	releaseID := api.ParseIDFromName(req.Parent, "releases")
-	d, err := g.deploymentRepo.Add(appID, releaseID)
+	d, err := g.deploymentRepo.AddExpanded(req.ControllerType())
 	if err != nil {
 		return api.NewError(err, err.Error())
 	}
 
+	// handle deployments without processes
+	if api.NewDeploymentStatus(d.Status) == api.DeploymentStatus_COMPLETE {
+		return nil
+	}
+
 	// Wait for deployment to complete and perform scale
 
-	sub, err := g.subscribeEvents([]string{appID}, []ct.EventType{ct.EventTypeDeployment}, []string{d.ID})
+	sub, err := g.subscribeEvents(&data.EventSubscriptionOpts{
+		AppIDs:        []string{d.AppID},
+		ObjectTypes:   []ct.EventType{ct.EventTypeDeployment, ct.EventTypeJob},
+		DeploymentIDs: []string{d.ID},
+	})
 	if err != nil {
 		return api.NewError(err, err.Error())
 	}
 	defer sub.Close()
 
+outer:
 	for {
-		event, ok := <-sub.Events
-		if !ok {
-			break
-		}
-		if event.ObjectType != "deployment" {
-			continue
-		}
-		var de *ct.DeploymentEvent
-		if err := json.Unmarshal(event.Data, &de); err != nil {
-			logger.Error("failed to unmarshal deployment event", "event_id", event.ID, "deployment_id", event.ObjectID, "error", err)
-			continue
-		}
+		select {
+		case event, ok := <-sub.Events:
+			if !ok {
+				break outer
+			}
+			if event.ObjectType != "deployment" && event.ObjectType != "job" {
+				continue outer
+			}
 
-		// Scale release to requested processes/tags once deployment is complete
-		if de.Status == "complete" {
-			if sr := req.ScaleRequest; sr != nil {
-				if _, err := g.createScale(&api.CreateScaleRequest{
-					Parent:    fmt.Sprintf("apps/%s/releases/%s", de.AppID, de.ReleaseID),
-					Processes: sr.Processes,
-					Tags:      sr.Tags,
-				}); err != nil {
-					return err
+			var deploymentID string
+			if event.Deployment != nil {
+				deploymentID = event.Deployment.ID
+			}
+			var de *ct.DeploymentEvent
+			switch event.ObjectType {
+			case "deployment":
+				if err := json.Unmarshal(event.Data, &de); err != nil {
+					logger.Error("failed to unmarshal deployment event", "event_id", event.ID, "deployment_id", event.ObjectID, "error", err)
+					continue outer
+				}
+
+			case "job":
+				var job *ct.Job
+				if err := json.Unmarshal(event.Data, &job); err != nil {
+					logger.Error("failed to unmarshal job event", "event_id", event.ID, "deployment_id", deploymentID, "job_uuid", event.UniqueID, "error", err)
+					continue outer
 				}
 			}
-		}
+			ds.Send(api.NewEvent(event))
 
-		ds.Send(&api.DeploymentEvent{
-			Parent:     fmt.Sprintf("apps/%s/deployments/%s", de.AppID, de.DeploymentID),
-			JobType:    de.JobType,
-			JobState:   api.NewJobState(de.JobState),
-			Error:      de.Error,
-			CreateTime: api.NewTimestamp(event.CreatedAt),
-		})
-
-		if de.Status == "failed" {
-			return status.Errorf(codes.FailedPrecondition, de.Error)
-		}
-		if de.Status == "complete" {
-			break
+			if de != nil {
+				if de.Status == "failed" {
+					return status.Errorf(codes.FailedPrecondition, de.Error)
+				}
+				if de.Status == "complete" {
+					break outer
+				}
+			}
+		case <-ds.Context().Done():
+			err := ds.Context().Err()
+			return maybeError(err)
 		}
 	}
 

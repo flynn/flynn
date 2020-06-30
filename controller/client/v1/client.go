@@ -322,6 +322,9 @@ func (c *Client) ScaleAppRelease(appID, releaseID string, opts ct.ScaleOptions) 
 		ReleaseID: releaseID,
 		State:     ct.ScaleRequestStatePending,
 	}
+	if opts.DeploymentID != "" {
+		scaleReq.DeploymentID = opts.DeploymentID
+	}
 	if opts.Processes != nil {
 		scaleReq.NewProcesses = &opts.Processes
 	}

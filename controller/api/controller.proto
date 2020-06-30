@@ -20,13 +20,15 @@ service Controller {
 
   rpc StreamDeployments(StreamDeploymentsRequest) returns (stream StreamDeploymentsResponse) {};
 
+  rpc StreamDeploymentEvents (StreamDeploymentEventsRequest) returns (stream StreamDeploymentEventsResponse) {};
+
   rpc UpdateApp (UpdateAppRequest) returns (App) {};
 
   rpc CreateScale (CreateScaleRequest) returns (ScaleRequest) {};
 
   rpc CreateRelease (CreateReleaseRequest) returns (Release) {};
 
-  rpc CreateDeployment (CreateDeploymentRequest) returns (stream DeploymentEvent) {};
+  rpc CreateDeployment (CreateDeploymentRequest) returns (stream Event) {};
 }
 
 message StatusResponse {
@@ -179,6 +181,39 @@ message StreamScalesResponse {
   string next_page_token = 3;
 }
 
+message StreamDeploymentEventsRequest {
+  // The maximum number of resources to return in the initial page.
+  int32 page_size = 1;
+
+  // Used for pagination. Must be a next_page_token returned from a previous response.
+  string page_token = 2;
+
+  // Specifies an optional list of resource names that should be looked up. The
+  // list length must be smaller than page_size. This can be used to request a
+  // known set of one or more resources, and can also be used to retrieve a
+  // single resource. Parent resource names may also be used to filter
+  // resources. Resource names are supported for apps and deployments.
+  repeated string name_filters = 3;
+
+  // Specifies an optional list of event types to return. The default is to
+  // return all event types related to deployments.
+  repeated string type_filters = 4;
+
+  // When true, leaves the stream open and sends newly created resources
+  // matching the filters until the stream is closed. page_token must not be
+  // set.
+  bool stream_creates = 5;
+}
+
+message StreamDeploymentEventsResponse {
+  repeated Event events = 1;
+
+  // Set to true on the last response for the initial page.
+  bool page_complete = 2;
+
+  string next_page_token = 3;
+}
+
 message StreamDeploymentsRequest {
   // The maximum number of resources to return in the initial page.
   int32 page_size = 1;
@@ -226,13 +261,17 @@ message UpdateAppRequest {
   google.protobuf.FieldMask update_mask = 2;
 }
 
+message ScaleConfig {
+  map<string, int32> processes = 1;
+
+  map<string, DeploymentProcessTags> tags = 2;
+}
+
 message CreateScaleRequest {
   // parent = "apps/APP_ID/releases/RELEASE_ID"
   string parent = 1;
 
-  map<string, int32> processes = 2;
-
-  map<string, DeploymentProcessTags> tags = 3;
+  ScaleConfig config = 2;
 }
 
 message CreateReleaseRequest {
@@ -244,12 +283,19 @@ message CreateReleaseRequest {
   string request_id = 3;
 }
 
+message DeploymentConfig {
+  NullableInt32 timeout = 1;
+
+  NullableInt32 batch_size = 2;
+
+  ScaleConfig scale_config = 3;
+}
+
 message CreateDeploymentRequest {
   // parent = "apps/APP_ID/releases/RELEASE_ID"
   string parent = 1;
 
-  // optional scale request
-  CreateScaleRequest scale_request = 2;
+  DeploymentConfig config = 2;
 }
 
 message App {
@@ -475,6 +521,9 @@ message ScaleRequest {
   google.protobuf.Timestamp create_time = 8;
 
   google.protobuf.Timestamp update_time = 9;
+
+  // deployment_name = "apps/APP_ID/deployments/DEPLOYMENT_ID"
+  string deployment_name = 10;
 }
 
 enum DeploymentStatus {
@@ -518,13 +567,25 @@ message ExpandedDeployment {
   google.protobuf.Timestamp expire_time = 12;
 
   google.protobuf.Timestamp end_time = 13;
+
+  string error = 14;
 }
 
-message DeploymentEvent {
-  // parent = "apps/APP_ID/deployments/DEPLOYMENT_ID"
+message Job {
+  // parent = "apps/APP_ID/releases/RELEASE_ID"
   string parent = 1;
 
-  string job_type = 2;
+  // name = "jobs/UUID"
+  string name = 2;
+
+  // deployment_name = "apps/APP_ID/deployments/DEPLOYMENT_ID"
+  string deployment_name = 3;
+
+  // host = "hosts/HOST_ID"
+  // host may be empty if job is pending
+  string host_name = 4;
+
+  string type = 5;
 
   enum JobState {
     PENDING = 0;
@@ -535,23 +596,73 @@ message DeploymentEvent {
 
     UP = 3;
 
-    STOPPING = 5;
+    STOPPING = 4;
 
-    DOWN = 6;
-
-    // CRASHED and FAILURE are no longer valid job states,
-    // but we still need to handle them in case they are set by old
-    // schedulers still using the legacy code.
-    CRASHED = 7;
-
-    FAILED = 8;
+    DOWN = 5;
   }
 
-  JobState job_state = 3;
+  JobState state = 6;
 
-  string Error = 4;
+  repeated string args = 7;
 
-  google.protobuf.Timestamp create_time = 5;
+  repeated string volume_ids = 8;
+
+  map<string, string> labels = 9;
+
+  NullableInt32 exit_status = 10;
+
+  string host_error = 11;
+
+  google.protobuf.Timestamp run_time = 12;
+
+  NullableInt32 restarts = 13;
+
+  google.protobuf.Timestamp create_time = 14;
+
+  google.protobuf.Timestamp update_time = 15;
+}
+
+message Event {
+  // when deployment is set:
+  // parent = "apps/APP_ID/deployments/DEPLOYMENT_ID"
+  // when job is set:
+  // parent = "jobs/UUID"
+  // when scale_request is set:
+  // parent = "apps/APP_ID/releases/RELEASE_ID/scales/SCALE_REQUEST_ID"
+  string parent = 1;
+
+  //  name = "events/EVENT_ID"
+  string name = 2;
+
+  // deployment_name = "apps/APP_ID/deployments/DEPLOYMENT_ID"
+  string deployment_name = 3;
+
+  // type = deployment | job | scale_request
+  string type = 4;
+
+  enum EventOp {
+    ANY = 0;
+
+    CREATE = 1;
+
+    UPDATE = 2;
+  }
+
+  EventOp op = 5;
+
+  google.protobuf.Timestamp create_time = 6;
+
+  oneof data {
+    ExpandedDeployment deployment = 7;
+
+    Job job = 8;
+
+    ScaleRequest scale_request = 9;
+  }
+}
+
+message NullableInt32 {
+  int32 value = 1;
 }
 
 message SignedData {

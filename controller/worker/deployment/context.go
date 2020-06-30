@@ -168,7 +168,7 @@ func (c *context) createDeploymentEvent(e ct.DeploymentEvent) error {
 	if e.Status == "" {
 		e.Status = "running"
 	}
-	return c.execWithRetries("event_insert_op", e.AppID, e.DeploymentID, string(ct.EventTypeDeployment), e, ct.EventOpUpdate)
+	return c.execWithRetries("event_insert_op", e.AppID, e.DeploymentID, e.DeploymentID, string(ct.EventTypeDeployment), e, ct.EventOpUpdate)
 }
 
 var execAttempts = attempt.Strategy{

@@ -271,19 +271,20 @@ type Job struct {
 	// empty if the job is pending
 	HostID string `json:"host_id,omitempty"`
 
-	AppID      string            `json:"app,omitempty"`
-	ReleaseID  string            `json:"release,omitempty"`
-	Type       string            `json:"type,omitempty"`
-	State      JobState          `json:"state,omitempty"`
-	Args       []string          `json:"args,omitempty"`
-	VolumeIDs  []string          `json:"volumes,omitempty"`
-	Meta       map[string]string `json:"meta,omitempty"`
-	ExitStatus *int32            `json:"exit_status,omitempty"`
-	HostError  *string           `json:"host_error,omitempty"`
-	RunAt      *time.Time        `json:"run_at,omitempty"`
-	Restarts   *int32            `json:"restarts,omitempty"`
-	CreatedAt  *time.Time        `json:"created_at,omitempty"`
-	UpdatedAt  *time.Time        `json:"updated_at,omitempty"`
+	AppID        string            `json:"app,omitempty"`
+	ReleaseID    string            `json:"release,omitempty"`
+	DeploymentID string            `json:"deployment,omitempty"`
+	Type         string            `json:"type,omitempty"`
+	State        JobState          `json:"state,omitempty"`
+	Args         []string          `json:"args,omitempty"`
+	VolumeIDs    []string          `json:"volumes,omitempty"`
+	Meta         map[string]string `json:"meta,omitempty"`
+	ExitStatus   *int32            `json:"exit_status,omitempty"`
+	HostError    *string           `json:"host_error,omitempty"`
+	RunAt        *time.Time        `json:"run_at,omitempty"`
+	Restarts     *int32            `json:"restarts,omitempty"`
+	CreatedAt    *time.Time        `json:"created_at,omitempty"`
+	UpdatedAt    *time.Time        `json:"updated_at,omitempty"`
 }
 
 type JobState string
@@ -388,6 +389,15 @@ type NewJob struct {
 }
 
 const DefaultDeployTimeout = 120 // seconds
+
+type CreateDeploymentConfig struct {
+	AppID     string
+	ReleaseID string
+	Timeout   *int32
+	BatchSize *int
+	Processes *map[string]int
+	Tags      *map[string]map[string]string
+}
 
 type Deployment struct {
 	ID              string                       `json:"id,omitempty"`
@@ -529,20 +539,57 @@ const (
 )
 
 type Event struct {
-	ID         int64           `json:"id,omitempty"`
-	AppID      string          `json:"app,omitempty"`
-	ObjectType EventType       `json:"object_type,omitempty"`
-	ObjectID   string          `json:"object_id,omitempty"`
-	UniqueID   string          `json:"-"`
-	Data       json.RawMessage `json:"data,omitempty"`
-	Op         EventOp         `json:"-"`
-	CreatedAt  *time.Time      `json:"created_at,omitempty"`
+	ID           int64           `json:"id,omitempty"`
+	AppID        string          `json:"app,omitempty"`
+	DeploymentID string          `json:"deployment_id,omitempty"`
+	ObjectType   EventType       `json:"object_type,omitempty"`
+	ObjectID     string          `json:"object_id,omitempty"`
+	UniqueID     string          `json:"-"`
+	Data         json.RawMessage `json:"data,omitempty"`
+	Op           EventOp         `json:"-"`
+	CreatedAt    *time.Time      `json:"created_at,omitempty"`
+}
+
+type ExpandedEvent struct {
+	ID           int64               `json:"id,omitempty"`
+	AppID        string              `json:"app,omitempty"`
+	ObjectType   EventType           `json:"object_type,omitempty"`
+	ObjectID     string              `json:"object_id,omitempty"`
+	UniqueID     string              `json:"-"`
+	Deployment   *ExpandedDeployment `json:"deployment,omitempty"`
+	Job          *Job                `json:"job,omitempty"`
+	ScaleRequest *ScaleRequest       `json:"scale_request,omitempty"`
+	Data         json.RawMessage     `json:"-"`
+	Op           EventOp             `json:"-"`
+	CreatedAt    *time.Time          `json:"created_at,omitempty"`
+}
+
+func (ee *ExpandedEvent) Event() *Event {
+	if ee == nil {
+		return nil
+	}
+	var deploymentID string
+	if ee.Deployment != nil {
+		deploymentID = ee.Deployment.ID
+	}
+	return &Event{
+		ID:           ee.ID,
+		AppID:        ee.AppID,
+		DeploymentID: deploymentID,
+		ObjectType:   ee.ObjectType,
+		ObjectID:     ee.ObjectID,
+		UniqueID:     ee.UniqueID,
+		Data:         ee.Data,
+		Op:           ee.Op,
+		CreatedAt:    ee.CreatedAt,
+	}
 }
 
 type ScaleRequest struct {
 	ID           string                        `json:"id"`
 	AppID        string                        `json:"app"`
 	ReleaseID    string                        `json:"release"`
+	DeploymentID string                        `json:"deployment_id,omitempty"`
 	State        ScaleRequestState             `json:"state"`
 	OldProcesses map[string]int                `json:"old_processes,omitempty"`
 	NewProcesses *map[string]int               `json:"new_processes,omitempty"`
@@ -567,6 +614,7 @@ type DeprecatedScale struct {
 }
 
 type ScaleOptions struct {
+	DeploymentID         string
 	Processes            map[string]int
 	Tags                 map[string]map[string]string
 	Timeout              *time.Duration

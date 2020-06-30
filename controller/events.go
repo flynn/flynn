@@ -196,7 +196,7 @@ func streamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request,
 			if event.ID <= currID {
 				continue
 			}
-			ch <- event
+			ch <- event.Event()
 		}
 	}
 }

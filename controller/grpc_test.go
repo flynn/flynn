@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flynn/flynn/controller/api"
@@ -114,7 +115,8 @@ func (s *GRPCSuite) SetUpTest(c *C) {
 	c.Assert(s.db.Exec(`
 		TRUNCATE
 			apps, artifacts, deployments, events,
-			formations, releases, scale_requests
+			formations, releases, scale_requests,
+			job_cache
 		CASCADE
 	`), IsNil)
 	s.scaleRequestNameMap = make(map[string]string)
@@ -170,7 +172,10 @@ func (s *GRPCSuite) createTestRelease(c *C, parentName string, release *api.Rele
 func (s *GRPCSuite) createTestDeployment(c *C, releaseName string) *api.ExpandedDeployment {
 	appID := api.ParseIDFromName(releaseName, "apps")
 	releaseID := api.ParseIDFromName(releaseName, "releases")
-	ctDeployment, err := s.api.deploymentRepo.AddExpanded(appID, releaseID)
+	ctDeployment, err := s.api.deploymentRepo.AddExpanded(&ct.CreateDeploymentConfig{
+		AppID:     appID,
+		ReleaseID: releaseID,
+	})
 	c.Assert(err, IsNil)
 	return api.NewExpandedDeployment(ctDeployment)
 }
@@ -181,11 +186,26 @@ func (s *GRPCSuite) createTestDeploymentEvent(c *C, d *api.ExpandedDeployment, e
 	e.ReleaseID = api.ParseIDFromName(d.NewRelease.Name, "releases")
 
 	c.Assert(data.CreateEvent(s.db.Exec, &ct.Event{
-		AppID:      e.AppID,
-		ObjectID:   e.DeploymentID,
-		ObjectType: ct.EventTypeDeployment,
-		Op:         ct.EventOpUpdate,
+		AppID:        e.AppID,
+		DeploymentID: e.DeploymentID,
+		ObjectID:     e.DeploymentID,
+		ObjectType:   ct.EventTypeDeployment,
+		Op:           ct.EventOpUpdate,
 	}, e), IsNil)
+}
+
+func (s *GRPCSuite) createTestJob(c *C, d *api.ExpandedDeployment, j *ct.Job) *api.Job {
+	j.AppID = api.ParseIDFromName(d.Name, "apps")
+	j.DeploymentID = api.ParseIDFromName(d.Name, "deployments")
+	j.ReleaseID = api.ParseIDFromName(d.NewRelease.Name, "releases")
+	if j.UUID == "" {
+		j.UUID = random.UUID()
+	}
+	if j.State == "" {
+		j.State = ct.JobStatePending
+	}
+	c.Assert(s.api.jobRepo.Add(j), IsNil)
+	return api.NewJob(j)
 }
 
 func (s *GRPCSuite) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
@@ -208,6 +228,15 @@ func (s *GRPCSuite) createTestScaleRequest(c *C, req *api.CreateScaleRequest) *a
 	c.Assert(err, IsNil)
 	scale := api.NewScaleRequest(ctReq)
 	s.scaleRequestNameMap[scale.Name] = fmt.Sprintf("testScale%d", len(s.scaleRequestNameMap)+1)
+	return scale
+}
+
+func (s *GRPCSuite) createTestScaleRequestForDeployment(c *C, req *api.CreateScaleRequest, deploymentName string) *api.ScaleRequest {
+	ctReq := req.ControllerType()
+	ctReq.DeploymentID = api.ParseIDFromName(deploymentName, "deployments")
+	ctReq, err := s.api.formationRepo.AddScaleRequest(ctReq, false)
+	c.Assert(err, IsNil)
+	scale := api.NewScaleRequest(ctReq)
 	return scale
 }
 
@@ -454,7 +483,6 @@ func (s *GRPCSuite) TestStreamApps(c *C) {
 	receiveAppsStream(stream) // initial page
 	testRelease1 := s.createTestRelease(c, testApp5.Name, &api.Release{})
 	testApp5 = s.setTestAppRelease(c, testApp5, testRelease1.Name)
-	fmt.Println(map[string]string{"app": testApp5.Name, "release": testRelease1.Name})
 	res = receiveAppsStream(stream)
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.Apps), Equals, 1)
@@ -951,13 +979,13 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	testRelease4 := s.createTestRelease(c, testApp1.Name, &api.Release{Labels: map[string]string{"i": "4"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
 	testRelease5 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"i": "5"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
 	testRelease6 := s.createTestRelease(c, testApp3.Name, &api.Release{Labels: map[string]string{"i": "6"}, Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease2.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale3 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease3.Name, Processes: map[string]int32{"devnull": 2}})
-	testScale4 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease4.Name, Processes: map[string]int32{"devnull": 2}})
-	testScale5 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale6 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 2}})
-	testScale7 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 3}})
+	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 1}}})
+	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease2.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 1}}})
+	testScale3 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease3.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 2}}})
+	testScale4 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease4.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 2}}})
+	testScale5 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 1}}})
+	testScale6 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 2}}})
+	testScale7 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 3}}})
 
 	testScales := []*api.ScaleRequest{
 		testScale1,
@@ -1047,8 +1075,8 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	// test streaming creates for specific release
 	stream, cancel := s.streamScalesWithCancel(c, &api.StreamScalesRequest{NameFilters: []string{testRelease6.Name}, StreamCreates: true})
 	s.receiveScalesStream(c, stream) // initial page
-	testScale8 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 3}})
-	testScale9 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 0}})
+	testScale8 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 3}}})
+	testScale9 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 0}}})
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
@@ -1057,12 +1085,12 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 
 	// test streaming creates for specific app or release
 	stream, cancel = s.streamScalesWithCancel(c, &api.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease6.Name}, StreamCreates: true})
-	s.receiveScalesStream(c, stream)                                                                                                          // initial page
-	testScale10 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Processes: map[string]int32{"devnull": 3}}) // neither
-	testScale11 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 0}}) // testRelease6 create
+	s.receiveScalesStream(c, stream)                                                                                                                                    // initial page
+	testScale10 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease5.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 3}}}) // neither
+	testScale11 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 0}}}) // testRelease6 create
 	testScale4.State = api.ScaleRequestState_SCALE_CANCELLED
-	s.updateTestScaleRequest(c, testScale4)                                                                                                   // testApp1 update
-	testScale12 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 0}}) // testApp1 create
+	s.updateTestScaleRequest(c, testScale4)                                                                                                                             // testApp1 update
+	testScale12 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 0}}}) // testApp1 create
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
 	c.Assert(len(res.ScaleRequests), Equals, 1)
@@ -1076,7 +1104,7 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 	// test creates are not streamed when flag not set
 	stream, cancel = s.streamScalesWithCancel(c, &api.StreamScalesRequest{})
 	s.receiveScalesStream(c, stream) // initial page
-	testScale13 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 3}})
+	testScale13 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 3}}})
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, IsNil)
 	cancel()
@@ -1085,9 +1113,9 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 
 	// test streaming updates (new scale for the app/release)
 	stream, cancel = s.streamScalesWithCancel(c, &api.StreamScalesRequest{NameFilters: []string{testApp1.Name, testRelease6.Name}, StreamUpdates: true})
-	s.receiveScalesStream(c, stream)                                                                                                          // initial page
-	testScale14 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease4.Name, Processes: map[string]int32{"devnull": 3}}) // testApp1
-	testScale15 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Processes: map[string]int32{"devnull": 1}})
+	s.receiveScalesStream(c, stream)                                                                                                                                    // initial page
+	testScale14 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease4.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 3}}}) // testApp1
+	testScale15 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease6.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 1}}})
 	testScale6.State = api.ScaleRequestState_SCALE_PENDING
 	s.updateTestScaleRequest(c, testScale6)
 	testScale4.State = api.ScaleRequestState_SCALE_PENDING
@@ -1152,14 +1180,14 @@ func (s *GRPCSuite) TestStreamScales(c *C) {
 func (s *GRPCSuite) TestStreamScalesUnaryPagination(c *C) {
 	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
 	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}}})
-	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
-	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 2}})
-	testScale3 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 3}})
-	testScale4 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 4}})
-	testScale5 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 5}})
-	testScale6 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 6}})
-	testScale7 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 7}})
-	testScale8 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 8}})
+	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 1}}})
+	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 2}}})
+	testScale3 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 3}}})
+	testScale4 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 4}}})
+	testScale5 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 5}}})
+	testScale6 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 6}}})
+	testScale7 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 7}}})
+	testScale8 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 8}}})
 
 	assertScaleRequestsEqual := func(c *C, a, b *api.ScaleRequest) {
 		c.Assert(a.Name, Equals, b.Name)
@@ -1211,7 +1239,7 @@ func (s *GRPCSuite) TestStreamScalesForApp(c *C) {
 	s.receiveScalesStream(c, stream) // initial page
 
 	// scale the release
-	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 1}})
+	testScale1 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 1}}})
 	// expect to get the scale request in stream
 	res := s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
@@ -1219,7 +1247,7 @@ func (s *GRPCSuite) TestStreamScalesForApp(c *C) {
 	c.Assert(res.ScaleRequests[0].Name, DeepEquals, testScale1.Name)
 
 	// scale the release again
-	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Processes: map[string]int32{"devnull": 2}})
+	testScale2 := s.createTestScaleRequest(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 2}}})
 	// expect to get the scale request in stream
 	res = s.receiveScalesStream(c, stream)
 	c.Assert(res, Not(IsNil))
@@ -1261,6 +1289,116 @@ func unaryReceiveDeployments(s *GRPCSuite, c *C, req *api.StreamDeploymentsReque
 		res = r
 	}
 	return
+}
+
+func (s *GRPCSuite) TestCreateDeployment(c *C) {
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testArtifact1 := s.createTestArtifact(c, &ct.Artifact{})
+	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{
+		Labels:    map[string]string{"i": "1"},
+		Artifacts: []string{testArtifact1.ID},
+	})
+
+	req := &api.CreateDeploymentRequest{
+		Parent: testRelease1.Name,
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	stream, err := s.grpc.CreateDeployment(ctx, req)
+	c.Assert(err, IsNil)
+
+	// deployment has no processes, so CreateDeployment should return right away
+	_, err = stream.Recv()
+	c.Assert(err, Equals, io.EOF)
+}
+
+func (s *GRPCSuite) TestStreamDeploymentEvents(c *C) {
+	testApp1 := s.createTestApp(c, &api.App{DisplayName: "test1"})
+	testArtifact1 := s.createTestArtifact(c, &ct.Artifact{})
+	testRelease1 := s.createTestRelease(c, testApp1.Name, &api.Release{
+		Labels:    map[string]string{"i": "1"},
+		Artifacts: []string{testArtifact1.ID},
+		Processes: map[string]*api.ProcessType{"devnull": {Args: []string{"tail", "-f", "/dev/null"}, Service: "dev"}},
+	})
+	testDeployment1 := s.createTestDeployment(c, testRelease1.Name)
+
+	streamEvents := func(req *api.StreamDeploymentEventsRequest) (api.Controller_StreamDeploymentEventsClient, func(), error) {
+		ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		stream, err := s.grpc.StreamDeploymentEvents(ctx, req)
+		var closeOnce sync.Once
+		closeFunc := func() {
+			closeOnce.Do(func() {
+				stream.CloseSend()
+			})
+		}
+		return stream, closeFunc, err
+	}
+
+	for _, nameFilters := range [][]string{
+		[]string{testDeployment1.Name},
+		[]string{testApp1.Name},
+		[]string{testApp1.Name, testDeployment1.Name},
+	} {
+		(func() {
+			stream, closeFunc, err := streamEvents(&api.StreamDeploymentEventsRequest{
+				NameFilters:   nameFilters,
+				StreamCreates: true,
+			})
+			defer closeFunc()
+
+			// we don't care about existing events
+			res, err := stream.Recv()
+			c.Assert(err, IsNil)
+
+			s.createTestDeploymentEvent(c, testDeployment1, &ct.DeploymentEvent{Status: "pending"})
+			res, err = stream.Recv()
+			c.Assert(err, IsNil)
+			c.Assert(len(res.Events), Equals, 1)
+			c.Assert(res.Events[0].Parent, Equals, testDeployment1.Name)
+			c.Assert(res.Events[0].DeploymentName, Equals, testDeployment1.Name)
+			c.Assert(res.Events[0].Type, Equals, string(ct.EventTypeDeployment))
+
+			testJob1 := s.createTestJob(c, testDeployment1, &ct.Job{})
+			res, err = stream.Recv()
+			c.Assert(err, IsNil)
+			c.Assert(len(res.Events), Equals, 1)
+			c.Assert(res.Events[0].Parent, Equals, testJob1.Name)
+			c.Assert(res.Events[0].DeploymentName, Equals, testDeployment1.Name)
+			c.Assert(res.Events[0].Type, Equals, string(ct.EventTypeJob))
+
+			testScale1 := s.createTestScaleRequestForDeployment(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 1}}}, testDeployment1.Name)
+			res, err = stream.Recv()
+			c.Assert(err, IsNil)
+			c.Assert(len(res.Events), Equals, 1)
+			c.Assert(res.Events[0].Parent, Equals, testScale1.Name)
+			c.Assert(res.Events[0].DeploymentName, Equals, testDeployment1.Name)
+			c.Assert(res.Events[0].Type, Equals, string(ct.EventTypeScaleRequest))
+		})()
+	}
+
+	(func() {
+		stream, closeFunc, err := streamEvents(&api.StreamDeploymentEventsRequest{
+			NameFilters:   []string{testDeployment1.Name},
+			TypeFilters:   []string{string(ct.EventTypeJob)},
+			StreamCreates: true,
+		})
+		defer closeFunc()
+
+		// we don't care about existing events
+		res, err := stream.Recv()
+		c.Assert(err, IsNil)
+
+		s.createTestDeploymentEvent(c, testDeployment1, &ct.DeploymentEvent{Status: "pending"})
+
+		s.createTestScaleRequestForDeployment(c, &api.CreateScaleRequest{Parent: testRelease1.Name, Config: &api.ScaleConfig{Processes: map[string]int32{"devnull": 1}}}, testDeployment1.Name)
+
+		testJob1 := s.createTestJob(c, testDeployment1, &ct.Job{})
+		res, err = stream.Recv()
+		c.Assert(err, IsNil)
+		c.Assert(len(res.Events), Equals, 1)
+		c.Assert(res.Events[0].Parent, Equals, testJob1.Name)
+		c.Assert(res.Events[0].DeploymentName, Equals, testDeployment1.Name)
+		c.Assert(res.Events[0].Type, Equals, string(ct.EventTypeJob))
+	})()
 }
 
 func (s *GRPCSuite) TestStreamDeployments(c *C) {

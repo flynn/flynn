@@ -27,7 +27,7 @@ func NewDeploymentRepo(db *postgres.DB, appRepo *AppRepo, releaseRepo *ReleaseRe
 }
 
 func (r *DeploymentRepo) Add(appID, releaseID string) (*ct.Deployment, error) {
-	ed, err := r.AddExpanded(appID, releaseID)
+	ed, err := r.AddExpanded(&ct.CreateDeploymentConfig{AppID: appID, ReleaseID: releaseID})
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,10 @@ func (r *DeploymentRepo) Add(appID, releaseID string) (*ct.Deployment, error) {
 	}, nil
 }
 
-func (r *DeploymentRepo) AddExpanded(appID, releaseID string) (*ct.ExpandedDeployment, error) {
+func (r *DeploymentRepo) AddExpanded(config *ct.CreateDeploymentConfig) (*ct.ExpandedDeployment, error) {
+	appID := config.AppID
+	releaseID := config.ReleaseID
+
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
@@ -96,8 +99,37 @@ func (r *DeploymentRepo) AddExpanded(appID, releaseID string) (*ct.ExpandedDeplo
 			return nil, err
 		}
 	}
+
+	var processes map[string]int
+	if config.Processes != nil {
+		processes = *config.Processes
+	} else {
+		processes = oldFormation.Processes
+	}
+
+	var tags map[string]map[string]string
+	if config.Tags != nil {
+		tags = *config.Tags
+	} else {
+		tags = oldFormation.Tags
+	}
+
+	var deployTimeout int32
+	if config.Timeout != nil {
+		deployTimeout = *config.Timeout
+	} else {
+		deployTimeout = app.DeployTimeout
+	}
+
+	var deployBatchSize *int
+	if config.BatchSize != nil {
+		deployBatchSize = config.BatchSize
+	} else {
+		app.DeployBatchSize()
+	}
+
 	procCount := 0
-	for _, i := range oldFormation.Processes {
+	for _, i := range processes {
 		procCount += i
 	}
 
@@ -111,24 +143,25 @@ func (r *DeploymentRepo) AddExpanded(appID, releaseID string) (*ct.ExpandedDeplo
 	}
 
 	ed := &ct.ExpandedDeployment{
-		AppID:         app.ID,
-		NewRelease:    release,
-		Type:          releaseType,
-		Strategy:      app.Strategy,
-		OldRelease:    oldRelease,
-		Processes:     oldFormation.Processes,
-		Tags:          oldFormation.Tags,
-		DeployTimeout: app.DeployTimeout,
+		AppID:           app.ID,
+		NewRelease:      release,
+		Type:            releaseType,
+		Strategy:        app.Strategy,
+		OldRelease:      oldRelease,
+		Processes:       processes,
+		Tags:            tags,
+		DeployTimeout:   deployTimeout,
+		DeployBatchSize: deployBatchSize,
 	}
 
 	d := &ct.Deployment{
 		AppID:           app.ID,
 		NewReleaseID:    release.ID,
 		Strategy:        app.Strategy,
-		Processes:       oldFormation.Processes,
-		Tags:            oldFormation.Tags,
-		DeployTimeout:   app.DeployTimeout,
-		DeployBatchSize: app.DeployBatchSize(),
+		Processes:       processes,
+		Tags:            tags,
+		DeployTimeout:   deployTimeout,
+		DeployBatchSize: deployBatchSize,
 	}
 	if oldRelease != nil {
 		d.OldReleaseID = oldRelease.ID
@@ -344,6 +377,7 @@ func createDeploymentEvent(dbExec func(string, ...interface{}) error, d *ct.Depl
 	}
 	return CreateEvent(dbExec, &ct.Event{
 		AppID:      d.AppID,
+		DeploymentID: d.ID,
 		ObjectID:   d.ID,
 		ObjectType: ct.EventTypeDeployment,
 		Op:         ct.EventOpCreate,
