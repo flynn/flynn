@@ -8,11 +8,11 @@ env_dir="$4"
 
 export_env_dir() {
   env_dir=$1
-  whitelist_regex=${2:-''}
-  blacklist_regex=${3:-'^(PATH|GIT_DIR|CPATH|CPPATH|LD_PRELOAD|LIBRARY_PATH)$'}
+  allowlist_regex=${2:-''}
+  blocklist_regex=${3:-'^(PATH|GIT_DIR|CPATH|CPPATH|LD_PRELOAD|LIBRARY_PATH)$'}
   if [ -d "${env_dir}" ]; then
     for e in $(ls $env_dir); do
-      echo "$e" | grep -Ei "$whitelist_regex" | grep -qvE "$blacklist_regex" &&
+      echo "$e" | grep -Ei "$allowlist_regex" | grep -qvE "$blocklist_regex" &&
       export "$e=$(cat $env_dir/$e)"
       :
     done

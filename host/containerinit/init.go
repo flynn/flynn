@@ -126,12 +126,12 @@ func (c *Client) Resume() error {
 	return c.c.Call("ContainerInit.Resume", struct{}{}, &struct{}{})
 }
 
-func (c *Client) GetPtyMaster() (*os.File, error) {
+func (c *Client) GetControlPTY() (*os.File, error) {
 	var fd fdrpc.FD
-	if err := c.c.Call("ContainerInit.GetPtyMaster", struct{}{}, &fd); err != nil {
+	if err := c.c.Call("ContainerInit.GetControlPTY", struct{}{}, &fd); err != nil {
 		return nil, err
 	}
-	return os.NewFile(uintptr(fd.FD), "ptyMaster"), nil
+	return os.NewFile(uintptr(fd.FD), "controlPTY"), nil
 }
 
 func (c *Client) GetStreams() (*os.File, *os.File, *os.File, error) {
@@ -189,7 +189,7 @@ type ContainerInit struct {
 	stdout     *os.File
 	stderr     *os.File
 	logFile    *os.File
-	ptyMaster  *os.File
+	controlPTY *os.File
 	openStdin  bool
 
 	streams    map[chan StateChange]struct{}
@@ -226,14 +226,14 @@ func (c *ContainerInit) DiscoverdDeregister(arg, res *struct{}) error {
 	return nil
 }
 
-func (c *ContainerInit) GetPtyMaster(arg struct{}, fd *fdrpc.FD) error {
+func (c *ContainerInit) GetControlPTY(arg struct{}, fd *fdrpc.FD) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	if c.ptyMaster == nil {
+	if c.controlPTY == nil {
 		return errors.New("no pty in this container")
 	}
-	fd.FD = int(c.ptyMaster.Fd())
+	fd.FD = int(c.controlPTY.Fd())
 
 	return nil
 }
@@ -587,21 +587,21 @@ func containerInitApp(c *Config, logFile *os.File) error {
 	// pty/pipes will be passed to flynn-host later via a UNIX socket.
 	if c.TTY {
 		log.Debug("creating PTY")
-		ptyMaster, ptySlave, err := pty.Open()
+		controlPTY, processTTY, err := pty.Open()
 		if err != nil {
 			log.Error("error creating PTY", "err", err)
 			return err
 		}
-		init.ptyMaster = ptyMaster
-		cmd.Stdout = ptySlave
-		cmd.Stderr = ptySlave
+		init.controlPTY = controlPTY
+		cmd.Stdout = processTTY
+		cmd.Stderr = processTTY
 		if c.OpenStdin {
 			log.Debug("attaching stdin to PTY")
-			cmd.Stdin = ptySlave
+			cmd.Stdin = processTTY
 			cmd.SysProcAttr.Setctty = true
 		}
 		if c.Uid != nil && c.Gid != nil {
-			if err := syscall.Fchown(int(ptySlave.Fd()), int(*c.Uid), int(*c.Gid)); err != nil {
+			if err := syscall.Fchown(int(processTTY.Fd()), int(*c.Uid), int(*c.Gid)); err != nil {
 				log.Error("error changing PTY ownership", "err", err)
 				return err
 			}

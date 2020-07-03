@@ -68,7 +68,7 @@ func main() {
 		Password:     password,
 		Logger:       log.New("component", "postgres"),
 		TimescaleDB:  true,
-		ExtWhitelist: true,
+		ExtAllowlist: true,
 		WaitUpstream: true,
 		SHMType:      "posix",
 	})

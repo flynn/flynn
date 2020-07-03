@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/cache"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
 )
@@ -28,11 +28,11 @@ func main() {
 type statusHandler struct {
 	h         status.Handler
 	k         string
-	whitelist []*net.IPNet
+	allowlist []*net.IPNet
 }
 
 func newStatusHandler(h status.Handler, k string) *statusHandler {
-	whitelist := []*net.IPNet{
+	allowlist := []*net.IPNet{
 		mustParseCIDR("10.0.0.0/8"),      // 10.0.0.0 - 10.255.255.255
 		mustParseCIDR("172.16.0.0/12"),   // 172.16.0.0 - 172.31.255.255
 		mustParseCIDR("192.168.0.0/16"),  // 192.168.0.0 - 192.168.255.255
@@ -44,7 +44,7 @@ func newStatusHandler(h status.Handler, k string) *statusHandler {
 		mustParseCIDR("203.0.113.0/24"),  // TEST-NET (for containers)
 		mustParseCIDR("100.64.0.0/10"),   // for containers
 	}
-	return &statusHandler{h, k, whitelist}
+	return &statusHandler{h, k, allowlist}
 }
 
 func mustParseCIDR(s string) *net.IPNet {
@@ -71,7 +71,7 @@ func (s *statusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		var authed bool
 		if ip := net.ParseIP(addr); ip != nil {
-			for _, v := range s.whitelist {
+			for _, v := range s.allowlist {
 				if v.Contains(ip) {
 					authed = true
 					break

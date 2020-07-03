@@ -40,7 +40,7 @@ type Config struct {
 	ReplTimeout  time.Duration
 	Logger       log15.Logger
 	TimescaleDB  bool
-	ExtWhitelist bool
+	ExtAllowlist bool
 	SHMType      string
 	WaitUpstream bool
 }
@@ -68,7 +68,7 @@ type Process struct {
 	opTimeout    time.Duration
 	replTimeout  time.Duration
 	timescaleDB  bool
-	extWhitelist bool
+	extAllowlist bool
 	shmType      string
 	waitUpstream bool
 
@@ -101,7 +101,7 @@ func NewProcess(c Config) *Process {
 		opTimeout:      c.OpTimeout,
 		replTimeout:    c.ReplTimeout,
 		timescaleDB:    c.TimescaleDB,
-		extWhitelist:   c.ExtWhitelist,
+		extAllowlist:   c.ExtAllowlist,
 		shmType:        c.SHMType,
 		waitUpstream:   c.WaitUpstream,
 		events:         make(chan state.DatabaseEvent, 1),
@@ -438,13 +438,13 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 
 	// TODO(titanous): investigate using a DNS name, proxy, or iptables rule for
 	// the upstream. (perhaps DNS plus some postgres magic like terminating
-	// a backend would work). Postgres appears to support remastering without
+	// a backend would work). Postgres appears to support changing the primary without
 	// restarting:
 	// http://www.databasesoup.com/2014/05/remastering-without-restarting.html
 
 	if p.running() {
 		// if we are running, we can just restart with a new recovery.conf, postgres
-		// supports streaming remastering.
+		// supports streaming primary changes.
 		if err := p.stop(); err != nil {
 			return err
 		}
@@ -833,7 +833,7 @@ func (p *Process) writeConfig(d configData) error {
 	d.ID = p.id
 	d.Port = p.port
 	d.TimescaleDB = p.timescaleDB
-	d.ExtWhitelist = p.extWhitelist
+	d.ExtAllowlist = p.extAllowlist
 	d.SHMType = p.shmType
 	f, err := os.Create(p.configPath())
 	if err != nil {
@@ -895,7 +895,7 @@ type configData struct {
 	ReadOnly bool
 
 	TimescaleDB  bool
-	ExtWhitelist bool
+	ExtAllowlist bool
 	SHMType      string
 }
 
@@ -940,7 +940,7 @@ shared_preload_libraries = 'timescaledb'
 dynamic_shared_memory_type = '{{.SHMType}}'
 {{end}}
 
-{{if .ExtWhitelist}}
+{{if .ExtAllowlist}}
 local_preload_libraries = 'pgextwlist'
 extwlist.extensions = 'btree_gin,btree_gist,chkpass,citext,cube,dblink,dict_int,earthdistance,fuzzystrmatch,hstore,intarray,isn,ltree,pg_prewarm,pg_stat_statements,pg_trgm,pgcrypto,pgrouting,pgrowlocks,pgstattuple,plpgsql,plv8,postgis,postgis_topology,postgres_fdw,tablefunc,timescaledb,unaccent,uuid-ossp'
 {{end}}

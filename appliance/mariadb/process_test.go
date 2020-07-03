@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/sirenia/state"
 	. "github.com/flynn/go-check"
@@ -150,7 +150,7 @@ func insertRow(c *C, db *sql.DB, n int) {
 }
 
 func waitReadWrite(c *C, db *sql.DB) {
-	// Check if the master has transitioned the database into read/write
+	// Check if the primary has transitioned the database into read/write
 	var readOnly string
 	err := queryAttempts.Run(func() error {
 		if err := db.QueryRow("SELECT @@read_only").Scan(&readOnly); err != nil {
@@ -163,19 +163,19 @@ func waitReadWrite(c *C, db *sql.DB) {
 	})
 	c.Assert(err, IsNil)
 
-	// Even if the database is read/write a slave must be connected
+	// Even if the database is read/write a replica must be connected
 	// for writes to be allowed.
 	err = queryAttempts.Run(func() error {
 		var discard interface{}
-		var masterClients int
-		err = db.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &masterClients)
+		var primaryClients int
+		err = db.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &primaryClients)
 		if err != nil {
 			return err
 		}
-		if masterClients > 0 {
+		if primaryClients > 0 {
 			return nil
 		}
-		return fmt.Errorf("no connected slave")
+		return fmt.Errorf("no connected replica")
 	})
 	c.Assert(err, IsNil)
 }
@@ -226,12 +226,12 @@ func (MariaDBSuite) TestIntegration_TwoNodeSync(c *C) {
 	// check it catches up
 	waitReplSync(c, node1, 2)
 
-	// Write to the master.
+	// Write to the primary.
 	db1 := connect(c, node1, "mysql")
 	defer db1.Close()
 	createTable(c, db1)
 
-	// Read from the slave.
+	// Read from the replica.
 	db2 := connect(c, node2, "mysql")
 	defer db2.Close()
 	waitRow(c, db2, 1)
@@ -260,15 +260,15 @@ func (MariaDBSuite) TestIntegration_FourNode(c *C) {
 
 	// There should currently be no connected semi-sync peers
 	var discard interface{}
-	var masterClients int
-	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &masterClients)
+	var primaryClients int
+	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &primaryClients)
 	c.Assert(err, IsNil)
-	c.Assert(masterClients, Equals, 0)
+	c.Assert(primaryClients, Equals, 0)
 
-	var masterStatus string
-	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_status'").Scan(&discard, &masterStatus)
+	var primaryStatus string
+	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_status'").Scan(&discard, &primaryStatus)
 	c.Assert(err, IsNil)
-	c.Assert(masterStatus, Equals, "ON")
+	c.Assert(primaryStatus, Equals, "ON")
 
 	// Start a sync
 	c.Log("starting sync (node2)")
@@ -299,13 +299,13 @@ func (MariaDBSuite) TestIntegration_FourNode(c *C) {
 	c.Log("assert primary (node1) downstream is sync (node2)")
 	assertDownstream(c, db1, 2)
 
-	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &masterClients)
+	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_clients'").Scan(&discard, &primaryClients)
 	c.Assert(err, IsNil)
-	c.Assert(masterClients, Equals, 1)
+	c.Assert(primaryClients, Equals, 1)
 
-	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_status'").Scan(&discard, &masterStatus)
+	err = db1.QueryRow("SHOW STATUS LIKE 'rpl_semi_sync_master_status'").Scan(&discard, &primaryStatus)
 	c.Assert(err, IsNil)
-	c.Assert(masterStatus, Equals, "ON")
+	c.Assert(primaryStatus, Equals, "ON")
 
 	// create a table and a row
 	c.Log("write to primary (node1)")

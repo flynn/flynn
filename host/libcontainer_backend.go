@@ -1241,7 +1241,7 @@ func (l *LibcontainerBackend) ResizeTTY(id string, height, width uint16) error {
 	if !container.job.Config.TTY {
 		return errors.New("job doesn't have a TTY")
 	}
-	pty, err := container.GetPtyMaster()
+	pty, err := container.GetControlPty()
 	if err != nil {
 		return err
 	}
@@ -1294,7 +1294,7 @@ func (l *LibcontainerBackend) Attach(req *AttachRequest) (err error) {
 	}()
 
 	if req.Job.Job.Config.TTY {
-		pty, err := client.GetPtyMaster()
+		pty, err := client.GetControlPty()
 		if err != nil {
 			return err
 		}

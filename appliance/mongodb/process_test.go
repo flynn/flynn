@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/sirenia/state"
 	. "github.com/flynn/go-check"
@@ -150,7 +150,7 @@ func waitReadWrite(c *C, session *mgo.Session) {
 	err := queryAttempts.Run(func() error {
 		status, err := replSetGetStatusQuery(session)
 		if err != nil || status.MyState != Primary {
-			return errors.New("not master")
+			return errors.New("not primary")
 		}
 		return nil
 	})
@@ -211,7 +211,7 @@ func (MongoDBSuite) TestIntegration_TwoNodeSync(c *C) {
 	waitReplSync(c, node1, 2)
 	assertDownstream(c, db1, node1, node2)
 
-	// Write to the master.
+	// Write to the primary.
 	insertDoc(c, db1, 1)
 
 	// Read from the sync
@@ -259,7 +259,7 @@ func (MongoDBSuite) TestIntegration_FourNode(c *C) {
 	db2.SetMode(mgo.Secondary, true)
 	assertDownstream(c, db2, node1, node2)
 
-	// Write to the master.
+	// Write to the primary.
 	insertDoc(c, db1, 1)
 
 	// Read from the sync

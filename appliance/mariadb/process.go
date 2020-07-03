@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/appliance/mariadb/mdbxlog"
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sirenia/client"
 	"github.com/flynn/flynn/pkg/sirenia/state"
@@ -451,7 +451,7 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 	}
 
 	if err := func() error {
-		// Connect to local server and set up slave replication.
+		// Connect to local server and set up replication.
 		db, err := p.connectLocal()
 		if err != nil {
 			logger.Error("error acquiring connection", "err", err)
@@ -459,18 +459,18 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 		}
 		defer db.Close()
 
-		// Stop the slave first before changing GTID & MASTER settings.
+		// Stop the replica first before changing GTID & MASTER settings.
 		if _, err := db.Exec(`STOP SLAVE`); err != nil {
 			return err
 		}
 
-		// Install semi-sync slave plugin. Ignore error if already installed.
+		// Install semi-sync replication plugin. Ignore error if already installed.
 		if _, err := db.Exec(`INSTALL PLUGIN rpl_semi_sync_slave SONAME 'semisync_slave.so'`); err != nil && MySQLErrorNumber(err) != 1968 {
 			logger.Error("error installing rpl_semi_sync_slave", "err", err)
 			return err
 		}
 
-		// Enable semi-synchronous on slave.
+		// Enable semi-synchronous on replica.
 		if _, err := db.Exec(`SET GLOBAL rpl_semi_sync_slave_enabled = 1`); err != nil {
 			return err
 		}
@@ -479,28 +479,28 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 		if backupInfo != nil {
 			logger.Info("updating gtid_slave_pos", "gtid", backupInfo.GTID)
 			if _, err := db.Exec(fmt.Sprintf(`SET GLOBAL gtid_slave_pos = "%s";`, backupInfo.GTID)); err != nil {
-				logger.Error("error updating slave gtid")
+				logger.Error("error updating replica gtid")
 				return err
 			}
 		}
 
 		host, port, _ := net.SplitHostPort(upstream.Addr)
-		logger.Info("changing master", "host", host, "port", port)
+		logger.Info("changing primary", "host", host, "port", port)
 		if _, err := db.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%s, MASTER_USER='flynn', MASTER_PASSWORD='%s', MASTER_CONNECT_RETRY=10, MASTER_USE_GTID=current_pos;", host, port, p.Password)); err != nil {
-			logger.Error("error changing master", "host", host, "port", port, "err", err)
+			logger.Error("error changing primary", "host", host, "port", port, "err", err)
 			return err
 		}
 		if _, err := db.Exec(`STOP SLAVE IO_THREAD`); err != nil {
-			logger.Error("error stopping slave io thread", "err", err)
+			logger.Error("error stopping replica io thread", "err", err)
 			return err
 		}
 		if _, err := db.Exec(`START SLAVE IO_THREAD`); err != nil {
-			logger.Error("error starting slave io thread", "err", err)
+			logger.Error("error starting replica io thread", "err", err)
 			return err
 		}
 
-		// Start slave.
-		logger.Info("starting slave")
+		// Start replica.
+		logger.Info("starting replica")
 		if _, err := db.Exec(`START SLAVE`); err != nil {
 			return err
 		}
@@ -556,15 +556,15 @@ func (p *Process) initPrimaryDB() error {
 	if p.Singleton {
 		return nil
 	}
-	// Enable semi-sync replication on the master.
-	master_variables := map[string]string{
+	// Enable semi-sync replication on the primary.
+	primaryVariables := map[string]string{
 		"rpl_semi_sync_master_wait_point":    "AFTER_SYNC",
 		"rpl_semi_sync_master_timeout":       "18446744073709551615",
 		"rpl_semi_sync_master_enabled":       "1",
 		"rpl_semi_sync_master_wait_no_slave": "1",
 	}
 
-	for v, val := range master_variables {
+	for v, val := range primaryVariables {
 		if _, err := db.Exec(fmt.Sprintf(`SET GLOBAL %s = %s`, v, val)); err != nil {
 			logger.Error("error setting system variable", "var", v, "val", val, "err", err)
 			return err
@@ -790,7 +790,7 @@ func (p *Process) waitForSync(downstream *discoverd.Instance, enableWrites bool)
 		logger.Info("waiting for downstream replication to catch up")
 		defer logger.Info("finished waiting for downstream replication")
 
-		prevSlaveXLog := p.XLog().Zero()
+		prevReplicaXLog := p.XLog().Zero()
 		for {
 			// Check if "wait sync" has been canceled.
 			select {
@@ -800,10 +800,10 @@ func (p *Process) waitForSync(downstream *discoverd.Instance, enableWrites bool)
 			default:
 			}
 
-			// Read local master status.
-			masterXLog, err := p.XLogPosition()
+			// Read local primary status.
+			primaryXLog, err := p.XLogPosition()
 			if err != nil {
-				logger.Error("error reading master xlog", "err", err)
+				logger.Error("error reading primary xlog", "err", err)
 				startTime = time.Now().UTC()
 				select {
 				case <-stopCh:
@@ -813,17 +813,17 @@ func (p *Process) waitForSync(downstream *discoverd.Instance, enableWrites bool)
 				}
 				continue
 			}
-			logger.Info("master xlog", "gtid", masterXLog)
+			logger.Info("primary xlog", "gtid", primaryXLog)
 
-			// Read downstream slave status.
-			slaveXLog, err := p.nodeXLogPosition(&DSN{
+			// Read downstream replica status.
+			replicaXLog, err := p.nodeXLogPosition(&DSN{
 				Host:     downstream.Addr,
 				User:     "flynn",
 				Password: p.Password,
 				Timeout:  p.OpTimeout,
 			})
 			if err != nil {
-				logger.Error("error reading slave xlog", "err", err)
+				logger.Error("error reading replica xlog", "err", err)
 				startTime = time.Now().UTC()
 				select {
 				case <-stopCh:
@@ -834,28 +834,28 @@ func (p *Process) waitForSync(downstream *discoverd.Instance, enableWrites bool)
 				continue
 			}
 
-			logger.Info("mysql slave xlog", "gtid", slaveXLog)
+			logger.Info("mysql replica xlog", "gtid", replicaXLog)
 
 			elapsedTime := time.Since(startTime)
 			logger := logger.New(
-				"master_log_pos", masterXLog,
-				"slave_log_pos", slaveXLog,
+				"primary_log_pos", primaryXLog,
+				"replica_log_pos", replicaXLog,
 				"elapsed", elapsedTime,
 			)
 
-			// Mark downstream server as synced if the xlog matches the master.
-			if cmp, err := p.XLog().Compare(masterXLog, slaveXLog); err == nil && cmp == 0 {
+			// Mark downstream server as synced if the xlog matches the primary.
+			if cmp, err := p.XLog().Compare(primaryXLog, replicaXLog); err == nil && cmp == 0 {
 				logger.Info("downstream caught up")
 				p.syncedDownstreamValue.Store(downstream)
 				break
 			}
 
-			// If the slave's xlog is making progress then reset the start time.
-			if cmp, err := p.XLog().Compare(prevSlaveXLog, slaveXLog); err == nil && cmp == -1 {
-				logger.Debug("slave status progressing, resetting start time")
+			// If the replica's xlog is making progress then reset the start time.
+			if cmp, err := p.XLog().Compare(prevReplicaXLog, replicaXLog); err == nil && cmp == -1 {
+				logger.Debug("replica status progressing, resetting start time")
 				startTime = time.Now().UTC()
 			}
-			prevSlaveXLog = slaveXLog
+			prevReplicaXLog = replicaXLog
 
 			if elapsedTime > p.ReplTimeout {
 				logger.Error("error checking replication status", "err", "downstream unable to make forward progress")

@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	dt "github.com/flynn/flynn/discoverd/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
@@ -111,8 +111,8 @@ type Handler struct {
 	Peers []string
 }
 
-// Whitelisted endpoints won't be proxied.
-func proxyWhitelisted(r *http.Request) bool {
+// Allowlisted endpoints won't be proxied.
+func proxyAllowlisted(r *http.Request) bool {
 	for _, url := range []string{"/raft/promote", "/raft/demote", "/shutdown"} {
 		if strings.HasPrefix(r.URL.Path, url) {
 			return true
@@ -128,7 +128,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// If running in proxy mode then redirect requests to a random peer
 	if h.Proxy.Load().(bool) {
-		if !proxyWhitelisted(r) {
+		if !proxyAllowlisted(r) {
 			// TODO(jpg): Should configuring the peer in proxy mode with no peers be impossible?
 			host := h.Peers[rand.Intn(len(h.Peers))]
 			redirectToHost(w, r, host)

@@ -19,16 +19,16 @@
 #     my-app-staging
 #
 # It is recommended to only copy particular environment variables by
-# specifying --env-whitelist which is a file containing a list of
+# specifying --env-allowlist which is a file containing a list of
 # environment variables to copy, one per line:
 #
-#   # whitelist.env
+#   # allowlist.env
 #   KEY1
 #   KEY2
 #   KEY3
 #
 #   flynn-clone.sh \
-#     --env-whitelist whitelist.env \
+#     --env-allowlist allowlist.env \
 #     my-app \
 #     my-app-staging
 
@@ -46,7 +46,7 @@ Clone a Flynn app from SRC_APP to DST_APP.
 OPTIONS:
   --src-cluster CLUSTER   Source cluster name [default: ${DEFAULT_SRC_CLUSTER}]
   --dst-cluster CLUSTER   Destination cluster name [default: ${DEFAULT_DST_CLUSTER}]
-  --env-whitelist FILE    Environment variable whitelist file (whitespace separated list)
+  --env-allowlist FILE    Environment variable allowlist file (whitespace separated list)
   -h, --help              Show this message
 USAGE
 }
@@ -60,7 +60,7 @@ main() {
   local dst_app=""
   local src_cluster="${DEFAULT_SRC_CLUSTER}"
   local dst_cluster="${DEFAULT_DST_CLUSTER}"
-  local env_whitelist=""
+  local env_allowlist=""
 
   parse_args "$@"
 
@@ -73,18 +73,18 @@ main() {
   flynn -c "${src_cluster}" -a "${src_app}" release show --json > "${tmp}/src.json"
 
   info "generating destination release configuration"
-  if [[ -n "${env_whitelist}" ]]; then
-    info "filtering environment variables using whitelist:"
-    cat "${env_whitelist}"
+  if [[ -n "${env_allowlist}" ]]; then
+    info "filtering environment variables using allowlist:"
+    cat "${env_allowlist}"
 
-    # generate a whitelist JSON object like {key1: true, key2: true, ...}
+    # generate a allowlist JSON object like {key1: true, key2: true, ...}
     # and use it to filter both the release env and the individual process env
     jq \
       --raw-output \
-      --argjson whitelist "$(jq --raw-input --slurp '[scan("\\S+")] | reduce .[] as $env ({}; .[$env] = true)' < "${env_whitelist}")" \
+      --argjson allowlist "$(jq --raw-input --slurp '[scan("\\S+")] | reduce .[] as $env ({}; .[$env] = true)' < "${env_allowlist}")" \
       '
-        .env = (if(.env) then .env | with_entries(select(.key | in($whitelist))) else null end) |
-        .processes |= (map_values(.env = (if(.env) then with_entries(select(.key | in($whitelist))) else null end)))
+        .env = (if(.env) then .env | with_entries(select(.key | in($allowlist))) else null end) |
+        .processes |= (map_values(.env = (if(.env) then with_entries(select(.key | in($allowlist))) else null end)))
       ' \
       < "${tmp}/src.json" | \
       sed "s|${src_app}-\(.*\)-web|${dst_app}-\\1-web|g" | \
@@ -142,12 +142,12 @@ parse_args() {
         dst_cluster="$2"
         shift 2
         ;;
-      --env-whitelist)
+      --env-allowlist)
         if [[ -z "$2" ]]; then
           usage
-          fail "--env-whitelist requires an argument"
+          fail "--env-allowlist requires an argument"
         fi
-        env_whitelist="$2"
+        env_allowlist="$2"
         shift 2
         ;;
       *)

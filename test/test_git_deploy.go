@@ -405,17 +405,17 @@ func (s *GitDeploySuite) TestDevStdout(t *c.C) {
 
 		// check with a TTY
 		cmd := flynnCmd(r.dir, "run", "bash", "-c", echoFoo)
-		master, slave, err := pty.Open()
+		controlPTY, processTTY, err := pty.Open()
 		t.Assert(err, c.IsNil)
-		defer master.Close()
-		defer slave.Close()
-		t.Assert(term.SetWinsize(slave.Fd(), &term.Winsize{Height: 24, Width: 80}), c.IsNil)
-		cmd.Stdin = slave
-		cmd.Stdout = slave
-		cmd.Stderr = slave
+		defer controlPTY.Close()
+		defer processTTY.Close()
+		t.Assert(term.SetWinsize(processTTY.Fd(), &term.Winsize{Height: 24, Width: 80}), c.IsNil)
+		cmd.Stdin = processTTY
+		cmd.Stdout = processTTY
+		cmd.Stderr = processTTY
 		t.Assert(cmd.Run(), c.IsNil)
 		out := make([]byte, 3)
-		_, err = io.ReadFull(master, out)
+		_, err = io.ReadFull(controlPTY, out)
 		t.Assert(err, c.IsNil)
 		t.Assert(string(out), c.Equals, "foo")
 	}
