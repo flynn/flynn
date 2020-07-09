@@ -450,7 +450,6 @@ To rotate an authentication key:
     flynn -a gitreceive env set CONTROLLER_KEY=$NEW_KEY
     flynn -a tarreceive env set CONTROLLER_KEY=$NEW_KEY
     flynn -a taffy env set CONTROLLER_KEY=$NEW_KEY
-    flynn -a dashboard env set CONTROLLER_KEY=$NEW_KEY
     flynn -a redis env set CONTROLLER_KEY=$NEW_KEY
     flynn -a mariadb env set CONTROLLER_KEY=$NEW_KEY
     flynn -a mongodb env set CONTROLLER_KEY=$NEW_KEY

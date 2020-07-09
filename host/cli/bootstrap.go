@@ -403,7 +403,6 @@ $$;`)
 			"gitreceive":    {"app": 1},
 			"tarreceive":    {"app": 1},
 			"logaggregator": {"app": 1},
-			"dashboard":     {"web": 1},
 			"status":        {"web": 1},
 		}
 		data.Postgres.Processes["postgres"] = 1
@@ -427,7 +426,6 @@ $$;`)
 			"gitreceive":    {"app": 2},
 			"tarreceive":    {"app": 2},
 			"logaggregator": {"app": 2},
-			"dashboard":     {"web": 2},
 			"status":        {"web": 2},
 		}
 		data.Postgres.Processes["postgres"] = 3
@@ -477,15 +475,6 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = '%s' AND deleted_at
 UPDATE releases SET env = pg_temp.json_object_update_key(env, 'DISCOVERD_PEERS', '%s')
 WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd' AND deleted_at IS NULL);
 `, state.StepData["discoverd"].(*bootstrap.RunAppState).Release.Env["DISCOVERD_PEERS"]))
-
-	// make sure STATUS_KEY has the correct value in the dashboard release
-	sqlBuf.WriteString(`
-UPDATE releases SET env = jsonb_set(env, '{STATUS_KEY}', (
-	SELECT env->'AUTH_KEY' FROM releases
-	WHERE release_id = (SELECT release_id FROM apps WHERE name = 'status' AND deleted_at IS NULL)
-))
-WHERE release_id = (SELECT release_id FROM apps WHERE name = 'dashboard' AND deleted_at IS NULL);
-`)
 
 	// load data into postgres
 	cmd := exec.JobUsingHost(state.Hosts[0], artifacts["postgres"], nil)

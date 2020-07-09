@@ -158,15 +158,6 @@ func (m *migration) Run() error {
 				"TLSKEY":  m.dm.TLSCert.PrivateKey,
 			},
 		},
-		{
-			AppName: "dashboard",
-			NewEnv: map[string]string{
-				"CA_CERT":              m.dm.TLSCert.CACert,
-				"DEFAULT_ROUTE_DOMAIN": m.dm.Domain,
-				"CONTROLLER_DOMAIN":    fmt.Sprintf("controller.%s", m.dm.Domain),
-				"URL":                  fmt.Sprintf("https://dashboard.%s", m.dm.Domain),
-			},
-		},
 	}
 
 	for _, am := range appMigrations {

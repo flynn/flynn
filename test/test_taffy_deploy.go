@@ -60,7 +60,6 @@ func (s *TaffyDeploySuite) deployWithTaffy(t *c.C, app *ct.App, env, meta, githu
 	t.Assert(err, c.IsNil)
 }
 
-// This test emulates deploys in the dashboard app
 func (s *TaffyDeploySuite) TestDeploys(t *c.C) {
 	assertMeta := func(m map[string]string, k string, checker c.Checker, args ...interface{}) {
 		v, ok := m[k]

@@ -63,7 +63,7 @@ Commands:
     migrate-domain
         Migrates the cluster's base domain from the current one to <domain>.
 
-        New certificates will be generated for the controller/dashboard and new
+        New certificates will be generated for the controller and new
         routes will be added with the pattern <app-name>.<domain> for each app.
 
     backup

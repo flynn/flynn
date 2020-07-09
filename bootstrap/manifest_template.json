@@ -130,14 +130,6 @@
     "encoding": "uuid"
   },
   {
-    "id": "dashboard-session-secret",
-    "action": "gen-random"
-  },
-  {
-    "id": "dashboard-login-token",
-    "action": "gen-random"
-  },
-  {
     "id": "name-seed",
     "action": "gen-random",
     "length": 10
@@ -664,54 +656,6 @@
     "data": "{{ getenv \"STATUS_KEY\" }}"
   },
   {
-    "id": "dashboard",
-    "action": "deploy-app",
-    "app": {
-      "name": "dashboard",
-      "meta": {"flynn-system-app": "true"}
-    },
-    "artifacts": [$image_artifact[dashboard]],
-    "release": {
-      "env": {
-        "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
-        "CONTROLLER_DOMAIN": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
-        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "STATUS_KEY": "{{ (index .StepData \"status-key\").Data }}",
-        "URL": "https://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
-        "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
-        "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}",
-        "APP_NAME": "dashboard",
-        "SECURE_COOKIES": "true"
-      },
-      "processes": {
-        "web": {
-          "ports": [{
-            "port": 80,
-            "proto": "tcp",
-            "service": {
-              "name": "dashboard-web",
-              "create": true,
-              "check": {"type": "http"}
-            }
-          }]
-        }
-      }
-    },
-    "processes": {
-      "web": 2
-    }
-  },
-  {
-    "id": "dashboard-route",
-    "action": "add-route",
-    "app_step": "dashboard",
-    "cert_step": "controller-cert",
-    "type": "http",
-    "service": "dashboard-web",
-    "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
-    "drain_backends": true
-  },
-  {
     "id": "status",
     "action": "deploy-app",
     "app": {
@@ -796,6 +740,6 @@
   {
     "id": "log-complete",
     "action": "log",
-    "output": "\n\nFlynn bootstrapping complete. Install the Flynn CLI (see https://flynn.io/docs/cli for instructions) and paste the line below into a terminal window:\n\nflynn cluster add -p {{ (index .StepData \"controller-cert\").Pin }} default {{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}\n\nThe built-in dashboard can be accessed at http://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }} and your login token is {{ (index .StepData \"dashboard-login-token\").Data }}"
+    "output": "\n\nFlynn bootstrapping complete. Install the Flynn CLI (see https://flynn.io/docs/cli for instructions) and paste the line below into a terminal window:\n\nflynn cluster add -p {{ (index .StepData \"controller-cert\").Pin }} default {{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}"
   }
 ]

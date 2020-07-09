@@ -22,7 +22,6 @@ var SystemApps = []SystemApp{
 	},
 	{Name: "blobstore"},
 	{Name: "taffy"},
-	{Name: "dashboard"},
 	{Name: "router"},
 	{Name: "gitreceive"},
 	{Name: "tarreceive"},
