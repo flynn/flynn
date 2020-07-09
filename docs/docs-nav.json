@@ -1,7 +1,6 @@
 [
   { "title": "Installation", "path": "/docs/installation", "children": [
     { "title": "Instructions", "path": "/docs/installation/manual" },
-    { "title": "Vagrant", "path": "/docs/installation/vagrant" },
     { "title": "Releases", "path": "https://releases.flynn.io" }
   ] },
   { "title": "Using", "children": [
@@ -21,7 +20,6 @@
       { "title": "Python", "path": "/docs/languages/python" },
       { "title": "Ruby", "path": "/docs/languages/ruby" }
     ] },
-    { "title": "Dashboard", "path": "/docs/dashboard" },
     { "title": "Docker", "path": "/docs/docker" },
     { "title": "Command Line Interface", "path": "/docs/cli" }
   ] },

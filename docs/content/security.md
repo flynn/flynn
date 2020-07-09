@@ -40,25 +40,11 @@ not be exposed to the Internet. A firewall must be configured so that the only
 Flynn ports accessible are 80 and 443 to prevent compromise. Access to these
 internal Flynn ports is equivalent to root access, so be careful.
 
-Access to the controller and dashboard is available via HTTPS over port 443, and
+Access to the controller is available via HTTPS over port 443, and
 a randomly generated bearer token is used for authentication. The TLS
 certificate used for communication is generated during installation.
 A cryptographic hash of the certificate is pinned as part of the CLI
 configuration string to prevent man-in-the-middle attacks.
-
-## Dashboard CA Certificate
-
-A CA certificate is also generated during installation and signs the certificate
-presented by the controller and dashboard. The private key corresponding
-associated with the CA certificate is discarded immediately to prevent misuse.
-The CA certificate is required as a work-around for how browsers handle multiple
-connections to servers with self-signed certificates. The CA certificate is
-provided to the browser by the dashboard in order to allow TLS-encrypted
-communication with the dashboard and the controller. The certificate may be
-provided over an insecure connection the first time the dashboard is visited, do
-not install the certificate if the connection is not trusted. In the future we
-will use [Let's Encrypt](https://letsencrypt.org) to avoid the need for the
-generated certificates and trust bootstrapping.
 
 ## Applications
 

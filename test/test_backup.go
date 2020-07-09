@@ -150,12 +150,8 @@ func (s *BackupSuite) testClusterBackupWithFn(t *c.C, name string, fn func(*c.C,
 		t.Assert(flynn("resource", "add", "mongodb"), Succeeds)
 	}
 
-	debug(t, "checking dashboard STATUS_KEY matches status AUTH_KEY")
-	dashboardStatusKeyResult := x.flynn("/", "-a", "dashboard", "env", "get", "STATUS_KEY")
-	t.Assert(dashboardStatusKeyResult, Succeeds)
 	statusAuthKeyResult := x.flynn("/", "-a", "status", "env", "get", "AUTH_KEY")
 	t.Assert(statusAuthKeyResult, Succeeds)
-	t.Assert(dashboardStatusKeyResult.Output, c.Equals, statusAuthKeyResult.Output)
 
 	if fn != nil {
 		fn(t, x)

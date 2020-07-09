@@ -254,7 +254,7 @@ var testRunScript = template.Must(template.New("test-run").Parse(`
 #!/bin/bash
 set -e -x -o pipefail
 
-echo {{ .Cluster.RouterIP }} {{ .Cluster.ClusterDomain }} {{ .Cluster.ControllerDomain }} {{ .Cluster.GitDomain }} dashboard.{{ .Cluster.ClusterDomain }} images.{{ .Cluster.ClusterDomain }} | sudo tee -a /etc/hosts
+echo {{ .Cluster.RouterIP }} {{ .Cluster.ClusterDomain }} {{ .Cluster.ControllerDomain }} {{ .Cluster.GitDomain }} images.{{ .Cluster.ClusterDomain }} | sudo tee -a /etc/hosts
 
 # Wait for the Flynn bridge interface to show up so we can use it as the
 # nameserver to resolve discoverd domains

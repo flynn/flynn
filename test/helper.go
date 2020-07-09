@@ -205,7 +205,7 @@ func (h *Helper) bootClusterWithConfig(t *c.C, conf *cluster2.BootConfig) *Clust
 	t.Assert(err, c.IsNil)
 	x.controller, _ = controller.NewClientWithConfig("https://controller."+s.Domain, s.Key, controller.Config{Pin: pin})
 
-	Hostnames.Add(t, s.IP, "controller."+s.Domain, "git."+s.Domain, "images."+s.Domain, "dashboard."+s.Domain)
+	Hostnames.Add(t, s.IP, "controller."+s.Domain, "git."+s.Domain, "images."+s.Domain)
 
 	t.Assert(x.flynn("/", "cluster", "add", "--tls-pin", s.Pin, s.Domain, s.Domain, s.Key), Succeeds)
 

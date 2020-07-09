@@ -26,6 +26,9 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	x := s.bootCluster(t, 1)
 	defer x.Destroy()
 
+	app, _ := s.createApp(t)
+	appName := app.Name
+
 	// Test that setting added HTTP and HTTPS ports succeeds
 	watcher, err := x.controller.WatchJobEvents("router", "")
 	t.Assert(err, c.IsNil)
@@ -33,7 +36,7 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	t.Assert(watcher.WaitFor(ct.JobEvents{"app": {ct.JobStateUp: 1, ct.JobStateDown: 1}}, 10*time.Second, nil), c.IsNil)
 
 	// check a non-routed HTTP request to an additional port fails
-	req, err := http.NewRequest("GET", "http://dashboard."+x.Domain+":8080", nil)
+	req, err := http.NewRequest("GET", "http://"+appName+"."+x.Domain+":8080", nil)
 	t.Assert(err, c.IsNil)
 	res, err := http.DefaultClient.Do(req)
 	t.Assert(err, c.IsNil)
@@ -41,7 +44,7 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	res.Body.Close()
 
 	// add a controller route on the new port
-	t.Assert(x.flynn("/", "-a", "dashboard", "route", "add", "http", "-s", "dashboard-web", "-p", "8080", "dashboard."+x.Domain), Succeeds)
+	t.Assert(x.flynn("/", "-a", appName, "route", "add", "http", "-s", appName+"-web", "-p", "8080", appName+"."+x.Domain), Succeeds)
 
 	// The router API does not currently give us a synchronous result on
 	// "route add", so we must pause for a moment to let it catch up. This seems
@@ -49,7 +52,7 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	time.Sleep(1 * time.Second)
 
 	// check a routed HTTP request succeeds
-	req, err = http.NewRequest("GET", "http://dashboard."+x.Domain+":8080", nil)
+	req, err = http.NewRequest("GET", "http://"+appName+"."+x.Domain+":8080", nil)
 	t.Assert(err, c.IsNil)
 	req.SetBasicAuth("", x.Key)
 	res, err = http.DefaultClient.Do(req)
@@ -58,7 +61,7 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	res.Body.Close()
 
 	// check that a HTTP request to the default port succeeds
-	req, err = http.NewRequest("GET", "http://dashboard."+x.Domain, nil)
+	req, err = http.NewRequest("GET", "http://"+appName+"."+x.Domain, nil)
 	t.Assert(err, c.IsNil)
 	res, err = http.DefaultClient.Do(req)
 	t.Assert(err, c.IsNil)
@@ -76,13 +79,13 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	}
 
 	// add an HTTPS controller route on the new port
-	cert, err := tlscert.Generate([]string{"dashboard." + x.Domain})
+	cert, err := tlscert.Generate([]string{appName + "." + x.Domain})
 	t.Assert(err, c.IsNil)
 	certPath, err := writeTemp(cert.Cert, "tls-cert")
 	t.Assert(err, c.IsNil)
 	keyPath, err := writeTemp(cert.PrivateKey, "tls-key")
 	t.Assert(err, c.IsNil)
-	certRoute := x.flynn("/", "-a", "dashboard", "route", "add", "http", "-s", "dashboard-web", "-p", "8081", "--tls-cert", certPath, "--tls-key", keyPath, "dashboard."+x.Domain)
+	certRoute := x.flynn("/", "-a", appName, "route", "add", "http", "-s", appName+"-web", "-p", "8081", "--tls-cert", certPath, "--tls-key", keyPath, appName+"."+x.Domain)
 	t.Assert(certRoute, Succeeds)
 
 	// pause to allow router to catch up (see above)
@@ -92,7 +95,7 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 
 	// check a routed HTTP request succeeds
-	req, err = http.NewRequest("GET", "https://dashboard."+x.Domain+":8081", nil)
+	req, err = http.NewRequest("GET", "https://"+appName+"."+x.Domain+":8081", nil)
 	t.Assert(err, c.IsNil)
 	res, err = client.Do(req)
 	t.Assert(err, c.IsNil)
@@ -100,7 +103,7 @@ func (s *RouterSuite) TestAdditionalHttpPorts(t *c.C) {
 	res.Body.Close()
 
 	// check that a HTTPS request to the default port succeeds
-	req, err = http.NewRequest("GET", "https://dashboard."+x.Domain, nil)
+	req, err = http.NewRequest("GET", "https://"+appName+"."+x.Domain, nil)
 	t.Assert(err, c.IsNil)
 	res, err = client.Do(req)
 	t.Assert(err, c.IsNil)
@@ -113,6 +116,9 @@ func (s *RouterSuite) TestCustom503ErrorPage(t *c.C) {
 	x := s.bootCluster(t, 1)
 	defer x.Destroy()
 
+	app, _ := s.createApp(t)
+	appName := app.Name
+
 	// Test that setting added HTTP and HTTPS ports succeeds
 	watcher, err := x.controller.WatchJobEvents("router", "")
 	t.Assert(err, c.IsNil)
@@ -120,7 +126,7 @@ func (s *RouterSuite) TestCustom503ErrorPage(t *c.C) {
 	t.Assert(watcher.WaitFor(ct.JobEvents{"app": {ct.JobStateUp: 1, ct.JobStateDown: 1}}, 10*time.Second, nil), c.IsNil)
 
 	// make sure the route returns 503
-	t.Assert(x.flynn("/", "-a", "dashboard", "scale", "web=0"), Succeeds)
+	t.Assert(x.flynn("/", "-a", appName, "scale", "web=0"), Succeeds)
 
 	// The router API does not currently give us a synchronous result on
 	// "route add", so we must pause for a moment to let it catch up. This seems
@@ -128,7 +134,7 @@ func (s *RouterSuite) TestCustom503ErrorPage(t *c.C) {
 	time.Sleep(1 * time.Second)
 
 	// check that a HTTP request returns the custom error page
-	res, err := http.Get("http://dashboard." + x.Domain)
+	res, err := http.Get("http://" + appName + "." + x.Domain)
 	t.Assert(err, c.IsNil)
 	t.Assert(res.StatusCode, c.Equals, http.StatusServiceUnavailable)
 	body, err := ioutil.ReadAll(res.Body)

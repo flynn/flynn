@@ -191,7 +191,7 @@ func (s *ControllerSuite) TestKeyRotation(t *c.C) {
 	t.Assert(set, Succeeds)
 
 	// reconfigure components to use new key
-	for _, app := range []string{"gitreceive", "tarreceive", "taffy", "dashboard"} {
+	for _, app := range []string{"gitreceive", "tarreceive", "taffy"} {
 		set := x.flynn("/", "-a", app, "env", "set", "CONTROLLER_KEY="+newKey)
 		t.Assert(set, Succeeds)
 	}

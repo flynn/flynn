@@ -12,7 +12,6 @@
   "slugrunner-18":  $image_artifact[slugrunner-18],
   "slugrunner-14":  $image_artifact[slugrunner-14],
   "taffy":          $image_artifact[taffy],
-  "dashboard":      $image_artifact[dashboard],
   "updater":        $image_artifact[updater],
   "logaggregator":  $image_artifact[logaggregator],
   "status":         $image_artifact[status],

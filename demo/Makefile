@@ -14,14 +14,14 @@ CLI_INSTALL_BIN ?= /usr/local/bin/flynn
 VAGRANT_ENV := CLUSTER_DOMAIN="${CLUSTER_DOMAIN}" SSH_AUTH_SOCK="" FLAG_BOOTSTRAP=false
 
 
-.PHONY: init bootstrap up down halt update ssh reset token destroy dashboard ssh-cmd
+.PHONY: init bootstrap up down halt update ssh reset destroy ssh-cmd
 
 
 # Initialize a new cluster
 init: update
 	@$(MAKE) up
 	@$(MAKE) bootstrap
-	@printf "\nFlynn is now running in the VM.\nOpen dashboard: make dashboard\n\n"
+	@printf "\nFlynn is now running in the VM.\n\n"
 
 # Install flynn cli on host
 $(CLI_INSTALL_BIN):
@@ -67,15 +67,6 @@ reset:
 destroy: $(CLI_INSTALL_BIN)
 	${VAGRANT_ENV} vagrant destroy -f
 	flynn cluster remove ${CLUSTER}
-
-# Get token for API and dashboard
-token: $(CLI_INSTALL_BIN)
-	@flynn -a dashboard -c ${CLUSTER} env get LOGIN_TOKEN
-
-# Open dashboard in browser
-dashboard:
-	@CMD=open && which xdg-open > /dev/null && CMD=xdg-open; \
-	$$CMD http://dashboard.${CLUSTER_DOMAIN}?token=${$(MAKE) token}
 
 # Run a command in the VM via SSH
 ssh-cmd:

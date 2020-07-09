@@ -29,12 +29,9 @@ func runCliAddCommand(args *docopt.Args, client *cluster.Client) error {
 		return errors.New("no hosts found")
 	}
 	var (
-		domain           string
-		key              string
-		pin              string
-		dashboardAppName string
-		dashboardDomain  string
-		dashboardToken   string
+		domain string
+		key    string
+		pin    string
 	)
 	controller := &mostRecentJob{app: "controller", typ: "web", check: func(job *host.Job) error {
 		domain = job.Config.Env["DEFAULT_ROUTE_DOMAIN"]
@@ -56,21 +53,6 @@ func runCliAddCommand(args *docopt.Args, client *cluster.Client) error {
 		}
 		return nil
 	}}
-	dashboard := &mostRecentJob{app: "dashboard", typ: "web", check: func(job *host.Job) error {
-		dashboardAppName = job.Config.Env["APP_NAME"]
-		dashboardDomain = job.Config.Env["DEFAULT_ROUTE_DOMAIN"]
-		dashboardToken = job.Config.Env["LOGIN_TOKEN"]
-		if dashboardAppName == "" {
-			return errors.New("cannot retrieve dashboard app name")
-		}
-		if dashboardDomain == "" {
-			return errors.New("cannot retrieve dashboard domain")
-		}
-		if dashboardToken == "" {
-			return errors.New("cannot retrieve dashboard login token")
-		}
-		return nil
-	}}
 	for _, h := range hosts {
 		hostJobs, err := h.ListJobs()
 		if err != nil {
@@ -80,7 +62,6 @@ func runCliAddCommand(args *docopt.Args, client *cluster.Client) error {
 			p := &job
 			controller.offer(p)
 			router.offer(p)
-			dashboard.offer(p)
 		}
 	}
 
@@ -90,13 +71,9 @@ func runCliAddCommand(args *docopt.Args, client *cluster.Client) error {
 	if err := router.err(); err != nil {
 		return err
 	}
-	if err := dashboard.err(); err != nil {
-		return err
-	}
 
 	fmt.Printf("Install the Flynn CLI (see https://flynn.io/docs/cli for instructions) and paste the line below into a terminal window:\n\n")
 	fmt.Printf("flynn cluster add -p %v default %v %v\n", pin, domain, key)
-	fmt.Printf("\nThe built-in dashboard can be accessed at http://%v.%v and your login token is %v\n", dashboardAppName, dashboardDomain, dashboardToken)
 
 	return nil
 }

@@ -204,7 +204,7 @@ flynn limit set slugbuilder memory=4GB
 
 You can also specify a default `slugbuilder` memory limit globally, set the
 `SLUGBUILDER_DEFAULT_MEMORY_LIMIT` environment variable for the apps that handle
-`git push` and Dashboard deploys:
+`git push` deploys:
 
 ```text
 limit=SLUGBUILDER_DEFAULT_MEMORY_LIMIT=2GB

@@ -93,13 +93,6 @@ func (s *DomainMigrationSuite) migrateDomain(t *c.C, client controller.Client, d
 	t.Assert(routerRelease.Env["TLSKEY"], c.Not(c.Equals), "")
 	t.Assert(routerRelease.Env["TLSKEY"], c.Not(c.Equals), prevRouterRelease.Env["TLSKEY"])
 
-	dashboardRelease, err := client.GetAppRelease("dashboard")
-	t.Assert(err, c.IsNil)
-	t.Assert(dashboardRelease.Env["DEFAULT_ROUTE_DOMAIN"], c.Equals, dm.Domain)
-	t.Assert(dashboardRelease.Env["CONTROLLER_DOMAIN"], c.Equals, fmt.Sprintf("controller.%s", dm.Domain))
-	t.Assert(dashboardRelease.Env["URL"], c.Equals, fmt.Sprintf("https://dashboard.%s", dm.Domain))
-	t.Assert(dashboardRelease.Env["CA_CERT"], c.Equals, cert.CACert)
-
 	routes, err := client.AppRouteList("controller")
 	t.Assert(err, c.IsNil)
 	t.Assert(len(routes), c.Equals, 2) // one for both new and old domain
@@ -128,7 +121,6 @@ func (s *DomainMigrationSuite) migrateDomain(t *c.C, client controller.Client, d
 		t.Assert(res.StatusCode, c.Equals, 200, c.Commentf("failed to ping %s", component))
 	}
 	doPing("controller", 3)
-	doPing("dashboard", 3)
 
 	return event.DomainMigration
 }
@@ -149,7 +141,7 @@ func (s *DomainMigrationSuite) TestDomainMigration(t *c.C) {
 	t.Assert(len(appRoutes), c.Equals, 1)
 
 	newDomain := random.String(32) + ".local"
-	Hostnames.Add(t, x.IP, "controller."+newDomain, "dashboard."+newDomain)
+	Hostnames.Add(t, x.IP, "controller."+newDomain)
 	dm := &ct.DomainMigration{
 		OldDomain: oldDomain,
 		Domain:    newDomain,

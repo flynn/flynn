@@ -149,7 +149,6 @@ var services = []Service{
 	},
 	{Name: "controller-scheduler", ReqFn: LeaderReqFn("controller-scheduler", "")},
 	{Name: "controller-worker"},
-	{Name: "dashboard", ReqFn: RandomReqFn("dashboard-web")},
 	{Name: "discoverd"},
 	{Name: "flannel"},
 	{Name: "gitreceive", ReqFn: RandomReqFn("gitreceive")},

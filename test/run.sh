@@ -13,7 +13,6 @@ main() {
       "controller.${DOMAIN}" \
       "git.${DOMAIN}" \
       "images.${DOMAIN}" \
-      "dashboard.${DOMAIN}" \
       >> /etc/hosts
   fi
 

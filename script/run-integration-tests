@@ -81,7 +81,7 @@ main() {
   if [[ -n "${version}" ]]; then
     boot_flags+=("--version" "${version}")
   fi
-  cluster_add=$("${ROOT}/script/bootstrap-flynn" ${boot_flags[@]} &> >(tee /dev/stderr) | tail -3 | head -1)
+  cluster_add=$("${ROOT}/script/bootstrap-flynn" ${boot_flags[@]} &> >(tee /dev/stderr) | tail -1 | head -1)
 
   if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
     echo Bootstrap failed >&2
