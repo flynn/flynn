@@ -52,7 +52,7 @@ require (
 	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 // indirect
 	github.com/jtacoma/uritemplates v1.0.0
 	github.com/julienschmidt/httprouter v0.0.0-20140925104356-46807412fe50
-	github.com/jvatic/asset-matrix-go v0.0.0-20190524161137-550750b01e75 // indirect
+	github.com/jvatic/asset-matrix-go v0.0.0-20190524161137-550750b01e75
 	github.com/kardianos/osext v0.0.0-20150223151934-ccfcd0245381
 	github.com/kavu/go_reuseport v1.4.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
