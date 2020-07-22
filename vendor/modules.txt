@@ -153,6 +153,8 @@ github.com/jmespath/go-jmespath
 github.com/jtacoma/uritemplates
 # github.com/julienschmidt/httprouter v0.0.0-20140925104356-46807412fe50
 github.com/julienschmidt/httprouter
+# github.com/jvatic/asset-matrix-go v0.0.0-20190524161137-550750b01e75
+github.com/jvatic/asset-matrix-go
 # github.com/kardianos/osext v0.0.0-20150223151934-ccfcd0245381
 github.com/kardianos/osext
 # github.com/kavu/go_reuseport v1.4.0
