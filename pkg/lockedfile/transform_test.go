@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"cmd/go/internal/lockedfile"
+	"github.com/flynn/flynn/pkg/lockedfile"
 )
 
 func isPowerOf2(x int) bool {
@@ -65,7 +65,7 @@ func TestTransform(t *testing.T) {
 			chunkWords := roundDownToPowerOf2(rand.Intn(maxChunkWords) + 1)
 			offset := rand.Intn(chunkWords)
 
-			err := lockedfile.Transform(path, func(data []byte) (chunk []byte, err error) {
+			err := lockedfile.Transform(path, 0666, func(data []byte) (chunk []byte, err error) {
 				chunk = buf[offset*8 : (offset+chunkWords)*8]
 
 				if len(data)&^7 != len(data) {

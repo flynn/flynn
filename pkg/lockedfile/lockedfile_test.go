@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"cmd/go/internal/lockedfile"
+	"github.com/flynn/flynn/pkg/lockedfile"
 )
 
 func mustTempDir(t *testing.T) (dir string, remove func()) {
@@ -159,13 +159,13 @@ func TestCanLockExistingFile(t *testing.T) {
 		t.Fatalf("ioutil.WriteFile: %v", err)
 	}
 
-	f, err := lockedfile.Edit(path)
+	f, err := lockedfile.Edit(path, 0666)
 	if err != nil {
 		t.Fatalf("first Edit: %v", err)
 	}
 
 	wait := mustBlock(t, "Edit", func() {
-		other, err := lockedfile.Edit(path)
+		other, err := lockedfile.Edit(path, 0666)
 		if err != nil {
 			t.Errorf("second Edit: %v", err)
 		}
@@ -195,7 +195,7 @@ func TestSpuriousEDEADLK(t *testing.T) {
 
 	if dir := os.Getenv(dirVar); dir != "" {
 		// Q.3 locks file B.
-		b, err := lockedfile.Edit(filepath.Join(dir, "B"))
+		b, err := lockedfile.Edit(filepath.Join(dir, "B"), 0666)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -206,7 +206,7 @@ func TestSpuriousEDEADLK(t *testing.T) {
 		}
 
 		// Q.3 blocks on file A.
-		a, err := lockedfile.Edit(filepath.Join(dir, "A"))
+		a, err := lockedfile.Edit(filepath.Join(dir, "A"), 0666)
 		// Q.3 unblocks and locks file A.
 		if err != nil {
 			t.Fatal(err)
@@ -221,7 +221,7 @@ func TestSpuriousEDEADLK(t *testing.T) {
 	defer remove()
 
 	// P.1 locks file A.
-	a, err := lockedfile.Edit(filepath.Join(dir, "A"))
+	a, err := lockedfile.Edit(filepath.Join(dir, "A"), 0666)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ locked:
 
 	waitP2 := mustBlock(t, "Edit B", func() {
 		// P.2 blocks on file B. (Spurious EDEADLK occurs here.)
-		b, err := lockedfile.Edit(filepath.Join(dir, "B"))
+		b, err := lockedfile.Edit(filepath.Join(dir, "B"), 0666)
 		// P.2 unblocks and locks file B.
 		if err != nil {
 			t.Error(err)

@@ -67,13 +67,12 @@ func Create(name string) (*File, error) {
 	return OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 }
 
-// Edit creates the named file with mode 0666 (before umask),
-// but does not truncate existing contents.
+// Edit creates the named file, but does not truncate existing contents.
 //
-// If Edit succeeds, methods on the returned File can be used for I/O.
-// The associated file descriptor has mode O_RDWR and the file is write-locked.
-func Edit(name string) (*File, error) {
-	return OpenFile(name, os.O_RDWR|os.O_CREATE, 0666)
+// If Edit succeeds, methods on the returned File can be used for I/O. The
+// associated file descriptor has mode O_RDWR and the file is write-locked.
+func Edit(name string, perm os.FileMode) (*File, error) {
+	return OpenFile(name, os.O_RDWR|os.O_CREATE, perm)
 }
 
 // Close unlocks and closes the underlying file.
@@ -128,8 +127,8 @@ func Write(name string, content io.Reader, perm os.FileMode) (err error) {
 // the file, making a best effort to preserve existing contents on error.
 //
 // t must not modify the slice passed to it.
-func Transform(name string, t func([]byte) ([]byte, error)) (err error) {
-	f, err := Edit(name)
+func Transform(name string, perm os.FileMode, t func([]byte) ([]byte, error)) (err error) {
+	f, err := Edit(name, perm)
 	if err != nil {
 		return err
 	}
