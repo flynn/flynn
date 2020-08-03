@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -17,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/flynn/flynn/controller/authorizer"
 	controller "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/archive"
@@ -40,8 +40,17 @@ func main() {
 	if authKey == "" {
 		log.Fatal("missing AUTH_KEY env var")
 	}
+	tokenKey, err := authorizer.ParseTokenKey(os.Getenv("ACCESS_TOKEN_KEY"))
+	if err != nil {
+		log.Fatalln("error decoding ACCESS_TOKEN_KEY:", err)
+	}
+	tokenMaxValidity, err := authorizer.ParseTokenMaxValidity(os.Getenv("ACCESS_TOKEN_MAX_VALIDITY"))
+	if err != nil {
+		log.Fatalln("error parsing ACCESS_TOKEN_MAX_VALIDITY:", err)
+	}
+	auth := authorizer.New([]string{authKey}, nil, tokenKey, tokenMaxValidity)
 
-	srv := newServer(authKey, client)
+	srv := newServer(auth, client)
 
 	handler := httphelper.ContextInjector(
 		"tarreceive",
@@ -52,16 +61,16 @@ func main() {
 }
 
 type server struct {
-	router  *httprouter.Router
-	authKey string
-	client  controller.Client
+	router *httprouter.Router
+	auth   *authorizer.Authorizer
+	client controller.Client
 }
 
-func newServer(authKey string, client controller.Client) *server {
+func newServer(auth *authorizer.Authorizer, client controller.Client) *server {
 	s := &server{
-		router:  httprouter.New(),
-		authKey: authKey,
-		client:  client,
+		router: httprouter.New(),
+		auth:   auth,
+		client: client,
 	}
 	s.router.GET("/layer/:id", s.handleGetLayer)
 	s.router.POST("/layer/:id", s.handleCreateLayer)
@@ -74,8 +83,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status.HealthyHandler.ServeHTTP(w, r)
 		return
 	}
-	_, password, _ := r.BasicAuth()
-	if len(password) != len(s.authKey) || subtle.ConstantTimeCompare([]byte(password), []byte(s.authKey)) != 1 {
+	if _, err := s.auth.AuthorizeRequest(r); err != nil {
 		w.WriteHeader(401)
 		return
 	}

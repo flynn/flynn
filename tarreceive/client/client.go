@@ -27,6 +27,10 @@ func NewClient(url, key string) *Client {
 	return newClient(url, key, httphelper.RetryClient)
 }
 
+func NewClientWithHTTP(url string, client *http.Client) *Client {
+	return newClient(url, "", client)
+}
+
 func NewClientWithConfig(url, key string, config Config) *Client {
 	if config.Pin == nil {
 		return NewClient(url, key)
