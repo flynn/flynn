@@ -9,7 +9,7 @@ package lockedfile
 import (
 	"os"
 
-	"cmd/go/internal/lockedfile/internal/filelock"
+	"github.com/flynn/flynn/pkg/lockedfile/internal/filelock"
 )
 
 func openFile(name string, flag int, perm os.FileMode) (*os.File, error) {
