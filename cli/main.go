@@ -14,7 +14,7 @@ import (
 
 	"github.com/docker/go-units"
 	cfg "github.com/flynn/flynn/cli/config"
-	"github.com/flynn/flynn/controller/client"
+	controller "github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/go-docopt"
@@ -127,6 +127,9 @@ See 'flynn help <command>' for more information on a specific command.
 
 	if err := runCommand(cmd, cmdArgs); err != nil {
 		log.Println(err)
+		if strings.Contains(err.Error(), "invalid_grant") {
+			log.Println("Reauthentication required. Run `flynn login` to get new credentials.")
+		}
 		shutdown.ExitWithCode(1)
 		return
 	}
