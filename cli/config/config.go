@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -11,24 +12,35 @@ import (
 	"runtime"
 
 	"github.com/BurntSushi/toml"
-	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/cli/login/tokensource"
+	controller "github.com/flynn/flynn/controller/client"
 	tarclient "github.com/flynn/flynn/tarreceive/client"
 	"github.com/mitchellh/go-homedir"
+	"golang.org/x/oauth2"
 )
 
 var ErrNoDockerPushURL = errors.New("ERROR: Docker push URL not configured, set it with 'flynn docker set-push-url'")
 
 type Cluster struct {
 	Name          string `json:"name"`
-	Key           string `json:"key"`
+	OAuthURL      string `json:"oauth_url,omitempty" toml:"OAuthURL,omitempty"`
+	Key           string `json:"key,omitempty" toml:"Key,omitempty"`
 	TLSPin        string `json:"tls_pin" toml:"TLSPin,omitempty"`
 	ControllerURL string `json:"controller_url"`
 	GitURL        string `json:"git_url"`
 	ImageURL      string `json:"image_url"`
-	DockerPushURL string `json:"docker_push_url"`
+	DockerPushURL string `json:"docker_push_url,omitempty" toml:"DockerPushURL,omitempty"`
 }
 
 func (c *Cluster) Client() (controller.Client, error) {
+	if c.OAuthURL != "" {
+		ts, err := tokensource.New(c.OAuthURL, c.ControllerURL, TokenCache())
+		if err != nil {
+			return nil, err
+		}
+		return controller.NewClientWithHTTP(c.ControllerURL, "", oauth2.NewClient(context.Background(), ts))
+	}
+
 	var pin []byte
 	if c.TLSPin != "" {
 		var err error
@@ -44,6 +56,14 @@ func (c *Cluster) TarClient() (*tarclient.Client, error) {
 	if c.ImageURL == "" {
 		return nil, errors.New("cluster: missing ImageURL .flynnrc config")
 	}
+	if c.OAuthURL != "" {
+		ts, err := tokensource.New(c.OAuthURL, c.ControllerURL, TokenCache())
+		if err != nil {
+			return nil, err
+		}
+		return tarclient.NewClientWithHTTP(c.ImageURL, oauth2.NewClient(context.Background(), ts)), nil
+	}
+
 	var pin []byte
 	if c.TLSPin != "" {
 		var err error
@@ -94,6 +114,10 @@ func DefaultPath() string {
 		return filepath.Join(Dir(), "flynnrc")
 	}
 	return filepath.Join(HomeDir(), ".flynnrc")
+}
+
+func TokenCache() tokensource.Cache {
+	return tokensource.NewTokenCache(filepath.Join(Dir(), "tokens"))
 }
 
 func ReadFile(path string) (*Config, error) {
