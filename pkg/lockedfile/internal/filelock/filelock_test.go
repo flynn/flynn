@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"cmd/go/internal/lockedfile/internal/filelock"
+	"github.com/flynn/flynn/pkg/lockedfile/internal/filelock"
 )
 
 func lock(t *testing.T, f *os.File) {
