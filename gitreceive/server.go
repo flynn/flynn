@@ -12,7 +12,6 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
-	"crypto/hmac"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,6 +23,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/flynn/flynn/controller/authorizer"
 	controller "github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/archiver"
@@ -41,12 +41,23 @@ func main() {
 	if err != nil {
 		log.Fatalln("Unable to connect to controller:", err)
 	}
-	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), httphelper.ContextInjector("gitreceive", httphelper.NewRequestLogger(newGitHandler(cc, []byte(key))))))
+
+	tokenKey, err := authorizer.ParseTokenKey(os.Getenv("ACCESS_TOKEN_KEY"))
+	if err != nil {
+		log.Fatalln("error decoding ACCESS_TOKEN_KEY:", err)
+	}
+	tokenMaxValidity, err := authorizer.ParseTokenMaxValidity(os.Getenv("ACCESS_TOKEN_MAX_VALIDITY"))
+	if err != nil {
+		log.Fatalln("error parsing ACCESS_TOKEN_MAX_VALIDITY:", err)
+	}
+	auth := authorizer.New([]string{key}, nil, tokenKey, tokenMaxValidity)
+
+	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), httphelper.ContextInjector("gitreceive", httphelper.NewRequestLogger(newGitHandler(cc, auth)))))
 }
 
 type gitHandler struct {
 	controller controller.Client
-	authKey    []byte
+	auth       *authorizer.Authorizer
 }
 
 type gitService struct {
@@ -67,8 +78,8 @@ var gitServices = [...]gitService{
 	{"POST", "/git-receive-pack", handlePostRPC, "git-receive-pack"},
 }
 
-func newGitHandler(controller controller.Client, authKey []byte) *gitHandler {
-	return &gitHandler{controller, authKey}
+func newGitHandler(controller controller.Client, auth *authorizer.Authorizer) *gitHandler {
+	return &gitHandler{controller, auth}
 }
 
 func (h *gitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +87,12 @@ func (h *gitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == status.Path {
 		status.HealthyHandler.ServeHTTP(w, r)
+		return
+	}
+
+	if _, err := h.auth.AuthorizeRequest(r); err != nil {
+		w.Header().Set("WWW-Authenticate", "Basic")
+		http.Error(w, "Authentication required", 401)
 		return
 	}
 
@@ -92,13 +109,6 @@ func (h *gitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// The protocol spec in git/Documentation/technical/http-protocol.txt
 		// says we must return 403 if no matching service is found.
 		http.Error(w, "Forbidden", 403)
-		return
-	}
-
-	_, password, _ := r.BasicAuth()
-	if !hmac.Equal([]byte(password), h.authKey) {
-		w.Header().Set("WWW-Authenticate", "Basic")
-		http.Error(w, "Authentication required", 401)
 		return
 	}
 
