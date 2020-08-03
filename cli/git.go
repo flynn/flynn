@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	cfg "github.com/flynn/flynn/cli/config"
+	"github.com/flynn/flynn/cli/login/tokensource"
 	"github.com/flynn/go-docopt"
 )
 
@@ -213,7 +214,21 @@ func runGitCredentials(args *docopt.Args) error {
 	if cluster == nil {
 		return nil
 	}
+	user := "user"
+	password := cluster.Key
+	if cluster.OAuthURL != "" {
+		ts, err := tokensource.New(cluster.OAuthURL, cluster.ControllerURL, cfg.TokenCache())
+		if err != nil {
+			return fmt.Errorf("error getting access token source: %s", err)
+		}
+		t, err := ts.Token()
+		if err != nil {
+			return fmt.Errorf("error getting access token: %s", err)
+		}
+		user = t.TokenType
+		password = t.AccessToken
+	}
 
-	fmt.Printf("protocol=https\nusername=user\nhost=%s\npassword=%s\n", details["host"], cluster.Key)
+	fmt.Printf("protocol=https\nusername=%s\nhost=%s\npassword=%s\n", user, details["host"], password)
 	return nil
 }

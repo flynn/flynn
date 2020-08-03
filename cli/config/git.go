@@ -33,9 +33,12 @@ func gitConfig(args ...string) error {
 }
 
 func WriteGlobalGitConfig(gitURL, caFile string) error {
-	if err := gitConfig(fmt.Sprintf("http.%s.sslCAInfo", gitURL), caFile); err != nil {
-		return err
+	if caFile != "" {
+		if err := gitConfig(fmt.Sprintf("http.%s.sslCAInfo", gitURL), caFile); err != nil {
+			return err
+		}
 	}
+
 	self, err := osext.Executable()
 	if err != nil {
 		return err
