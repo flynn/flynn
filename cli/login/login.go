@@ -52,7 +52,7 @@ func Run(args *docopt.Args) error {
 	prompt := args.Bool["--prompt"]
 	force := args.Bool["--force"]
 	clusterName := args.String["--cluster-name"]
-	controllerURL := args.String["--controller-url>"]
+	controllerURL := args.String["--controller-url"]
 
 	if issuer == "" && len(existingIssuers) == 1 {
 		for k := range existingIssuers {
