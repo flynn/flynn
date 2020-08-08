@@ -317,9 +317,54 @@ git-archive-all() {
 	tar --create --exclude-vcs .
 }
 
+git-attribute() {
+	git show $1 --pretty="format:$2" --no-notes -s | tr -d '\n'
+}
+
+git-subject() {
+	git-attribute $1 "%s"
+}
+
+git-body() {
+	git-attribute $1 "%b"
+}
+
+git-signature-status() {
+	git-attribute $1 "%G?"
+}
+
+git-signature-fingerprint() {
+	git-attribute $1 "%GF"
+}
+
+git-author-email() {
+	git-attribute $1 "%ae"
+}
+
+git-author-name() {
+	git-attribute $1 "%an"
+}
+
+git-committer-email() {
+	git-attribute $1 "%ce"
+}
+
+git-committer-name() {
+	git-attribute $1 "%cn"
+}
+
 while read oldrev newrev refname; do
 	if [[ $refname = "refs/heads/master" ]]; then
-		git-archive-all $newrev | /bin/flynn-receiver "$RECEIVE_APP" "$newrev" --meta git=true --meta "git.commit=$newrev"| sed -u "s/^/"$'\e[1G\e[K'"/"
+		git-archive-all $newrev | /bin/flynn-receiver "$RECEIVE_APP" "$newrev" \
+			--meta git=true \
+			--meta "git.commit=$newrev" \
+			--meta "git.subject=$(git-subject $newrev)" \
+			--meta "git.body=$(git-body $newrev)" \
+			--meta "git.author-email=$(git-author-email $newrev)" \
+			--meta "git.author-name=$(git-author-name $newrev)" \
+			--meta "git.committer-email=$(git-committer-email $newrev)" \
+			--meta "git.committer-name=$(git-committer-name $newrev)" \
+			| sed -u "s/^/"$'\e[1G\e[K'"/"
 		master_pushed=1
 		break
 	fi
