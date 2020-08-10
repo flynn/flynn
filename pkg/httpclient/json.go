@@ -16,6 +16,7 @@ import (
 
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
+	"golang.org/x/oauth2"
 )
 
 type DialFunc func(network, addr string) (net.Conn, error)
@@ -182,6 +183,19 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 	if err != nil {
 		return nil, err
 	}
+
+	if ot, ok := c.HTTP.Transport.(*oauth2.Transport); ok {
+		t, err := ot.Source.Token()
+		if err != nil {
+			return nil, &url.Error{
+				Op:  method,
+				URL: path,
+				Err: err,
+			}
+		}
+		t.SetAuthHeader(req)
+	}
+
 	req.Header.Set("Connection", "upgrade")
 	res, err := clientconn.Do(req)
 	if err != nil && err != httputil.ErrPersistEOF {
