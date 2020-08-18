@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	RefreshTokenExpiry = "refresh_token_expiry"
-	issuerMetadataPath = "/.well-known/oauth-authorization-server"
+	RefreshTokenExpiry    = "refresh_token_expiry"
+	RefreshTokenIssueTime = "refresh_token_issue_time"
+	issuerMetadataPath    = "/.well-known/oauth-authorization-server"
 )
 
 type Error struct {
@@ -32,11 +33,12 @@ func (e Error) Error() string {
 }
 
 type tokenJSON struct {
-	AccessToken           string `json:"access_token"`
-	TokenType             string `json:"token_type"`
-	RefreshToken          string `json:"refresh_token"`
-	ExpiresIn             int    `json:"expires_in"`
-	RefreshTokenExpiresIn int    `json:"refresh_token_expires_in"`
+	AccessToken           string    `json:"access_token"`
+	TokenType             string    `json:"token_type"`
+	RefreshToken          string    `json:"refresh_token"`
+	ExpiresIn             int       `json:"expires_in"`
+	RefreshTokenExpiresIn int       `json:"refresh_token_expires_in"`
+	RefreshTokenIssueTime time.Time `json:"refresh_token_issue_time"`
 }
 
 func RefreshToken(c *oauth2.Config, t *oauth2.Token, audience string) (*oauth2.Token, error) {
@@ -107,6 +109,9 @@ func RefreshToken(c *oauth2.Config, t *oauth2.Token, audience string) (*oauth2.T
 	if tj.RefreshTokenExpiresIn > 0 {
 		raw[RefreshTokenExpiry] = time.Now().Add(time.Duration(tj.RefreshTokenExpiresIn) * time.Second)
 		raw["audience"] = audience
+	}
+	if !tj.RefreshTokenIssueTime.IsZero() {
+		raw[RefreshTokenIssueTime] = tj.RefreshTokenIssueTime
 	}
 
 	return newToken.WithExtra(raw), nil

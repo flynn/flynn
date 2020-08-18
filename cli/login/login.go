@@ -382,15 +382,24 @@ func exchangeAuthCode(ctx context.Context, config *oauth2.Config, info *codeInfo
 	if !ok || nonce != info.Nonce {
 		return nil, fmt.Errorf("oauth2 auth response has invalid nonce, expected %q, got %q", info.Nonce, nonce)
 	}
+
+	extra := make(map[string]interface{})
+	extra["audience"] = t.Extra("audience")
+
+	iss, _ := t.Extra("refresh_token_issue_time").(string)
+	if iss != "" {
+		issueTime, err := time.Parse(time.RFC3339Nano, iss)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing refresh_token_issue_time %q: %s", iss, err)
+		}
+		extra[oauth.RefreshTokenIssueTime] = issueTime
+	}
 	exp, ok := t.Extra("refresh_token_expires_in").(float64)
 	if ok {
-		t = t.WithExtra(map[string]interface{}{
-			oauth.RefreshTokenExpiry: time.Now().Add(time.Duration(exp) * time.Second),
-			"audience":               t.Extra("audience"),
-		})
+		extra[oauth.RefreshTokenExpiry] = time.Now().Add(time.Duration(exp) * time.Second)
 	}
 
-	return t, nil
+	return t.WithExtra(extra), nil
 }
 
 type codeInfo struct {
