@@ -28,8 +28,9 @@ type cache struct {
 }
 
 type tokenCache struct {
-	RefreshToken       string    `json:"refresh_token"`
-	RefreshTokenExpiry time.Time `json:"refresh_token_expiry"`
+	RefreshToken          string    `json:"refresh_token"`
+	RefreshTokenExpiry    time.Time `json:"refresh_token_expiry"`
+	RefreshTokenIssueTime time.Time `json:"refresh_token_issue_time"`
 
 	AccessTokens map[string]*accessToken `json:"access_tokens"`
 }
@@ -96,8 +97,9 @@ func (c *cache) GetToken(issuer, clientID, audience string) (*oauth2.Token, erro
 		t.Expiry = at.Expiry
 	}
 	t = t.WithExtra(map[string]interface{}{
-		oauth.RefreshTokenExpiry: cache.RefreshTokenExpiry,
-		"audience":               audience,
+		oauth.RefreshTokenExpiry:    cache.RefreshTokenExpiry,
+		oauth.RefreshTokenIssueTime: cache.RefreshTokenIssueTime,
+		"audience":                  audience,
 	})
 
 	return t, nil
@@ -125,13 +127,16 @@ func (c *cache) SetToken(issuer, clientID string, t *oauth2.Token) error {
 			cached.AccessTokens = make(map[string]*accessToken)
 		}
 
-		refreshExpiry, ok := t.Extra(oauth.RefreshTokenExpiry).(time.Time)
-		if !ok || refreshExpiry.After(cached.RefreshTokenExpiry) || cached.RefreshToken == "" {
+		updatedRefresh := false
+		refreshIssued, ok := t.Extra(oauth.RefreshTokenIssueTime).(time.Time)
+		if !ok || refreshIssued.After(cached.RefreshTokenIssueTime) || cached.RefreshToken == "" {
 			cached.RefreshToken = t.RefreshToken
-			cached.RefreshTokenExpiry = refreshExpiry
+			cached.RefreshTokenIssueTime = refreshIssued
+			cached.RefreshTokenExpiry, _ = t.Extra(oauth.RefreshTokenExpiry).(time.Time)
+			updatedRefresh = true
 		}
 		if audience, ok := t.Extra("audience").(string); ok && audience != "" {
-			if oldToken, ok := cached.AccessTokens[audience]; !ok || t.Expiry.After(oldToken.Expiry) || t.AccessToken == "" {
+			if oldToken, ok := cached.AccessTokens[audience]; !ok || updatedRefresh || t.Expiry.After(oldToken.Expiry) || t.AccessToken == "" {
 				cached.AccessTokens[audience] = &accessToken{
 					AccessToken: t.AccessToken,
 					TokenType:   t.TokenType,
