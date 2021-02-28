@@ -1,6 +1,6 @@
 # Flynn is Unmaintained
 
-Flynn is no longer being developed.
+Flynn is no longer being developed. _(Wondering what Flynn is? [Take a look at our older README](https://github.com/flynn/flynn/blob/2c20757de8b32a40ba06f7e5b363b2d4dd6b332e/README.md))_
 
 All public Flynn-related infrastructure including binary release hosting and cluster discovery will be shut down on June 1, 2021. This means that **installation of the CLI and deployments of new server hosts will fail starting on June 1**. Running hosts will not be impacted.
 
