@@ -9,3 +9,5 @@ Flynn will no longer receive security updates, we strongly recommend transitioni
 We thank everyone for their support and engagement over the years, and we're sorry that we won't be able to continue developing the platform.
 
 The Flynn Team
+
+_PS: If you want a Flynn sticker or t-shirt, [we still have some left](https://shop.flynn.io)._
