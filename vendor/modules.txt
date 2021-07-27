@@ -121,12 +121,6 @@ github.com/google/go-cmp/cmp/internal/function
 github.com/google/go-cmp/cmp/internal/value
 # github.com/googleapis/gax-go/v2 v2.0.5
 github.com/googleapis/gax-go/v2
-# github.com/gorilla/context v0.0.0-20140604161150-14f550f51af5
-github.com/gorilla/context
-# github.com/gorilla/securecookie v0.0.0-20140409111100-1b0c7f6e9ab3
-github.com/gorilla/securecookie
-# github.com/gorilla/sessions v0.0.0-20140613194357-aa5e036e6c44
-github.com/gorilla/sessions
 # github.com/gorilla/websocket v1.4.1
 github.com/gorilla/websocket
 # github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
@@ -153,8 +147,6 @@ github.com/jmespath/go-jmespath
 github.com/jtacoma/uritemplates
 # github.com/julienschmidt/httprouter v0.0.0-20140925104356-46807412fe50
 github.com/julienschmidt/httprouter
-# github.com/jvatic/asset-matrix-go v0.0.0-20190524161137-550750b01e75
-github.com/jvatic/asset-matrix-go
 # github.com/kardianos/osext v0.0.0-20150223151934-ccfcd0245381
 github.com/kardianos/osext
 # github.com/kavu/go_reuseport v1.4.0
@@ -191,7 +183,7 @@ github.com/mitchellh/go-homedir
 github.com/mrunalp/fileutils
 # github.com/olekukonko/ts v0.0.0-20140412220145-ecf753e7c962
 github.com/olekukonko/ts
-# github.com/opencontainers/runc v1.0.0-rc8 => github.com/flynn/runc v1.0.0-rc1001
+# github.com/opencontainers/runc v1.0.0-rc95 => github.com/flynn/runc v1.0.0-rc1001
 github.com/opencontainers/runc/libcontainer
 github.com/opencontainers/runc/libcontainer/apparmor
 github.com/opencontainers/runc/libcontainer/cgroups

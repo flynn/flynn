@@ -35,9 +35,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20160803200408-a6b377e3400b
 	github.com/golang/protobuf v1.4.1
 	github.com/google/go-cmp v0.4.0
-	github.com/gorilla/context v0.0.0-20140604161150-14f550f51af5
-	github.com/gorilla/securecookie v0.0.0-20140409111100-1b0c7f6e9ab3 // indirect
-	github.com/gorilla/sessions v0.0.0-20140613194357-aa5e036e6c44
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
 	github.com/hashicorp/go-msgpack v0.0.0-20150518234257-fa3f63826f7c // indirect
@@ -52,7 +49,6 @@ require (
 	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 // indirect
 	github.com/jtacoma/uritemplates v1.0.0
 	github.com/julienschmidt/httprouter v0.0.0-20140925104356-46807412fe50
-	github.com/jvatic/asset-matrix-go v0.0.0-20190524161137-550750b01e75
 	github.com/kardianos/osext v0.0.0-20150223151934-ccfcd0245381
 	github.com/kavu/go_reuseport v1.4.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
@@ -71,7 +67,7 @@ require (
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
 	github.com/olekukonko/ts v0.0.0-20140412220145-ecf753e7c962 // indirect
-	github.com/opencontainers/runc v1.0.0-rc8
+	github.com/opencontainers/runc v1.0.0-rc95
 	github.com/opencontainers/runtime-spec v1.0.1 // indirect
 	github.com/opencontainers/selinux v1.2.2 // indirect
 	github.com/pkg/errors v0.8.1
